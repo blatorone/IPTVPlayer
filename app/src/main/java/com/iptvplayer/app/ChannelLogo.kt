@@ -23,12 +23,23 @@ private val logos = LruCache<String, Bitmap>(64)
 
 @Composable
 internal fun ChannelLogo(address: String?, modifier: Modifier = Modifier) {
+    PortalImage(address, modifier.size(32.dp), ContentScale.Fit, maxPixels = 128)
+}
+
+@Composable
+internal fun PortalImage(
+    address: String?,
+    modifier: Modifier,
+    contentScale: ContentScale = ContentScale.Crop,
+    maxPixels: Int = 384
+) {
     if (address == null) return
-    val logo by produceState<Bitmap?>(null, address) {
+    val cacheKey = "$maxPixels:$address"
+    val logo by produceState<Bitmap?>(null, cacheKey) {
         value = null
-        value = logos.get(address) ?: withContext(Dispatchers.IO) {
+        value = logos.get(cacheKey) ?: withContext(Dispatchers.IO) {
             try {
-                loadLogo(address)?.also { logos.put(address, it) }
+                loadLogo(address, maxPixels)?.also { logos.put(cacheKey, it) }
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
@@ -40,13 +51,13 @@ internal fun ChannelLogo(address: String?, modifier: Modifier = Modifier) {
         Image(
             bitmap = it.asImageBitmap(),
             contentDescription = null,
-            contentScale = ContentScale.Fit,
-            modifier = modifier.size(32.dp)
+            contentScale = contentScale,
+            modifier = modifier
         )
     }
 }
 
-private fun loadLogo(address: String): Bitmap? {
+private fun loadLogo(address: String, maxPixels: Int): Bitmap? {
     val uri = URI(address)
     require(uri.scheme in listOf("http", "https") && uri.host != null && uri.userInfo == null)
     val connection = uri.toURL().openConnection() as HttpURLConnection
@@ -67,7 +78,7 @@ private fun loadLogo(address: String): Bitmap? {
         val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
         if (options.outWidth <= 0 || options.outHeight <= 0) return null
-        while (maxOf(options.outWidth, options.outHeight) / maxOf(1, options.inSampleSize) > 128) {
+        while (maxOf(options.outWidth, options.outHeight) / maxOf(1, options.inSampleSize) > maxPixels) {
             options.inSampleSize = maxOf(1, options.inSampleSize) * 2
         }
         options.inJustDecodeBounds = false

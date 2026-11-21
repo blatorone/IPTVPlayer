@@ -19,13 +19,15 @@ Die vorhandene Projektstruktur hat Vorrang, sofern sie diese Ziele trägt. Fachl
 
 ## Identitäten und Datenfluss
 
-Der aktuelle Stalker-Durchstich speichert eine Portalquelle mit der zuletzt geladenen Senderliste, Kategorien und bereits geladenen Katalogseiten als verschlüsselte Momentaufnahme im lokalen Verzeichnis ohne Backup. Der Schlüssel bleibt im Android Keystore. Sitzungstokens werden bei Bedarf neu bezogen. Beim Übergang zu Room ist die bestehende Momentaufnahme zu übernehmen.
+Der aktuelle Stalker-Durchstich speichert mehrere Portalquellen mit ihren Senderlisten, Kategorien, Katalogseiten und EPG-Auswahlen als verschlüsselte Momentaufnahme im lokalen Verzeichnis ohne Backup. Die ältere Datei für eine einzelne Quelle wird beim Lesen als Bibliothek mit einer Quelle geöffnet. Die gemeinsame Ansicht verwendet standardmäßig alle gespeicherten Portale in gespeicherter Reihenfolge. Live-TV bildet eigene Kategorien. Filme und Serien ordnen die Portalgruppen gemeinsamen Genres zu, laden ihre Seiten pro Portal und führen Titel anhand bereinigter Namen, Erscheinungsdaten und externer Kennungen zusammen. Der Schlüssel bleibt im Android Keystore. Sitzungstokens werden bei Bedarf neu bezogen. Lokale VOD-Positionen beziehen sich auf die gemeinsame Inhaltsidentität und bleiben von Android-Backups ausgeschlossen. Beim Übergang zu Room sind diese Daten zu übernehmen.
 
 `Source` besitzt Importkonfiguration und einen stabilen lokalen Schlüssel; `SourceItem` referenziert Ursprung und externen Schlüssel; `Channel` ist ein kanonischer Live-Eintrag und besitzt mehrere `StreamVariant`-Einträge mit Quellreferenz und Priorität. `EpgChannel` und `Programme` bleiben quellbezogen; Zuordnungen verbinden sie mit `Channel`. VOD-Titel/Episoden besitzen eigene Identitäten und Fortschritt. Wenn eine Quelle entfernt wird, nur ihre Varianten und Zuordnungen entfernen; ein Channel bleibt erhalten, solange Varianten existieren. Favoriten und manuelle Entscheidungen bei vorübergehend fehlender Quelle möglichst erhalten und Bereinigungsregeln explizit machen.
 
 Import → validieren/parsen → Quellobjekte normalisieren → verlässlich zuordnen → transaktional speichern → UI beobachtet Daten. Auswahl → Controller startet Variante → Fehlerklassifikation → begrenzter Failover. Sync serialisiert ausdrücklich ausgewählte lokale Daten → verschlüsselt → überträgt; Gegenrichtung authentifiziert und validiert vor konfliktbewusster Übernahme.
 
 ## Sicherheit und Betriebsgrenzen
+
+Die optionale TMDB-Verbindung nutzt einen separat verschlüsselten Lesezugang im lokalen Verzeichnis ohne Backup. Ausgewählte Kataloge und VOD-Metadaten stammen aus der offiziellen API. Der Abgleich verwendet nur öffentliche Metadaten wie Titel, Jahr und externe IDs. Portalzugangsdaten und Wiedergabelinks bleiben in den IPTV-Adaptern.
 
 HTTPS bevorzugen; Zertifikatsprüfungen nicht deaktivieren. Unsichere vom Nutzer konfigurierte Quellen verständlich kennzeichnen. URLs können Tokens enthalten und gelten als geheim. Backups, Fehlermeldungen, Absturzberichte und CI-Logs prüfen. QR-Zugriff ist kein Ersatz für Netzwerksicherheit. Abhängigkeiten und Rechte minimal halten. Netzwerk-, Parser-, Datenbank- und Player-Fehler getrennt behandeln; Abbrüche respektieren und Wiederholungen begrenzen.
 

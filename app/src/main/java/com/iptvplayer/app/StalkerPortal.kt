@@ -9,6 +9,10 @@ import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URLEncoder
 import java.util.Locale
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.ZoneOffset
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
@@ -24,10 +28,17 @@ internal class StalkerChannel(
     val genreName: String?,
     val id: String? = null,
     val logo: String? = null,
-    val direct: Boolean = false
+    val direct: Boolean = false,
+    val epgIdentity: String? = null,
+    val number: Long? = null
 )
 
-internal data class PortalProgramme(val title: String, val startSeconds: Long?)
+internal data class PortalProgramme(
+    val title: String,
+    val startSeconds: Long?,
+    val endSeconds: Long? = null,
+    val description: String? = null
+)
 
 internal class PortalRequestException(val status: Int) : IllegalStateException()
 internal class PortalAuthenticationException : IllegalStateException()
@@ -41,10 +52,20 @@ internal data class PortalTitle(
     val command: String? = null,
     val episode: String? = null,
     val categoryId: String? = null,
-    val categoryName: String? = null
+    val categoryName: String? = null,
+    val poster: String? = null,
+    val year: Int? = null,
+    val addedAt: Long? = null,
+    val description: String? = null,
+    val imdbId: String? = null,
+    val tmdbId: String? = null,
+    val popularity: Double? = null,
+    val service: String? = null,
+    val timing: EpisodeTiming = EpisodeTiming()
 )
 
 internal data class PortalGroup(val id: String, val name: String, val country: String? = null)
+internal data class PortalSeason(val number: Int?, val title: PortalTitle, val episodes: List<PortalTitle>)
 
 internal data class PortalCatalog(
     val titles: List<PortalTitle>,
@@ -83,6 +104,9 @@ internal sealed interface ImportStatus {
 internal class StalkerPortal(address: String, macAddress: String) {
     private val mac = normalizePortalMac(macAddress)
     private val endpoints = endpointsFor(address.trim())
+    val sourceLabel: String = endpoints.first().let {
+        if (it.port == -1) it.host else "${it.host}:${it.port}"
+    }
     private var endpoint = endpoints.first()
     private val sessionMutex = Mutex()
     private var sessionToken: String? = null
@@ -96,12 +120,17 @@ internal class StalkerPortal(address: String, macAddress: String) {
         token: String,
         page: Int = 1,
         previous: PortalCatalog? = null,
-        category: String = "*"
+        category: String = "*",
+        search: String? = null
     ): PortalCatalog = withContext(Dispatchers.IO) {
         require(section != PortalSection.LIVE)
         val response = request(
             section.type, "get_ordered_list", token,
-            mapOf("category" to category, "p" to page.toString())
+            buildMap {
+                put("category", category)
+                put("p", page.toString())
+                if (search != null) put("search", search)
+            }
         )
         val entries = entriesFrom(response)
         val newTitles = buildList {
@@ -113,7 +142,19 @@ internal class StalkerPortal(address: String, macAddress: String) {
                     id = entry.text("id", "movie_id", "stream_id"),
                     command = entry.text("cmd", "command"),
                     categoryId = entry.text("category_id", "genre_id"),
-                    categoryName = entry.text("category_name", "group_title", "genre_name")
+                    categoryName = entry.text("category_name", "group_title", "genre_name"),
+                    poster = entry.text("screenshot_uri", "cover", "movie_image", "stream_icon", "logo")
+                        ?.let(::resolveLogo),
+                    year = entry.text("year", "release_year")?.toIntOrNull()
+                        ?: entry.text("release_date", "releasedate")?.take(4)?.toIntOrNull(),
+                    addedAt = entry.text("added", "added_at", "created_at", "date_added", "upload_date")
+                        ?.let(::catalogTimestamp),
+                    description = entry.text("description", "plot", "about"),
+                    imdbId = entry.text("imdb_id", "imdb"),
+                    tmdbId = entry.text("tmdb_id", "tmdb"),
+                    popularity = entry.text("popularity", "views", "view_count", "votes", "rating_count", "imdb_votes")
+                        ?.toDoubleOrNull()?.takeIf { it.isFinite() && it > 0 },
+                    service = entry.text("platform", "provider", "service", "network", "studio")
                 ))
             }
         }
@@ -138,10 +179,10 @@ internal class StalkerPortal(address: String, macAddress: String) {
             }.distinctBy { it.id }
         }
 
-    suspend fun loadEpisodes(series: PortalTitle, token: String): List<PortalTitle> =
+    suspend fun loadSeasons(series: PortalTitle, token: String): List<PortalSeason> =
         withContext(Dispatchers.IO) {
             val id = series.id ?: return@withContext emptyList()
-            val result = linkedSetOf<PortalTitle>()
+            val result = linkedMapOf<String, PortalSeason>()
             var rows = 0
             for (page in 1..50) {
                 coroutineContext.ensureActive()
@@ -151,26 +192,63 @@ internal class StalkerPortal(address: String, macAddress: String) {
                 )
                 val entries = entriesFrom(response)
                 if (entries.length() == 0) break
-                val previousSize = result.size
+                val previousSize = result.values.sumOf { it.episodes.size }
                 for (index in 0 until entries.length()) {
                     val entry = entries.optJSONObject(index) ?: continue
-                    val command = entry.text("cmd", "command") ?: continue
-                    val name = entry.text("name", "title") ?: series.name
-                    val episodes = entry.optJSONArray("series")
-                    if (episodes == null) {
-                        result.add(PortalTitle(name, command = command, episode = entry.text("episode")))
-                    } else for (number in 0 until episodes.length()) {
-                        val episode = episodes.optString(number)
-                        if (episode.isNotBlank()) {
-                            result.add(PortalTitle(name, command = command, episode = episode))
+                    val seasonTitle = entry.text("season_name", "name", "title") ?: series.name
+                    val seasonNumber = entry.text("season_number", "season_num", "season")?.toIntOrNull()
+                        ?: seasonNumberPattern.find(seasonTitle)?.groupValues?.get(1)?.toIntOrNull()
+                    val key = seasonNumber?.toString() ?: entry.text("season_id") ?: seasonTitle
+                    val command = entry.text("cmd", "command")
+                    val episodeRows = entry.optJSONArray("series") ?: entry.optJSONArray("episodes")
+                    val episodes = buildList {
+                        if (episodeRows == null) {
+                            if (command != null) add(PortalTitle(
+                                seasonTitle,
+                                id = entry.text("id", "episode_id"),
+                                command = command,
+                                episode = entry.text("episode", "episode_number"),
+                                timing = entry.episodeTiming()
+                            ))
+                        } else for (offset in 0 until episodeRows.length()) {
+                            val episodeRow = episodeRows.optJSONObject(offset)
+                            if (episodeRow != null) {
+                                val link = episodeRow.text("cmd", "command") ?: command ?: continue
+                                add(PortalTitle(
+                                    episodeRow.text("name", "title") ?: seasonTitle,
+                                    id = episodeRow.text("id", "episode_id"),
+                                    command = link,
+                                    episode = episodeRow.text("episode", "episode_number", "number")
+                                        ?: (offset + 1).toString(),
+                                    description = episodeRow.text("description", "plot", "about"),
+                                    timing = episodeRow.episodeTiming()
+                                ))
+                            } else if (command != null) {
+                                val episode = episodeRows.optString(offset)
+                                if (episode.isNotBlank()) add(PortalTitle(
+                                    seasonTitle, command = command, episode = episode
+                                ))
+                            }
                         }
                     }
+                    if (episodes.isEmpty()) continue
+                    val previous = result[key]
+                    val title = previous?.title ?: PortalTitle(
+                        name = seasonTitle,
+                        poster = entry.text("screenshot_uri", "cover", "movie_image", "logo")
+                            ?.let(::resolveLogo) ?: series.poster,
+                        year = entry.text("year", "release_year")?.toIntOrNull(),
+                        description = entry.text("description", "plot", "about")
+                    )
+                    result[key] = PortalSeason(
+                        seasonNumber, title, (previous?.episodes.orEmpty() + episodes).distinct()
+                    )
                 }
                 rows += entries.length()
                 val total = (response as? JSONObject)?.optInt("total_items", -1) ?: -1
-                if (result.size == previousSize || (total >= 0 && rows >= total)) break
+                if (result.values.sumOf { it.episodes.size } == previousSize || (total >= 0 && rows >= total)) break
             }
-            result.toList()
+            result.values.sortedBy { it.number ?: Int.MAX_VALUE }
         }
 
     suspend fun loadGenres(token: String): Map<String, String> = withContext(Dispatchers.IO) {
@@ -398,7 +476,9 @@ internal class StalkerPortal(address: String, macAddress: String) {
             direct = entry.text("use_http_tmp_link") == "0" &&
                 listOf("wowza_tmp_link", "use_load_balancing", "nginx_secure_link").all {
                     entry.text(it) in listOf(null, "0")
-                }
+                },
+            epgIdentity = entry.text("tvg_id", "tvg-id", "xmltv_id"),
+            number = entry.text("number", "num", "channel_number")?.toLongOrNull()?.takeIf { it > 0 }
         )
     }
 
@@ -425,7 +505,10 @@ internal class StalkerPortal(address: String, macAddress: String) {
                     val entry = entries.optJSONObject(index) ?: continue
                     val title = entry.optString("name").ifBlank { entry.optString("title") }
                     if (title.isNotBlank()) add(PortalProgramme(
-                        title, entry.optLong("start_timestamp", 0).takeIf { it > 0 }
+                        title,
+                        entry.optLong("start_timestamp", 0).takeIf { it > 0 },
+                        entry.optLong("stop_timestamp", 0).takeIf { it > 0 },
+                        entry.text("descr", "description", "plot")
                     ))
                 }
             }
@@ -581,6 +664,17 @@ internal class StalkerPortal(address: String, macAddress: String) {
     }
 }
 
+private fun catalogTimestamp(value: String): Long? {
+    value.toLongOrNull()?.takeIf { it > 0 }?.let {
+        return if (it >= 100_000_000_000L) it / 1000 else it
+    }
+    return runCatching { Instant.parse(value).epochSecond }.getOrNull()
+        ?: runCatching {
+            LocalDateTime.parse(value.replace(' ', 'T')).toEpochSecond(ZoneOffset.UTC)
+        }.getOrNull()
+        ?: runCatching { LocalDate.parse(value).atStartOfDay().toEpochSecond(ZoneOffset.UTC) }.getOrNull()
+}
+
 private fun cleanPlaybackCommand(command: String): String = command.trim()
     .replaceFirst(Regex("^(?:ffmpeg|ffrt|auto|ffplay)\\s+", RegexOption.IGNORE_CASE), "")
     .removeSurrounding("\"")
@@ -593,8 +687,11 @@ private fun JSONObject.text(vararg names: String): String? = names.firstNotNullO
 private val channelTextFields = setOf(
     "name", "title", "cmd", "command", "tv_genre_id", "genre_id", "category_id",
     "group_title", "genre_name", "id", "ch_id", "stream_id", "logo", "logo_url", "stream_icon",
-    "use_http_tmp_link", "wowza_tmp_link", "use_load_balancing", "nginx_secure_link"
+    "use_http_tmp_link", "wowza_tmp_link", "use_load_balancing", "nginx_secure_link",
+    "tvg_id", "tvg-id", "xmltv_id", "number", "num", "channel_number"
 )
+private val seasonNumberPattern =
+    Regex("(?i)\\b(?:staffel|season|saison|temporada|seizoen|s)[ ._-]*0*(\\d{1,4})\\b")
 
 private class LimitedCatalogueStream(input: InputStream) : FilterInputStream(input) {
     private var bytesRead = 0L

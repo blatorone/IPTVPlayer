@@ -10,9 +10,9 @@ Ein nutzerkonfigurierbarer IPTV-Player für Android-Telefone und -Tablets sowie 
 - Xtream-kompatible Quellen mit Serveradresse und Zugangsdaten unterstützen; Live, Filme, Serien, Kategorien und verfügbare Metadaten übernehmen. Zugangsdaten geschützt ablegen und aus Anzeigen und Logs heraushalten.
 - Stalker-Portale als eigenen Quelltyp unterstützen. Nutzer geben die Portaladresse und die vom Anbieter autorisierten Anmeldedaten oder Gerätekennungen ein. Live-Sender, Kategorien, EPG-Informationen, Filme und Serien übernehmen, soweit das jeweilige Portal sie bereitstellt. Zugangsdaten und Sitzungstokens geschützt behandeln.
 - XMLTV aus konfigurierbaren Quellen importieren und EPG-Zuordnungen anhand stabiler IDs ermöglichen. Zeitzonen und Programmzeiten korrekt behandeln; fehlende Daten dürfen Wiedergabe nicht verhindern.
-- Live-Sender aus mehreren Quellen in einer Bibliothek zusammenführen. Identische Sender nur bei verlässlicher ID oder ausdrücklicher Nutzerzuordnung vereinigen; keine Zusammenführung allein aufgrund ähnlicher Namen. Ein zusammengeführter Sender besitzt priorisierte, einzeln identifizierbare Wiedergabevarianten. Quellherkunft und manuelle Korrektur bleiben zugänglich.
+- Live-Sender, Filme und Serien mehrerer Quellen standardmäßig gemeinsam anzeigen. Die Quellverwaltung bietet eine Einzelansicht und eine gemeinsame Aktualisierung gespeicherter Quellen. Live-TV ordnet Sender eigenen Kategorien zu. Stimmen Sendername und Land nach dem Entfernen eindeutiger Portal- und Qualitätszusätze überein, können die Streams als Varianten eines Senders erscheinen. Zusätzlich sind verlässliche EPG-IDs und manuelle Zuordnungen vorgesehen. Varianten derselben Quelle werden vor Varianten weiterer Quellen versucht.
 - Kategorien und Länderfilter anbieten; unbekannte oder nicht eindeutig ableitbare Länder als „Unbekannt“ behandeln. Filter kombinieren, zurücksetzen und leere Ergebnisse verständlich anzeigen. Favoriten und benutzerdefinierte Zuordnungen über Aktualisierungen erhalten, soweit stabile Identitäten verfügbar sind.
-- Live-TV, Filme und Serien öffnen zunächst ihre Kategorien. Nutzer können Kategorien individuell per langem Druck ausblenden und über die Sichtbarkeitseinstellungen wieder einblenden. Die Länderauswahl gilt für die Kategorien aller drei Bereiche und bleibt lokal gespeichert.
+- Live-TV, Filme und Serien öffnen zunächst ihre Kategorien. Ein Dialog ermöglicht das Ein- und Ausblenden mehrerer Kategorien. Ausgeblendete Kategorien sind dort gekennzeichnet. Die Länderauswahl und ihre Reihenfolge gelten für alle drei Bereiche und bleiben lokal gespeichert. Nach einem Portalimport wird die Auswahl standardmäßig angeboten.
 
 ## Live, EPG und Navigation
 
@@ -23,8 +23,14 @@ Ein nutzerkonfigurierbarer IPTV-Player für Android-Telefone und -Tablets sowie 
 
 ## VOD
 
+- Film- und Serienkategorien zeigen Poster und bieten Sortierungen nach Name, Erscheinungsjahr und Hinzufügedatum, soweit das Portal die Metadaten liefert. Eine Detailansicht bietet Aktionen für Favoriten, Merkliste und die bewusste Wiedergabe.
+- Filme und Serien lassen sich nach Erscheinungsjahr filtern. Für aktuelle Kinostarts, wöchentliche Trends, Streamingdienst-Verfügbarkeit und Ausstrahlungen verwendet die App nach Einrichtung die offizielle TMDB-Schnittstelle. Die IPTV-Quellen liefern dazu passende Wiedergabevarianten.
+- Die App vergleicht bei Serien auf der Merkliste und im Serienverlauf die Folgenliste mit dem zuletzt erfassten Stand. Neue Folgen werden in den Listen, Seriendetails und Staffelansichten markiert.
+- Die Suche berücksichtigt die Länderauswahl und zeigt Trefferzahlen auf den Schaltflächen für Live-TV, Filme und Serien. Sender erscheinen mit Logo, VOD-Titel mit Poster und verfügbaren Informationen. Die Herkunft bleibt am Treffer sichtbar.
+
 - Filme und Serien getrennt vom Live-Angebot durchsuchen; Detailansicht und Episodenauswahl bereitstellen, sofern die Quelle sie liefert. VOD startet nur nach bewusster Auswahl und ersetzt dann die laufende Live-Wiedergabe. Pause, Suche und Fortsetzen anbieten, soweit Format und Quelle dies erlauben.
-- Wiedergabeposition lokal speichern und Fortsetzen oder Neustart anbieten; abgeschlossene Einträge angemessen behandeln. Fehler oder fehlende Metadaten dürfen andere Bibliotheksbereiche nicht blockieren. Automatische nächste Episode ist eine offene Produktentscheidung und zunächst nicht vorauszusetzen.
+- Wiedergabeposition lokal speichern und Fortsetzen oder Neustart anbieten; abgeschlossene Einträge angemessen behandeln. Beim Wechsel auf eine abspielbare Variante desselben Films oder derselben Folge die letzte Wiedergabeposition übernehmen. Die nächste Folge startet auf Wunsch am markierten Abspannbeginn oder am tatsächlichen Ende. Die Vorwarnzeit ist einstellbar. Eindeutig markierte Intros können manuell oder automatisch übersprungen werden.
+- Der Filmverlauf zeigt die gespeicherte Position. Der Serienverlauf und die Merkliste zeigen bei angesehenen Serien auch Staffel und Folge. „Fortsetzen“ öffnet den zugehörigen Inhalt direkt an der gespeicherten Stelle.
 
 ## Temporäre QR-Playlistverwaltung
 

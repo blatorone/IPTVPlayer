@@ -7,6 +7,7 @@ import android.util.AtomicFile
 import java.io.File
 import java.io.FileNotFoundException
 import java.security.KeyStore
+import java.security.MessageDigest
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -25,42 +26,83 @@ internal class SavedPortal(
     val genres: Map<String, String>,
     val catalogs: Map<PortalSection, PortalCatalog>,
     val epgChannelIds: Set<String> = emptySet()
-)
+) {
+    val identity: String by lazy {
+        val input = "$address\n${normalizePortalMac(mac)}".encodeToByteArray()
+        MessageDigest.getInstance("SHA-256").digest(input).joinToString("") { "%02x".format(it) }
+    }
+}
+
+internal data class SavedPortals(val sources: List<SavedPortal>, val activeId: String)
 
 internal class PortalStorage(context: Context) {
     private val file = AtomicFile(File(context.noBackupFilesDir, "stalker-source.v1"))
+    private val metadataFile = AtomicFile(File(context.noBackupFilesDir, "metadata-token.v1"))
     private companion object {
         val mutex = Mutex()
     }
 
-    suspend fun read(): SavedPortal? = mutex.withLock {
+    suspend fun read(): SavedPortals? = mutex.withLock {
         withContext(Dispatchers.IO) {
-            val bytes = try {
-                file.readFully()
-            } catch (_: FileNotFoundException) {
-                return@withContext null
+            val plain = readEncrypted(file) ?: return@withContext null
+            val data = JSONObject(plain)
+            val sources = data.optJSONArray("sources")
+            if (sources == null) {
+                val source = decode(data)
+                SavedPortals(listOf(source), source.identity)
+            } else {
+                SavedPortals(
+                    List(sources.length()) { decode(sources.getJSONObject(it)) },
+                    data.getString("activeId")
+                )
             }
-            require(bytes.size > 12)
-            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-            cipher.init(Cipher.DECRYPT_MODE, key(create = false), GCMParameterSpec(128, bytes, 0, 12))
-            decode(JSONObject(cipher.doFinal(bytes, 12, bytes.size - 12).decodeToString()))
         }
     }
 
-    suspend fun write(source: SavedPortal) = mutex.withLock {
+    suspend fun write(library: SavedPortals) = mutex.withLock {
         withContext(Dispatchers.IO) {
-            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-            cipher.init(Cipher.ENCRYPT_MODE, key(create = true))
-            check(cipher.iv.size == 12)
-            val encrypted = cipher.iv + cipher.doFinal(encode(source).toString().encodeToByteArray())
-            val output = file.startWrite()
-            try {
-                output.write(encrypted)
-                file.finishWrite(output)
-            } catch (error: Exception) {
-                file.failWrite(output)
-                throw error
+            val data = JSONObject().apply {
+                put("activeId", library.activeId)
+                put("sources", JSONArray().apply {
+                    for (source in library.sources) put(encode(source))
+                })
             }
+            writeEncrypted(file, data.toString())
+        }
+    }
+
+    suspend fun readMetadataToken(): String? = mutex.withLock {
+        withContext(Dispatchers.IO) { readEncrypted(metadataFile)?.ifBlank { null } }
+    }
+
+    suspend fun writeMetadataToken(token: String) = mutex.withLock {
+        withContext(Dispatchers.IO) { writeEncrypted(metadataFile, token) }
+    }
+
+    private fun readEncrypted(target: AtomicFile): String? {
+        val bytes = try {
+            target.readFully()
+        } catch (_: FileNotFoundException) {
+            return null
+        }
+        require(bytes.size > 12)
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.DECRYPT_MODE, key(create = false), GCMParameterSpec(128, bytes, 0, 12))
+        return cipher.doFinal(bytes, 12, bytes.size - 12).decodeToString()
+    }
+
+    private fun writeEncrypted(target: AtomicFile, value: String) {
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, key(create = true))
+        check(cipher.iv.size == 12)
+        val encrypted = cipher.iv + cipher.doFinal(value.encodeToByteArray())
+        val output = target.startWrite()
+        try {
+            output.write(encrypted)
+            target.finishWrite(output)
+        } catch (error: Exception) {
+            target.failWrite(output)
+            throw error
         }
     }
 
@@ -98,6 +140,8 @@ internal class PortalStorage(context: Context) {
                     put("id", channel.id)
                     put("logo", channel.logo)
                     put("direct", channel.direct)
+                    put("epgIdentity", channel.epgIdentity)
+                    put("number", channel.number)
                 })
             }
         })
@@ -111,6 +155,14 @@ internal class PortalStorage(context: Context) {
                             put("command", title.command)
                             put("categoryId", title.categoryId)
                             put("categoryName", title.categoryName)
+                            put("poster", title.poster)
+                            put("year", title.year)
+                            put("addedAt", title.addedAt)
+                            put("description", title.description)
+                            put("imdbId", title.imdbId)
+                            put("tmdbId", title.tmdbId)
+                            put("popularity", title.popularity)
+                            put("service", title.service)
                         })
                     })
                     put("total", catalog.total)
@@ -138,7 +190,9 @@ internal class PortalStorage(context: Context) {
                 entry.optString("genreName").ifEmpty { null },
                 entry.optString("id").ifEmpty { null },
                 entry.optString("logo").ifEmpty { null },
-                entry.optBoolean("direct")
+                entry.optBoolean("direct"),
+                entry.optString("epgIdentity").ifEmpty { null },
+                entry.optLong("number").takeIf { it > 0 }
             )
         }
         val labels = data.getJSONObject("genres")
@@ -157,7 +211,15 @@ internal class PortalStorage(context: Context) {
                             title.optString("id").ifEmpty { null },
                             title.optString("command").ifEmpty { null },
                             categoryId = title.optString("categoryId").ifEmpty { null },
-                            categoryName = title.optString("categoryName").ifEmpty { null }
+                            categoryName = title.optString("categoryName").ifEmpty { null },
+                            poster = title.optString("poster").ifEmpty { null },
+                            year = title.optInt("year").takeIf { it > 0 },
+                            addedAt = title.optLong("addedAt").takeIf { it > 0 },
+                            description = title.optString("description").ifEmpty { null },
+                            imdbId = title.optString("imdbId").ifEmpty { null },
+                            tmdbId = title.optString("tmdbId").ifEmpty { null },
+                            popularity = title.optDouble("popularity").takeIf { it.isFinite() && it > 0 },
+                            service = title.optString("service").ifEmpty { null }
                         )
                     },
                     entry.optInt("total", -1).takeIf { it >= 0 },

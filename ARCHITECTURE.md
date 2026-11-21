@@ -1,0 +1,34 @@
+# IPTVPlayer – Architektur
+
+## Grundsätze
+
+Die vorhandene Projektstruktur hat Vorrang, sofern sie diese Ziele trägt. Fachliche Grenzen zunächst logisch trennen; zusätzliche Gradle-Module nur bei belegtem Nutzen. UI → ViewModel/Zustand → Anwendungsfälle/Repositories → lokale Datenbank und externe Adapter. Abhängigkeiten zeigen nach innen; Media3, Room und Netzwerkmodelle nicht direkt als UI-Verträge verwenden. Coroutines und Flow für asynchrone Arbeit und beobachtbaren Zustand, injizierbare Schnittstellen für Tests.
+
+## Komponenten
+
+- **Präsentation:** Compose-Oberflächen für Quellen, Live, EPG, VOD, Einstellungen und QR-Verwaltung; gemeinsame Zustandsmodelle, adaptive Layouts und explizites Fokusmanagement für TV.
+- **Import:** M3U-Parser, Xtream-Adapter, Stalker-Adapter und XMLTV-Parser hinter getrennten Schnittstellen; Eingaben validieren, große Dateien stromorientiert und begrenzt verarbeiten. Import in temporären Zustand, anschließend transaktional übernehmen; eine fehlgeschlagene Aktualisierung zerstört keine letzte gültige Bibliothek. Der Stalker-Adapter verwaltet die Portalsitzung, ermittelt verfügbare Katalogfunktionen und führt Portal-Einträge in das gemeinsame Katalogmodell über.
+- **Katalog:** Normalisierung, Quellenzuordnung, Kategorien und Länderfilter. Stabile interne IDs und Herkunfts-IDs getrennt halten. Manuelle Verknüpfungen vor automatischen Regeln berücksichtigen; nicht sicher identifizierbare Einträge getrennt lassen.
+- **EPG:** XMLTV-Kanäle und Programme getrennt speichern; Zuordnung per expliziter Zuordnung oder passender `tvg-id`, Zeitstempel als absolute Zeitpunkte speichern, lokal darstellen. Doppelte und fehlende Programme behandeln, alte Daten kontrolliert bereinigen.
+- **Wiedergabe:** ein lebenszyklusbewusster Media3-Player-Controller als gemeinsame Instanz für die aktive Sitzung; UI bindet sich daran, Screen-Wechsel erzeugen keinen neuen Player. Geeigneten MediaSession-Service prüfen, falls Hintergrundwiedergabe tatsächlich gewünscht ist; keine Hintergrundwiedergabe allein aus Navigation ableiten. Controller modelliert Live/VOD, aktiven Eintrag, Variante, Status und Fehler. Ressourcen bei Ende der Sitzung freigeben.
+- **Failover:** pro explizitem Live-Start geordnete, endliche Variantenliste und besuchte Varianten führen. Bei tatsächlich als wiedergaberelevant eingestuftem Fehler nächste Variante versuchen; bei Erschöpfung Fehler mit Retry anzeigen. Nutzerwechsel, Stop und neue Sitzung brechen alte Versuche ab; späte Callbacks dürfen neue Wiedergabe nicht beeinflussen.
+- **Daten:** Room für Quellenreferenzen, Katalog, Varianten, EPG, Favoriten, Zuordnungen und VOD-Fortschritt; sichere Schlüsselspeicherung für sensible Zugangsdaten, keine Klartext-Secrets in gewöhnlichen Einstellungen oder Backups. Datenbankmigrationen versionieren. Große Datenmengen indizieren und paginieren; Aufbewahrung begrenzen.
+- **QR-Verwaltung:** eigener kurzlebiger lokaler Dienst mit minimalen Endpunkten und Sitzungszustand; zufälliges Token, begrenzte Lebensdauer, Request-Größenlimits, explizite Nutzerfreigabe, Bindung an geeignete lokale Schnittstelle und konsequenter Shutdown. Schutz gegen fremde Webseiten und Wiederverwendung mitbedenken. Ohne überprüfte sichere Transportlösung keine stillschweigende Übertragung von Geheimnissen.
+- **Sync:** optionaler Adapter für vom Nutzer kontrollierten Speicher; versioniertes verschlüsseltes Exportformat mit authentifizierter Verschlüsselung, zufälligem Nonce, KDF-Salt und Formatversion. Secrets bleiben aus Logs. Lokal erzeugte Änderungen und Versionsstände ermöglichen Konflikterkennung; bei unauflösbaren Konflikten Nutzerentscheidung oder sichere Kopie, keine stille Datenvernichtung. Wiederherstellung und Schlüsselverlust testen.
+- **Updates:** Release-Metadaten über dedizierten Adapter abrufen; erlaubte Quelle und Paketidentität prüfen, Versionsvergleich und Nutzerbestätigung vor Download/Installation. Android-Paketinstaller prüft Signaturkompatibilität; Fehler bei unbekannten Quellen und fehlenden Berechtigungen erklären. Keine selbst erfundene automatische Umgehung von Installationsschutz.
+
+## Identitäten und Datenfluss
+
+Der aktuelle Stalker-Durchstich speichert eine Portalquelle mit der zuletzt geladenen Senderliste, Kategorien und bereits geladenen Katalogseiten als verschlüsselte Momentaufnahme im lokalen Verzeichnis ohne Backup. Der Schlüssel bleibt im Android Keystore. Sitzungstokens werden bei Bedarf neu bezogen. Beim Übergang zu Room ist die bestehende Momentaufnahme zu übernehmen.
+
+`Source` besitzt Importkonfiguration und einen stabilen lokalen Schlüssel; `SourceItem` referenziert Ursprung und externen Schlüssel; `Channel` ist ein kanonischer Live-Eintrag und besitzt mehrere `StreamVariant`-Einträge mit Quellreferenz und Priorität. `EpgChannel` und `Programme` bleiben quellbezogen; Zuordnungen verbinden sie mit `Channel`. VOD-Titel/Episoden besitzen eigene Identitäten und Fortschritt. Wenn eine Quelle entfernt wird, nur ihre Varianten und Zuordnungen entfernen; ein Channel bleibt erhalten, solange Varianten existieren. Favoriten und manuelle Entscheidungen bei vorübergehend fehlender Quelle möglichst erhalten und Bereinigungsregeln explizit machen.
+
+Import → validieren/parsen → Quellobjekte normalisieren → verlässlich zuordnen → transaktional speichern → UI beobachtet Daten. Auswahl → Controller startet Variante → Fehlerklassifikation → begrenzter Failover. Sync serialisiert ausdrücklich ausgewählte lokale Daten → verschlüsselt → überträgt; Gegenrichtung authentifiziert und validiert vor konfliktbewusster Übernahme.
+
+## Sicherheit und Betriebsgrenzen
+
+HTTPS bevorzugen; Zertifikatsprüfungen nicht deaktivieren. Unsichere vom Nutzer konfigurierte Quellen verständlich kennzeichnen. URLs können Tokens enthalten und gelten als geheim. Backups, Fehlermeldungen, Absturzberichte und CI-Logs prüfen. QR-Zugriff ist kein Ersatz für Netzwerksicherheit. Abhängigkeiten und Rechte minimal halten. Netzwerk-, Parser-, Datenbank- und Player-Fehler getrennt behandeln; Abbrüche respektieren und Wiederholungen begrenzen.
+
+## Teststrategie
+
+Parser mit kleinen synthetischen Fixtures, relativen URLs, defekten Einträgen, Zeitzonen und großen Eingaben testen. Repository- und Migrationstests mit temporärer Datenbank; Zuordnung und Konflikte deterministisch testen. Player über Fake-Adapter auf Navigation, Nutzerwechsel, Abbruch und endliches Failover prüfen; Media3 auf Geräten mit legalen Testmedien integrieren. Compose-/TV-Tests prüfen Fokus, D-Pad und Zurück. QR-Ablauf, Zugriffsschutz und Shutdown; Sync-Roundtrip, Manipulation, falsche Passphrase und Konflikte; CI und signierte Installation auf realistischen Geräten prüfen.

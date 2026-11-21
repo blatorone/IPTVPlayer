@@ -56,6 +56,14 @@
     <string name="channel_category_number">Kategorie %s</string>
     <string name="uncategorized_channels">Ohne Kategorie</string>
     <string name="back_to_categories">Zu den Kategorien</string>
+    <string name="category_settings">Kategorien und Länder</string>
+    <string name="category_settings_hint">Halte eine Kategorie gedrückt, um sie aus- oder wieder einzublenden.</string>
+    <string name="show_hidden_categories">Ausgeblendete Kategorien vorübergehend anzeigen</string>
+    <string name="country_filter_label">Länder für Live-TV, Filme und Serien</string>
+    <string name="all_countries">Alle Länder</string>
+    <string name="unknown_country">Unbekannt</string>
+    <string name="hidden_category_label">%1$s (ausgeblendet)</string>
+    <string name="no_visible_categories">Keine sichtbaren Kategorien. Prüfe die Länder- und Sichtbarkeitseinstellungen oder lade das Portal erneut.</string>
     <string name="playback_starting">Stream startet: %s</string>
     <string name="playback_timeout">Der Stream konnte innerhalb von 25 Sekunden nicht gestartet werden.</string>
     <string name="playback_link_error">Das Portal hat für diesen Sender keinen nutzbaren Wiedergabelink geliefert.</string>

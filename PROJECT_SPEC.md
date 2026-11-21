@@ -12,6 +12,7 @@ Ein nutzerkonfigurierbarer IPTV-Player für Android-Telefone und -Tablets sowie 
 - XMLTV aus konfigurierbaren Quellen importieren und EPG-Zuordnungen anhand stabiler IDs ermöglichen. Zeitzonen und Programmzeiten korrekt behandeln; fehlende Daten dürfen Wiedergabe nicht verhindern.
 - Live-Sender aus mehreren Quellen in einer Bibliothek zusammenführen. Identische Sender nur bei verlässlicher ID oder ausdrücklicher Nutzerzuordnung vereinigen; keine Zusammenführung allein aufgrund ähnlicher Namen. Ein zusammengeführter Sender besitzt priorisierte, einzeln identifizierbare Wiedergabevarianten. Quellherkunft und manuelle Korrektur bleiben zugänglich.
 - Kategorien und Länderfilter anbieten; unbekannte oder nicht eindeutig ableitbare Länder als „Unbekannt“ behandeln. Filter kombinieren, zurücksetzen und leere Ergebnisse verständlich anzeigen. Favoriten und benutzerdefinierte Zuordnungen über Aktualisierungen erhalten, soweit stabile Identitäten verfügbar sind.
+- Live-TV, Filme und Serien öffnen zunächst ihre Kategorien. Nutzer können Kategorien individuell per langem Druck ausblenden und über die Sichtbarkeitseinstellungen wieder einblenden. Die Länderauswahl gilt für die Kategorien aller drei Bereiche und bleibt lokal gespeichert.
 
 ## Live, EPG und Navigation
 

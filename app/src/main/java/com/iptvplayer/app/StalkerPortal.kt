@@ -39,13 +39,18 @@ internal data class PortalTitle(
     val name: String,
     val id: String? = null,
     val command: String? = null,
-    val episode: String? = null
+    val episode: String? = null,
+    val categoryId: String? = null,
+    val categoryName: String? = null
 )
+
+internal data class PortalGroup(val id: String, val name: String, val country: String? = null)
 
 internal data class PortalCatalog(
     val titles: List<PortalTitle>,
     val total: Int?,
-    val nextPage: Int?
+    val nextPage: Int?,
+    val groups: List<PortalGroup> = emptyList()
 )
 
 internal fun normalizePortalMac(address: String): String {
@@ -90,19 +95,26 @@ internal class StalkerPortal(address: String, macAddress: String) {
         section: PortalSection,
         token: String,
         page: Int = 1,
-        previous: PortalCatalog? = null
+        previous: PortalCatalog? = null,
+        category: String = "*"
     ): PortalCatalog = withContext(Dispatchers.IO) {
         require(section != PortalSection.LIVE)
         val response = request(
             section.type, "get_ordered_list", token,
-            mapOf("category" to "*", "p" to page.toString())
+            mapOf("category" to category, "p" to page.toString())
         )
         val entries = entriesFrom(response)
         val newTitles = buildList {
             for (index in 0 until entries.length()) {
                 val entry = entries.optJSONObject(index) ?: continue
                 val title = entry.text("name", "title") ?: continue
-                add(PortalTitle(title, entry.text("id", "movie_id", "stream_id"), entry.text("cmd", "command")))
+                add(PortalTitle(
+                    name = title,
+                    id = entry.text("id", "movie_id", "stream_id"),
+                    command = entry.text("cmd", "command"),
+                    categoryId = entry.text("category_id", "genre_id"),
+                    categoryName = entry.text("category_name", "group_title", "genre_name")
+                ))
             }
         }
         check(entries.length() == 0 || newTitles.isNotEmpty())
@@ -110,8 +122,21 @@ internal class StalkerPortal(address: String, macAddress: String) {
             ?.takeIf { it >= entries.length() } ?: previous?.total
         val titles = previous?.titles.orEmpty() + newTitles
         val hasMore = newTitles.isNotEmpty() && (total == null || titles.size < total)
-        PortalCatalog(titles, total, if (hasMore) page + 1 else null)
+        PortalCatalog(titles, total, if (hasMore) page + 1 else null, previous?.groups.orEmpty())
     }
+
+    suspend fun loadCatalogGroups(section: PortalSection, token: String): List<PortalGroup> =
+        withContext(Dispatchers.IO) {
+            val entries = entriesFrom(request(section.type, "get_categories", token))
+            buildList {
+                for (index in 0 until entries.length()) {
+                    val row = entries.optJSONObject(index) ?: continue
+                    val id = row.text("id", "category_id") ?: continue
+                    val name = row.text("title", "name") ?: continue
+                    if (id != "*") add(PortalGroup(id, name, row.text("country_code", "country")))
+                }
+            }.distinctBy { it.id }
+        }
 
     suspend fun loadEpisodes(series: PortalTitle, token: String): List<PortalTitle> =
         withContext(Dispatchers.IO) {

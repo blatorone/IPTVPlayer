@@ -109,10 +109,19 @@ internal class PortalStorage(context: Context) {
                             put("name", title.name)
                             put("id", title.id)
                             put("command", title.command)
+                            put("categoryId", title.categoryId)
+                            put("categoryName", title.categoryName)
                         })
                     })
                     put("total", catalog.total)
                     put("nextPage", catalog.nextPage)
+                    put("groups", JSONArray().apply {
+                        for (group in catalog.groups) put(JSONObject().apply {
+                            put("id", group.id)
+                            put("name", group.name)
+                            put("country", group.country)
+                        })
+                    })
                 })
             }
         })
@@ -146,11 +155,22 @@ internal class PortalStorage(context: Context) {
                         else PortalTitle(
                             title.getString("name"),
                             title.optString("id").ifEmpty { null },
-                            title.optString("command").ifEmpty { null }
+                            title.optString("command").ifEmpty { null },
+                            categoryId = title.optString("categoryId").ifEmpty { null },
+                            categoryName = title.optString("categoryName").ifEmpty { null }
                         )
                     },
                     entry.optInt("total", -1).takeIf { it >= 0 },
-                    entry.optInt("nextPage", -1).takeIf { it > 0 }
+                    entry.optInt("nextPage", -1).takeIf { it > 0 },
+                    entry.optJSONArray("groups")?.let { groups ->
+                        List(groups.length()) { index ->
+                            val group = groups.getJSONObject(index)
+                            PortalGroup(
+                                group.getString("id"), group.getString("name"),
+                                group.optString("country").ifEmpty { null }
+                            )
+                        }
+                    }.orEmpty()
                 ))
             }
         }

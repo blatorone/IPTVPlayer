@@ -1,12 +1,14 @@
 package com.iptvplayer.app
 
 import android.os.Bundle
+import android.content.Context
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -51,6 +53,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.text.style.TextOverflow
@@ -77,6 +81,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
@@ -113,10 +118,13 @@ private enum class Destination(val label: Int) {
     MOVIES(R.string.destination_movies),
     SERIES(R.string.destination_series),
     SETTINGS(R.string.destination_settings),
+    CATEGORIES(R.string.category_settings),
     SOURCES(R.string.destination_sources)
 }
 
-private val mainDestinations = Destination.entries.filter { it != Destination.SOURCES }
+private val mainDestinations = Destination.entries.filter {
+    it != Destination.SOURCES && it != Destination.CATEGORIES
+}
 
 private val playerColors = darkColorScheme(
     primary = Color(0xFF8BB8FF),
@@ -139,6 +147,18 @@ private fun PlayerHome(
     var lastFocused by rememberSaveable { mutableStateOf(Destination.LIVE) }
     val initialFocus = remember { FocusRequester() }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val preview = LocalInspectionMode.current
+    val preferences = remember(context, preview) {
+        if (preview) null else context.getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE)
+    }
+    var countries by remember(preferences) {
+        mutableStateOf(preferences?.getStringSet("countries", emptySet()).orEmpty().toSet())
+    }
+    var hiddenCategories by remember(preferences) {
+        mutableStateOf(preferences?.getStringSet("hidden", emptySet()).orEmpty().toSet())
+    }
+    var showHiddenCategories by remember { mutableStateOf(false) }
     var liveSession by remember { mutableStateOf<Pair<StalkerPortal, String?>?>(null) }
     var channels by remember { mutableStateOf(emptyList<StalkerChannel>()) }
     var genres by remember { mutableStateOf(emptyMap<String, String>()) }
@@ -154,6 +174,11 @@ private fun PlayerHome(
     var importStatuses by remember { mutableStateOf(emptyMap<PortalSection, ImportStatus>()) }
     var catalogSession by remember { mutableStateOf<Pair<StalkerPortal, String?>?>(null) }
     var catalogs by remember { mutableStateOf(emptyMap<PortalSection, PortalCatalog>()) }
+    var selectedGroup by remember { mutableStateOf<Pair<PortalSection, PortalGroup>?>(null) }
+    var groupCatalog by remember { mutableStateOf<PortalCatalog?>(null) }
+    var groupLoading by remember { mutableStateOf(false) }
+    var groupError by remember { mutableStateOf(false) }
+    var groupJob by remember { mutableStateOf<Job?>(null) }
     var catalogLoading by remember { mutableStateOf(emptySet<PortalSection>()) }
     var catalogErrors by remember { mutableStateOf(emptySet<PortalSection>()) }
     var playbackError by remember { mutableStateOf<Int?>(null) }
@@ -168,6 +193,71 @@ private fun PlayerHome(
     var editing by remember { mutableStateOf(false) }
     var restoring by remember { mutableStateOf(storage != null) }
     var storageError by remember { mutableStateOf<Int?>(null) }
+    val fallbackGroup = stringResource(R.string.uncategorized_channels)
+    val uncategorized = stringResource(R.string.uncategorized_channels)
+    val categoryNumber = stringResource(R.string.channel_category_number)
+    val liveCategories = remember(channels, genres, uncategorized, categoryNumber) {
+        channels.groupBy { channel ->
+            channel.genreName ?: genres[channel.genreId]
+                ?: channel.genreId?.takeUnless { it == "0" }?.let { categoryNumber.format(it) }
+                ?: uncategorized
+        }
+    }
+    val knownCountries = remember(liveCategories, catalogs, fallbackGroup) {
+        (liveCategories.keys.map { categoryCountry(it) } +
+            catalogs.values.flatMap { catalog ->
+                catalog.availableGroups(fallbackGroup).map { categoryCountry(it.name, it.country) }
+            }).toSet()
+    }
+
+    fun toggleCountry(code: String) {
+        countries = if (code in countries) countries - code else countries + code
+        preferences?.edit()?.putStringSet("countries", countries)?.apply()
+    }
+
+    fun toggleCategory(section: PortalSection, id: String) {
+        val key = categoryKey(section, id)
+        hiddenCategories = if (key in hiddenCategories) hiddenCategories - key else hiddenCategories + key
+        preferences?.edit()?.putStringSet("hidden", hiddenCategories)?.apply()
+    }
+
+    fun visibleCategory(section: PortalSection, id: String, label: String, country: String? = null): Boolean {
+        val hidden = categoryKey(section, id) in hiddenCategories
+        return (showHiddenCategories || !hidden) &&
+            (countries.isEmpty() || categoryCountry(label, country) in countries ||
+                (showHiddenCategories && hidden))
+    }
+
+    fun closeGroup() {
+        groupJob?.cancel()
+        selectedGroup = null
+        groupCatalog = null
+        groupError = false
+        groupLoading = false
+    }
+
+    fun loadGroup(section: PortalSection, group: PortalGroup, next: Boolean = false) {
+        val session = catalogSession ?: return
+        val previous = groupCatalog.takeIf { next }
+        val page = if (next) previous?.nextPage ?: return else 1
+        groupJob?.cancel()
+        selectedGroup = section to group
+        groupCatalog = previous
+        groupError = false
+        groupLoading = true
+        groupJob = scope.launch {
+            try {
+                val token = session.second ?: session.first.openSession()
+                groupCatalog = session.first.loadCatalog(section, token, page, previous, group.id)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                groupError = true
+            } finally {
+                if (kotlin.coroutines.coroutineContext.isActive) groupLoading = false
+            }
+        }
+    }
     var epgCache by remember(liveSession) {
         mutableStateOf(emptyMap<String, List<PortalProgramme>>())
     }
@@ -348,6 +438,7 @@ private fun PlayerHome(
                     if (activated) return
                     if (!sameSource) {
                         closeSeries()
+                        closeGroup()
                         channels = emptyList()
                         genres = emptyMap()
                         catalogs = emptyMap()
@@ -392,7 +483,19 @@ private fun PlayerHome(
                                 if (imported.partial) ImportStatus.Partial(channels.size)
                                 else ImportStatus.Count(channels.size)
                             } else {
-                                val catalog = source.loadCatalog(section, token)
+                                val catalog = coroutineScope {
+                                    val groups = async {
+                                        try {
+                                            source.loadCatalogGroups(section, token)
+                                        } catch (error: CancellationException) {
+                                            throw error
+                                        } catch (_: Exception) {
+                                            emptyList()
+                                        }
+                                    }
+                                    val firstPage = source.loadCatalog(section, token)
+                                    firstPage.copy(groups = groups.await())
+                                }
                                 activateSource()
                                 catalogs = catalogs + (section to catalog)
                                 catalog.total?.let { ImportStatus.Count(it) }
@@ -519,7 +622,13 @@ private fun PlayerHome(
     BackHandler(enabled = selected != null || insideCategory) {
         if (insideCategory) category = null
         else if (selected == Destination.SERIES && openedSeries != null) closeSeries()
-        else selected = if (selected == Destination.SOURCES) Destination.SETTINGS else null
+        else if (
+            (selected == Destination.MOVIES && selectedGroup?.first == PortalSection.MOVIES) ||
+            (selected == Destination.SERIES && selectedGroup?.first == PortalSection.SERIES)
+        ) closeGroup()
+        else selected = if (selected == Destination.SOURCES || selected == Destination.CATEGORIES) {
+            Destination.SETTINGS
+        } else null
     }
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -545,14 +654,15 @@ private fun PlayerHome(
                         modifier = if (
                             item == lastFocused &&
                             destination != Destination.SETTINGS &&
-                            destination != Destination.SOURCES
+                            destination != Destination.SOURCES && destination != Destination.CATEGORIES
                         ) {
                             Modifier.fillMaxWidth().focusRequester(initialFocus)
                         } else {
                             Modifier.fillMaxWidth()
                         },
                         selected = item == (destination ?: Destination.LIVE) ||
-                            (item == Destination.SETTINGS && destination == Destination.SOURCES),
+                            (item == Destination.SETTINGS &&
+                                destination in listOf(Destination.SOURCES, Destination.CATEGORIES)),
                         onClick = {
                             lastFocused = item
                             selected = item
@@ -568,8 +678,12 @@ private fun PlayerHome(
                 when (destination) {
                     null, Destination.LIVE -> LiveOverview(
                         player = player,
-                        channels = channels,
-                        genres = genres,
+                        groups = liveCategories,
+                        visibleGroups = liveCategories.keys.filter {
+                            visibleCategory(PortalSection.LIVE, it, it)
+                        }.sorted(),
+                        hiddenGroups = hiddenCategories,
+                        onToggleGroup = { toggleCategory(PortalSection.LIVE, it) },
                         category = category,
                         onCategory = { category = it },
                         playing = playing.takeIf { vodSection == null },
@@ -592,11 +706,40 @@ private fun PlayerHome(
                             }
                         }
                     )
-                    Destination.SETTINGS -> MenuButton(
-                        label = stringResource(R.string.destination_sources),
-                        modifier = Modifier.focusRequester(initialFocus),
-                        onClick = { selected = Destination.SOURCES }
-                    )
+                    Destination.SETTINGS -> {
+                        MenuButton(
+                            label = stringResource(R.string.destination_sources),
+                            modifier = Modifier.focusRequester(initialFocus),
+                            onClick = { selected = Destination.SOURCES }
+                        )
+                        MenuButton(stringResource(R.string.category_settings), Modifier) {
+                            selected = Destination.CATEGORIES
+                        }
+                    }
+                    Destination.CATEGORIES -> {
+                        Text(stringResource(R.string.category_settings_hint))
+                        MenuButton(
+                            stringResource(R.string.show_hidden_categories),
+                            Modifier.focusRequester(initialFocus),
+                            selected = showHiddenCategories
+                        ) { showHiddenCategories = !showHiddenCategories }
+                        Text(stringResource(R.string.country_filter_label))
+                        MenuButton(
+                            stringResource(R.string.all_countries), Modifier,
+                            selected = countries.isEmpty()
+                        ) {
+                            countries = emptySet()
+                            preferences?.edit()?.remove("countries")?.apply()
+                        }
+                        for (code in (knownCountries + countries).sorted()) {
+                            val label = if (code == UNKNOWN_COUNTRY) {
+                                stringResource(R.string.unknown_country)
+                            } else countryLabel(code)
+                            MenuButton(label, Modifier, selected = code in countries) {
+                                toggleCountry(code)
+                            }
+                        }
+                    }
                     Destination.SOURCES -> {
                         MenuButton(
                             label = stringResource(
@@ -687,21 +830,48 @@ private fun PlayerHome(
                                     MenuButton(label, Modifier.fillMaxWidth()) { selectTitle(section, episode) }
                                 }
                             }
-                        } else CatalogOverview(
-                            catalog = catalogs[section],
+                        } else {
+                            val group = selectedGroup?.takeIf { it.first == section }?.second
+                            val baseCatalog = catalogs[section]
+                            val uncategorizedSelected = group?.id == ALL_CATALOG_ITEMS
+                            if (group != null) {
+                                MenuButton(
+                                    stringResource(R.string.back_to_categories), Modifier,
+                                    onClick = ::closeGroup
+                                )
+                                Text(group.name, style = MaterialTheme.typography.titleMedium)
+                                CatalogOverview(
+                                    catalog = if (uncategorizedSelected) baseCatalog else groupCatalog,
+                                    loading = if (uncategorizedSelected) section in catalogLoading else groupLoading,
+                                    failed = if (uncategorizedSelected) section in catalogErrors else groupError,
+                                    canLoadMore = !connecting,
+                                    emptyMessage = if (section == PortalSection.MOVIES) {
+                                        R.string.no_movies
+                                    } else R.string.no_series,
+                                    onLoadMore = {
+                                        if (uncategorizedSelected) loadMore(section)
+                                        else loadGroup(section, group, next = true)
+                                    },
+                                    onSelect = { selectTitle(section, it) }
+                                )
+                            } else CatalogCategories(
+                            groups = baseCatalog?.availableGroups(fallbackGroup).orEmpty().filter {
+                                visibleCategory(section, it.id, it.name, it.country)
+                            },
                             loading = section in catalogLoading ||
                                 importStatuses[section] == ImportStatus.Loading,
                             failed = section in catalogErrors ||
                                 importStatuses[section] == ImportStatus.Failed,
-                            canLoadMore = !connecting,
-                            emptyMessage = if (section == PortalSection.MOVIES) {
-                                R.string.no_movies
-                            } else {
-                                R.string.no_series
+                            isHidden = { categoryKey(section, it.id) in hiddenCategories },
+                            onSelect = {
+                                if (it.id == ALL_CATALOG_ITEMS) {
+                                    closeGroup()
+                                    selectedGroup = section to it
+                                } else loadGroup(section, it)
                             },
-                            onLoadMore = { loadMore(section) },
-                            onSelect = { selectTitle(section, it) }
-                        )
+                            onToggle = { toggleCategory(section, it.id) }
+                            )
+                        }
                     }
                 }
             }
@@ -837,8 +1007,10 @@ private fun PortalImportStatus(statuses: Map<PortalSection, ImportStatus>) {
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 private fun LiveOverview(
     player: ExoPlayer?,
-    channels: List<StalkerChannel>,
-    genres: Map<String, String>,
+    groups: Map<String, List<StalkerChannel>>,
+    visibleGroups: List<String>,
+    hiddenGroups: Set<String>,
+    onToggleGroup: (String) -> Unit,
     category: String?,
     onCategory: (String?) -> Unit,
     playing: StalkerChannel?,
@@ -852,29 +1024,23 @@ private fun LiveOverview(
     onStop: () -> Unit,
     onSelect: (StalkerChannel) -> Unit
 ) {
-    val uncategorized = stringResource(R.string.uncategorized_channels)
-    val categoryLabel = stringResource(R.string.channel_category_number)
-    val groups = remember(channels, genres, uncategorized, categoryLabel) {
-        channels.groupBy { channel ->
-            channel.genreName ?: genres[channel.genreId]
-                ?: channel.genreId?.takeUnless { it == "0" }?.let { categoryLabel.format(it) }
-                ?: uncategorized
-        }
-    }
     val visibleChannels = groups[category]
     val channels: @Composable () -> Unit = {
         Text(
             category ?: stringResource(R.string.channel_categories),
             style = MaterialTheme.typography.titleMedium
         )
-        if (channels.isEmpty()) {
+        if (groups.isEmpty()) {
             Text(stringResource(R.string.no_channels), color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else if (visibleChannels == null) {
+            if (visibleGroups.isEmpty()) Text(stringResource(R.string.no_visible_categories))
             LazyColumn(Modifier.heightIn(max = 320.dp)) {
-                items(groups.keys.sorted()) { group ->
+                items(visibleGroups, key = { it }) { group ->
                     MenuButton(
-                        group, Modifier.fillMaxWidth(),
-                        count = groups.getValue(group).size
+                        categoryEntryLabel(group, categoryKey(PortalSection.LIVE, group) in hiddenGroups),
+                        Modifier.fillMaxWidth(),
+                        count = groups.getValue(group).size,
+                        onLongPress = { onToggleGroup(group) }
                     ) { onCategory(group) }
                 }
             }
@@ -934,6 +1100,35 @@ private fun LiveOverview(
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 preview(Modifier.fillMaxWidth())
                 channels()
+            }
+        }
+    }
+}
+
+@Composable
+private fun categoryEntryLabel(name: String, hidden: Boolean): String =
+    if (hidden) stringResource(R.string.hidden_category_label, name) else name
+
+@Composable
+private fun CatalogCategories(
+    groups: List<PortalGroup>,
+    loading: Boolean,
+    failed: Boolean,
+    isHidden: (PortalGroup) -> Boolean,
+    onSelect: (PortalGroup) -> Unit,
+    onToggle: (PortalGroup) -> Unit
+) {
+    if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+    if (failed) Text(stringResource(R.string.catalog_load_failed), color = MaterialTheme.colorScheme.error)
+    if (groups.isEmpty() && !loading && !failed) Text(stringResource(R.string.no_visible_categories))
+    if (groups.isNotEmpty()) {
+        LazyColumn(Modifier.heightIn(max = 320.dp)) {
+            items(groups, key = { it.id }) { group ->
+                MenuButton(
+                    categoryEntryLabel(group.name, isHidden(group)),
+                    Modifier.fillMaxWidth(),
+                    onLongPress = { onToggle(group) }
+                ) { onSelect(group) }
             }
         }
     }
@@ -1077,6 +1272,7 @@ private fun MenuButton(
     logo: String? = null,
     count: Int? = null,
     onFocused: (() -> Unit)? = null,
+    onLongPress: (() -> Unit)? = null,
     onClick: () -> Unit
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -1087,11 +1283,12 @@ private fun MenuButton(
         else -> Color.Transparent
     }
     Surface(
-        onClick = onClick,
-        modifier = modifier.onFocusChanged {
-            if (it.isFocused && !focused) onFocused?.invoke()
-            focused = it.isFocused
-        },
+        modifier = modifier
+            .onFocusChanged {
+                if (it.isFocused && !focused) onFocused?.invoke()
+                focused = it.isFocused
+            }
+            .combinedClickable(onClick = onClick, onLongClick = onLongPress),
         color = container,
         contentColor = if (focused) colors.onTertiaryContainer else colors.onSurface,
         shape = RoundedCornerShape(8.dp)

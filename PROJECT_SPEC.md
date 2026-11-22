@@ -51,6 +51,8 @@ Ein nutzerkonfigurierbarer IPTV-Player für Android-Telefone und -Tablets sowie 
 - Touch und Fernbedienung gleichwertig nutzbar: sichtbarer Fokus, logische D-Pad-Reihenfolge, erreichbare Aktionen und vorhersehbare Zurück-Navigation.
 - Die Einstellungen markieren Fokus und Mauszeiger farblich. Zweimaliges Zurück beendet die App bei geöffnetem Hauptmenü. Im Programmführer und in der Vollbild-Senderliste führt Links zuerst zu den Kategorien und danach ins Hauptmenü. Rechts öffnet die Zeitleiste am aktuellen Programm, und Links führt über frühere Programme zurück zur Senderspalte. Die erneute Auswahl des laufenden Senders oder langes Zurück öffnet eine laufende Live-Vorschau im Vollbild.
 
+Im Programmführer erscheint während aktiver Live-Wiedergabe eine fokussierbare Stopp-Aktion, die den Stream beendet.
+
 ## VOD
 
 - Beim automatischen Folgenwechsel pausiert „Schaust du noch?“ nach einer einstellbaren Anzahl von Folgen ohne Eingabe. Die Abfrage ist standardmäßig nach drei Folgen aktiv. Ohne Bestätigung wird nach 30 Sekunden gestoppt.

@@ -2,6 +2,10 @@
 
 ## Unveröffentlicht
 
+## 1.0.25
+
+- Im Live-Programmführer erscheint während der Wiedergabe eine fokussierbare Stopp-Schaltfläche.
+
 ## 1.0.24
 
 - Absturz beim Öffnen der Einstellungen behoben, der durch eine ungültige Auswahlansicht ausgelöst wurde.

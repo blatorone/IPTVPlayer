@@ -4222,6 +4222,13 @@ private fun PlayerHome(
                                             }
                                         }
                                     }
+                                    if (livePreview != null || starting != null && vodSection == null) {
+                                        MenuButton(
+                                            stringResource(R.string.stop_playback),
+                                            Modifier,
+                                            onClick = ::stopPlayback
+                                        )
+                                    }
                                 }
                             guideState.SaveableStateProvider("programme-guide") {
                                 ProgrammeTimeline(

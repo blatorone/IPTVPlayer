@@ -119,6 +119,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.first
@@ -258,6 +259,16 @@ private data class PlaybackAttempt(
 )
 
 private enum class SeriesActivityView { HISTORY, WATCHLIST }
+private enum class SettingsSection(val label: Int) {
+    GENERAL(R.string.settings_general),
+    SOURCES(R.string.settings_library),
+    GUIDE(R.string.destination_guide),
+    APPEARANCE(R.string.settings_appearance),
+    PLAYBACK(R.string.settings_playback),
+    CONTROLS(R.string.settings_controls),
+    METADATA(R.string.settings_metadata),
+    UPDATES(R.string.settings_updates)
+}
 
 private fun liveSelection(channel: StalkerChannel, group: LiveChannelGroup, combine: Boolean): PlaybackSelection {
     val source = group.variants.first().item.source.identity
@@ -330,8 +341,14 @@ private fun PlayerHome(
     var metadataSettingsOpen by remember { mutableStateOf(false) }
     var episodeSettingsOpen by remember { mutableStateOf(false) }
     var epgSettingsOpen by remember { mutableStateOf(false) }
+    var settingsSection by rememberSaveable { mutableStateOf<SettingsSection?>(null) }
+    var guideAppearancePage by remember { mutableStateOf<GuideAppearancePage?>(null) }
+    var guideAppearance by remember(preferences) { mutableStateOf(readGuideAppearance(preferences)) }
     var useXmlTv by remember(preferences) { mutableStateOf(preferences?.getBoolean("xmltv_enabled", false) ?: false) }
     var epgAtStartup by remember(preferences) { mutableStateOf(preferences?.getBoolean("epg_at_startup", true) ?: true) }
+    var playLastChannelAtStartup by remember(preferences) {
+        mutableStateOf(preferences?.getBoolean("play_last_channel_at_startup", true) ?: true)
+    }
     var epgRefreshHours by remember(preferences) { mutableStateOf(preferences?.getInt("epg_refresh_hours", 6) ?: 6) }
     var epgHorizonHours by remember(preferences) { mutableStateOf(preferences?.getInt("epg_horizon_hours", 24) ?: 24) }
     var xmlTvSources by remember { mutableStateOf(emptyList<String>()) }
@@ -398,6 +415,9 @@ private fun PlayerHome(
     var showHiddenCategories by remember { mutableStateOf(false) }
     var mergeSources by remember(preferences) {
         mutableStateOf(preferences?.getBoolean("mergeSources", true) ?: true)
+    }
+    var mergedIndividualPortals by remember(preferences) {
+        mutableStateOf(preferences?.getStringSet("merged_individual_portals", emptySet()).orEmpty().toSet())
     }
     var categoryMenu by remember { mutableStateOf<Pair<PortalSection, String?>?>(null) }
     var details by remember { mutableStateOf<Pair<PortalSection, PortalTitle>?>(null) }
@@ -498,12 +518,14 @@ private fun PlayerHome(
         if (mergeSources) savedSources.ifEmpty { listOfNotNull(active) } else listOfNotNull(active)
     }
     val combine = mergeSources
+    val mergePortalChannels = storedSource?.identity in mergedIndividualPortals
     var editing by remember { mutableStateOf(false) }
     var initialPortalPromptDismissed by rememberSaveable { mutableStateOf(false) }
     var restoring by remember { mutableStateOf(storage != null) }
     var storageError by remember { mutableStateOf<Int?>(null) }
-    val detailMetadata by produceState<TmdbTitle?>(null, metadataClient, details) {
+    val detailMetadata by produceState<TmdbTitle?>(null, metadataClient, details, mergeSources) {
         value = null
+        if (!mergeSources) return@produceState
         val client = metadataClient ?: return@produceState
         val entry = details ?: return@produceState
         if (entry.first == PortalSection.SERIES && titleIdentity(entry.second) == null) return@produceState
@@ -580,17 +602,16 @@ private fun PlayerHome(
     val fallbackGroup = stringResource(R.string.uncategorized_channels)
     val uncategorized = stringResource(R.string.uncategorized_channels)
     val categoryNames = LiveCategory.entries.associateWith { stringResource(it.label) }
-    val displayChannels = remember { mutableMapOf<StalkerChannel, StalkerChannel>() }
-    val liveGroups = remember(sourcesForBrowsing, combine) {
-        val groups = buildLiveChannelGroups(sourcesForBrowsing, combine)
+    val displayChannels = remember(combine, mergePortalChannels) { mutableMapOf<StalkerChannel, StalkerChannel>() }
+    val liveGroups = remember(sourcesForBrowsing, combine, mergePortalChannels) {
+        val groups = buildLiveChannelGroups(sourcesForBrowsing, combine, mergePortalChannels)
         val originals = groups.map { it.variants.first().item.value }.toSet()
         displayChannels.keys.retainAll(originals)
         groups.associateBy { group ->
             val original = group.variants.first().item.value
-            val name = group.description.name
-            displayChannels.getOrPut(original) {
+            if (!combine && !mergePortalChannels) original else displayChannels.getOrPut(original) {
                 StalkerChannel(
-                    name, original.command, original.genreId, original.genreName,
+                    group.description.name, original.command, original.genreId, original.genreName,
                     original.id, original.logo, original.direct, original.epgIdentity, original.number
                 )
             }
@@ -599,9 +620,14 @@ private fun PlayerHome(
     val liveVariants = remember(liveGroups) {
         liveGroups.mapValues { (_, group) -> group.variants.map { it.item } }
     }
-    val allLiveCategories = remember(liveGroups, categoryNames) {
+    val allLiveCategories = remember(liveGroups, categoryNames, combine, uncategorized) {
         liveGroups.keys.groupBy { channel ->
-            categoryNames.getValue(liveGroups.getValue(channel).description.category)
+            val group = liveGroups.getValue(channel)
+            if (combine) categoryNames.getValue(group.description.category) else {
+                val first = group.variants.first().item
+                first.value.genreName?.takeIf(String::isNotBlank)
+                    ?: first.source.genres[first.value.genreId] ?: uncategorized
+            }
         }
     }
     val liveCategories = remember(allLiveCategories, liveGroups, countries) {
@@ -971,12 +997,44 @@ private fun PlayerHome(
         val group = selectedGroup
         if (groupUsesTmdb && group != null) loadGroup(group.first, group.second)
     }
-    var epgCache by remember(liveSession) {
+    var epgCache by remember {
         mutableStateOf(emptyMap<String, List<PortalProgramme>>())
     }
-    var epgFetchedAt by remember(liveSession) { mutableStateOf(emptyMap<String, Long>()) }
-    val epgInFlight = remember(liveSession) { mutableSetOf<String>() }
+    var epgFetchedAt by remember { mutableStateOf(emptyMap<String, Long>()) }
+    val epgInFlight = remember { mutableSetOf<String>() }
+    var guideCacheLoaded by remember(storage) { mutableStateOf(storage == null) }
     var externalGuides by remember { mutableStateOf(emptyList<XmlTvGuide>()) }
+    LaunchedEffect(storage) {
+        if (storage == null) return@LaunchedEffect
+        val saved = try {
+            storage.readGuideCache()
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            emptyMap()
+        }
+        val now = System.currentTimeMillis()
+        val recent = saved.filterValues { now - it.fetchedAt in 0..(7 * 86_400_000L) }
+        epgCache = recent.mapValues { it.value.programmes } + epgCache
+        epgFetchedAt = recent.mapValues { it.value.fetchedAt } + epgFetchedAt
+        guideCacheLoaded = true
+    }
+    LaunchedEffect(storage, guideCacheLoaded) {
+        if (storage == null || !guideCacheLoaded) return@LaunchedEffect
+        snapshotFlow { epgFetchedAt to epgCache }.collectLatest { (times, entries) ->
+            if (times.isEmpty()) return@collectLatest
+            delay(900)
+            try {
+                storage.writeGuideCache(times.mapNotNull { (key, time) ->
+                    entries[key]?.let { key to CachedProgramme(time, it) }
+                }.toMap())
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                // A cache write is optional. The in-memory guide remains available.
+            }
+        }
+    }
 
     fun effectiveProgrammes(channel: StalkerChannel): List<PortalProgramme>? =
         if (useXmlTv) {
@@ -985,7 +1043,10 @@ private fun PlayerHome(
                     guide.programmes(item.value, channel.name).takeIf { it.isNotEmpty() }
                 }
             } ?: emptyList<PortalProgramme>().takeUnless { epgUpdating }
-        } else epgCache[programmeKey(channel)]
+        } else {
+            val key = programmeKey(channel)
+            if (key == null) emptyList() else epgCache[key]
+        }
 
     suspend fun loadProviderSchedule(channel: StalkerChannel, force: Boolean = false): Boolean {
         val key = programmeKey(channel) ?: return true
@@ -993,7 +1054,8 @@ private fun PlayerHome(
         if (variants.isEmpty()) return true
         val last = epgFetchedAt[key] ?: -1
         val maxAge = if (epgRefreshHours > 0) epgRefreshHours * 3_600_000L else Long.MAX_VALUE
-        if (!force && last >= 0 && SystemClock.elapsedRealtime() - last < maxAge) return true
+        if (!guideCacheLoaded) return true
+        if (!force && last >= 0 && System.currentTimeMillis() - last in 0 until maxAge) return true
         if (!epgInFlight.add(key)) return true
         return try {
             var entries = emptyList<PortalProgramme>()
@@ -1013,7 +1075,7 @@ private fun PlayerHome(
             }
             check(answered)
             epgCache = epgCache + (key to entries)
-            epgFetchedAt = epgFetchedAt + (key to SystemClock.elapsedRealtime())
+            epgFetchedAt = epgFetchedAt + (key to System.currentTimeMillis())
             true
         } catch (error: CancellationException) {
             throw error
@@ -1036,7 +1098,7 @@ private fun PlayerHome(
 
     val pinnedProgramme = programmeChannel?.let(::programmeKey) in pinnedProgrammeKeys
     val programmes = programmeChannel?.let(::effectiveProgrammes)
-    LaunchedEffect(programmeChannel, sourcesForBrowsing, useXmlTv, epgHorizonHours, epgRefreshRequest) {
+    LaunchedEffect(programmeChannel, sourcesForBrowsing, useXmlTv, epgHorizonHours, epgRefreshRequest, guideCacheLoaded) {
         val channel = programmeChannel ?: return@LaunchedEffect
         if (useXmlTv) return@LaunchedEffect
         delay(250)
@@ -1050,15 +1112,24 @@ private fun PlayerHome(
             if (canPlay()) epgRefreshRequest++
         }
     }
-    LaunchedEffect(restoring, hasPortal, liveSession, useXmlTv, xmlTvSources, xmlTvSourcesLoaded, epgHorizonHours, epgRefreshRequest) {
-        if (restoring || !hasPortal || !xmlTvSourcesLoaded) return@LaunchedEffect
+    LaunchedEffect(restoring, hasPortal, liveSession, useXmlTv, xmlTvSources, xmlTvSourcesLoaded, guideCacheLoaded,
+        epgHorizonHours, epgRefreshRequest, epgRefreshHours) {
+        if (restoring || !hasPortal || !xmlTvSourcesLoaded || !guideCacheLoaded) return@LaunchedEffect
         val refresh = epgAtStartup || epgRefreshRequest > 0
         epgUpdateFailed = false
         epgUpdating = true
         try {
             if (useXmlTv) {
-                val results = xmlTvSources.mapNotNull(::guideSourceUri).map {
-                    loadXmlTvGuide(context.cacheDir, it, epgHorizonHours, refresh)
+                val sources = xmlTvSources.mapNotNull(::guideSourceUri)
+                val maxAge = if (epgRefreshHours > 0) epgRefreshHours * 3_600_000L else Long.MAX_VALUE
+                val cached = sources.map {
+                    loadXmlTvGuide(context.cacheDir, it, epgHorizonHours, false, false, maxAge)
+                }
+                externalGuides = cached.mapNotNull { it.guide }
+                val results = sources.zip(cached).map { (uri, entry) ->
+                    if (entry.guide == null || refresh && (epgRefreshRequest > 0 || entry.needsRefresh)) {
+                        loadXmlTvGuide(context.cacheDir, uri, epgHorizonHours, refresh = true)
+                    } else entry
                 }
                 externalGuides = results.mapNotNull { it.guide }
                 epgUpdateFailed = results.any { it.failed }
@@ -1069,7 +1140,8 @@ private fun PlayerHome(
                     val key = programmeKey(it)
                     key in pinnedProgrammeKeys || key in epgCache
                 }
-                epgUpdateFailed = !loadProviderSchedules(available.take(12) + known, force = true)
+                if (epgRefreshRequest == 0) delay(700)
+                epgUpdateFailed = !loadProviderSchedules(available.take(12) + known, force = epgRefreshRequest > 0)
             }
         } finally {
             epgUpdating = false
@@ -1303,7 +1375,7 @@ private fun PlayerHome(
     LaunchedEffect(restoring, liveCategories) {
         if (restoring || restoredLastLiveChannel) return@LaunchedEffect
         restoredLastLiveChannel = true
-        if (selected != Destination.LIVE || playbackSelection != null) return@LaunchedEffect
+        if (!playLastChannelAtStartup || selected != Destination.LIVE || playbackSelection != null) return@LaunchedEffect
         val savedKey = preferences?.getString("last_live_channel", null) ?: return@LaunchedEffect
         val visibleChannels = liveCategories.entries
             .filter { visibleCategory(PortalSection.LIVE, it.key, it.key) }
@@ -1996,6 +2068,8 @@ private fun PlayerHome(
     var guidePanel by remember { mutableStateOf(GuidePanel.GRID) }
     var fullscreenGuidePanel by remember { mutableStateOf(GuidePanel.GRID) }
     var fullscreenOverlayContent by remember { mutableStateOf(GuidePanel.CHANNELS) }
+    var overlayInteraction by remember { mutableIntStateOf(0) }
+    var overlayScheduleFocused by remember { mutableStateOf(false) }
     var guideProgramme by remember { mutableStateOf<PortalProgramme?>(null) }
     val guidePanelFocus = remember { FocusRequester() }
     val guideChannelFocus = remember { FocusRequester() }
@@ -2018,13 +2092,14 @@ private fun PlayerHome(
         guidePanel = guidePanel.afterProgrammeGuide(input)
     }
     fun showFullscreenPanel(panel: GuidePanel) {
+        if (panel != fullscreenGuidePanel) overlayScheduleFocused = false
         if (panel != GuidePanel.GRID) fullscreenOverlayContent = panel
         fullscreenGuidePanel = panel
     }
-    LaunchedEffect(fullscreen, fullscreenGuidePanel) {
+    LaunchedEffect(fullscreen, fullscreenGuidePanel, guideAppearance.closeSeconds, overlayInteraction) {
         if (!fullscreen) showFullscreenPanel(GuidePanel.GRID)
-        else if (fullscreenGuidePanel != GuidePanel.GRID) {
-            delay(15_000)
+        else if (fullscreenGuidePanel != GuidePanel.GRID && guideAppearance.closeSeconds > 0) {
+            delay(guideAppearance.closeSeconds * 1_000L)
             showFullscreenPanel(GuidePanel.GRID)
         }
     }
@@ -2100,6 +2175,7 @@ private fun PlayerHome(
         else if (selected == Destination.MOVIES && movieHistoryOpen) movieHistoryOpen = false
         else if (selected == Destination.MOVIES && movieWatchlistOpen) movieWatchlistOpen = false
         else if (selected == Destination.SOURCES || selected == Destination.CATEGORIES) selected = Destination.SETTINGS
+        else if (selected == Destination.SETTINGS && settingsSection != null) settingsSection = null
         else openMainMenu()
     }
     var playerControlsRequest by remember { mutableIntStateOf(0) }
@@ -2140,7 +2216,7 @@ private fun PlayerHome(
         }
     }
     val longBack by rememberUpdatedState<() -> Boolean>({
-        !controlSettingsOpen &&
+        !controlSettingsOpen && guideAppearancePage == null &&
             (runMappedControl(GuideInput.LONG_BACK) || (!fullscreen && openCurrentFullscreen()))
     })
     val screenBack by rememberUpdatedState<(Boolean) -> Boolean>({ released ->
@@ -2159,6 +2235,12 @@ private fun PlayerHome(
         }
     }
     BackHandler(onBack = ::navigateBack)
+    guideAppearancePage?.let { page ->
+        GuideAppearanceDialog(page, guideAppearance, onChange = {
+            guideAppearance = it
+            it.save(preferences)
+        }, onDismiss = { guideAppearancePage = null })
+    }
     if (controlSettingsOpen) ControlMappingDialog(
         bindings = controlBindings,
         onChange = { input, action ->
@@ -2288,6 +2370,8 @@ private fun PlayerHome(
         }
     }
     if (fullscreen) {
+        val screenWidth = LocalConfiguration.current.screenWidthDp.dp
+        val scheduleBesideList = guideAppearance.showSchedule && screenWidth >= 640.dp
         fun navigateFromLiveFullscreen(input: GuideInput) {
             if (runMappedControl(input)) return
             if (fullscreenGuidePanel == GuidePanel.GRID && (input == GuideInput.SWIPE_RIGHT || input == GuideInput.REMOTE_RIGHT)) {
@@ -2298,7 +2382,12 @@ private fun PlayerHome(
         }
         val live = vodSection == null
         val overlayFocus = remember { FocusRequester() }
-        val inputModifier = if (live) Modifier.guideNavigationInput(onInput = ::navigateFromLiveFullscreen) else Modifier
+        val inputModifier = if (live) Modifier.guideNavigationInput(interceptRemote = { input ->
+            val mapped = controlBindings[input]
+            val custom = mapped != null && mapped != ControlAction.DEFAULT
+            custom || fullscreenGuidePanel != GuidePanel.CHANNELS || !scheduleBesideList ||
+                (input == GuideInput.REMOTE_LEFT && !overlayScheduleFocused)
+        }, onInput = ::navigateFromLiveFullscreen) else Modifier
         Box(Modifier.fillMaxSize().background(Color.Black).then(inputModifier)) {
             PlayerFrame(
                 player, active = true, fullscreen = true, onStop = ::stopPlayback,
@@ -2331,11 +2420,20 @@ private fun PlayerHome(
                     val groups = liveCategories.keys.filter { visibleCategory(PortalSection.LIVE, it, it) }
                         .sortedBy { categoryNames.values.indexOf(it) }
                     val channelCategory = guideChannelCategory(category, groups, liveCategories, playing)
+                    val panelWidth = when (panel) {
+                        GuidePanel.CHANNELS -> {
+                            val fraction = if (scheduleBesideList) 0.62f else 0.38f
+                            (screenWidth * fraction * guideAppearance.listWidth.factor)
+                                .coerceIn(minOf(205.dp, screenWidth * 0.8f), screenWidth * 0.88f)
+                        }
+                        GuidePanel.DETAILS -> minOf(300.dp, screenWidth * 0.85f)
+                        else -> minOf(235.dp, screenWidth * 0.85f)
+                    }
                     Surface(
-                        modifier = Modifier.width(if (panel == GuidePanel.DETAILS) 300.dp else 235.dp)
+                        modifier = Modifier.width(panelWidth)
                             .then(if (panel == GuidePanel.DETAILS) Modifier.heightIn(max = 230.dp) else Modifier.fillMaxHeight()),
                         shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.94f)
+                        color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = guideAppearance.opacity / 100f)
                     ) {
                         Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                             MenuButton(
@@ -2345,22 +2443,25 @@ private fun PlayerHome(
                             ) {
                                 showFullscreenPanel(if (panel == GuidePanel.CHANNELS) GuidePanel.CATEGORIES else panel.after(GuideInput.BACK))
                             }
-                            LaunchedEffect(panel) { overlayFocus.requestFocus() }
+                            LaunchedEffect(panel) { if (panel != GuidePanel.CHANNELS) overlayFocus.requestFocus() }
                             when (panel) {
                                 GuidePanel.CHANNELS -> {
                                     val channelsInPanel = liveCategories[channelCategory].orEmpty()
-                                    if (channelsInPanel.isEmpty()) Text(stringResource(R.string.no_channels))
-                                    LazyColumn(Modifier.weight(1f)) {
-                                        items(channelsInPanel) { channel ->
-                                            MenuButton(
-                                                channel.name, Modifier.fillMaxWidth(), logo = channel.logo, selected = channel === playing
-                                            ) {
-                                                showFullscreenPanel(GuidePanel.GRID)
-                                                selected = Destination.LIVE
-                                                playChannel(channel)
-                                            }
+                                    if (channelsInPanel.isEmpty()) LaunchedEffect(Unit) { overlayFocus.requestFocus() }
+                                    FullscreenChannelList(
+                                        Modifier.weight(1f), channelsInPanel, playing, guideAppearance, scheduleBesideList,
+                                        refreshKey = epgRefreshRequest + if (guideCacheLoaded) 1 else 0,
+                                        programmes = ::effectiveProgrammes,
+                                        onVisible = { visible -> if (!useXmlTv) loadProviderSchedules(visible) },
+                                        onInteraction = { overlayInteraction++ },
+                                        onScheduleFocused = { overlayScheduleFocused = it },
+                                        onSelect = { channel ->
+                                            overlayInteraction++
+                                            if (!guideAppearance.keepChannelList) showFullscreenPanel(GuidePanel.GRID)
+                                            selected = Destination.LIVE
+                                            playChannel(channel)
                                         }
-                                    }
+                                    )
                                 }
                                 GuidePanel.CATEGORIES -> LazyColumn(Modifier.weight(1f)) {
                                     items(groups) { group ->
@@ -2737,9 +2838,11 @@ private fun PlayerHome(
                 } else loadGroup(section, group)
             }
             val compactGuide = inGuide && (maxHeight < 400.dp || maxWidth < 680.dp)
-            val guidePreviewWidth = if (compactGuide) {
+            val basePreviewWidth = if (compactGuide) {
                 minOf(maxWidth * 0.24f, maxHeight * 0.43f).coerceAtLeast(76.dp)
             } else (maxWidth * 0.29f).coerceIn(128.dp, 290.dp)
+            val guidePreviewWidth = (basePreviewWidth * guideAppearance.previewSize.factor)
+                .coerceAtMost(minOf(maxWidth * 0.45f, maxHeight * 0.7f))
             val menu: @Composable () -> Unit = {
                 Text(
                     text = stringResource(R.string.app_name),
@@ -2856,52 +2959,88 @@ private fun PlayerHome(
                         onSelect = ::playChannel
                     )
                     Destination.SETTINGS -> {
-                        SettingsHeading(R.string.settings_library)
-                        MenuButton(
-                            label = stringResource(R.string.destination_sources),
-                            modifier = Modifier.focusRequester(initialFocus),
-                            onClick = { selected = Destination.SOURCES }
-                        )
-                        MenuButton(stringResource(R.string.category_settings), Modifier) {
-                            selected = Destination.CATEGORIES
-                        }
-                        SettingsHeading(R.string.destination_guide)
-                        MenuButton(stringResource(R.string.epg_settings), Modifier) { epgSettingsOpen = true }
-                        SettingsHeading(R.string.settings_playback)
-                        MenuButton(stringResource(R.string.episode_settings), Modifier) { episodeSettingsOpen = true }
-                        MenuButton(stringResource(R.string.live_preview_in_vod, stringResource(vodLiveView.label)), Modifier) {
-                            vodLiveView = VodLiveView.entries[(vodLiveView.ordinal + 1) % VodLiveView.entries.size]
-                            preferences?.edit()?.putString("vod_live_view", vodLiveView.name)?.apply()
-                        }
-                        for ((section, label) in listOf(
-                            PortalSection.MOVIES to R.string.vod_movies_playback,
-                            PortalSection.SERIES to R.string.vod_series_playback
-                        )) {
-                            val view = vodPlaybackViews.getValue(section)
-                            MenuButton(stringResource(label, stringResource(
-                                if (view == VodLiveView.HIDDEN) R.string.vod_playback_off else view.label
-                            )), Modifier) {
-                                val next = VodLiveView.entries[(view.ordinal + 1) % VodLiveView.entries.size]
-                                vodPlaybackViews[section] = next
-                                preferences?.edit()?.putString("vod_view_${section.name}", next.name)?.apply()
-                                if (next == VodLiveView.HIDDEN && vodSection == section) player?.pause()
+                        val section = settingsSection
+                        if (section == null) {
+                            SettingsSection.entries.forEachIndexed { index, item ->
+                                MenuButton(
+                                    stringResource(item.label),
+                                    if (index == 0) Modifier.focusRequester(initialFocus) else Modifier
+                                ) { settingsSection = item }
                             }
-                        }
-                        SettingsHeading(R.string.settings_controls)
-                        MenuButton(stringResource(R.string.control_settings), Modifier) { controlSettingsOpen = true }
-                        SettingsHeading(R.string.settings_updates)
-                        updateSettings()
-                        SettingsHeading(R.string.settings_metadata)
-                        MenuButton(stringResource(R.string.tmdb_settings), Modifier) {
-                            metadataSettingsOpen = true
-                        }
-                        MenuButton(stringResource(R.string.tvmaze_episode_provider), Modifier, selected = useTvmaze) {
-                            useTvmaze = !useTvmaze
-                            preferences?.edit()?.putBoolean("use_tvmaze", useTvmaze)?.apply()
-                        }
-                        if (useTvmaze) {
-                            MenuButton(stringResource(R.string.tvmaze_credit), Modifier) {
-                                uriHandler.openUri("https://www.tvmaze.com/")
+                        } else {
+                            MenuButton(stringResource(R.string.navigation_back), Modifier.focusRequester(initialFocus)) {
+                                settingsSection = null
+                            }
+                            SettingsHeading(section.label)
+                            when (section) {
+                                SettingsSection.GENERAL -> {
+                                    MenuButton(
+                                        stringResource(R.string.start_last_channel),
+                                        Modifier,
+                                        selected = playLastChannelAtStartup
+                                    ) {
+                                        playLastChannelAtStartup = !playLastChannelAtStartup
+                                        preferences?.edit()?.putBoolean("play_last_channel_at_startup", playLastChannelAtStartup)?.apply()
+                                    }
+                                }
+                                SettingsSection.SOURCES -> {
+                                    MenuButton(
+                                        label = stringResource(R.string.destination_sources),
+                                        modifier = Modifier,
+                                        onClick = { selected = Destination.SOURCES }
+                                    )
+                                    MenuButton(stringResource(R.string.category_settings), Modifier) {
+                                        selected = Destination.CATEGORIES
+                                    }
+                                }
+                                SettingsSection.GUIDE ->
+                                    MenuButton(stringResource(R.string.epg_settings), Modifier) { epgSettingsOpen = true }
+                                SettingsSection.APPEARANCE -> {
+                                    MenuButton(stringResource(R.string.guide_grid_appearance), Modifier) {
+                                        guideAppearancePage = GuideAppearancePage.GRID
+                                    }
+                                    MenuButton(stringResource(R.string.guide_channel_list_appearance), Modifier) {
+                                        guideAppearancePage = GuideAppearancePage.CHANNELS
+                                    }
+                                }
+                                SettingsSection.PLAYBACK -> {
+                                    MenuButton(stringResource(R.string.episode_settings), Modifier) { episodeSettingsOpen = true }
+                                    MenuButton(stringResource(R.string.live_preview_in_vod, stringResource(vodLiveView.label)), Modifier) {
+                                        vodLiveView = VodLiveView.entries[(vodLiveView.ordinal + 1) % VodLiveView.entries.size]
+                                        preferences?.edit()?.putString("vod_live_view", vodLiveView.name)?.apply()
+                                    }
+                                    for ((section, label) in listOf(
+                                        PortalSection.MOVIES to R.string.vod_movies_playback,
+                                        PortalSection.SERIES to R.string.vod_series_playback
+                                    )) {
+                                        val view = vodPlaybackViews.getValue(section)
+                                        MenuButton(stringResource(label, stringResource(
+                                            if (view == VodLiveView.HIDDEN) R.string.vod_playback_off else view.label
+                                        )), Modifier) {
+                                            val next = VodLiveView.entries[(view.ordinal + 1) % VodLiveView.entries.size]
+                                            vodPlaybackViews[section] = next
+                                            preferences?.edit()?.putString("vod_view_${section.name}", next.name)?.apply()
+                                            if (next == VodLiveView.HIDDEN && vodSection == section) player?.pause()
+                                        }
+                                    }
+                                }
+                                SettingsSection.CONTROLS ->
+                                    MenuButton(stringResource(R.string.control_settings), Modifier) { controlSettingsOpen = true }
+                                SettingsSection.UPDATES -> updateSettings()
+                                SettingsSection.METADATA -> {
+                                    MenuButton(stringResource(R.string.tmdb_settings), Modifier) {
+                                        metadataSettingsOpen = true
+                                    }
+                                    MenuButton(stringResource(R.string.tvmaze_episode_provider), Modifier, selected = useTvmaze) {
+                                        useTvmaze = !useTvmaze
+                                        preferences?.edit()?.putBoolean("use_tvmaze", useTvmaze)?.apply()
+                                    }
+                                    if (useTvmaze) {
+                                        MenuButton(stringResource(R.string.tvmaze_credit), Modifier) {
+                                            uriHandler.openUri("https://www.tvmaze.com/")
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -2955,6 +3094,15 @@ private fun PlayerHome(
                         Text(stringResource(
                             if (mergeSources) R.string.sources_combined else R.string.sources_separate
                         ))
+                        val activePortalId = storedSource?.identity
+                        if (!mergeSources && activePortalId != null) {
+                            MenuButton(stringResource(R.string.merge_portal_channels), Modifier, selected = mergePortalChannels) {
+                                mergedIndividualPortals = if (mergePortalChannels) mergedIndividualPortals - activePortalId
+                                    else mergedIndividualPortals + activePortalId
+                                preferences?.edit()?.putStringSet("merged_individual_portals", mergedIndividualPortals)?.apply()
+                                category = null
+                            }
+                        }
                         for ((index, source) in savedSources.withIndex()) {
                             val host = remember(source.address) {
                                 runCatching { java.net.URI(source.address).host }.getOrNull().orEmpty()
@@ -3065,7 +3213,7 @@ private fun PlayerHome(
                                         .padding(if (compactGuide) 4.dp else 8.dp),
                                     horizontalArrangement = Arrangement.spacedBy(if (compactGuide) 8.dp else 16.dp)
                                 ) {
-                                    Box(Modifier.width(guidePreviewWidth)) {
+                                    if (guideAppearance.showPreview) Box(Modifier.width(guidePreviewWidth)) {
                                         PlayerFrame(
                                             player, active = livePreview != null, onStop = ::stopPlayback,
                                             onOpenFullscreen = (livePreview ?: infoChannel)?.let { channel ->
@@ -3118,13 +3266,14 @@ private fun PlayerHome(
                                 programmeKey = ::programmeKey,
                                 scroll = guideScroll,
                                 compact = compactGuide,
-                                refreshKey = epgRefreshRequest,
+                                appearance = guideAppearance,
+                                refreshKey = epgRefreshRequest + if (guideCacheLoaded) 1 else 0,
                                 horizonHours = epgHorizonHours,
                                 active = guidePanel == GuidePanel.GRID,
                                 channelColumnFocus = guideChannelFocus,
                                 restorePlayingFocus = restoreLiveFocus,
                                 onPlayingFocusRestored = { restoreLiveFocus = false },
-                                onChannelLeft = ::openMainMenu,
+                                onChannelLeft = { guidePanel = GuidePanel.CATEGORIES },
                                 onVisibleChannels = { visible -> if (!useXmlTv) loadProviderSchedules(visible) },
                                 onHighlight = {
                                     programmeChannel = it
@@ -3206,7 +3355,7 @@ private fun PlayerHome(
                         liveSources = { channel -> liveVariants[channel].orEmpty().map { it.source } },
                         liveProgramme = { channel -> effectiveProgrammes(channel)?.firstOrNull()?.title },
                         onHighlightChannel = { programmeChannel = it },
-                        metadataClient = metadataClient,
+                        metadataClient = metadataClient.takeIf { combine },
                         portalFor = ::sessionFor,
                         countries = countries,
                         combine = combine,
@@ -3582,8 +3731,11 @@ private fun PlayerHome(
                     ) { content() }
                 }
             }
-            LaunchedEffect(destination) {
-                if (!inGuide && !restoreLiveFocus) initialFocus.requestFocus()
+            LaunchedEffect(destination, settingsSection) {
+                if (!inGuide && !restoreLiveFocus) {
+                    if (destination == Destination.SETTINGS) contentScroll.scrollTo(0)
+                    initialFocus.requestFocus()
+                }
             }
             LaunchedEffect(inGuide, guidePanel) {
                 if (inGuide) {

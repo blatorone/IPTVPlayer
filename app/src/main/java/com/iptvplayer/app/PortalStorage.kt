@@ -35,11 +35,14 @@ internal class SavedPortal(
 }
 
 internal data class SavedPortals(val sources: List<SavedPortal>, val activeId: String)
+internal data class CachedProgramme(val fetchedAt: Long, val programmes: List<PortalProgramme>)
 
 internal class PortalStorage(context: Context) {
     private val file = AtomicFile(File(context.noBackupFilesDir, "stalker-source.v1"))
     private val metadataFile = AtomicFile(File(context.noBackupFilesDir, "metadata-token.v1"))
     private val epgSourcesFile = AtomicFile(File(context.noBackupFilesDir, "epg-sources.v1"))
+    private val guideCacheFile = AtomicFile(File(context.noBackupFilesDir, "portal-guide.v1"))
+    private val guideCacheMutex = Mutex()
     private companion object {
         val mutex = Mutex()
     }
@@ -90,6 +93,48 @@ internal class PortalStorage(context: Context) {
 
     suspend fun writeEpgSources(urls: List<String>) = mutex.withLock {
         withContext(Dispatchers.IO) { writeEncrypted(epgSourcesFile, JSONArray(urls).toString()) }
+    }
+
+    suspend fun readGuideCache(): Map<String, CachedProgramme> = guideCacheMutex.withLock {
+        withContext(Dispatchers.IO) {
+            val data = JSONObject(readEncrypted(guideCacheFile) ?: "{}")
+            data.keys().asSequence().associateWith { key ->
+                val entry = data.getJSONObject(key)
+                val shows = entry.getJSONArray("shows")
+                CachedProgramme(entry.getLong("time"), List(shows.length()) { index ->
+                    val show = shows.getJSONObject(index)
+                    PortalProgramme(
+                        show.getString("title"), show.optLong("start").takeIf { it != 0L },
+                        show.optLong("end").takeIf { it != 0L },
+                        show.optString("description").ifBlank { null }
+                    )
+                })
+            }
+        }
+    }
+
+    suspend fun writeGuideCache(cache: Map<String, CachedProgramme>) = guideCacheMutex.withLock {
+        withContext(Dispatchers.IO) {
+            val data = JSONObject()
+            var remainingShows = 20_000
+            for ((key, entry) in cache.entries.sortedByDescending { it.value.fetchedAt }.take(750)) {
+                if (remainingShows == 0) break
+                val shows = entry.programmes.take(minOf(256, remainingShows))
+                remainingShows -= shows.size
+                data.put(key, JSONObject().apply {
+                    put("time", entry.fetchedAt)
+                    put("shows", JSONArray().apply {
+                        for (show in shows) put(JSONObject().apply {
+                            put("title", show.title.take(256))
+                            put("start", show.startSeconds)
+                            put("end", show.endSeconds)
+                            put("description", show.description?.take(1000))
+                        })
+                    })
+                })
+            }
+            writeEncrypted(guideCacheFile, data.toString())
+        }
     }
 
     private fun readEncrypted(target: AtomicFile): String? {

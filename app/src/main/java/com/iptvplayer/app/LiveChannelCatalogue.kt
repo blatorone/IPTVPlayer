@@ -159,13 +159,18 @@ private fun comparisonName(description: ChannelDescription): String? =
     description.normalizedName.takeIf { it.isNotEmpty() && description.country != UNKNOWN_COUNTRY }
         ?.let { "station:${description.country}:$it" }
 
-internal fun buildLiveChannelGroups(sources: List<SavedPortal>, combine: Boolean): List<LiveChannelGroup> {
+internal fun buildLiveChannelGroups(
+    sources: List<SavedPortal>, combine: Boolean, mergeWithinSource: Boolean = true
+): List<LiveChannelGroup> {
     val variants = sources.flatMap { source ->
-        source.channels.sortedBy { it.number ?: Long.MAX_VALUE }.map { channel ->
+        val channels = if (!combine && !mergeWithinSource) source.channels
+        else source.channels.sortedBy { it.number ?: Long.MAX_VALUE }
+        channels.map { channel ->
             val category = channel.genreName ?: source.genres[channel.genreId]
             LiveStreamVariant(SourceItem(source, channel), describeChannel(channel, category))
         }
     }
+    if (!combine && !mergeWithinSource) return variants.map { LiveChannelGroup(listOf(it)) }
     val known = variants.filter { it.description.country != UNKNOWN_COUNTRY }
         .groupBy({ it.description.normalizedName }, { it.description.country })
         .mapValues { (_, countries) -> countries.distinct().singleOrNull() }

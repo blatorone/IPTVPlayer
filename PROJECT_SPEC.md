@@ -18,6 +18,11 @@ Ein nutzerkonfigurierbarer IPTV-Player für Android-Telefone und -Tablets sowie 
 
 ## Live, EPG und Navigation
 
+- Die Vollbild-Senderliste zeigt laufende Sendung und Fortschritt pro Sender. Auf breiten Geräten kann daneben der Tagesplan mit der Beschreibung der ausgewählten Sendung erscheinen. Listenbreite, Deckkraft, Schließzeit und Verhalten beim Senderwechsel sind einstellbar.
+- Unter **Einstellungen → Darstellung** lassen sich Zeilenhöhe, Schrift, Videovorschau, Sendernummern und Logos im Programmführer einstellen. Die übrigen Einstellungen sind in eigene Bereiche gegliedert.
+- Bereits geladene EPG-Daten erscheinen nach einem Neustart aus dem lokalen Cache. Fehlende oder fällige Daten werden im Hintergrund geladen. Der Start des zuletzt gesehenen Senders wartet nicht auf eine EPG-Abfrage und ist unter **Allgemein** abschaltbar.
+- Bei getrennten Quellen verwendet Live-TV die Gruppen des gewählten Portals. Standardmäßig bleiben Sendername, Varianten und Reihenfolge des Portals erhalten. Das Zusammenfassen von Sendervarianten lässt sich je Einzelportal einschalten. Suche und VOD-Details zeigen im Einzelportalmodus die Portalmetadaten.
+
 - Android TV zeigt die App über einen eigenen Launcher-Eintrag an. Ein Touchscreen ist für den Start und die Bedienung per Fernbedienung keine Voraussetzung.
 - Ohne gespeicherte Quelle bietet der erste Start direkt die Portal-Einrichtung an. Nach dem erfolgreichen ersten Import öffnet sich der Programmführer. Die automatische EPG-Aktualisierung setzt eine eingerichtete Quelle voraus.
 
@@ -37,7 +42,7 @@ Ein nutzerkonfigurierbarer IPTV-Player für Android-Telefone und -Tablets sowie 
 - Beim Navigieren durch Listen und EPG läuft der aktuell gestartete Live-Sender weiter. Fokuswechsel oder bloßes Markieren startet keinen anderen Stream; erst ausdrückliche Auswahl wechselt den Sender. Zurück und Oberflächenwechsel dürfen die laufende Wiedergabe nicht unbeabsichtigt beenden. Explizites Stoppen und Verlassen gemäß Lebenszyklus bleiben möglich.
 - Bei abspielbarem Variantenfehler begrenzt und ohne Endlosschleife zur nächsten verfügbaren Variante desselben zusammengeführten Senders wechseln. Fehler, Versuch und aktuelle Quelle nachvollziehbar anzeigen, ohne vertrauliche URLs offenzulegen. Keine anderen Sender automatisch auswählen. Nutzer können erneut versuchen oder Quelle wählen.
 - Touch und Fernbedienung gleichwertig nutzbar: sichtbarer Fokus, logische D-Pad-Reihenfolge, erreichbare Aktionen und vorhersehbare Zurück-Navigation.
-- Die Einstellungen markieren Fokus und Mauszeiger farblich. Zweimaliges Zurück beendet die App bei geöffnetem Hauptmenü. Im Programmführer führt Links aus der Senderspalte ins Hauptmenü. Rechts öffnet die Zeitleiste am aktuellen Programm, und Links führt über frühere Programme zurück zur Senderspalte. Die erneute Auswahl des laufenden Senders oder langes Zurück öffnet eine laufende Live-Vorschau im Vollbild.
+- Die Einstellungen markieren Fokus und Mauszeiger farblich. Zweimaliges Zurück beendet die App bei geöffnetem Hauptmenü. Im Programmführer und in der Vollbild-Senderliste führt Links zuerst zu den Kategorien und danach ins Hauptmenü. Rechts öffnet die Zeitleiste am aktuellen Programm, und Links führt über frühere Programme zurück zur Senderspalte. Die erneute Auswahl des laufenden Senders oder langes Zurück öffnet eine laufende Live-Vorschau im Vollbild.
 
 ## VOD
 

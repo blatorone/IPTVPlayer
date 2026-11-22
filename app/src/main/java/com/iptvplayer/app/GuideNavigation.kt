@@ -125,6 +125,7 @@ internal fun GuidePanel.after(input: GuideInput): GuidePanel = when (input) {
 internal fun GuidePanel.afterProgrammeGuide(input: GuideInput): GuidePanel = when (input) {
     GuideInput.REMOTE_LEFT, GuideInput.SWIPE_LEFT -> when (this) {
         GuidePanel.DETAILS -> GuidePanel.GRID
+        GuidePanel.GRID -> GuidePanel.CATEGORIES
         else -> GuidePanel.MENU
     }
     GuideInput.REMOTE_RIGHT, GuideInput.SWIPE_RIGHT -> when (this) {

@@ -64,6 +64,20 @@ class LiveChannelCatalogueTest {
     }
 
     @Test
+    fun anIndividualPortalCanPreserveRawChannelsOrGroupItsVariants() {
+        val fhd = StalkerChannel("DE RTL FHD", "fhd", "home", "Portalgruppe", number = 9)
+        val hd = StalkerChannel("DE RTL HD", "hd", "home", "Portalgruppe", number = 2)
+        val source = source("one", listOf(fhd, hd))
+
+        val raw = buildLiveChannelGroups(listOf(source), combine = false, mergeWithinSource = false)
+        assertEquals(listOf(fhd, hd), raw.map { it.variants.single().item.value })
+
+        val merged = buildLiveChannelGroups(listOf(source), combine = false, mergeWithinSource = true)
+        assertEquals(listOf(hd, fhd), merged.single().variants.map { it.item.value })
+        assertEquals("Portalgruppe", merged.single().variants.first().item.value.genreName)
+    }
+
+    @Test
     fun groupsFourKPlusAndCodecTagsWithTheSameSender() {
         val first = source("one", listOf(channel("DE | RTL 4K+", "DE Allgemeines", "uhd")))
         val second = source("two", listOf(channel("(DE) RTL FHD HEVC", "DE", "fhd")))

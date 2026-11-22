@@ -26,6 +26,8 @@ Media3-Controller und Live-Oberfläche anbinden; Wiedergabe über Navigation erh
 
 ## 4. XMLTV und EPG
 
+Der Programmführer und die Vollbild-Senderliste verwenden dieselben EPG-Daten. Der Anbieter-Cache ist persistent und XMLTV liest den lokalen Stand vor einer Netzaktualisierung. Bildschirmdarstellung und Vollbild-Overlay haben getrennte Einstellungsseiten.
+
 XMLTV-Import, ID- und manuelle Zuordnung, Zeiten, Aktualisierung und EPG-Oberfläche implementieren. Fehlende EPG-Daten unabhängig von Live behandeln.
 **Fertig:** Programme und lokale Uhrzeit stimmen bei Zeitzonenwechsel; EPG-Navigation lässt Live laufen; unzugeordnete Sender funktionieren weiterhin.
 
@@ -55,5 +57,7 @@ Der Workflow und der Update-Client stehen im Projekt. Der Workflow baut und test
 Abnahme aus `PROJECT_SPEC.md` mit Touch und TV-Fernbedienung durchführen; unterschiedliche Bildschirmgrößen, schlechte Verbindung, Neustart, größere Bibliotheken, Migration, Datenschutz und Ressourcenverbrauch prüfen. Nicht verfügbare Fire-TV-/Shield-Geräte ausdrücklich als Testlücke benennen. Dokumentation und bekannte Grenzen aktualisieren.
 
 ## Noch zu entscheiden
+
+Aus der Sichtung der TV-Referenz folgen weitere Funktionspakete für Aufnahmen, Anbieterarchive, Erinnerungen, Kindersicherung, Datensicherung, erweiterte Fernbedienungsbelegung und gerätespezifische Wiedergabe. Für Aufnahmen und Archiv sind getrennte Abnahmekriterien zu Speicherziel, Gerät und unterstützter Quelle erforderlich.
 
 Konkrete SDK-/Gerätematrix und Versionen; belastbare Länder-Metadaten; Hintergrundverhalten außerhalb der App; QR-Transport und Schutzmodell; Cloud-Anbieter, Datenumfang, KDF-Parameter und Konflikt-UX; automatische nächste Episode. Keine dieser Optionen als fertige Implementierung ausgeben.

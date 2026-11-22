@@ -78,16 +78,19 @@ internal data class XmlTvGuide(
     }
 }
 
-internal data class XmlTvResult(val guide: XmlTvGuide?, val failed: Boolean)
+internal data class XmlTvResult(val guide: XmlTvGuide?, val failed: Boolean, val needsRefresh: Boolean = false)
 
 internal suspend fun loadXmlTvGuide(
-    directory: File, uri: URI, hours: Int, refresh: Boolean
+    directory: File, uri: URI, hours: Int, refresh: Boolean,
+    allowDownload: Boolean = true,
+    maxCacheAgeMillis: Long = 0
 ): XmlTvResult = withContext(Dispatchers.IO) {
     val digest = MessageDigest.getInstance("SHA-256").digest(uri.toASCIIString().encodeToByteArray())
         .joinToString("") { "%02x".format(it.toInt() and 255) }
     val saved = File(directory, "programme-$digest.xmltv")
     var failed = false
-    if (refresh || !saved.isFile) {
+    val age = System.currentTimeMillis() - saved.lastModified()
+    if (allowDownload && (!saved.isFile || refresh && age !in 0 until maxCacheAgeMillis)) {
         var temporary: File? = null
         try {
             val download = File.createTempFile("programme-", ".tmp", directory)
@@ -133,7 +136,7 @@ internal suspend fun loadXmlTvGuide(
         failed = true
         null
     }
-    XmlTvResult(guide, failed)
+    XmlTvResult(guide, failed, guide == null || age !in 0 until maxCacheAgeMillis)
 }
 
 private suspend fun readXmlTv(file: File, hours: Int): XmlTvGuide =

@@ -8,7 +8,12 @@ class GuideNavigationTest {
     fun leftOpensTheChannelListOnlyInFullscreen() {
         for (input in listOf(GuideInput.REMOTE_LEFT, GuideInput.SWIPE_LEFT)) {
             assertEquals(GuidePanel.CHANNELS, GuidePanel.GRID.after(input))
-            assertEquals(GuidePanel.MENU, GuidePanel.GRID.afterProgrammeGuide(input))
+            val guideCategories = GuidePanel.GRID.afterProgrammeGuide(input)
+            assertEquals(GuidePanel.CATEGORIES, guideCategories)
+            assertEquals(GuidePanel.MENU, guideCategories.afterProgrammeGuide(input))
+            val fullscreenCategories = GuidePanel.CHANNELS.after(input)
+            assertEquals(GuidePanel.CATEGORIES, fullscreenCategories)
+            assertEquals(GuidePanel.MENU, fullscreenCategories.after(input))
             assertEquals(GuidePanel.GRID, GuidePanel.DETAILS.afterProgrammeGuide(input))
         }
     }

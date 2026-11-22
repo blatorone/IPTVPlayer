@@ -1,5 +1,13 @@
 # Änderungen
 
+## 1.0.13
+
+- Links öffnet aus der Senderspalte oder Vollbild-Senderliste zuerst die Kategorien und danach das Hauptmenü.
+- Vollbild-Senderliste mit laufenden Sendungen, Fortschritt und optionalem Tagesplan.
+- Einstellbare Größe des Programmführers sowie getrennte Darstellungs- und Einstellungsseiten.
+- Lokaler EPG-Cache beim Start mit Hintergrundaktualisierung.
+- Originale Portalkategorien im Einzelportalmodus und optionale Gruppierung von Sendervarianten je Portal.
+
 ## 1.0.12
 
 - Senderliste nur im Live-Vollbild öffnen. Links führt aus Film- und Seriendetails zurück in den Katalog.

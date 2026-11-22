@@ -40,8 +40,10 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.isSpecified
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -63,6 +65,7 @@ internal fun ProgrammeTimeline(
     programmeKey: (StalkerChannel) -> String?,
     scroll: LazyListState,
     compact: Boolean,
+    appearance: GuideAppearance,
     refreshKey: Int,
     horizonHours: Int,
     active: Boolean,
@@ -91,7 +94,7 @@ internal fun ProgrammeTimeline(
         canFocus = active
         down = channelColumnFocus
     }
-    val rowHeight = if (compact) 36.dp else 48.dp
+    val rowHeight = (if (compact) 36.dp else 48.dp) * appearance.rowSize.factor
     val displayed = remember(channels, pinnedIds, onlyPinned) {
         if (onlyPinned) channels.filter { programmeKey(it) in pinnedIds } else channels
     }
@@ -195,6 +198,7 @@ internal fun ProgrammeTimeline(
                     channel === highlighted, channel === playing,
                     rowHeight = rowHeight,
                     compact = compact,
+                    appearance = appearance,
                     onFocus = { onHighlight(channel) }
                 ) {
                     onHighlight(channel)
@@ -204,6 +208,7 @@ internal fun ProgrammeTimeline(
                     Modifier.weight(3f), schedule, start, now, offset,
                     rowHeight = rowHeight,
                     compact = compact,
+                    textScale = appearance.textSize.factor,
                     loading = schedule == null && programmeKey(channel) != null,
                     active = active,
                     channelFocus = channelFocus,
@@ -263,6 +268,7 @@ private fun GuideChannelCell(
     playing: Boolean,
     rowHeight: Dp,
     compact: Boolean,
+    appearance: GuideAppearance,
     onFocus: () -> Unit,
     onPlay: () -> Unit
 ) {
@@ -286,14 +292,18 @@ private fun GuideChannelCell(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(number.toString(), Modifier.width(if (compact) 24.dp else 32.dp), style = MaterialTheme.typography.labelSmall, maxLines = 1)
-        ChannelLogo(
+        if (appearance.showNumbers) Text(
+            number.toString(), Modifier.width(if (compact) 24.dp else 32.dp),
+            style = MaterialTheme.typography.labelSmall.scaled(appearance.textSize.factor), maxLines = 1
+        )
+        if (appearance.showLogos) ChannelLogo(
             channel.logo,
             Modifier.width(if (compact) 22.dp else 28.dp).height(if (compact) 18.dp else 24.dp)
         )
         Text(
             channel.name,
-            style = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelMedium,
+            style = (if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelMedium)
+                .scaled(appearance.textSize.factor),
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
@@ -309,6 +319,7 @@ private fun TimelineRow(
     offset: Long,
     rowHeight: Dp,
     compact: Boolean,
+    textScale: Float,
     loading: Boolean,
     active: Boolean,
     channelFocus: FocusRequester,
@@ -375,7 +386,7 @@ private fun TimelineRow(
             ProgrammeCell(
                 programme, Modifier.offset(x = width * left).width(width * span).fillMaxHeight()
                     .then(cellModifier(index)),
-                current = now in from until stop, compact = compact,
+                current = now in from until stop, compact = compact, textScale = textScale,
                 onFocus = { onFocus(programme) }, onSelect = onProgramme
             )
         }
@@ -411,6 +422,7 @@ private fun ProgrammeCell(
     modifier: Modifier,
     current: Boolean,
     compact: Boolean,
+    textScale: Float,
     onFocus: () -> Unit,
     onSelect: (PortalProgramme) -> Unit
 ) {
@@ -430,14 +442,21 @@ private fun ProgrammeCell(
         contentAlignment = Alignment.CenterStart
     ) {
         Text(
-            programme.title, style = if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelMedium,
+            programme.title, style = (if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelMedium)
+                .scaled(textScale),
             color = if (focused) colors.onTertiaryContainer else colors.onSurface,
             maxLines = 2, overflow = TextOverflow.Ellipsis
         )
     }
 }
 
-private fun guideTime(seconds: Long): String =
+private fun TextStyle.scaled(factor: Float): TextStyle =
+    copy(
+        fontSize = if (fontSize.isSpecified) fontSize * factor else fontSize,
+        lineHeight = if (lineHeight.isSpecified) lineHeight * factor else lineHeight
+    )
+
+internal fun guideTime(seconds: Long): String =
     DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault()).format(Instant.ofEpochSecond(seconds))
 
 private fun guideDate(seconds: Long): String =

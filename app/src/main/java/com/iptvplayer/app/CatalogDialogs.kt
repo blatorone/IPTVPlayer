@@ -24,22 +24,51 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 
+internal enum class CategoryMove { TOP, UP, DOWN, BOTTOM }
+
+internal fun <T> List<T>.moveCategory(item: T, direction: CategoryMove): List<T> {
+    val index = indexOf(item)
+    if (index < 0) return this
+    val destination = when (direction) {
+        CategoryMove.TOP -> 0
+        CategoryMove.UP -> (index - 1).coerceAtLeast(0)
+        CategoryMove.DOWN -> (index + 1).coerceAtMost(lastIndex)
+        CategoryMove.BOTTOM -> lastIndex
+    }
+    return if (destination == index) this else toMutableList().apply { add(destination, removeAt(index)) }
+}
+
 @Composable
 internal fun CategoryDialog(
     groups: List<PortalGroup>,
     initiallySelected: String?,
     isHidden: (PortalGroup) -> Boolean,
     onApply: (Set<String>, Boolean) -> Unit,
+    onMove: (String, CategoryMove) -> Unit,
     onDismiss: () -> Unit
 ) {
     var selection by remember(initiallySelected) {
         mutableStateOf(setOfNotNull(initiallySelected))
     }
+    var moving by remember(initiallySelected) { mutableStateOf(false) }
+    val selected = selection.singleOrNull()
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.manage_categories)) },
         text = {
-            LazyColumn(Modifier.heightIn(max = 280.dp)) {
+            Column {
+            if (moving && selected != null) {
+                Text(groups.firstOrNull { it.id == selected }?.name.orEmpty(), style = MaterialTheme.typography.titleMedium)
+                Row {
+                    MenuButton(stringResource(R.string.category_move_top), Modifier) { onMove(selected, CategoryMove.TOP) }
+                    MenuButton(stringResource(R.string.category_move_up), Modifier) { onMove(selected, CategoryMove.UP) }
+                }
+                Row {
+                    MenuButton(stringResource(R.string.category_move_down), Modifier) { onMove(selected, CategoryMove.DOWN) }
+                    MenuButton(stringResource(R.string.category_move_bottom), Modifier) { onMove(selected, CategoryMove.BOTTOM) }
+                }
+            }
+            LazyColumn(Modifier.heightIn(max = if (moving) 145.dp else 245.dp)) {
                 items(groups, key = { it.id }) { group ->
                     val hidden = isHidden(group)
                     MenuButton(
@@ -48,9 +77,12 @@ internal fun CategoryDialog(
                         selected = group.id in selection,
                         hiddenIndicator = hidden
                     ) {
-                        selection = if (group.id in selection) selection - group.id else selection + group.id
+                        selection = if (moving) setOf(group.id)
+                        else if (group.id in selection) selection - group.id else selection + group.id
                     }
                 }
+            }
+            if (!moving && selected != null) MenuButton(stringResource(R.string.category_move), Modifier) { moving = true }
             }
         },
         confirmButton = {

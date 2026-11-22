@@ -36,13 +36,22 @@ internal class SavedPortal(
 
 internal data class SavedPortals(val sources: List<SavedPortal>, val activeId: String)
 internal data class CachedProgramme(val fetchedAt: Long, val programmes: List<PortalProgramme>)
+internal data class StartupStream(
+    val address: String, val mac: String, val id: String?, val command: String, val direct: Boolean
+)
+internal data class StartupChannel(
+    val key: String, val selectionSource: String, val selectionId: String, val scope: String,
+    val name: String, val streams: List<StartupStream>
+)
 
 internal class PortalStorage(context: Context) {
     private val file = AtomicFile(File(context.noBackupFilesDir, "stalker-source.v1"))
     private val metadataFile = AtomicFile(File(context.noBackupFilesDir, "metadata-token.v1"))
     private val epgSourcesFile = AtomicFile(File(context.noBackupFilesDir, "epg-sources.v1"))
     private val guideCacheFile = AtomicFile(File(context.noBackupFilesDir, "portal-guide.v1"))
+    private val startupChannelFile = AtomicFile(File(context.noBackupFilesDir, "last-live.v1"))
     private val guideCacheMutex = Mutex()
+    private val startupMutex = Mutex()
     private companion object {
         val mutex = Mutex()
     }
@@ -93,6 +102,43 @@ internal class PortalStorage(context: Context) {
 
     suspend fun writeEpgSources(urls: List<String>) = mutex.withLock {
         withContext(Dispatchers.IO) { writeEncrypted(epgSourcesFile, JSONArray(urls).toString()) }
+    }
+
+    suspend fun readStartupChannel(): StartupChannel? = startupMutex.withLock {
+        withContext(Dispatchers.IO) {
+            val data = JSONObject(readEncrypted(startupChannelFile) ?: return@withContext null)
+            val streams = data.getJSONArray("streams")
+            StartupChannel(
+                data.getString("key"), data.getString("source"), data.getString("selection"), data.getString("scope"),
+                data.getString("name"), List(streams.length()) {
+                    val stream = streams.getJSONObject(it)
+                    StartupStream(stream.getString("address"), stream.getString("mac"),
+                        stream.optString("id").ifBlank { null }, stream.getString("command"), stream.optBoolean("direct"))
+                }
+            )
+        }
+    }
+
+    suspend fun writeStartupChannel(channel: StartupChannel) = startupMutex.withLock {
+        withContext(Dispatchers.IO) {
+            val data = JSONObject().apply {
+                put("key", channel.key)
+                put("source", channel.selectionSource)
+                put("selection", channel.selectionId)
+                put("scope", channel.scope)
+                put("name", channel.name)
+                put("streams", JSONArray().apply {
+                    for (stream in channel.streams) put(JSONObject().apply {
+                        put("address", stream.address)
+                        put("mac", stream.mac)
+                        put("id", stream.id)
+                        put("command", stream.command)
+                        put("direct", stream.direct)
+                    })
+                })
+            }
+            writeEncrypted(startupChannelFile, data.toString())
+        }
     }
 
     suspend fun readGuideCache(): Map<String, CachedProgramme> = guideCacheMutex.withLock {

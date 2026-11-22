@@ -27,6 +27,8 @@ Import → validieren/parsen → Quellobjekte normalisieren → verlässlich zuo
 
 ## Sicherheit und Betriebsgrenzen
 
+Eine kleine verschlüsselte Momentaufnahme der zuletzt gespielten Live-Variante wird getrennt von der Bibliothek gelesen. Der Datenabgleich erfolgt nach der Bibliothekswiederherstellung. Bestätigte Intro-Fingerabdrücke bleiben lokal und werden vor einer erneuten Skip-Empfehlung mit der laufenden Folge verglichen.
+
 Eigene EPG-URLs liegen verschlüsselt außerhalb von Android-Backups. Der XMLTV-Adapter liest begrenzte XML- oder GZip-Dateien, ordnet per EPG-ID oder eindeutigem Sendernamen zu und behält bei fehlgeschlagenen Downloads den letzten gültigen Cache. Der Anbieteradapter aktualisiert sichtbare, bereits geladene und angeheftete Sender in begrenzten Gruppen.
 
 Portal-EPG verwendet einen begrenzten, verschlüsselten Dateicache außerhalb von Android-Backups. Zeitstempel und Daten sind an die quellbezogene Senderidentität gebunden. XMLTV veröffentlicht beim Start zuerst vorhandene lokale Programme. Die Aktualisierung setzt anschließend bei fehlenden oder abgelaufenen Daten an. Beide Cache-Ladevorgänge laufen unabhängig vom Start der Wiedergabe.

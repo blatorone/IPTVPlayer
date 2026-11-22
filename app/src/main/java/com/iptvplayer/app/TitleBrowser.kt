@@ -73,6 +73,7 @@ internal fun ColumnScope.TitleGrid(
     preferPopularity: Boolean,
     newEpisodes: (PortalTitle) -> Int,
     returnTitle: PortalTitle?,
+    focusFirstTitle: Boolean,
     onTitleFocusRestored: () -> Unit,
     onSelect: (PortalTitle) -> Unit
 ) {
@@ -140,12 +141,16 @@ internal fun ColumnScope.TitleGrid(
     }
     if (sorted.isEmpty()) Text(stringResource(R.string.no_matching_titles))
     val scroll = rememberLazyGridState()
-    val returnIndex = if (returnTitle == null) -1 else sorted.indexOf(returnTitle)
+    val returnIndex = when {
+        returnTitle != null -> sorted.indexOf(returnTitle)
+        focusFirstTitle && sorted.isNotEmpty() -> 0
+        else -> -1
+    }
     val returnFocus = remember { FocusRequester() }
-    LaunchedEffect(returnTitle, returnIndex) {
-        if (returnTitle == null) return@LaunchedEffect
-        if (returnIndex < 0) onTitleFocusRestored()
-        else if (scroll.layoutInfo.visibleItemsInfo.none { it.index == returnIndex }) scroll.scrollToItem(returnIndex)
+    LaunchedEffect(returnTitle, returnIndex, focusFirstTitle) {
+        if (returnIndex >= 0 && scroll.layoutInfo.visibleItemsInfo.none { it.index == returnIndex }) {
+            scroll.scrollToItem(returnIndex)
+        } else if (returnIndex < 0 && returnTitle != null) onTitleFocusRestored()
     }
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 92.dp),
@@ -212,6 +217,10 @@ internal fun TitleDetails(
     newEpisodes: Int,
     resumeLabel: String?,
     onResume: (() -> Unit)?,
+    firstEpisodeAction: (() -> Unit)?,
+    firstEpisodeLabel: String?,
+    focusPrimary: Boolean,
+    onPrimaryFocused: () -> Unit,
     compact: Boolean,
     onBack: () -> Unit,
     onPlay: () -> Unit,
@@ -244,12 +253,24 @@ internal fun TitleDetails(
             }
             resumeLabel?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             val leftEdge = Modifier.onHorizontalRemote(allowRight = false) { onBack() }
+            val primaryFocus = remember { FocusRequester() }
+            val primaryAction = onResume ?: firstEpisodeAction
+            LaunchedEffect(focusPrimary, primaryAction != null) {
+                if (focusPrimary && primaryAction != null) {
+                    withFrameNanos { }
+                    if (primaryFocus.requestFocus()) onPrimaryFocused()
+                }
+            }
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (onResume != null) MenuButton(stringResource(R.string.resume_playback), leftEdge, onClick = onResume)
+                if (primaryAction != null) MenuButton(
+                    if (onResume != null) stringResource(R.string.resume_playback) else firstEpisodeLabel.orEmpty(),
+                    leftEdge.focusRequester(primaryFocus),
+                    onClick = primaryAction
+                )
                 if (section == PortalSection.MOVIES) {
                     MenuButton(stringResource(R.string.play_movie), if (onResume == null) leftEdge else Modifier, onClick = onPlay)
                 }
-                val favoriteModifier = if (section == PortalSection.SERIES && onResume == null) leftEdge else Modifier
+                val favoriteModifier = if (section == PortalSection.SERIES && primaryAction == null) leftEdge else Modifier
                 MenuButton(stringResource(R.string.favorites), favoriteModifier, selected = favorite, onClick = onFavorite)
                 MenuButton(stringResource(R.string.watchlist), Modifier, selected = saved, onClick = onWatch)
             }

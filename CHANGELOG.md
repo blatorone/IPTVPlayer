@@ -1,5 +1,23 @@
 # Änderungen
 
+## Unveröffentlicht
+
+- Neuer App-Name StreamWatch, adaptives Launcher-Icon und passendes Android-TV-Banner.
+- Fernbedienungsfokus auf dem ersten Film, der primären Serienaktion oder dem zuletzt gesehenen Live-Sender.
+- Lesbarere Programmbeschreibung mit eigener Spalte neben dem EPG auf breiten Bildschirmen.
+- Vollbild-Steuerung mit Play/Pause-Fokus, automatischem Ausblenden und eigener Zurück-Aktion.
+- Schnellstart des letzten Live-Senders aus einer verschlüsselten Momentaufnahme.
+- Fernbedienungsfokus für Intro und nächste Folge, gespeicherte Intro-Erkennung und optionale Abfrage „Schaust du noch?“.
+- Verschiebbare Kategorien, EPG-Beschreibung passend zur markierten Sendung und einstellbare Hauptmenü-Symbole.
+- Weitere Formate für Portal-Ablaufdaten und eine Über-Seite mit Version und Versionsdatum.
+- Live-Vollbild mit Senderwechsel per Hoch/Runter und Wischgeste. Die Belegung ist anpassbar.
+- Serien-Vollbild mit direktem Zugriff auf Folgen, Staffeln und Hauptmenü über die linke Pfeiltaste.
+- Intro-Erkennung auch in der kleinen Playeransicht. „Intro überspringen“ erscheint als anwählbare Schaltfläche. Automatisches Überspringen bleibt optional und standardmäßig ausgeschaltet.
+
+## 1.0.14
+
+- Bedienung, Wiedergabe und Katalognavigation verbessert.
+
 ## 1.0.13
 
 - Links öffnet aus der Senderspalte oder Vollbild-Senderliste zuerst die Kategorien und danach das Hauptmenü.

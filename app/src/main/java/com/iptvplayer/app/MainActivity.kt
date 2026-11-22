@@ -39,17 +39,20 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.key
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ButtonDefaults
@@ -91,6 +94,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -134,9 +138,11 @@ class MainActivity : ComponentActivity() {
     private val storage by lazy { PortalStorage(applicationContext) }
     private var longBackAction: (() -> Boolean)? = null
     private var screenBackAction: ((Boolean) -> Boolean)? = null
+    private var playbackInputAction: (() -> Unit)? = null
     private var consumedLongBack = false
 
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0) playbackInputAction?.invoke()
         if (event.keyCode == android.view.KeyEvent.KEYCODE_BACK) {
             if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount > 0) {
                 if (consumedLongBack || longBackAction?.invoke() == true) {
@@ -156,6 +162,11 @@ class MainActivity : ComponentActivity() {
         return super.dispatchKeyEvent(event)
     }
 
+    override fun dispatchTouchEvent(event: android.view.MotionEvent): Boolean {
+        if (event.actionMasked == android.view.MotionEvent.ACTION_DOWN) playbackInputAction?.invoke()
+        return super.dispatchTouchEvent(event)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Log.setLogLevel(Log.LOG_LEVEL_OFF)
@@ -168,6 +179,7 @@ class MainActivity : ComponentActivity() {
                     storage = storage,
                     registerLongBack = { longBackAction = it },
                     registerScreenBack = { screenBackAction = it },
+                    registerPlaybackInput = { playbackInputAction = it },
                     onExit = ::finish,
                     onFullscreen = { fullscreen ->
                         val controller = WindowCompat.getInsetsController(window, window.decorView)
@@ -199,14 +211,18 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Destination(val label: Int) {
-    LIVE(R.string.destination_live),
-    MOVIES(R.string.destination_movies),
-    SERIES(R.string.destination_series),
-    SETTINGS(R.string.destination_settings),
-    SEARCH(R.string.search),
+private enum class Destination(val label: Int, val icon: Int? = null) {
+    LIVE(R.string.destination_live, R.drawable.ic_menu_live),
+    MOVIES(R.string.destination_movies, R.drawable.ic_menu_movies),
+    SERIES(R.string.destination_series, R.drawable.ic_menu_series),
+    SETTINGS(R.string.destination_settings, R.drawable.ic_menu_settings),
+    SEARCH(R.string.search, R.drawable.ic_menu_search),
     CATEGORIES(R.string.category_settings),
     SOURCES(R.string.destination_sources)
+}
+
+private enum class MainMenuStyle(val label: Int) {
+    BOTH(R.string.menu_style_both), TEXT(R.string.menu_style_text), ICONS(R.string.menu_style_icons)
 }
 
 private enum class VodLiveView(val label: Int) {
@@ -267,7 +283,8 @@ private enum class SettingsSection(val label: Int) {
     PLAYBACK(R.string.settings_playback),
     CONTROLS(R.string.settings_controls),
     METADATA(R.string.settings_metadata),
-    UPDATES(R.string.settings_updates)
+    UPDATES(R.string.settings_updates),
+    ABOUT(R.string.settings_about)
 }
 
 private fun liveSelection(channel: StalkerChannel, group: LiveChannelGroup, combine: Boolean): PlaybackSelection {
@@ -302,6 +319,7 @@ private fun PlayerHome(
     storage: PortalStorage? = null,
     registerLongBack: (((() -> Boolean)?) -> Unit) = {},
     registerScreenBack: ((((Boolean) -> Boolean)?) -> Unit) = {},
+    registerPlaybackInput: (((() -> Unit)?) -> Unit) = {},
     onExit: () -> Unit = {},
     onFullscreen: (Boolean) -> Unit = {},
     canPlay: () -> Boolean = { false }
@@ -342,6 +360,11 @@ private fun PlayerHome(
     var episodeSettingsOpen by remember { mutableStateOf(false) }
     var epgSettingsOpen by remember { mutableStateOf(false) }
     var settingsSection by rememberSaveable { mutableStateOf<SettingsSection?>(null) }
+    var mainMenuStyle by remember(preferences) {
+        mutableStateOf(MainMenuStyle.entries.firstOrNull {
+            it.name == preferences?.getString("main_menu_style", null)
+        } ?: MainMenuStyle.BOTH)
+    }
     var guideAppearancePage by remember { mutableStateOf<GuideAppearancePage?>(null) }
     var guideAppearance by remember(preferences) { mutableStateOf(readGuideAppearance(preferences)) }
     var useXmlTv by remember(preferences) { mutableStateOf(preferences?.getBoolean("xmltv_enabled", false) ?: false) }
@@ -387,12 +410,22 @@ private fun PlayerHome(
         mutableStateOf(preferences?.getInt("credits_before_end_seconds", 60) ?: 60)
     }
     val seriesOpenings = remember { mutableMapOf<Pair<String, String>, Pair<String, List<EpisodeFrame>>>() }
-    val learnedIntros = remember { mutableMapOf<Pair<String, String>, Pair<String, LongRange>>() }
     var fullscreenVideoSurface by remember { mutableStateOf<SurfaceView?>(null) }
+    var playbackVideoSurface by remember { mutableStateOf<SurfaceView?>(null) }
     var detectedTiming by remember { mutableStateOf<Pair<String, EpisodeTiming>?>(null) }
     var nextEpisodeAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     var nextEpisodeName by remember { mutableStateOf("") }
     var nextEpisodeSeconds by remember { mutableStateOf<Int?>(null) }
+    var checkSeriesInactivity by remember(preferences) {
+        mutableStateOf(preferences?.getBoolean("check_series_inactivity", true) ?: true)
+    }
+    var inactiveEpisodeLimit by remember(preferences) {
+        mutableIntStateOf((preferences?.getInt("inactive_episode_limit", 3) ?: 3).coerceIn(1, 10))
+    }
+    var silentEpisodes by remember { mutableIntStateOf(0) }
+    var interruptedEpisode by remember { mutableStateOf(false) }
+    var advancingEpisode by remember { mutableStateOf(false) }
+    var watchingPrompt by remember { mutableStateOf(false) }
     var skipIntroTo by remember { mutableStateOf<Long?>(null) }
     var metadataBusy by remember { mutableStateOf(false) }
     var metadataError by remember { mutableStateOf(false) }
@@ -420,6 +453,7 @@ private fun PlayerHome(
         mutableStateOf(preferences?.getStringSet("merged_individual_portals", emptySet()).orEmpty().toSet())
     }
     var categoryMenu by remember { mutableStateOf<Pair<PortalSection, String?>?>(null) }
+    val categoryOrders = remember { mutableStateMapOf<String, List<String>>() }
     var details by remember { mutableStateOf<Pair<PortalSection, PortalTitle>?>(null) }
     var favorites by remember(preferences) {
         mutableStateOf(preferences?.getStringSet("favorites", emptySet()).orEmpty().toSet())
@@ -501,9 +535,19 @@ private fun PlayerHome(
     var controlSettingsOpen by remember { mutableStateOf(false) }
     var openedSeries by remember { mutableStateOf<PortalTitle?>(null) }
     var seasons by remember { mutableStateOf<List<PortalSeason>?>(null) }
+    var playbackSeasons by remember { mutableStateOf(emptyList<PortalSeason>()) }
+    var playbackSeries by remember { mutableStateOf<PortalTitle?>(null) }
+    var playbackSeason by remember { mutableStateOf<PortalSeason?>(null) }
+    var playbackEpisode by remember { mutableStateOf<PortalTitle?>(null) }
+    var overlaySeason by remember { mutableStateOf<PortalSeason?>(null) }
+    var playbackEpisodeVariants by remember {
+        mutableStateOf(emptyMap<PortalTitle, List<SourceItem<PortalTitle>>>())
+    }
     var openedSeason by remember { mutableStateOf<PortalSeason?>(null) }
     val seriesDetailScroll = rememberLazyListState()
     var catalogueReturnTitle by remember { mutableStateOf<PortalTitle?>(null) }
+    var focusFirstMovie by remember { mutableStateOf(false) }
+    var focusSeriesPrimary by remember { mutableStateOf(false) }
     var episodeVariants by remember { mutableStateOf(emptyMap<PortalTitle, List<SourceItem<PortalTitle>>>()) }
     var episodeError by remember { mutableStateOf(false) }
     var resumeEpisodeMissing by remember { mutableStateOf(false) }
@@ -518,6 +562,19 @@ private fun PlayerHome(
         if (mergeSources) savedSources.ifEmpty { listOfNotNull(active) } else listOfNotNull(active)
     }
     val combine = mergeSources
+    fun categoryOrderKey(section: PortalSection): String =
+        "category_order_${if (combine) "combined" else storedSource?.identity.orEmpty()}_${section.name}"
+
+    fun <T> withCategoryOrder(section: PortalSection, values: List<T>, id: (T) -> String): List<T> {
+        val key = categoryOrderKey(section)
+        val stored = categoryOrders[key] ?: runCatching {
+            val data = org.json.JSONArray(preferences?.getString(key, null) ?: "[]")
+            List(data.length()) { data.getString(it) }
+        }.getOrDefault(emptyList())
+        if (stored.isEmpty()) return values
+        val positions = stored.withIndex().associate { it.value to it.index }
+        return values.sortedBy { positions[id(it)] ?: Int.MAX_VALUE }
+    }
     val mergePortalChannels = storedSource?.identity in mergedIndividualPortals
     var editing by remember { mutableStateOf(false) }
     var initialPortalPromptDismissed by rememberSaveable { mutableStateOf(false) }
@@ -754,6 +811,12 @@ private fun PlayerHome(
 
     fun countryPriority(name: String, country: String? = null): Int =
         countries.indexOf(categoryCountry(name, country)).takeIf { it >= 0 } ?: Int.MAX_VALUE
+
+    fun defaultVodCategoryOrder(section: PortalSection): List<PortalGroup> =
+        browsingGroups(section).sortedWith(compareBy(
+            { if (combine) vodCategoryNames.keys.indexOf(it.id) else countryPriority(it.name, it.country) },
+            { it.name }
+        ))
 
     fun titleKey(section: PortalSection, title: PortalTitle): String =
         "${catalogSession?.first?.sourceLabel.orEmpty()}:${section.name}:${title.id ?: title.name}"
@@ -1155,6 +1218,7 @@ private fun PlayerHome(
                 val saved = library.sources.firstOrNull { it.identity == library.activeId }
                     ?: library.sources.firstOrNull()
                 if (saved != null) {
+                    preferences?.edit()?.putString("active_portal_cache", saved.identity)?.apply()
                     val session = StalkerPortal(saved.address, saved.mac) to null
                     storedSource = saved
                     liveSession = session
@@ -1178,6 +1242,7 @@ private fun PlayerHome(
 
     suspend fun save(source: SavedPortal, activate: Boolean = true) {
         if (activate || storedSource?.identity == source.identity) storedSource = source
+        preferences?.edit()?.putString("active_portal_cache", storedSource?.identity)?.apply()
         val index = savedSources.indexOfFirst { it.identity == source.identity }
         savedSources = if (index < 0) savedSources + source else {
             savedSources.toMutableList().apply { this[index] = source }
@@ -1235,6 +1300,9 @@ private fun PlayerHome(
         nextEpisodeAction = null
         nextEpisodeSeconds = null
         skipIntroTo = null
+        watchingPrompt = false
+        interruptedEpisode = false
+        if (!advancingEpisode) silentEpisodes = 0
         player?.stop()
         player?.clearMediaItems()
         playing = null
@@ -1244,6 +1312,18 @@ private fun PlayerHome(
         vodSection = null
         fullscreen = false
         lastBack = 0
+    }
+
+    fun advanceEpisode(confirmed: Boolean = false) {
+        val next = nextEpisodeAction ?: return
+        if (confirmed) silentEpisodes = 0
+        watchingPrompt = false
+        advancingEpisode = true
+        try {
+            next()
+        } finally {
+            advancingEpisode = false
+        }
     }
 
     fun reopenPlayback(
@@ -1371,11 +1451,55 @@ private fun PlayerHome(
         )
     }
 
+    fun startupChannelScope(): String {
+        val activeId = storedSource?.identity ?: preferences?.getString("active_portal_cache", null)
+        val sourceScope = if (mergeSources) "combined" else "${activeId.orEmpty()}:${activeId in mergedIndividualPortals}"
+        return listOf(sourceScope, countries.joinToString(","), hiddenCategories.sorted().joinToString(",")).joinToString("|")
+    }
+
+    var cachedStartupAttempt by remember { mutableStateOf(false) }
+    LaunchedEffect(storage) {
+        if (storage == null || !playLastChannelAtStartup || selected != Destination.LIVE) return@LaunchedEffect
+        val cached = try {
+            storage.readStartupChannel()
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            null
+        } ?: return@LaunchedEffect
+        if (!restoring || selected != Destination.LIVE || playbackSelection != null ||
+            cached.scope != startupChannelScope() || cached.key != preferences?.getString("last_live_channel", null)
+        ) return@LaunchedEffect
+        val channel = StalkerChannel(cached.name, "", null, null)
+        programmeChannel = channel
+        cachedStartupAttempt = true
+        startPlayback(
+            channel, PlaybackSelection(cached.selectionSource, PortalSection.LIVE, cached.selectionId),
+            cached.streams.map { saved ->
+                val portal = StalkerPortal(saved.address, saved.mac)
+                val stream = StalkerChannel(cached.name, saved.command, null, null, id = saved.id, direct = saved.direct)
+                PlaybackVariant(portal.sourceLabel) { portal.resolve(stream, portal.openSession()) }
+            },
+            liveRestoreKey = cached.key
+        )
+    }
+
+    LaunchedEffect(restoring, playing, playbackAttempt, liveGroups) {
+        if (restoring || playing == null || playing in liveGroups || vodSection != null) return@LaunchedEffect
+        val key = playbackAttempt?.liveRestoreKey ?: return@LaunchedEffect
+        val restored = liveGroups.keys.firstOrNull { (programmeKey(it) ?: liveGroups[it]?.identity) == key }
+            ?: return@LaunchedEffect
+        playing = restored
+        programmeChannel = restored
+    }
+
     var restoredLastLiveChannel by remember { mutableStateOf(false) }
-    LaunchedEffect(restoring, liveCategories) {
+    LaunchedEffect(restoring, liveCategories, playbackError) {
         if (restoring || restoredLastLiveChannel) return@LaunchedEffect
+        val retryFromCatalogue = cachedStartupAttempt && playbackError != null
+        if (cachedStartupAttempt && !retryFromCatalogue && playbackSelection != null) return@LaunchedEffect
         restoredLastLiveChannel = true
-        if (!playLastChannelAtStartup || selected != Destination.LIVE || playbackSelection != null) return@LaunchedEffect
+        if (selected != Destination.LIVE || playbackSelection != null && !retryFromCatalogue) return@LaunchedEffect
         val savedKey = preferences?.getString("last_live_channel", null) ?: return@LaunchedEffect
         val visibleChannels = liveCategories.entries
             .filter { visibleCategory(PortalSection.LIVE, it.key, it.key) }
@@ -1386,7 +1510,9 @@ private fun PlayerHome(
         }
         if (index >= 0) {
             guideScroll.requestScrollToItem(index)
-            playChannel(visibleChannels[index])
+            programmeChannel = visibleChannels[index]
+            restoreLiveFocus = true
+            if (playLastChannelAtStartup) playChannel(visibleChannels[index])
         }
     }
 
@@ -1506,7 +1632,8 @@ private fun PlayerHome(
             )
         ) return
         closeSeries()
-        if (section == PortalSection.SERIES) seriesDetailScroll.requestScrollToItem(0)
+        focusSeriesPrimary = section == PortalSection.SERIES
+        if (focusSeriesPrimary) seriesDetailScroll.requestScrollToItem(0)
         details = section to title
         if (section == PortalSection.SERIES && isTitleSaved(section, title) && trackedSeries(title) == null) {
             updateTrackedSeries(title, saved = true)
@@ -1646,6 +1773,12 @@ private fun PlayerHome(
                         )
                         val seasonList = seasons.orEmpty()
                         val availableVariants = episodeVariants
+                        playbackSeries = series
+                        playbackSeasons = seasonList
+                        playbackSeason = season
+                        playbackEpisode = title
+                        overlaySeason = season
+                        playbackEpisodeVariants = availableVariants
                         followingEpisode(seasonList, season, title)?.let { (followingSeason, following) ->
                             nextEpisodeName = following.episode?.let {
                                 resources.getString(R.string.episode_number, it)
@@ -1824,7 +1957,7 @@ private fun PlayerHome(
                 enteredAddress, enteredMac, refreshedChannels, refreshedGenres,
                 refreshedCatalogs,
                 savedSources.firstOrNull { it.identity == previous?.identity }?.epgChannelIds.orEmpty(),
-                source.subscriptionExpiry
+                previous?.subscriptionExpiry ?: source.loadSubscriptionExpiry(token)
             )
             val sameSource = snapshot.identity == storedSource?.identity
             if (activate || sameSource) {
@@ -1956,6 +2089,26 @@ private fun PlayerHome(
                         if (lastBadgedAttempt != attempt.mediaId) {
                             if (attempt.selection.section == PortalSection.LIVE) {
                                 preferences?.edit()?.putString("last_live_channel", attempt.liveRestoreKey)?.apply()
+                                val key = attempt.liveRestoreKey
+                                val variants = liveGroups[attempt.channel]?.variants
+                                if (key != null && !variants.isNullOrEmpty() && storage != null) {
+                                    val snapshot = StartupChannel(
+                                        key, attempt.selection.source, attempt.selection.id, startupChannelScope(),
+                                        attempt.channel.name, variants.take(8).map { (item, _) ->
+                                            val stream = item.value
+                                            StartupStream(item.source.address, item.source.mac, stream.id, stream.command, stream.direct)
+                                        }
+                                    )
+                                    scope.launch {
+                                        try {
+                                            storage.writeStartupChannel(snapshot)
+                                        } catch (error: CancellationException) {
+                                            throw error
+                                        } catch (_: Exception) {
+                                            // The normal catalogue restore remains available.
+                                        }
+                                    }
+                                }
                             }
                             lastBadgedAttempt = attempt.mediaId
                             playbackSourceBadge = attempt.mediaId to attempt.variants[attempt.index].label
@@ -2068,9 +2221,22 @@ private fun PlayerHome(
     var guidePanel by remember { mutableStateOf(GuidePanel.GRID) }
     var fullscreenGuidePanel by remember { mutableStateOf(GuidePanel.GRID) }
     var fullscreenOverlayContent by remember { mutableStateOf(GuidePanel.CHANNELS) }
+    var playbackControlsVisible by remember { mutableStateOf(false) }
+    var dismissPlaybackControls by remember { mutableIntStateOf(0) }
     var overlayInteraction by remember { mutableIntStateOf(0) }
     var overlayScheduleFocused by remember { mutableStateOf(false) }
-    var guideProgramme by remember { mutableStateOf<PortalProgramme?>(null) }
+    var guideProgramme by remember { mutableStateOf<Pair<StalkerChannel, PortalProgramme>?>(null) }
+    val guideNow by produceState(System.currentTimeMillis() / 1_000) {
+        while (true) {
+            delay(30_000)
+            value = System.currentTimeMillis() / 1_000
+        }
+    }
+    fun guideSelection(channel: StalkerChannel): PortalProgramme? = resolveGuideProgramme(
+        effectiveProgrammes(channel).orEmpty(),
+        guideProgramme?.takeIf { it.first === channel }?.second,
+        guideNow
+    )
     val guidePanelFocus = remember { FocusRequester() }
     val guideChannelFocus = remember { FocusRequester() }
     fun openMainMenu() {
@@ -2088,6 +2254,17 @@ private fun PlayerHome(
         guidePanel = GuidePanel.MENU
         selected = Destination.LIVE
     }
+    fun restoreGuideEntryFocus() {
+        val savedKey = preferences?.getString("last_live_channel", null)
+        val channel = playing.takeIf { vodSection == null } ?: savedKey?.let { key ->
+            liveGroups.keys.firstOrNull { (programmeKey(it) ?: liveGroups[it]?.identity) == key }
+        }
+        if (channel != null) {
+            if (category != null && channel !in liveCategories[category].orEmpty()) category = null
+            programmeChannel = channel
+        }
+        restoreLiveFocus = true
+    }
     fun navigateGuide(input: GuideInput) {
         guidePanel = guidePanel.afterProgrammeGuide(input)
     }
@@ -2096,9 +2273,9 @@ private fun PlayerHome(
         if (panel != GuidePanel.GRID) fullscreenOverlayContent = panel
         fullscreenGuidePanel = panel
     }
-    LaunchedEffect(fullscreen, fullscreenGuidePanel, guideAppearance.closeSeconds, overlayInteraction) {
+    LaunchedEffect(fullscreen, fullscreenGuidePanel, guideAppearance.closeSeconds, overlayInteraction, categoryMenu) {
         if (!fullscreen) showFullscreenPanel(GuidePanel.GRID)
-        else if (fullscreenGuidePanel != GuidePanel.GRID && guideAppearance.closeSeconds > 0) {
+        else if (vodSection == null && fullscreenGuidePanel != GuidePanel.GRID && guideAppearance.closeSeconds > 0 && categoryMenu == null) {
             delay(guideAppearance.closeSeconds * 1_000L)
             showFullscreenPanel(GuidePanel.GRID)
         }
@@ -2124,6 +2301,12 @@ private fun PlayerHome(
     }
     fun leaveFullscreen() {
         savePlaybackPosition()
+        if (vodSection == PortalSection.SERIES && playbackSeries != null && selected == Destination.SERIES) {
+            openedSeries = playbackSeries
+            openedSeason = playbackSeason
+            seasons = playbackSeasons
+            episodeVariants = playbackEpisodeVariants
+        }
         restoreLiveFocus = vodSection == null && (selected == null || selected == Destination.LIVE)
         if (restoreLiveFocus && inGuide) {
             if (category != null && playing !in liveCategories[category].orEmpty()) category = null
@@ -2142,8 +2325,19 @@ private fun PlayerHome(
     }
     fun navigateBack() {
         if (fullscreen) {
+            if (watchingPrompt) {
+                stopPlayback()
+                return
+            }
+            if (playbackControlsVisible) {
+                dismissPlaybackControls++
+                return
+            }
             if (fullscreenGuidePanel != GuidePanel.GRID) {
-                showFullscreenPanel(GuidePanel.GRID)
+                showFullscreenPanel(
+                    if (vodSection == PortalSection.SERIES) fullscreenGuidePanel.afterSeriesOverlay(GuideInput.BACK)
+                    else GuidePanel.GRID
+                )
                 return
             }
             leaveFullscreen()
@@ -2179,6 +2373,23 @@ private fun PlayerHome(
         else openMainMenu()
     }
     var playerControlsRequest by remember { mutableIntStateOf(0) }
+    fun changeLiveChannel(step: Int): Boolean {
+        val groups = withCategoryOrder(PortalSection.LIVE, liveCategories.keys
+            .filter { visibleCategory(PortalSection.LIVE, it, it) }
+            .sortedBy { categoryNames.values.indexOf(it) }) { it }
+        val currentChannel = if (vodSection == null) starting ?: playing else null
+        val group = guideChannelCategory(category, groups, liveCategories, currentChannel)
+        val channels = liveCategories[group].orEmpty()
+        if (channels.isEmpty()) return false
+        val index = channels.indexOf(currentChannel)
+        val next = if (index < 0) {
+            if (step > 0) channels.first() else channels.last()
+        } else channels[Math.floorMod(index + step, channels.size)]
+        category = group
+        selected = Destination.LIVE
+        playChannel(next, openFullscreenOnStart = fullscreen)
+        return true
+    }
     fun runMappedControl(input: GuideInput): Boolean {
         val action = controlBindings[input] ?: ControlAction.DEFAULT
         val panel = when (action) {
@@ -2189,7 +2400,7 @@ private fun PlayerHome(
             else -> null
         }
         if (panel != null) {
-            if (fullscreen && vodSection == null) {
+            if (fullscreen && (vodSection == null || vodSection == PortalSection.SERIES && panel != GuidePanel.DETAILS)) {
                 if (panel == GuidePanel.DETAILS) {
                     programmeChannel = playing
                     guideProgramme = null
@@ -2212,29 +2423,77 @@ private fun PlayerHome(
             } ?: false
             ControlAction.STOP -> if (playing != null || starting != null) { stopPlayback(); true } else false
             ControlAction.CONTROLS -> if (fullscreen) { playerControlsRequest++; true } else false
+            ControlAction.NEXT_CHANNEL -> changeLiveChannel(1)
+            ControlAction.PREVIOUS_CHANNEL -> changeLiveChannel(-1)
             else -> false
         }
     }
     val longBack by rememberUpdatedState<() -> Boolean>({
-        !controlSettingsOpen && guideAppearancePage == null &&
-            (runMappedControl(GuideInput.LONG_BACK) || (!fullscreen && openCurrentFullscreen()))
+        !watchingPrompt && !playbackControlsVisible && !controlSettingsOpen && guideAppearancePage == null &&
+            (runMappedControl(GuideInput.LONG_BACK) ||
+                if (fullscreen && fullscreenGuidePanel != GuidePanel.GRID) {
+                    showFullscreenPanel(GuidePanel.GRID)
+                    true
+                } else !fullscreen && openCurrentFullscreen())
     })
     val screenBack by rememberUpdatedState<(Boolean) -> Boolean>({ released ->
-        val handled = !fullscreen && (
+        val handled = fullscreen && (playbackControlsVisible || watchingPrompt || fullscreenGuidePanel != GuidePanel.GRID) || !fullscreen && (
             isMainMenuOpen() || selected == Destination.MOVIES || selected == Destination.SERIES
         )
         if (handled && released) navigateBack()
         handled
     })
+    val playbackInput by rememberUpdatedState<() -> Unit>({
+        if (vodSection == PortalSection.SERIES && playing != null && !watchingPrompt) {
+            interruptedEpisode = true
+            silentEpisodes = 0
+        }
+    })
     DisposableEffect(Unit) {
         registerLongBack { longBack() }
         registerScreenBack { released -> screenBack(released) }
+        registerPlaybackInput { playbackInput() }
         onDispose {
             registerLongBack(null)
             registerScreenBack(null)
+            registerPlaybackInput(null)
         }
     }
     BackHandler(onBack = ::navigateBack)
+    categoryMenu?.let { (section, first) ->
+        val defaultGroups = if (section == PortalSection.LIVE) {
+            allLiveCategories.keys.sortedBy { categoryNames.values.indexOf(it) }.map { PortalGroup(it, it) }
+        } else defaultVodCategoryOrder(section)
+        val groups = withCategoryOrder(section, defaultGroups) { it.id }
+        CategoryDialog(
+            groups, first,
+            isHidden = { categoryKey(section, it.id) in hiddenCategories },
+            onApply = { ids, hidden ->
+                setCategoryVisibility(section, ids, hidden)
+                categoryMenu = null
+            },
+            onMove = { id, direction ->
+                val order = groups.map { it.id }.moveCategory(id, direction)
+                val key = categoryOrderKey(section)
+                categoryOrders[key] = order
+                preferences?.edit()?.putString(key, org.json.JSONArray(order).toString())?.apply()
+            },
+            onDismiss = { categoryMenu = null }
+        )
+    }
+    LaunchedEffect(watchingPrompt) {
+        if (watchingPrompt) {
+            delay(30_000)
+            if (watchingPrompt) stopPlayback()
+        }
+    }
+    if (watchingPrompt && !fullscreen) AlertDialog(
+        onDismissRequest = ::stopPlayback,
+        title = { Text(stringResource(R.string.series_still_watching)) },
+        text = { Text(stringResource(R.string.series_still_watching_timeout)) },
+        confirmButton = { MenuButton(stringResource(R.string.play_next_episode), Modifier) { advanceEpisode(confirmed = true) } },
+        dismissButton = { MenuButton(stringResource(R.string.stop_playback), Modifier, onClick = ::stopPlayback) }
+    )
     guideAppearancePage?.let { page ->
         GuideAppearanceDialog(page, guideAppearance, onChange = {
             guideAppearance = it
@@ -2273,17 +2532,23 @@ private fun PlayerHome(
         val uri = item.localConfiguration?.uri ?: return@LaunchedEffect
         val hls = item.localConfiguration?.mimeType == MimeTypes.APPLICATION_M3U8 ||
             uri.lastPathSegment.orEmpty().endsWith(".m3u8", ignoreCase = true)
-        if (hls && !scanOpening) return@LaunchedEffect
         val previous = seriesOpenings[seriesKey]
-        val learned = learnedIntros[seriesKey]?.takeIf { it.first == previous?.first }?.second
+        val learnedKey = seriesKey?.let { (source, key) ->
+            val identity = "$source\n$key\n$hls"
+            "opening:" + java.security.MessageDigest.getInstance("SHA-256").digest(identity.encodeToByteArray())
+                .joinToString("") { "%02x".format(it) }
+        }
+        val learned = learnedKey?.let { decodeLearnedOpening(progressPreferences?.getString(it, null)) }
         var timing = EpisodeTiming()
         val updates = if (hls) flow {
             val opening = mutableListOf<EpisodeFrame>()
-            while (active.currentMediaItem == item && active.currentPosition < 180_000) {
+            while (active.currentMediaItem == item &&
+                (if (scanOpening) active.currentPosition < 180_000 else active.duration - active.currentPosition < 240_000)
+            ) {
                 val position = active.currentPosition
                 val bucket = position / HLS_INTRO_FRAME_INTERVAL_MS * HLS_INTRO_FRAME_INTERVAL_MS
-                val surface = fullscreenVideoSurface
-                if (surface != null && active.isPlaying && position - bucket < 500 &&
+                val surface = fullscreenVideoSurface ?: playbackVideoSurface
+                if (surface != null && active.isPlaying &&
                     (opening.lastOrNull()?.timeMs ?: -1) < bucket
                 ) {
                     sampleEpisodeSurface(surface, bucket)?.let {
@@ -2297,23 +2562,27 @@ private fun PlayerHome(
         updates.collect { analysis ->
             if (active.currentMediaItem != item) return@collect
             if (seriesKey != null && analysis.opening.isNotEmpty()) {
-                if (previous != null && previous.first != selection.id && timing.introEndMs == null) {
+                if (timing.introEndMs == null) {
                     val intro = withContext(Dispatchers.Default) {
-                        if (hls) {
-                            learned?.let { confirmKnownOpening(analysis.opening, previous.second, it) }
-                                ?: findRepeatedOpening(analysis.opening, previous.second, HLS_INTRO_FRAME_INTERVAL_MS)
-                        } else findRepeatedOpening(analysis.opening, previous.second)
+                        learned?.let { confirmKnownOpening(analysis.opening, it.frames, it.range) }
+                            ?: previous?.takeIf { it.first != selection.id }?.let {
+                                if (hls) findRepeatedOpening(analysis.opening, it.second, HLS_INTRO_FRAME_INTERVAL_MS)
+                                else findRepeatedOpening(analysis.opening, it.second)
+                            }
                     }
                     if (active.currentMediaItem != item) return@collect
                     intro?.let {
                         timing = timing.copy(introStartMs = intro.first, introEndMs = intro.last + 1)
-                        if (hls) learnedIntros[seriesKey] = selection.id to intro
+                            if (learnedKey != null) {
+                                val frames = analysis.opening.filter { frame -> frame.timeMs in intro }.take(7)
+                                if (frames.size >= 4) progressPreferences?.edit()
+                                    ?.putString(learnedKey, LearnedOpening(intro, frames).encode())?.apply()
+                            }
                     }
                 }
                 if (seriesOpenings.size >= 16 && seriesKey !in seriesOpenings) {
                     val oldest = seriesOpenings.keys.first()
                     seriesOpenings.remove(oldest)
-                    learnedIntros.remove(oldest)
                 }
                 if (previous?.first != selection.id || analysis.opening.size > previous.second.size) {
                     seriesOpenings[seriesKey] = selection.id to analysis.opening
@@ -2356,12 +2625,16 @@ private fun PlayerHome(
                 nextEpisodeSeconds = if (nextEpisodeAction != null && remaining <= episodeNoticeSeconds * 1_000L) {
                     ((remaining + 999) / 1_000).toInt()
                 } else null
-                if (autoNextEpisode && (active.isPlaying || active.playbackState == Player.STATE_ENDED) &&
+                if (!watchingPrompt && autoNextEpisode && (active.isPlaying || active.playbackState == Player.STATE_ENDED) &&
                     remaining == 0L && canPlay()
                 ) {
-                    val advance = nextEpisodeAction
-                    if (advance != null) {
-                        advance()
+                    if (nextEpisodeAction != null) {
+                        silentEpisodes = if (interruptedEpisode) 0 else silentEpisodes + 1
+                        if (checkSeriesInactivity && silentEpisodes >= inactiveEpisodeLimit) {
+                            active.pause()
+                            watchingPrompt = true
+                            nextEpisodeSeconds = null
+                        } else advanceEpisode()
                         return@LaunchedEffect
                     }
                 }
@@ -2370,45 +2643,88 @@ private fun PlayerHome(
         }
     }
     if (fullscreen) {
-        val screenWidth = LocalConfiguration.current.screenWidthDp.dp
+        val episodeActionFocus = remember { FocusRequester() }
+        val episodeAction = when {
+            watchingPrompt -> 3
+            nextEpisodeSeconds != null -> 2
+            skipIntroTo != null -> 1
+            else -> 0
+        }
+        LaunchedEffect(episodeAction, playbackControlsVisible, fullscreenGuidePanel, skipIntroTo) {
+            if (episodeAction != 0 && !playbackControlsVisible &&
+                (fullscreenGuidePanel == GuidePanel.GRID || watchingPrompt || skipIntroTo != null)
+            ) {
+                withFrameNanos { }
+                episodeActionFocus.requestFocus()
+            }
+        }
+        val screen = LocalConfiguration.current
+        val screenWidth = screen.screenWidthDp.dp
+        val screenHeight = screen.screenHeightDp.dp
         val scheduleBesideList = guideAppearance.showSchedule && screenWidth >= 640.dp
-        fun navigateFromLiveFullscreen(input: GuideInput) {
+        val descriptionBesideSchedule = scheduleBesideList && guideAppearance.showDescription && screenWidth >= 840.dp
+        val live = vodSection == null
+        val seriesOverlay = vodSection == PortalSection.SERIES && playbackSeries != null
+        fun navigateFullscreen(input: GuideInput) {
             if (runMappedControl(input)) return
+            if (input.vertical) {
+                if (live && fullscreenGuidePanel == GuidePanel.GRID) {
+                    changeLiveChannel(if (input == GuideInput.REMOTE_UP || input == GuideInput.SWIPE_UP) 1 else -1)
+                }
+                return
+            }
+            if (seriesOverlay) {
+                showFullscreenPanel(fullscreenGuidePanel.afterSeriesOverlay(input))
+                return
+            }
+            if (!live) return
             if (fullscreenGuidePanel == GuidePanel.GRID && (input == GuideInput.SWIPE_RIGHT || input == GuideInput.REMOTE_RIGHT)) {
                 programmeChannel = playing
                 guideProgramme = null
             }
             showFullscreenPanel(fullscreenGuidePanel.after(input))
         }
-        val live = vodSection == null
         val overlayFocus = remember { FocusRequester() }
-        val inputModifier = if (live) Modifier.guideNavigationInput(interceptRemote = { input ->
-            val mapped = controlBindings[input]
-            val custom = mapped != null && mapped != ControlAction.DEFAULT
-            custom || fullscreenGuidePanel != GuidePanel.CHANNELS || !scheduleBesideList ||
-                (input == GuideInput.REMOTE_LEFT && !overlayScheduleFocused)
-        }, onInput = ::navigateFromLiveFullscreen) else Modifier
+        fun interceptDirection(input: GuideInput): Boolean {
+            if (playbackControlsVisible || watchingPrompt) return false
+            val custom = controlBindings[input]?.let { it != ControlAction.DEFAULT } == true
+            if (input.vertical) return fullscreenGuidePanel == GuidePanel.GRID && (custom || live)
+            return custom || seriesOverlay || live && (
+                fullscreenGuidePanel != GuidePanel.CHANNELS || !scheduleBesideList ||
+                    input == GuideInput.REMOTE_LEFT && !overlayScheduleFocused
+            )
+        }
+        val inputModifier = Modifier.guideNavigationInput(
+            interceptRemote = ::interceptDirection,
+            interceptGesture = { input -> interceptDirection(input) || live && !input.vertical && !playbackControlsVisible },
+            onInput = ::navigateFullscreen
+        )
         Box(Modifier.fillMaxSize().background(Color.Black).then(inputModifier)) {
             PlayerFrame(
                 player, active = true, fullscreen = true, onStop = ::stopPlayback,
                 onSurface = { fullscreenVideoSurface = it },
-                onGuideInput = if (live) ::navigateFromLiveFullscreen else null,
+                onGuideInput = ::navigateFullscreen,
+                interceptGuideKey = ::interceptDirection,
                 onTouchAction = { runMappedControl(GuideInput.TAP) },
                 onMediaKey = { runMappedControl(GuideInput.PLAY_PAUSE) },
-                controlsRequest = playerControlsRequest
+                controlsRequest = playerControlsRequest,
+                controlsDismissRequest = dismissPlaybackControls,
+                controlsAllowed = fullscreenGuidePanel == GuidePanel.GRID && !watchingPrompt,
+                episodeActionVisible = episodeAction != 0 || fullscreenGuidePanel != GuidePanel.GRID || skipIntroTo != null,
+                onControlsVisible = { playbackControlsVisible = it }
             )
             if (controlBindings[GuideInput.TAP] == ControlAction.PLAY_PAUSE &&
-                fullscreenGuidePanel == GuidePanel.GRID
+                fullscreenGuidePanel == GuidePanel.GRID && !playbackControlsVisible
             ) {
                 MenuButton(
                     stringResource(R.string.control_show_controls),
                     Modifier.align(Alignment.BottomEnd).padding(12.dp)
                 ) { playerControlsRequest++ }
             }
-            if (live && fullscreenGuidePanel != GuidePanel.GRID) {
+            if ((live || seriesOverlay) && fullscreenGuidePanel != GuidePanel.GRID) {
                 Box(Modifier.matchParentSize().clickable { showFullscreenPanel(GuidePanel.GRID) })
             }
-            if (live) {
+            if (live || seriesOverlay) {
                 AnimatedVisibility(
                     visible = fullscreenGuidePanel != GuidePanel.GRID,
                     modifier = Modifier.align(
@@ -2417,39 +2733,72 @@ private fun PlayerHome(
                     enter = fadeIn(), exit = fadeOut()
                 ) {
                     val panel = fullscreenOverlayContent
-                    val groups = liveCategories.keys.filter { visibleCategory(PortalSection.LIVE, it, it) }
-                        .sortedBy { categoryNames.values.indexOf(it) }
+                    val groups = withCategoryOrder(PortalSection.LIVE, liveCategories.keys
+                        .filter { visibleCategory(PortalSection.LIVE, it, it) }
+                        .sortedBy { categoryNames.values.indexOf(it) }) { it }
                     val channelCategory = guideChannelCategory(category, groups, liveCategories, playing)
-                    val panelWidth = when (panel) {
+                    val panelWidth = if (seriesOverlay) minOf(360.dp, screenWidth * 0.8f) else when (panel) {
                         GuidePanel.CHANNELS -> {
-                            val fraction = if (scheduleBesideList) 0.62f else 0.38f
+                            val fraction = when {
+                                descriptionBesideSchedule -> 0.82f
+                                scheduleBesideList -> 0.62f
+                                else -> 0.38f
+                            }
                             (screenWidth * fraction * guideAppearance.listWidth.factor)
                                 .coerceIn(minOf(205.dp, screenWidth * 0.8f), screenWidth * 0.88f)
                         }
-                        GuidePanel.DETAILS -> minOf(300.dp, screenWidth * 0.85f)
+                        GuidePanel.DETAILS -> (screenWidth * 0.55f).coerceIn(minOf(300.dp, screenWidth * 0.85f), minOf(580.dp, screenWidth * 0.85f))
                         else -> minOf(235.dp, screenWidth * 0.85f)
                     }
                     Surface(
                         modifier = Modifier.width(panelWidth)
-                            .then(if (panel == GuidePanel.DETAILS) Modifier.heightIn(max = 230.dp) else Modifier.fillMaxHeight()),
+                            .then(if (panel == GuidePanel.DETAILS) Modifier.heightIn(max = screenHeight * 0.83f) else Modifier.fillMaxHeight()),
                         shape = RoundedCornerShape(12.dp),
                         color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = guideAppearance.opacity / 100f)
                     ) {
                         Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                             MenuButton(
-                                if (panel == GuidePanel.CHANNELS) channelCategory ?: stringResource(R.string.channels)
+                                if (seriesOverlay && panel == GuidePanel.CHANNELS) overlaySeason?.title?.name
+                                    ?: stringResource(R.string.series_overlay_episodes)
+                                else if (seriesOverlay && panel == GuidePanel.CATEGORIES) stringResource(R.string.series_overlay_seasons)
+                                else if (panel == GuidePanel.CHANNELS) channelCategory ?: stringResource(R.string.channels)
                                 else stringResource(R.string.navigation_back),
                                 Modifier.focusRequester(overlayFocus)
                             ) {
-                                showFullscreenPanel(if (panel == GuidePanel.CHANNELS) GuidePanel.CATEGORIES else panel.after(GuideInput.BACK))
+                                if (seriesOverlay) navigateBack()
+                                else showFullscreenPanel(if (panel == GuidePanel.CHANNELS) GuidePanel.CATEGORIES else panel.after(GuideInput.BACK))
                             }
-                            LaunchedEffect(panel) { if (panel != GuidePanel.CHANNELS) overlayFocus.requestFocus() }
+                            LaunchedEffect(panel) { if (seriesOverlay || panel != GuidePanel.CHANNELS) overlayFocus.requestFocus() }
                             when (panel) {
                                 GuidePanel.CHANNELS -> {
+                                    if (seriesOverlay) {
+                                        val episodes = overlaySeason?.episodes.orEmpty()
+                                        val current = episodes.indexOf(playbackEpisode).coerceAtLeast(0)
+                                        key(overlaySeason) {
+                                            LazyColumn(
+                                                Modifier.weight(1f), state = rememberLazyListState(current)
+                                            ) {
+                                                items(episodes) { episode ->
+                                                    MenuButton(episode.name, Modifier.fillMaxWidth(), selected = episode == playbackEpisode) {
+                                                        val series = playbackSeries ?: return@MenuButton
+                                                        val season = overlaySeason ?: return@MenuButton
+                                                        openedSeries = series
+                                                        openedSeason = season
+                                                        seasons = playbackSeasons
+                                                        episodeVariants = playbackEpisodeVariants
+                                                        selected = Destination.SERIES
+                                                        showFullscreenPanel(GuidePanel.GRID)
+                                                        selectTitle(PortalSection.SERIES, episode)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    } else {
                                     val channelsInPanel = liveCategories[channelCategory].orEmpty()
                                     if (channelsInPanel.isEmpty()) LaunchedEffect(Unit) { overlayFocus.requestFocus() }
                                     FullscreenChannelList(
                                         Modifier.weight(1f), channelsInPanel, playing, guideAppearance, scheduleBesideList,
+                                        descriptionBesideSchedule = descriptionBesideSchedule,
                                         refreshKey = epgRefreshRequest + if (guideCacheLoaded) 1 else 0,
                                         programmes = ::effectiveProgrammes,
                                         onVisible = { visible -> if (!useXmlTv) loadProviderSchedules(visible) },
@@ -2463,40 +2812,47 @@ private fun PlayerHome(
                                         }
                                     )
                                 }
+                                    }
                                 GuidePanel.CATEGORIES -> LazyColumn(Modifier.weight(1f)) {
+                                    if (seriesOverlay) {
+                                        items(playbackSeasons) { season ->
+                                            MenuButton(season.title.name, Modifier.fillMaxWidth(), selected = season == playbackSeason) {
+                                                overlaySeason = season
+                                                showFullscreenPanel(GuidePanel.CHANNELS)
+                                            }
+                                        }
+                                    } else {
                                     items(groups) { group ->
-                                        MenuButton(group, Modifier.fillMaxWidth(), selected = channelCategory == group) {
+                                        MenuButton(group, Modifier.fillMaxWidth(), selected = channelCategory == group,
+                                            onLongPress = { categoryMenu = PortalSection.LIVE to group }) {
                                             category = group
                                             showFullscreenPanel(GuidePanel.CHANNELS)
                                         }
                                     }
                                 }
+                                    }
                                 GuidePanel.MENU -> LazyColumn(Modifier.weight(1f)) {
                                     items(mainDestinations) { destination ->
-                                        MenuButton(stringResource(destination.label), Modifier.fillMaxWidth()) {
+                                        MenuButton(
+                                            stringResource(destination.label), Modifier.fillMaxWidth(),
+                                            leadingIcon = destination.icon.takeUnless { mainMenuStyle == MainMenuStyle.TEXT },
+                                            iconOnly = mainMenuStyle == MainMenuStyle.ICONS
+                                        ) {
                                             showFullscreenPanel(GuidePanel.GRID)
                                             guidePanel = GuidePanel.GRID
                                             lastFocused = destination
                                             pendingVodCategory = destination.takeIf { it == Destination.MOVIES || it == Destination.SERIES }
                                             selected = destination
                                             fullscreen = false
+                                            if (destination == Destination.LIVE) restoreGuideEntryFocus()
                                         }
                                     }
                                 }
                                 GuidePanel.DETAILS -> {
-                                    val now = System.currentTimeMillis() / 1_000
                                     val schedule = playing?.let(::effectiveProgrammes).orEmpty()
-                                    val programme = schedule.firstOrNull {
-                                        val from = it.startSeconds
-                                        val to = it.endSeconds
-                                        from != null && to != null && now in from until to
-                                    } ?: schedule.firstOrNull { it.startSeconds == null }
-                                    playing?.let { Text(it.name, style = MaterialTheme.typography.labelMedium) }
-                                    Text(programme?.title ?: stringResource(R.string.no_guide), style = MaterialTheme.typography.titleMedium)
-                                    Text(
-                                        programme?.description ?: stringResource(R.string.no_title_description),
-                                        Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
-                                        style = MaterialTheme.typography.bodySmall
+                                    ProgrammeInfoCard(
+                                        playing, currentGuideProgramme(schedule, guideNow),
+                                        Modifier.fillMaxWidth().weight(1f, fill = false)
                                     )
                                 }
                                 GuidePanel.GRID -> Unit
@@ -2505,14 +2861,27 @@ private fun PlayerHome(
                     }
                 }
             }
-            if (skipIntroTo != null || nextEpisodeSeconds != null) {
+            if (episodeAction != 0 && (fullscreenGuidePanel == GuidePanel.GRID || watchingPrompt || skipIntroTo != null)) {
                 Surface(
                     modifier = Modifier.align(Alignment.CenterEnd).padding(20.dp),
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Column(Modifier.padding(12.dp)) {
+                        if (watchingPrompt) {
+                            Text(stringResource(R.string.series_still_watching), style = MaterialTheme.typography.titleMedium)
+                            Text(stringResource(R.string.series_still_watching_timeout))
+                            Row {
+                                MenuButton(
+                                    stringResource(R.string.play_next_episode), Modifier.focusRequester(episodeActionFocus)
+                                ) { advanceEpisode(confirmed = true) }
+                                MenuButton(stringResource(R.string.stop_playback), Modifier, onClick = ::stopPlayback)
+                            }
+                        } else {
                         skipIntroTo?.let { position ->
-                            MenuButton(stringResource(R.string.skip_intro), Modifier) {
+                            MenuButton(
+                                stringResource(R.string.skip_intro),
+                                if (episodeAction == 1) Modifier.focusRequester(episodeActionFocus) else Modifier
+                            ) {
                                 player?.seekTo(position)
                                 skipIntroTo = null
                             }
@@ -2523,11 +2892,14 @@ private fun PlayerHome(
                                 else stringResource(R.string.next_episode_ready, nextEpisodeName)
                             )
                             Row {
-                                MenuButton(stringResource(R.string.play_next_episode), Modifier) {
-                                    nextEpisodeAction?.invoke()
+                                MenuButton(
+                                    stringResource(R.string.play_next_episode), Modifier.focusRequester(episodeActionFocus)
+                                ) {
+                                    advanceEpisode(confirmed = true)
                                 }
                                 MenuButton(stringResource(R.string.stop_playback), Modifier, onClick = ::stopPlayback)
                             }
+                        }
                         }
                     }
                 }
@@ -2564,20 +2936,6 @@ private fun PlayerHome(
             }
         }
         return
-    }
-    categoryMenu?.let { (section, first) ->
-        val groups = if (section == PortalSection.LIVE) {
-            allLiveCategories.keys.sorted().map { PortalGroup(it, it) }
-        } else browsingGroups(section)
-        CategoryDialog(
-            groups, first,
-            isHidden = { categoryKey(section, it.id) in hiddenCategories },
-            onApply = { ids, hidden ->
-                setCategoryVisibility(section, ids, hidden)
-                categoryMenu = null
-            },
-            onDismiss = { categoryMenu = null }
-        )
     }
     if (askForCountries) {
         AlertDialog(
@@ -2713,7 +3071,26 @@ private fun PlayerHome(
                     autoNextEpisode = !autoNextEpisode
                     preferences?.edit()?.putBoolean("auto_next_episode", autoNextEpisode)?.apply()
                 }
-                MenuButton(stringResource(R.string.auto_skip_intro), Modifier, selected = autoSkipIntro) {
+                MenuButton(
+                    stringResource(R.string.series_inactivity_check), Modifier, selected = checkSeriesInactivity
+                ) {
+                    checkSeriesInactivity = !checkSeriesInactivity
+                    preferences?.edit()?.putBoolean("check_series_inactivity", checkSeriesInactivity)?.apply()
+                }
+                if (checkSeriesInactivity) {
+                    Text(stringResource(R.string.series_inactive_episode_limit, inactiveEpisodeLimit))
+                    Row {
+                        MenuButton("−1", Modifier) {
+                            inactiveEpisodeLimit = (inactiveEpisodeLimit - 1).coerceAtLeast(1)
+                            preferences?.edit()?.putInt("inactive_episode_limit", inactiveEpisodeLimit)?.apply()
+                        }
+                        MenuButton("+1", Modifier) {
+                            inactiveEpisodeLimit = (inactiveEpisodeLimit + 1).coerceAtMost(10)
+                            preferences?.edit()?.putInt("inactive_episode_limit", inactiveEpisodeLimit)?.apply()
+                        }
+                    }
+                }
+                MenuButton(stringResource(R.string.skip_intro_automatically), Modifier, selected = autoSkipIntro) {
                     autoSkipIntro = !autoSkipIntro
                     preferences?.edit()?.putBoolean("auto_skip_intro", autoSkipIntro)?.apply()
                 }
@@ -2815,17 +3192,16 @@ private fun PlayerHome(
             val compactMedia = maxHeight < 400.dp
             val cornerPreviewWidth = (maxWidth * 0.18f).coerceIn(90.dp, 164.dp)
             val visibleVodGroups = vodSectionForScreen?.let { section ->
-                browsingGroups(section)
-                    .filter { visibleCategory(section, it.id, it.name, it.country) }
-                    .sortedWith(compareBy(
-                        { if (combine) vodCategoryNames.keys.indexOf(it.id) else countryPriority(it.name, it.country) },
-                        { it.name }
-                    ))
+                withCategoryOrder(
+                    section,
+                    defaultVodCategoryOrder(section).filter { visibleCategory(section, it.id, it.name, it.country) }
+                ) { it.id }
             }.orEmpty()
             val recentCategoryKey = "last_vod_category_${vodSectionForScreen?.name}"
             fun openVodCategory(group: PortalGroup) {
                 val section = vodSectionForScreen ?: return
                 catalogueReturnTitle = null
+                focusFirstMovie = section == PortalSection.MOVIES
                 preferences?.edit()?.putString(recentCategoryKey, group.id)?.apply()
                 closeSeries()
                 details = null
@@ -2853,6 +3229,8 @@ private fun PlayerHome(
                 mainDestinations.forEach { item ->
                     MenuButton(
                         label = stringResource(item.label),
+                        leadingIcon = item.icon.takeUnless { mainMenuStyle == MainMenuStyle.TEXT },
+                        iconOnly = mainMenuStyle == MainMenuStyle.ICONS,
                         modifier = if (
                             item == lastFocused && !inGuide && destination != Destination.SEARCH &&
                             destination != Destination.SETTINGS &&
@@ -2870,6 +3248,7 @@ private fun PlayerHome(
                         onClick = {
                             lastFocused = item
                             guidePanel = GuidePanel.GRID
+                            if (item == Destination.LIVE) restoreGuideEntryFocus()
                             pendingVodCategory = item.takeIf { it == Destination.MOVIES || it == Destination.SERIES }
                             selected = item
                         }
@@ -2905,6 +3284,7 @@ private fun PlayerHome(
                             Box(Modifier.width(cornerPreviewWidth)) {
                                 PlayerFrame(
                                     player, active = true, onStop = ::stopPlayback,
+                                    onSurface = { playbackVideoSurface = it },
                                     onOpenFullscreen = { if (vodSection == null) playChannel(channel) else fullscreen = true }
                                 )
                             }
@@ -2996,6 +3376,14 @@ private fun PlayerHome(
                                 SettingsSection.GUIDE ->
                                     MenuButton(stringResource(R.string.epg_settings), Modifier) { epgSettingsOpen = true }
                                 SettingsSection.APPEARANCE -> {
+                                    MenuButton(
+                                        stringResource(R.string.menu_style_setting, stringResource(mainMenuStyle.label)),
+                                        Modifier
+                                    ) {
+                                        val styles = MainMenuStyle.entries
+                                        mainMenuStyle = styles[(mainMenuStyle.ordinal + 1) % styles.size]
+                                        preferences?.edit()?.putString("main_menu_style", mainMenuStyle.name)?.apply()
+                                    }
                                     MenuButton(stringResource(R.string.guide_grid_appearance), Modifier) {
                                         guideAppearancePage = GuideAppearancePage.GRID
                                     }
@@ -3027,6 +3415,7 @@ private fun PlayerHome(
                                 SettingsSection.CONTROLS ->
                                     MenuButton(stringResource(R.string.control_settings), Modifier) { controlSettingsOpen = true }
                                 SettingsSection.UPDATES -> updateSettings()
+                                SettingsSection.ABOUT -> AboutSettings()
                                 SettingsSection.METADATA -> {
                                     MenuButton(stringResource(R.string.tmdb_settings), Modifier) {
                                         metadataSettingsOpen = true
@@ -3193,13 +3582,19 @@ private fun PlayerHome(
                         )
                     }
                     Destination.LIVE -> {
-                        val groups = liveCategories.keys
+                        val groups = withCategoryOrder(PortalSection.LIVE, liveCategories.keys
                             .filter { visibleCategory(PortalSection.LIVE, it, it) }
-                            .sortedBy { categoryNames.values.indexOf(it) }
+                            .sortedBy { categoryNames.values.indexOf(it) }) { it }
                         val guideChannels = remember(liveCategories, groups, category) {
                             if (category in groups) liveCategories[category].orEmpty()
                             else groups.flatMap { liveCategories[it].orEmpty() }
                         }
+                        val livePlayback = playing.takeIf { vodSection == null }
+                        val focusTarget = if (restoreLiveFocus) {
+                            livePlayback ?: preferences?.getString("last_live_channel", null)?.let { key ->
+                                guideChannels.firstOrNull { (programmeKey(it) ?: liveGroups[it]?.identity) == key }
+                            }
+                        } else null
                         Box(Modifier.fillMaxSize()) {
                             Column(
                                 Modifier.fillMaxSize(),
@@ -3216,6 +3611,7 @@ private fun PlayerHome(
                                     if (guideAppearance.showPreview) Box(Modifier.width(guidePreviewWidth)) {
                                         PlayerFrame(
                                             player, active = livePreview != null, onStop = ::stopPlayback,
+                                            onSurface = { playbackVideoSurface = it },
                                             onOpenFullscreen = (livePreview ?: infoChannel)?.let { channel ->
                                                 { playChannel(channel) }
                                             }
@@ -3226,12 +3622,7 @@ private fun PlayerHome(
                                         verticalArrangement = Arrangement.spacedBy(if (compactGuide) 1.dp else 5.dp)
                                     ) {
                                         infoChannel?.let { channel ->
-                                            val now = System.currentTimeMillis() / 1000
-                                            val schedule = effectiveProgrammes(channel).orEmpty()
-                                            val current = guideProgramme ?: schedule.firstOrNull { entry ->
-                                                entry.startSeconds?.let { now >= it } == true &&
-                                                    entry.endSeconds?.let { now < it } == true
-                                            } ?: schedule.firstOrNull { it.startSeconds == null }
+                                            val current = guideSelection(channel)
                                             val time = listOfNotNull(current?.startSeconds, current?.endSeconds).joinToString(" – ") {
                                                 DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault())
                                                     .format(Instant.ofEpochSecond(it))
@@ -3262,6 +3653,7 @@ private fun PlayerHome(
                                 pinnedIds = pinnedProgrammeKeys,
                                 highlighted = programmeChannel,
                                 playing = playing.takeIf { vodSection == null },
+                                focusTarget = focusTarget,
                                 programmes = ::effectiveProgrammes,
                                 programmeKey = ::programmeKey,
                                 scroll = guideScroll,
@@ -3281,7 +3673,7 @@ private fun PlayerHome(
                                 },
                                 onProgrammeFocus = { channel, programme ->
                                     programmeChannel = channel
-                                    guideProgramme = programme
+                                    guideProgramme = channel to programme
                                 },
                                 onPlay = { channel -> playChannel(channel, openFullscreenOnStart = false) },
                                 onTogglePin = ::toggleProgrammeChannel
@@ -3290,13 +3682,7 @@ private fun PlayerHome(
                             }
                             if (guidePanel == GuidePanel.DETAILS) {
                                 val channel = programmeChannel ?: playing.takeIf { vodSection == null }
-                                val now = System.currentTimeMillis() / 1_000
-                                val schedule = channel?.let(::effectiveProgrammes).orEmpty()
-                                val programme = guideProgramme ?: schedule.firstOrNull {
-                                    val start = it.startSeconds
-                                    val end = it.endSeconds
-                                    start != null && end != null && now in start until end
-                                } ?: schedule.firstOrNull { it.startSeconds == null }
+                                val programme = channel?.let(::guideSelection)
                                 Column(
                                     Modifier.align(Alignment.TopEnd).fillMaxHeight()
                                         .width((guidePreviewWidth * 1.65f).coerceIn(250.dp, 420.dp))
@@ -3331,12 +3717,15 @@ private fun PlayerHome(
                                             Modifier.fillMaxWidth().focusRequester(guidePanelFocus), selected = category == null
                                         ) {
                                             category = null
+                                            restoreLiveFocus = false
                                             guideScroll.requestScrollToItem(0)
                                             guidePanel = GuidePanel.GRID
                                         }
                                         groups.forEach { group ->
-                                            MenuButton(group, Modifier.fillMaxWidth(), selected = category == group) {
+                                            MenuButton(group, Modifier.fillMaxWidth(), selected = category == group,
+                                                onLongPress = { categoryMenu = PortalSection.LIVE to group }) {
                                                 category = group
+                                                restoreLiveFocus = false
                                                 guideScroll.requestScrollToItem(0)
                                                 guidePanel = GuidePanel.GRID
                                             }
@@ -3401,6 +3790,14 @@ private fun PlayerHome(
                             val seriesResume = if (section == PortalSection.SERIES) {
                                 (trackedSeries(title) ?: seriesActivity.firstOrNull { entry -> entry.refs.any { it in refs } })
                                     ?.let(::resumeFor)
+                                    ?.takeIf {
+                                        (progressPreferences?.getLong(it.progressKey, 0L) ?: 0L) > 0 &&
+                                            progressPreferences?.getBoolean("completed:${it.progressKey}", false) != true &&
+                                            resumeEpisode(seasons.orEmpty(), it) != null
+                                    }
+                            } else null
+                            val firstEpisode = if (section == PortalSection.SERIES && seriesResume == null) {
+                                firstPlayableEpisode(seasons.orEmpty())
                             } else null
                             val movieResumeKey = if (section == PortalSection.MOVIES) {
                                 val currentKey = titleSelection(section, title).progressKey
@@ -3426,6 +3823,19 @@ private fun PlayerHome(
                                 onResume = if (resumeKey != null && (section == PortalSection.MOVIES || seasons != null)) {
                                     { selectTitle(section, title, seriesResume, movieResumeKey) }
                                 } else null,
+                                firstEpisodeAction = firstEpisode?.let { (season, episode) ->
+                                    {
+                                        openedSeason = season
+                                        selectTitle(section, episode)
+                                    }
+                                },
+                                firstEpisodeLabel = firstEpisode?.let { (season, episode) ->
+                                    val number = episode.episode
+                                    if (season.number == null || number.isNullOrBlank()) stringResource(R.string.play_first_episode)
+                                    else stringResource(R.string.play_numbered_episode, season.number, number)
+                                },
+                                focusPrimary = focusSeriesPrimary && section == PortalSection.SERIES,
+                                onPrimaryFocused = { focusSeriesPrimary = false },
                                 compact = compactMedia,
                                 onBack = ::navigateBack,
                                 onPlay = { selectTitle(section, title) },
@@ -3591,7 +4001,11 @@ private fun PlayerHome(
                                     isSaved = { isTitleSaved(section, it) },
                                     preferPopularity = group.id == VodCategory.POPULAR.id,
                                     returnTitle = catalogueReturnTitle,
-                                    onTitleFocusRestored = { catalogueReturnTitle = null },
+                                    focusFirstTitle = focusFirstMovie,
+                                    onTitleFocusRestored = {
+                                        catalogueReturnTitle = null
+                                        focusFirstMovie = false
+                                    },
                                     newEpisodes = { title ->
                                         if (section == PortalSection.SERIES) trackedSeries(title)?.unseen?.size ?: 0 else 0
                                     },
@@ -3621,9 +4035,9 @@ private fun PlayerHome(
             if (inGuide) {
                 Column(
                     Modifier.fillMaxSize().guideNavigationInput(interceptRemote = { input ->
-                        guidePanel != GuidePanel.GRID || controlBindings[input]?.let {
+                        !input.vertical && (guidePanel != GuidePanel.GRID || controlBindings[input]?.let {
                             it != ControlAction.DEFAULT && it != ControlAction.CHANNELS
-                        } == true
+                        } == true)
                     }) {
                         if (!runMappedControl(it)) navigateGuide(it)
                     },
@@ -4030,7 +4444,7 @@ private fun PlaybackFeedback(starting: StalkerChannel?, error: Int?) {
 
 @Composable
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
-private fun PlayerFrame(
+internal fun PlayerFrame(
     player: ExoPlayer?,
     active: Boolean,
     showEmpty: Boolean = true,
@@ -4039,16 +4453,26 @@ private fun PlayerFrame(
     onSurface: ((SurfaceView?) -> Unit)? = null,
     onOpenFullscreen: (() -> Unit)? = null,
     onGuideInput: ((GuideInput) -> Unit)? = null,
+    interceptGuideKey: (GuideInput) -> Boolean = { true },
     onTouchAction: (() -> Boolean)? = null,
     onMediaKey: (() -> Boolean)? = null,
-    controlsRequest: Int = 0
+    controlsRequest: Int = 0,
+    controlsDismissRequest: Int = 0,
+    controlsAllowed: Boolean = true,
+    episodeActionVisible: Boolean = false,
+    onControlsVisible: ((Boolean) -> Unit)? = null
 ) {
     val stop by rememberUpdatedState(onStop)
     val openFullscreen by rememberUpdatedState(onOpenFullscreen)
     val guideInput by rememberUpdatedState(onGuideInput)
+    val interceptDirection by rememberUpdatedState(interceptGuideKey)
     val touchAction by rememberUpdatedState(onTouchAction)
     val mediaKey by rememberUpdatedState(onMediaKey)
+    val allowControls by rememberUpdatedState(controlsAllowed)
+    val controlsVisibility by rememberUpdatedState(onControlsVisible)
     var shownControlsRequest by remember { mutableIntStateOf(controlsRequest) }
+    var previousDismissRequest by remember { mutableIntStateOf(controlsDismissRequest) }
+    var previousEpisodeAction by remember { mutableStateOf(episodeActionVisible) }
     Box(
         modifier = (if (fullscreen) Modifier.fillMaxSize() else Modifier.fillMaxWidth().aspectRatio(16f / 9f))
             .background(
@@ -4061,14 +4485,80 @@ private fun PlayerFrame(
             AndroidView(
                 factory = { context ->
                     object : PlayerView(context) {
+                        private var controlsVisible = false
+                        private val hideControls = Runnable { hideController() }
+
+                        init {
+                            if (fullscreen) {
+                                isFocusable = true
+                                controllerShowTimeoutMs = 0
+                                setControllerAnimationEnabled(false)
+                                setControllerVisibilityListener(ControllerVisibilityListener { visibility ->
+                                    controlsVisible = visibility == android.view.View.VISIBLE
+                                    controlsVisibility?.invoke(controlsVisible)
+                                    removeCallbacks(hideControls)
+                                    if (controlsVisible) {
+                                        postDelayed(hideControls, 6_000L)
+                                        post {
+                                            if (controlsVisible) findViewById<android.view.View>(
+                                                androidx.media3.ui.R.id.exo_play_pause
+                                            )?.requestFocus()
+                                        }
+                                    } else if (allowControls) {
+                                        post { if (!controlsVisible && allowControls) requestFocus() }
+                                    }
+                                })
+                            }
+                        }
+
+                        private fun extendControlsTimeout() {
+                            removeCallbacks(hideControls)
+                            postDelayed(hideControls, 6_000L)
+                        }
+
+                        override fun onDetachedFromWindow() {
+                            removeCallbacks(hideControls)
+                            super.onDetachedFromWindow()
+                        }
+
                         override fun performClick(): Boolean =
                             touchAction?.invoke() == true || super.performClick()
+
+                        override fun dispatchTouchEvent(event: android.view.MotionEvent): Boolean {
+                            if (fullscreen && controlsVisible) extendControlsTimeout()
+                            return super.dispatchTouchEvent(event)
+                        }
 
                         override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
                             if (event.keyCode == android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE &&
                                 event.action == android.view.KeyEvent.ACTION_DOWN &&
                                 (event.repeatCount == 0 && mediaKey?.invoke() == true)
                             ) return true
+                            if (fullscreen && allowControls) {
+                                if (controlsVisible) {
+                                    extendControlsTimeout()
+                                } else {
+                                    val direction = when (event.keyCode) {
+                                        android.view.KeyEvent.KEYCODE_DPAD_LEFT -> GuideInput.REMOTE_LEFT
+                                        android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> GuideInput.REMOTE_RIGHT
+                                        android.view.KeyEvent.KEYCODE_DPAD_UP -> GuideInput.REMOTE_UP
+                                        android.view.KeyEvent.KEYCODE_DPAD_DOWN -> GuideInput.REMOTE_DOWN
+                                        else -> null
+                                    }
+                                    val onDirection = guideInput
+                                    if (direction != null && onDirection != null && interceptDirection(direction)) {
+                                        if (event.action == android.view.KeyEvent.ACTION_UP && !event.isCanceled) onDirection(direction)
+                                        return true
+                                    }
+                                    if (direction?.vertical == true && onDirection != null) return true
+                                    if (event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER ||
+                                        event.keyCode == android.view.KeyEvent.KEYCODE_ENTER
+                                    ) {
+                                        if (event.action == android.view.KeyEvent.ACTION_UP && !event.isCanceled) showController()
+                                        return true
+                                    }
+                                }
+                            }
                             return super.dispatchKeyEvent(event)
                         }
                     }.apply {
@@ -4089,41 +4579,45 @@ private fun PlayerFrame(
                                 setOnClickListener { stop() }
                             }
                             val pause = row.findViewById<android.view.View>(androidx.media3.ui.R.id.exo_play_pause)
+                            if (pause != null) {
+                                button.id = android.view.View.generateViewId()
+                                pause.nextFocusRightId = button.id
+                                button.nextFocusLeftId = pause.id
+                            }
                             val index = row.indexOfChild(pause).takeIf { it >= 0 }?.plus(1) ?: row.childCount
                             row.addView(button, index, LinearLayout.LayoutParams(size, size))
                         }
                         this.player = player
+                        if (fullscreen) post { if (allowControls) requestFocus() }
                     }
                 },
                 modifier = Modifier.fillMaxSize(),
                 onReset = null,
                 onRelease = {
+                    if (fullscreen) controlsVisibility?.invoke(false)
                     it.player = null
                     onSurface?.invoke(null)
                 },
                 update = { view ->
                     onSurface?.invoke(view.videoSurfaceView as? SurfaceView)
-                    view.useController = openFullscreen == null
+                    view.useController = openFullscreen == null && controlsAllowed
+                    if (previousEpisodeAction != episodeActionVisible) {
+                        previousEpisodeAction = episodeActionVisible
+                        if (!episodeActionVisible && controlsAllowed && !view.isControllerFullyVisible) {
+                            view.post { if (allowControls) view.requestFocus() }
+                        }
+                    }
+                    if (previousDismissRequest != controlsDismissRequest) {
+                        previousDismissRequest = controlsDismissRequest
+                        view.hideController()
+                    }
                     if (shownControlsRequest != controlsRequest) {
                         shownControlsRequest = controlsRequest
-                        view.showController()
+                        if (controlsAllowed) view.showController()
                     }
                     if (openFullscreen != null) {
                         view.isFocusable = true
                         view.setOnClickListener { openFullscreen?.invoke() }
-                    }
-                    if (guideInput != null) {
-                        view.setOnKeyListener { _, keyCode, event ->
-                            val direction = when (keyCode) {
-                                android.view.KeyEvent.KEYCODE_DPAD_LEFT -> GuideInput.REMOTE_LEFT
-                                android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> GuideInput.REMOTE_RIGHT
-                                else -> null
-                            }
-                            if (direction == null) false else {
-                                if (event.action == android.view.KeyEvent.ACTION_UP) guideInput?.invoke(direction)
-                                true
-                            }
-                        }
                     }
                 }
             )
@@ -4131,6 +4625,18 @@ private fun PlayerFrame(
             Text(stringResource(R.string.no_playback))
         }
     }
+}
+
+@Composable
+@Suppress("DEPRECATION")
+private fun AboutSettings() {
+    val context = LocalContext.current
+    val app = remember(context) { context.packageManager.getPackageInfo(context.packageName, 0) }
+    val code = if (android.os.Build.VERSION.SDK_INT >= 28) app.longVersionCode else app.versionCode.toLong()
+    Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleLarge)
+    Text(stringResource(R.string.about_version, app.versionName.orEmpty()))
+    Text(stringResource(R.string.about_version_code, code))
+    Text(stringResource(R.string.about_version_date, stringResource(R.string.version_date)))
 }
 
 @Composable
@@ -4175,6 +4681,7 @@ private fun CatalogOverview(
     isSaved: (PortalTitle) -> Boolean,
     preferPopularity: Boolean,
     returnTitle: PortalTitle?,
+    focusFirstTitle: Boolean,
     onTitleFocusRestored: () -> Unit,
     newEpisodes: (PortalTitle) -> Int,
     onSelect: (PortalTitle) -> Unit
@@ -4202,7 +4709,7 @@ private fun CatalogOverview(
         }
         TitleGrid(
             catalog.titles, isFavorite, isSaved, preferPopularity, newEpisodes,
-            returnTitle, onTitleFocusRestored, onSelect
+            returnTitle, focusFirstTitle, onTitleFocusRestored, onSelect
         )
         if (catalog.nextPage != null && !loading && canLoadMore) {
             MenuButton(stringResource(R.string.catalog_load_more), Modifier, onClick = onLoadMore)
@@ -4265,6 +4772,8 @@ internal fun MenuButton(
     logo: String? = null,
     count: Int? = null,
     hiddenIndicator: Boolean = false,
+    leadingIcon: Int? = null,
+    iconOnly: Boolean = false,
     onFocused: (() -> Unit)? = null,
     onLongPress: (() -> Unit)? = null,
     onClick: () -> Unit
@@ -4300,11 +4809,19 @@ internal fun MenuButton(
                     .background(if (focused) colors.onTertiaryContainer else colors.primary))
             }
             ChannelLogo(logo, Modifier.padding(end = 8.dp))
+            leadingIcon?.let { icon ->
+                Icon(
+                    painterResource(icon),
+                    contentDescription = label.takeIf { iconOnly },
+                    modifier = Modifier.size(20.dp)
+                )
+                if (!iconOnly) Box(Modifier.width(9.dp))
+            }
             if (hiddenIndicator) {
                 HiddenCategoryIcon()
                 Box(Modifier.width(8.dp))
             }
-            Text(
+            if (!iconOnly || leadingIcon == null) Text(
                 label,
                 modifier = if (count == null) Modifier else Modifier.weight(1f),
                 style = MaterialTheme.typography.labelLarge,

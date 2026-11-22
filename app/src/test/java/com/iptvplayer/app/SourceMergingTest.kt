@@ -81,6 +81,9 @@ class SourceMergingTest {
     fun readsOnlyValidPortalExpiryDates() {
         val expected = java.time.LocalDate.of(2026, 12, 31)
         assertEquals(expected, parsePortalExpiry("2026-12-31 18:30:00"))
+        assertEquals(expected, parsePortalExpiry("31.12.2026"))
+        assertEquals(expected, parsePortalExpiry("31/12/2026 18:30"))
+        assertEquals(null, parsePortalExpiry("31.02.2026"))
         assertEquals(expected, parsePortalExpiry("1798675200"))
         assertEquals(null, parsePortalExpiry("0000-00-00"))
         assertEquals(null, parsePortalExpiry("2026-02-30"))

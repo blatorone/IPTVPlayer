@@ -5,6 +5,15 @@ import org.junit.Test
 
 class FullscreenChannelListTest {
     @Test
+    fun detailsFollowTheSelectedTimeSlotDuringAnEpgRefresh() {
+        val now = PortalProgramme("Jetzt", 100, 200)
+        val previous = PortalProgramme("Alter Titel", 200, 300)
+        val updated = previous.copy(title = "Korrigierter Titel")
+        assertEquals(updated, resolveGuideProgramme(listOf(now, updated), previous, 125))
+        assertEquals(now, resolveGuideProgramme(listOf(now), previous, 125))
+    }
+
+    @Test
     fun picksTheCurrentShowAndCalculatesItsProgress() {
         val earlier = PortalProgramme("Früher", 100, 200)
         val current = PortalProgramme("Jetzt", 200, 300)

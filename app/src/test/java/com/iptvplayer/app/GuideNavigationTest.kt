@@ -5,6 +5,28 @@ import org.junit.Test
 
 class GuideNavigationTest {
     @Test
+    fun seriesOverlayMovesBetweenEpisodesSeasonsAndMenuInBothDirections() {
+        val episodes = GuidePanel.GRID.afterSeriesOverlay(GuideInput.REMOTE_LEFT)
+        val seasons = episodes.afterSeriesOverlay(GuideInput.SWIPE_LEFT)
+        val menu = seasons.afterSeriesOverlay(GuideInput.REMOTE_LEFT)
+        assertEquals(GuidePanel.CHANNELS, episodes)
+        assertEquals(GuidePanel.CATEGORIES, seasons)
+        assertEquals(GuidePanel.MENU, menu)
+        assertEquals(seasons, menu.afterSeriesOverlay(GuideInput.BACK))
+        assertEquals(episodes, seasons.afterSeriesOverlay(GuideInput.REMOTE_RIGHT))
+        assertEquals(GuidePanel.GRID, episodes.afterSeriesOverlay(GuideInput.SWIPE_RIGHT))
+        assertEquals(episodes, episodes.afterSeriesOverlay(GuideInput.REMOTE_DOWN))
+    }
+
+    @Test
+    fun movingACategoryKeepsTheRelativeOrderOfTheOthers() {
+        val categories = listOf("Nachrichten", "Sport", "Filme", "Kinder")
+        assertEquals(listOf("Filme", "Nachrichten", "Sport", "Kinder"), categories.moveCategory("Filme", CategoryMove.TOP))
+        assertEquals(listOf("Sport", "Filme", "Kinder", "Nachrichten"), categories.moveCategory("Nachrichten", CategoryMove.BOTTOM))
+        assertEquals(categories, categories.moveCategory("Unbekannt", CategoryMove.UP))
+    }
+
+    @Test
     fun leftOpensTheChannelListOnlyInFullscreen() {
         for (input in listOf(GuideInput.REMOTE_LEFT, GuideInput.SWIPE_LEFT)) {
             assertEquals(GuidePanel.CHANNELS, GuidePanel.GRID.after(input))

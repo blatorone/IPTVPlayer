@@ -6,6 +6,20 @@ import org.junit.Test
 
 class SeriesActivityTest {
     @Test
+    fun selectsSeasonOneEpisodeOneEvenWhenThePortalReturnsAnotherOrder() {
+        val firstEpisode = PortalTitle("Erste Folge", episode = "01")
+        val first = PortalSeason(1, PortalTitle("Staffel 1"), listOf(
+            PortalTitle("Zweite Folge", episode = "2"), firstEpisode
+        ))
+        val second = PortalSeason(2, PortalTitle("Staffel 2"), listOf(PortalTitle("Folge", episode = "1")))
+        val special = PortalSeason(0, PortalTitle("Extras"), listOf(PortalTitle("Extra", episode = "1")))
+
+        assertEquals(first to firstEpisode, firstPlayableEpisode(listOf(special, second, first)))
+        assertEquals(second to second.episodes.first(), firstPlayableEpisode(listOf(special, second)))
+        assertNull(firstPlayableEpisode(listOf(first.copy(episodes = emptyList()))))
+    }
+
+    @Test
     fun recordsFirstCheckAsBaselineAndKeepsLaterEpisodesUnread() {
         val series = TrackedSeries("series", "Beispiel", emptyList(), saved = true)
         val first = series.observe(setOf("1:1", "1:2"), now = 1)

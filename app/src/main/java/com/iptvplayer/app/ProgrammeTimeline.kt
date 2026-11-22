@@ -61,6 +61,7 @@ internal fun ProgrammeTimeline(
     pinnedIds: Set<String>,
     highlighted: StalkerChannel?,
     playing: StalkerChannel?,
+    focusTarget: StalkerChannel?,
     programmes: (StalkerChannel) -> List<PortalProgramme>?,
     programmeKey: (StalkerChannel) -> String?,
     scroll: LazyListState,
@@ -98,7 +99,7 @@ internal fun ProgrammeTimeline(
     val displayed = remember(channels, pinnedIds, onlyPinned) {
         if (onlyPinned) channels.filter { programmeKey(it) in pinnedIds } else channels
     }
-    val playingIndex = if (restorePlayingFocus) displayed.indexOf(playing) else -1
+    val playingIndex = if (restorePlayingFocus) displayed.indexOf(focusTarget) else -1
     val playingFocus = remember { FocusRequester() }
     val loadVisible by rememberUpdatedState(onVisibleChannels)
     LaunchedEffect(displayed, scroll, refreshKey) {
@@ -113,10 +114,10 @@ internal fun ProgrammeTimeline(
     LaunchedEffect(displayed, highlighted) {
         if (highlighted !in displayed) displayed.firstOrNull()?.let(onHighlight)
     }
-    LaunchedEffect(active, restorePlayingFocus, playing) {
+    LaunchedEffect(active, restorePlayingFocus, focusTarget) {
         if (active && restorePlayingFocus) {
             offset = 0
-            if (playing in channels && playing !in displayed) onlyPinned = false
+            if (focusTarget in channels && focusTarget !in displayed) onlyPinned = false
         }
     }
     LaunchedEffect(active, playingIndex) {
@@ -128,7 +129,7 @@ internal fun ProgrammeTimeline(
     LaunchedEffect(active, displayed.isEmpty()) {
         if (active && displayed.isNotEmpty() && playingIndex < 0) {
             withFrameNanos { }
-            if (channelColumnFocus.requestFocus() && restorePlayingFocus && playing !in channels) {
+            if (channelColumnFocus.requestFocus() && restorePlayingFocus && focusTarget !in channels) {
                 onPlayingFocusRestored()
             }
         }

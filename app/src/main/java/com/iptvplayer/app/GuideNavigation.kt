@@ -20,8 +20,16 @@ internal enum class GuidePanel { GRID, CHANNELS, CATEGORIES, MENU, DETAILS }
 internal enum class GuideInput(val label: Int) {
     REMOTE_LEFT(R.string.control_left), REMOTE_RIGHT(R.string.control_right),
     SWIPE_LEFT(R.string.control_swipe_left), SWIPE_RIGHT(R.string.control_swipe_right),
+    REMOTE_UP(R.string.control_up), REMOTE_DOWN(R.string.control_down),
+    SWIPE_UP(R.string.control_swipe_up), SWIPE_DOWN(R.string.control_swipe_down),
     LONG_BACK(R.string.control_long_back), TAP(R.string.control_tap),
-    PLAY_PAUSE(R.string.control_media_key), BACK(R.string.navigation_back)
+    PLAY_PAUSE(R.string.control_media_key), BACK(R.string.navigation_back);
+
+    val vertical get() = this in verticalInputs
+
+    private companion object {
+        val verticalInputs = setOf(REMOTE_UP, REMOTE_DOWN, SWIPE_UP, SWIPE_DOWN)
+    }
 }
 
 internal enum class ControlAction(val label: Int) {
@@ -34,19 +42,24 @@ internal enum class ControlAction(val label: Int) {
     FULLSCREEN(R.string.control_fullscreen),
     PLAY_PAUSE(R.string.control_play_pause),
     STOP(R.string.stop_playback),
-    CONTROLS(R.string.control_show_controls)
+    CONTROLS(R.string.control_show_controls),
+    NEXT_CHANNEL(R.string.control_next_channel), PREVIOUS_CHANNEL(R.string.control_previous_channel)
 }
 
 @Composable
 internal fun Modifier.guideNavigationInput(
-    interceptRemote: (GuideInput) -> Boolean = { true },
+    interceptRemote: (GuideInput) -> Boolean = { !it.vertical },
+    interceptGesture: (GuideInput) -> Boolean = { !it.vertical },
     onInput: (GuideInput) -> Unit
 ): Modifier {
     val current = rememberUpdatedState(onInput)
+    val gestureEnabled = rememberUpdatedState(interceptGesture)
     return onPreviewKeyEvent { event ->
         val input = when (event.key) {
             Key.DirectionLeft -> GuideInput.REMOTE_LEFT
             Key.DirectionRight -> GuideInput.REMOTE_RIGHT
+            Key.DirectionUp -> GuideInput.REMOTE_UP
+            Key.DirectionDown -> GuideInput.REMOTE_DOWN
             else -> null
         }
         if (input == null || !interceptRemote(input)) false else {
@@ -56,21 +69,30 @@ internal fun Modifier.guideNavigationInput(
     }.pointerInput(Unit) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-            var horizontal = false
+            var swipe: GuideInput? = null
             do {
                 val event = awaitPointerEvent(PointerEventPass.Initial)
                 if (event.changes.count { it.pressed } > 1) return@awaitEachGesture
                 val change = event.changes.firstOrNull { it.id == down.id } ?: return@awaitEachGesture
                 val delta = change.position - down.position
-                if (!horizontal) {
-                    if (abs(delta.y) > viewConfiguration.touchSlop && abs(delta.y) >= abs(delta.x)) {
-                        return@awaitEachGesture
+                if (swipe == null && maxOf(abs(delta.x), abs(delta.y)) > viewConfiguration.touchSlop) {
+                    val direction = if (abs(delta.x) >= abs(delta.y)) {
+                        if (delta.x < 0) GuideInput.SWIPE_LEFT else GuideInput.SWIPE_RIGHT
+                    } else {
+                        if (delta.y < 0) GuideInput.SWIPE_UP else GuideInput.SWIPE_DOWN
                     }
-                    horizontal = abs(delta.x) > viewConfiguration.touchSlop && abs(delta.x) > abs(delta.y)
+                    if (!gestureEnabled.value(direction)) return@awaitEachGesture
+                    swipe = direction
                 }
-                if (horizontal) change.consume()
-                if (!change.pressed && horizontal && abs(delta.x) >= 30.dp.toPx()) {
-                    current.value(if (delta.x < 0) GuideInput.SWIPE_LEFT else GuideInput.SWIPE_RIGHT)
+                swipe?.let { direction ->
+                    change.consume()
+                    val distance = when (direction) {
+                        GuideInput.SWIPE_UP -> -delta.y
+                        GuideInput.SWIPE_DOWN -> delta.y
+                        GuideInput.SWIPE_LEFT -> -delta.x
+                        else -> delta.x
+                    }
+                    if (!change.pressed && distance >= 30.dp.toPx()) current.value(direction)
                 }
             } while (change.pressed)
         }
@@ -119,7 +141,21 @@ internal fun GuidePanel.after(input: GuideInput): GuidePanel = when (input) {
         GuidePanel.CATEGORIES -> GuidePanel.CHANNELS
         else -> GuidePanel.GRID
     }
-    GuideInput.LONG_BACK, GuideInput.TAP, GuideInput.PLAY_PAUSE -> this
+    else -> this
+}
+
+internal fun GuidePanel.afterSeriesOverlay(input: GuideInput): GuidePanel = when (input) {
+    GuideInput.REMOTE_LEFT, GuideInput.SWIPE_LEFT -> when (this) {
+        GuidePanel.GRID -> GuidePanel.CHANNELS
+        GuidePanel.CHANNELS -> GuidePanel.CATEGORIES
+        else -> GuidePanel.MENU
+    }
+    GuideInput.BACK, GuideInput.REMOTE_RIGHT, GuideInput.SWIPE_RIGHT -> when (this) {
+        GuidePanel.MENU -> GuidePanel.CATEGORIES
+        GuidePanel.CATEGORIES -> GuidePanel.CHANNELS
+        else -> GuidePanel.GRID
+    }
+    else -> this
 }
 
 internal fun GuidePanel.afterProgrammeGuide(input: GuideInput): GuidePanel = when (input) {

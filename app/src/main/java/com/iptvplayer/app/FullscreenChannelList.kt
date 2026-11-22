@@ -1,6 +1,5 @@
 package com.iptvplayer.app
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -12,6 +11,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -38,11 +39,26 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 
 internal fun currentGuideProgramme(schedule: List<PortalProgramme>, now: Long): PortalProgramme? =
-    schedule.firstOrNull {
-        val start = it.startSeconds
-        val end = it.endSeconds ?: start?.plus(1800)
+    schedule.firstOrNull { programme ->
+        val start = programme.startSeconds
+        val end = start?.let { from ->
+            programme.endSeconds?.takeIf { it > from }
+                ?: schedule.mapNotNull { it.startSeconds }.filter { it > from }.minOrNull() ?: from + 1_800
+        }
         start != null && end != null && now in start until end
     } ?: schedule.firstOrNull { it.startSeconds == null }
+
+internal fun resolveGuideProgramme(
+    schedule: List<PortalProgramme>, selected: PortalProgramme?, now: Long
+): PortalProgramme? {
+    if (selected != null) {
+        schedule.firstOrNull { it == selected }?.let { return it }
+        selected.startSeconds?.let { start ->
+            schedule.firstOrNull { it.startSeconds == start }?.let { return it }
+        }
+    }
+    return currentGuideProgramme(schedule, now)
+}
 
 internal fun guideProgrammeProgress(show: PortalProgramme?, now: Long): Float? {
     val start = show?.startSeconds ?: return null
@@ -57,6 +73,7 @@ internal fun FullscreenChannelList(
     playing: StalkerChannel?,
     appearance: GuideAppearance,
     showSchedule: Boolean,
+    descriptionBesideSchedule: Boolean,
     refreshKey: Int,
     programmes: (StalkerChannel) -> List<PortalProgramme>?,
     onVisible: suspend (List<StalkerChannel>) -> Unit,
@@ -93,7 +110,7 @@ internal fun FullscreenChannelList(
     }
     Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         LazyColumn(
-            Modifier.weight(if (showSchedule) 1f else 2f).fillMaxHeight(),
+            Modifier.weight(1f).fillMaxHeight(),
             state = scroll,
             verticalArrangement = Arrangement.spacedBy(3.dp)
         ) {
@@ -181,13 +198,41 @@ internal fun FullscreenChannelList(
                         }
                     }
                 }
-                if (appearance.showDescription && details != null) {
-                    Text(
-                        details.description ?: stringResource(R.string.no_title_description),
-                        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainerHigh).padding(8.dp),
-                        style = MaterialTheme.typography.bodySmall, maxLines = 5, overflow = TextOverflow.Ellipsis
-                    )
+                if (appearance.showDescription && !descriptionBesideSchedule && details != null) {
+                    ProgrammeInfoCard(null, details, Modifier.fillMaxWidth().weight(0.65f))
                 }
+            }
+            if (appearance.showDescription && descriptionBesideSchedule) {
+                ProgrammeInfoCard(null, details, Modifier.weight(1.3f).fillMaxHeight())
+            }
+        }
+    }
+}
+
+@Composable
+internal fun ProgrammeInfoCard(
+    channel: StalkerChannel?,
+    programme: PortalProgramme?,
+    modifier: Modifier = Modifier
+) {
+    val scroll = rememberScrollState()
+    LaunchedEffect(programme) { scroll.scrollTo(0) }
+    Surface(modifier, shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+        Column(
+            Modifier.verticalScroll(scroll).padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            channel?.let { Text(it.name, style = MaterialTheme.typography.labelLarge) }
+            Text(programme?.title ?: stringResource(R.string.no_guide), style = MaterialTheme.typography.titleLarge)
+            val time = listOfNotNull(programme?.startSeconds, programme?.endSeconds).joinToString(" – ", transform = ::guideTime)
+            if (time.isNotEmpty()) Text(
+                time, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary
+            )
+            programme?.let {
+                Text(
+                    it.description ?: stringResource(R.string.no_title_description),
+                    style = MaterialTheme.typography.bodyMedium
+                )
             }
         }
     }

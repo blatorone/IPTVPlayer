@@ -22,6 +22,23 @@ internal data class EpisodeVideoAnalysis(
     val creditsStartMs: Long? = null
 )
 
+internal data class LearnedOpening(val range: LongRange, val frames: List<EpisodeFrame>) {
+    fun encode(): String = "${range.first},${range.last};" +
+        frames.joinToString(";") { "${it.timeMs},${it.fingerprint}" }
+}
+
+internal fun decodeLearnedOpening(encoded: String?): LearnedOpening? {
+    val rows = encoded?.split(';') ?: return null
+    val bounds = rows.first().split(',').mapNotNull(String::toLongOrNull)
+    if (bounds.size != 2 || bounds[0] < 0 || bounds[1] <= bounds[0] || bounds[1] > 180_000) return null
+    val frames = rows.drop(1).take(7).mapNotNull { row ->
+        val columns = row.split(',').mapNotNull(String::toLongOrNull)
+        if (columns.size != 2 || columns[0] !in bounds[0]..bounds[1]) null
+        else EpisodeFrame(columns[0], columns[1], false)
+    }
+    return frames.takeIf { it.size >= 4 }?.let { LearnedOpening(bounds[0]..bounds[1], it) }
+}
+
 private const val FRAME_INTERVAL_MS = 3_000L
 internal const val HLS_INTRO_FRAME_INTERVAL_MS = 1_000L
 
@@ -51,13 +68,19 @@ internal fun confirmKnownOpening(
 ): LongRange? {
     val prefix = reference.filter { it.timeMs in intro }.take(7)
     if (prefix.size < 4) return null
-    val match = current.takeLast(prefix.size)
-    if (match.size != prefix.size || match.map(EpisodeFrame::fingerprint).distinct().size < 3) return null
-    val offset = match.first().timeMs - prefix.first().timeMs
-    if (match.zip(prefix).count { (a, b) ->
-            a.timeMs - b.timeMs == offset && java.lang.Long.bitCount(a.fingerprint xor b.fingerprint) <= 10
-        } < prefix.size - (prefix.size / 5)) return null
-    return (intro.first + offset)..(intro.last + offset)
+    val newest = current.lastOrNull()?.timeMs ?: return null
+    val recent = current.takeLast(14).associateBy { it.timeMs }
+    val offset = newest - prefix.last().timeMs
+    if (intro.first + offset < 0) return null
+    val matches = prefix.mapNotNull { referenceFrame ->
+        recent[referenceFrame.timeMs + offset]?.takeIf {
+            java.lang.Long.bitCount(it.fingerprint xor referenceFrame.fingerprint) <= 10
+        }
+    }
+    if (matches.size >= maxOf(4, prefix.size - 1) &&
+        matches.map(EpisodeFrame::fingerprint).distinct().size >= 3
+    ) return (intro.first + offset)..(intro.last + offset)
+    return null
 }
 
 internal fun analyzeEpisodeVideo(

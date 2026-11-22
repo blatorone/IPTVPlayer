@@ -119,6 +119,20 @@ internal class StalkerPortal(address: String, macAddress: String) {
     var subscriptionExpiry: java.time.LocalDate? = null
         private set
 
+    suspend fun loadSubscriptionExpiry(token: String): LocalDate? = withContext(Dispatchers.IO) {
+        subscriptionExpiry ?: sequenceOf("account_info" to "get_main_info", "stb" to "get_main_info")
+            .firstNotNullOfOrNull { (type, action) ->
+                val account = try {
+                    request(type, action, token) as? JSONObject
+                } catch (error: kotlinx.coroutines.CancellationException) {
+                    throw error
+                } catch (_: Exception) {
+                    null
+                }
+                account?.let { subscriptionDate(it, allowDateInPhoneField = true) }
+            }?.also { subscriptionExpiry = it }
+    }
+
     suspend fun loadCatalog(
         section: PortalSection,
         token: String,
@@ -584,9 +598,7 @@ internal class StalkerPortal(address: String, macAddress: String) {
                 if (profile?.optInt("blocked", 0) == 1 || profile?.optBoolean("blocked") == true) {
                     throw PortalAuthenticationException()
                 }
-                subscriptionExpiry = sequenceOf("expire_billing_date", "end_date", "expiration_date", "exp_date", "expire_date")
-                    .mapNotNull { field -> parsePortalExpiry(profile?.optString(field)) }
-                    .firstOrNull()
+                subscriptionExpiry = profile?.let(::subscriptionDate)
                 endpoint = candidate
                 return token
             } catch (error: Exception) {
@@ -679,6 +691,10 @@ internal fun parsePortalExpiry(value: String?): java.time.LocalDate? {
     val date = when {
         Regex("""\d{4}-\d{2}-\d{2}(?:[T ].*)?""").matches(text) ->
             runCatching { java.time.LocalDate.parse(text.take(10)) }.getOrNull()
+        Regex("""\d{1,2}[./]\d{1,2}[./]\d{4}(?:\s.*)?""").matches(text) -> {
+            val parts = text.substringBefore(' ').split('.', '/')
+            runCatching { LocalDate.of(parts[2].toInt(), parts[1].toInt(), parts[0].toInt()) }.getOrNull()
+        }
         Regex("""\d{10}|\d{13}""").matches(text) -> {
             val epoch = text.toLong()
             val instant = if (text.length == 10) java.time.Instant.ofEpochSecond(epoch)
@@ -688,6 +704,20 @@ internal fun parsePortalExpiry(value: String?): java.time.LocalDate? {
         else -> null
     }
     return date?.takeIf { it.year in 2000..2200 }
+}
+
+private fun subscriptionDate(data: JSONObject, allowDateInPhoneField: Boolean = false): LocalDate? {
+    val fields = listOf(
+        "expire_billing_date", "end_date", "expiration_date", "exp_date", "expire_date", "expires_at",
+        "expired_at", "valid_until", "subscription_end", "subscription_expiration", "expiration", "expires"
+    )
+    val sections = listOf(data) + listOf("account", "subscription", "user_info").mapNotNull(data::optJSONObject)
+    return sections.firstNotNullOfOrNull { section ->
+        fields.firstNotNullOfOrNull { parsePortalExpiry(section.optString(it)) }
+            ?: if (allowDateInPhoneField) section.optString("phone").trim().takeIf {
+                '-' in it || '.' in it || '/' in it
+            }?.let(::parsePortalExpiry) else null
+    }
 }
 
 private fun catalogTimestamp(value: String): Long? {

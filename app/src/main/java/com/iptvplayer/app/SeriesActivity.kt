@@ -56,6 +56,17 @@ internal fun resumeEpisode(seasons: List<PortalSeason>, resume: EpisodeResume): 
     return null
 }
 
+internal fun firstPlayableEpisode(seasons: List<PortalSeason>): Pair<PortalSeason, PortalTitle>? {
+    val available = seasons.filter { it.episodes.isNotEmpty() }
+    val season = available.firstOrNull { it.number == 1 }
+        ?: available.minByOrNull { it.number?.takeIf { number -> number > 0 } ?: Int.MAX_VALUE }
+        ?: return null
+    val episode = season.episodes.minByOrNull {
+        it.episode?.toIntOrNull()?.takeIf { number -> number > 0 } ?: Int.MAX_VALUE
+    } ?: return null
+    return season to episode
+}
+
 internal fun recoverEpisodeResume(entry: TrackedSeries, positions: Map<String, *>): EpisodeResume? {
     entry.lastEpisode?.let { return it }
     val prefixes = listOf("SERIES:catalogue:${entry.key}:") + entry.refs.map {

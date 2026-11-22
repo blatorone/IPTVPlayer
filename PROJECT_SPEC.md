@@ -2,9 +2,14 @@
 
 ## Ziel und Rahmen
 
+Die App erscheint auf Android und Android TV unter dem Namen **StreamWatch**. Der Anzeigewechsel übernimmt bestehende Installationen über die Paket-ID `com.iptvplayer.app` und den vorhandenen Update-Kanal.
+
 Ein nutzerkonfigurierbarer IPTV-Player für Android-Telefone und -Tablets sowie Android TV, Fire TV und Nvidia Shield. Die App liefert keine Sender, Playlists oder Zugangsdaten und umgeht keine Zugangsbeschränkungen. Nutzer fügen eigene, zur Nutzung berechtigte Quellen hinzu. Kotlin, Compose, Media3 und Room bilden den technischen Rahmen. Mindest-SDK, Geräteabdeckung und konkrete Versionen werden nach Prüfung des bestehenden Projekts festgelegt.
 
 ## Quellen und Bibliothek
+
+- Der Schnellstart kann die letzte Live-Auswahl aus einer kleinen verschlüsselten Momentaufnahme öffnen, während die Bibliothek wiederhergestellt wird. Ein fehlendes oder unpassendes Abbild verwendet den normalen Startpfad.
+- Die Quellenübersicht zeigt ein lokal gespeichertes Ablaufdatum aus dem Geräteprofil oder den Kontoinformationen des Portals. Weitere Formatvarianten werden nur für angemeldete Portale geprüft.
 
 - Die Quellenliste zeigt das Ablaufdatum eines Stalker-Portals an, sofern das Portal es im Geräteprofil bereitstellt. Das Datum wird beim Hinzufügen und Aktualisieren der Quelle eingelesen.
 
@@ -17,6 +22,8 @@ Ein nutzerkonfigurierbarer IPTV-Player für Android-Telefone und -Tablets sowie 
 - Live-TV, Filme und Serien öffnen zunächst ihre Kategorien. Ein Dialog ermöglicht das Ein- und Ausblenden mehrerer Kategorien. Ausgeblendete Kategorien sind dort gekennzeichnet. Die Länderauswahl und ihre Reihenfolge gelten für alle drei Bereiche und bleiben lokal gespeichert. Nach einem Portalimport wird die Auswahl standardmäßig angeboten.
 
 ## Live, EPG und Navigation
+
+- Die Programmbeschreibung bleibt an Sender und Zeit der markierten Sendung gebunden. Das Kontextmenü einer Kategorie erlaubt das Verschieben oder Ein- und Ausblenden. Die Reihenfolge wird getrennt für Live-TV, Filme und Serien gespeichert. Das Hauptmenü kann Symbole, Text oder beides anzeigen.
 
 - Die Vollbild-Senderliste zeigt laufende Sendung und Fortschritt pro Sender. Auf breiten Geräten kann daneben der Tagesplan mit der Beschreibung der ausgewählten Sendung erscheinen. Listenbreite, Deckkraft, Schließzeit und Verhalten beim Senderwechsel sind einstellbar.
 - Unter **Einstellungen → Darstellung** lassen sich Zeilenhöhe, Schrift, Videovorschau, Sendernummern und Logos im Programmführer einstellen. Die übrigen Einstellungen sind in eigene Bereiche gegliedert.
@@ -46,7 +53,14 @@ Ein nutzerkonfigurierbarer IPTV-Player für Android-Telefone und -Tablets sowie 
 
 ## VOD
 
+- Beim automatischen Folgenwechsel pausiert „Schaust du noch?“ nach einer einstellbaren Anzahl von Folgen ohne Eingabe. Die Abfrage ist standardmäßig nach drei Folgen aktiv. Ohne Bestätigung wird nach 30 Sekunden gestoppt.
+
+- Beim Öffnen einer Filmkategorie erhält der erste sichtbare Titel den Fokus. Nach dem Verlassen der Details erhält der zuvor ausgewählte Titel den Fokus zurück. Seriendetails fokussieren „Fortsetzen“, wenn eine verfügbare Folge einen offenen Wiedergabefortschritt hat. Andernfalls steht dort die Aktion zum Start der ersten verfügbaren Folge.
+
 - Langes Zurück öffnet standardmäßig die aktive Live-TV-, Film- oder Serienwiedergabe im Vollbild. Einmaliges Zurück kehrt zum laufenden Sender im Programmführer oder zur geöffneten Film- oder Serienansicht samt Staffel zurück. Langes Zurück, Live-TV-Richtungen und Gesten sowie Tipp und Wiedergabetaste im Vollbild lassen sich mit Aktionen belegen. Die Standardbelegung lässt sich wiederherstellen.
+- Die mittlere Taste öffnet im Vollbild die Wiedergabesteuerung mit Fokus auf Play/Pause. Die Richtungstasten bewegen den Fokus innerhalb der Steuerung. Zurück oder sechs Sekunden ohne Eingabe schließen die Steuerung, während das Vollbild geöffnet bleibt.
+- Im Live-Vollbild wechseln Hoch und Hochwischen zum nächsten Sender, Runter und Runterwischen zum vorherigen. Der Wechsel folgt der sichtbaren Kategorie. Für Filme und Serien sind die vier vertikalen Eingaben standardmäßig frei und im Mapping belegbar.
+- Im Serien-Vollbild öffnet Links nacheinander die Folgen der Staffel, die Staffeln und das Hauptmenü. Rechts und Zurück gehen eine Ebene zurück. Langes Zurück schließt die gesamte Einblendung.
 - Filme und Serien können getrennt nach dem Vollbild in einer kleinen Vorschau oder im Hintergrund weiterlaufen. Die Option „Aus“ pausiert die Wiedergabe. Die kleine Vorschau ist voreingestellt.
 - Gleichnamige Serienfassungen werden nur bei übereinstimmender IMDb-/TMDB-ID oder bei passendem Titel und bekanntem, gleichem Erscheinungsjahr zusammengeführt. Widersprüchliche IDs trennen die Fassungen.
 
@@ -66,6 +80,7 @@ Ein nutzerkonfigurierbarer IPTV-Player für Android-Telefone und -Tablets sowie 
 - Seriendetails zeigen die Aktionen nebeneinander und darunter eine horizontal wählbare Staffelreihe über den Folgen mit verfügbaren Portalbildern, Beschreibungen und lokalem Wiedergabestatus. Die vollständige Serienbeschreibung und die Folgen sind in einem gemeinsamen vertikalen Detailbereich erreichbar.
 - Eindeutig englische Beschreibungen werden im deutschen VOD-Bereich ausgelassen. Folgenbilder und deutsche Folgenbeschreibungen können bei eingerichtetem TMDB-Zugang ergänzt werden. Ohne Folgenbild dient das Serienposter als Ersatz.
 - Für Intro und Abspann lässt sich getrennt zwischen automatischer Erkennung und eigenen Zeitmarken wählen. Im manuellen Modus gelten die gespeicherten Einstellungen für alle Serien. Der Introstart und das Introende beziehen sich auf den Folgenbeginn, der Abspannbeginn auf die verbleibende Laufzeit. Der Vorlauf für den Hinweis zur nächsten Folge bleibt separat einstellbar.
+- Intros werden standardmäßig erkannt und mit einer anwählbaren Überspringen-Schaltfläche angezeigt. Automatisches Überspringen ist eine separate, standardmäßig ausgeschaltete Option.
 
 ## Temporäre QR-Playlistverwaltung
 
@@ -76,6 +91,8 @@ Auf ausdrücklichen Start des Nutzers stellt das Gerät eine zeitlich begrenzte 
 Standardmäßig aus; kein Herstellerkonto erforderlich. Nutzer stellen ihren eigenen unterstützten Speicher bereit. Nur nach Einrichtung und Einwilligung werden ausgewählte Einstellungen, Favoriten, Zuordnungen und optional Quellen/Zugangsdaten geräteübergreifend synchronisiert; keine Wiedergabedaten oder Geheimnisse stillschweigend hochladen. Vor Übertragung auf dem Gerät authentifiziert verschlüsseln; Schlüssel aus einer vom Nutzer gewählten Passphrase mit geeigneter passwortbasierter Schlüsselableitung und zufälligem Salt ableiten. Schlüssel und Passphrase nicht hochladen oder loggen. Nutzer über Verlust der Passphrase und mögliche Metadaten beim Speicheranbieter informieren. Löschung und Deaktivierung klar unterscheiden; Konflikte und Offline-Änderungen nicht stillschweigend überschreiben. Anbieter, Schlüsselparameter und Konfliktoberfläche sind vor Umsetzung festzulegen.
 
 ## Updates und Qualität
+
+Unter **Einstellungen → Über StreamWatch** stehen Version, Versionscode und Versionsdatum. Das Versionsdatum wird beim Anlegen eines Releases mitgepflegt.
 
 Unter **Einstellungen → App-Updates** kann die App manuell oder optional beim Start nach einer neueren stabilen Version suchen. Sie zeigt Versionshinweise an und lädt die APK nach Auswahl herunter. Vor der Übergabe an den Android-Paketinstaller prüft sie SHA-256, Paketname, Versionscode und Signatur. Die Installation erfordert die Android-Systembestätigung.
 

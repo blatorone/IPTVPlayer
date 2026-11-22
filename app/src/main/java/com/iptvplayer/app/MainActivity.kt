@@ -381,9 +381,6 @@ private fun PlayerHome(
     }
     var metadataClient by remember { mutableStateOf<TmdbClient?>(null) }
     var metadataSettingsOpen by remember { mutableStateOf(false) }
-    var traktClientId by remember(preferences) {
-        mutableStateOf(preferences?.getString("trakt_client_id", "").orEmpty())
-    }
     var traktSession by remember { mutableStateOf<TraktSession?>(null) }
     var traktDeviceCode by remember { mutableStateOf<TraktDeviceCode?>(null) }
     var traktBusy by remember { mutableStateOf(false) }
@@ -673,10 +670,6 @@ private fun PlayerHome(
             val session = storage?.readTraktSession()
             if (session != null) {
                 traktSession = session
-                if (traktClientId.isBlank()) {
-                    traktClientId = session.clientId
-                    preferences?.edit()?.putString("trakt_client_id", session.clientId)?.apply()
-                }
             }
         } catch (error: CancellationException) {
             throw error
@@ -686,8 +679,7 @@ private fun PlayerHome(
     }
 
     suspend fun <T> withTraktSession(action: suspend (TraktApi, TraktSession) -> T): T {
-        val clientId = traktClientId.trim()
-        require(clientId.isNotBlank()) { context.getString(R.string.trakt_client_id_required) }
+        val clientId = TRAKT_CLIENT_ID
         val api = TraktApi(clientId)
         var session = storage?.readTraktSession() ?: traktSession
             ?: error(context.getString(R.string.trakt_not_connected))
@@ -702,12 +694,7 @@ private fun PlayerHome(
 
     fun connectTrakt() {
         if (traktBusy) return
-        val clientId = traktClientId.trim()
-        if (clientId.isBlank()) {
-            traktStatus = context.getString(R.string.trakt_client_id_required)
-            return
-        }
-        preferences?.edit()?.putString("trakt_client_id", clientId)?.apply()
+        val clientId = TRAKT_CLIENT_ID
         traktBusy = true
         traktStatus = null
         scope.launch {
@@ -3982,16 +3969,10 @@ private fun PlayerHome(
                                     }
                                 }
                                 SettingsSection.SYNC -> TraktSettings(
-                                    clientId = traktClientId,
-                                    onClientIdChange = { value ->
-                                        traktClientId = value.trim()
-                                        preferences?.edit()?.putString("trakt_client_id", value.trim())?.apply()
-                                    },
                                     accountName = traktSession?.username,
                                     deviceCode = traktDeviceCode,
                                     busy = traktBusy,
                                     status = traktStatus,
-                                    onOpenDeveloperApps = { uriHandler.openUri("https://developer.trakt.tv/apps") },
                                     onConnect = ::connectTrakt,
                                     onSync = ::syncTrakt,
                                     onDisconnect = ::disconnectTrakt

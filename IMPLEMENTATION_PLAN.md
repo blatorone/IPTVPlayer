@@ -58,7 +58,7 @@ Abnahme aus `PROJECT_SPEC.md` mit Touch und TV-Fernbedienung durchführen; unter
 
 ## Ergänzung: Trakt-Konto und Live-Wiederherstellung
 
-- Trakt-Gerätecode-Verknüpfung mit lokalem QR-Code, verschlüsselter Sitzung, Token-Erneuerung sowie manueller Merkliste-/Gesehen-Synchronisierung ist in die bestehende App integriert. Für den tatsächlichen OAuth-Aufruf muss der Nutzer eine Trakt Client ID in den Einstellungen hinterlegen.
+- Trakt-Gerätecode-Verknüpfung mit fester App-Client-ID, lokalem QR-Code, verschlüsselter Sitzung, Token-Erneuerung sowie manueller Merkliste-/Gesehen-Synchronisierung ist in die bestehende App integriert. Nutzer müssen keine Entwickler-ID eingeben.
 - Live-Kategorie wird zusammen mit dem zuletzt verwendeten Live-Sender lokal wiederhergestellt. Der Programmführer startet in der Kategorie dieses Senders.
 - Build-Prüfung: `assembleDebug` erfolgreich. OAuth mit einem echten Trakt-Konto und Bedienung auf Shield/Fire TV müssen noch auf Geräten geprüft werden.
 

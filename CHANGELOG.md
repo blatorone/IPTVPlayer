@@ -2,6 +2,10 @@
 
 ## Unveröffentlicht
 
+## 1.0.26
+
+- Trakt-Verbindung startet ohne manuelle Client-ID-Eingabe; Gerätecode-QR berücksichtigt auch `auth.trakt.tv` und kann den Code direkt auf der Aktivierungsseite einsetzen.
+
 ## 1.0.25
 
 - Im Live-Programmführer erscheint während der Wiedergabe eine fokussierbare Stopp-Schaltfläche.

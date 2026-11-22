@@ -351,10 +351,7 @@
     <string name="tvmaze_episode_provider">Folgeninformationen von TVmaze</string>
     <string name="tvmaze_credit">Folgendaten von TVmaze · tvmaze.com</string>
     <string name="settings_sync">Konten und Synchronisierung</string>
-    <string name="trakt_intro">Verbinde dein Trakt-Konto, um Merkliste und Gesehen-Status von Filmen und Serien abzugleichen. Die Anmeldung erfolgt über einen Code, den du am Handy bestätigst.</string>
-    <string name="trakt_client_id">Trakt Client ID</string>
-    <string name="trakt_client_id_help">Erforderlich: eigene App-ID aus deinem Trakt-Entwicklerkonto. Es wird kein Client Secret in der App gespeichert.</string>
-    <string name="trakt_open_developer_apps">Trakt-App-ID erstellen</string>
+    <string name="trakt_intro">Tippe auf „Mit Trakt verbinden“. Scanne den QR-Code mit deinem Handy oder öffne die angezeigte Trakt-Seite und gib dort den Gerätecode ein. Nach deiner Freigabe verbindet sich StreamWatch automatisch.</string>
     <string name="trakt_connect">Mit Trakt verbinden</string>
     <string name="trakt_connecting">Verbindung wird vorbereitet …</string>
     <string name="trakt_sync_now">Jetzt synchronisieren</string>
@@ -366,7 +363,6 @@
     <string name="trakt_qr_description">QR-Code zur Trakt-Autorisierung</string>
     <string name="trakt_qr_unavailable">QR-Code konnte nicht erstellt werden.</string>
     <string name="trakt_disclaimer">StreamWatch verwendet Trakt, wird aber nicht von Trakt unterstützt oder zertifiziert.</string>
-    <string name="trakt_client_id_required">Bitte trage zuerst deine Trakt Client ID ein.</string>
     <string name="trakt_client_id_changed">Die Client ID passt nicht zur gespeicherten Anmeldung. Trenne Trakt und verbinde das Konto erneut.</string>
     <string name="trakt_not_connected">Es ist kein Trakt-Konto verbunden.</string>
     <string name="trakt_session_read_failed">Die gespeicherte Trakt-Anmeldung konnte nicht gelesen werden.</string>

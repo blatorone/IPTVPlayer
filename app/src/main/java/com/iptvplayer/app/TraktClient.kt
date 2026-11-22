@@ -1,6 +1,7 @@
 package com.iptvplayer.app
 
 import java.net.HttpURLConnection
+import java.net.URI
 import java.net.URL
 import java.net.URLEncoder
 import java.time.Instant
@@ -10,6 +11,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+
+internal const val TRAKT_CLIENT_ID = "OFqILSXgqkCjYQ_wYRIbfs3O6ngifeMysl-mcbi6XqA"
 
 internal data class TraktSession(
     val clientId: String,
@@ -68,12 +71,12 @@ internal class TraktApi(private val clientId: String) {
         val json = request("/oauth/device/code", "POST", JSONObject().put("client_id", clientId)).jsonObject()
         val code = json.optString("device_code").takeIf(String::isNotBlank) ?: error("Trakt hat keinen Gerätecode geliefert.")
         val userCode = json.optString("user_code").takeIf(String::isNotBlank) ?: error("Trakt hat keinen Bestätigungscode geliefert.")
-        val verify = json.optString("verification_url").takeIf(String::isNotBlank)
-            ?: json.optString("verification_url_complete").substringBefore('?').takeIf(String::isNotBlank)
-            ?: "https://trakt.tv/activate"
-        val complete = json.optString("verification_url_complete")
-            .takeIf { it.startsWith("https://trakt.tv/") || it.startsWith("https://www.trakt.tv/") }
-            ?: verify
+        val completeFromApi = json.optString("verification_url_complete")
+        val verify = sequenceOf(
+            json.optString("verification_url"), completeFromApi.substringBefore('?')
+        ).firstNotNullOfOrNull { it.takeIf(::isTrustedActivationUrl) }
+            ?: "https://auth.trakt.tv/activate"
+        val complete = completeFromApi.takeIf(::isTrustedActivationUrl) ?: verify
         return TraktDeviceCode(
             code, userCode, verify, complete,
             json.optInt("expires_in", 600).coerceAtLeast(1),
@@ -248,6 +251,11 @@ internal class TraktApi(private val clientId: String) {
 
     private fun String?.toInstantMillis(): Long? = this?.takeIf(String::isNotBlank)
         ?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
+
+    private fun isTrustedActivationUrl(value: String): Boolean = runCatching {
+        val uri = URI(value)
+        uri.scheme == "https" && uri.host in setOf("trakt.tv", "www.trakt.tv", "auth.trakt.tv")
+    }.getOrDefault(false)
 
     private fun mediaIdentity(item: TraktMedia): String =
         "${item.section}:${item.imdbId ?: item.tmdbId ?: item.traktId ?: normalizedLabel(item.name)}:${item.year ?: ""}"

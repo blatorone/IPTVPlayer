@@ -41,7 +41,7 @@ HTTPS bevorzugen; Zertifikatsprüfungen nicht deaktivieren. Unsichere vom Nutzer
 
 ## Trakt-Integration
 
-Trakt wird über einen vom Nutzer bereitgestellten Client-ID-Wert und den OAuth-Gerätecode-Ablauf angebunden. Die App enthält kein Client Secret. QR-Codes werden lokal mit ZXing erzeugt; Bestätigungscode und Tokens werden nicht protokolliert. Access- und Refresh-Token liegen in einer separaten verschlüsselten Datei außerhalb von Android-Backups. Refresh-Token-Rotation wird unmittelbar gespeichert. Die manuelle Synchronisierung importiert Trakt-Merkliste und Gesehen-Status, wenn ein lokaler Quelltitel eindeutig zugeordnet werden kann, und ergänzt lokale Merklisteeinträge in Trakt. Nicht zuordenbare Einträge bleiben in Trakt, da StreamWatch keine Wiedergabequelle dafür besitzt.
+Trakt wird über eine feste, öffentliche StreamWatch Client ID und den OAuth-Gerätecode-Ablauf angebunden. Die App enthält kein Client Secret. QR-Codes werden lokal mit ZXing erzeugt; Gerätecode-URLs werden nur von den HTTPS-Trakt-Aktivierungsdomains akzeptiert. Bestätigungscodes und Tokens werden nicht protokolliert. Access- und Refresh-Token liegen in einer separaten verschlüsselten Datei außerhalb von Android-Backups. Refresh-Token-Rotation wird unmittelbar gespeichert. Die manuelle Synchronisierung importiert Trakt-Merkliste und Gesehen-Status, wenn ein lokaler Quelltitel eindeutig zugeordnet werden kann, und ergänzt lokale Merklisteeinträge in Trakt. Nicht zuordenbare Einträge bleiben in Trakt, da StreamWatch keine Wiedergabequelle dafür besitzt.
 
 ## Live-Startkategorie
 

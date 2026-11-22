@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -27,13 +26,10 @@ import java.nio.charset.StandardCharsets
 
 @Composable
 internal fun TraktSettings(
-    clientId: String,
-    onClientIdChange: (String) -> Unit,
     accountName: String?,
     deviceCode: TraktDeviceCode?,
     busy: Boolean,
     status: String?,
-    onOpenDeveloperApps: () -> Unit,
     onConnect: () -> Unit,
     onSync: () -> Unit,
     onDisconnect: () -> Unit
@@ -41,25 +37,10 @@ internal fun TraktSettings(
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(stringResource(R.string.trakt_intro), style = MaterialTheme.typography.bodyMedium)
         if (accountName == null) {
-            OutlinedTextField(
-                value = clientId,
-                onValueChange = onClientIdChange,
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text(stringResource(R.string.trakt_client_id)) },
-                supportingText = { Text(stringResource(R.string.trakt_client_id_help)) },
-                singleLine = true,
-                enabled = !busy && deviceCode == null
-            )
-            MenuButton(
-                stringResource(R.string.trakt_open_developer_apps),
-                Modifier.fillMaxWidth(),
-                enabled = !busy,
-                onClick = onOpenDeveloperApps
-            )
             MenuButton(
                 stringResource(if (busy) R.string.trakt_connecting else R.string.trakt_connect),
                 Modifier.fillMaxWidth(),
-                enabled = !busy && deviceCode == null && clientId.isNotBlank(),
+                enabled = !busy && deviceCode == null,
                 onClick = onConnect
             )
         } else {

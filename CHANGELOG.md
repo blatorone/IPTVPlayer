@@ -2,6 +2,10 @@
 
 ## Unveröffentlicht
 
+## 1.0.24
+
+- Absturz beim Öffnen der Einstellungen behoben, der durch eine ungültige Auswahlansicht ausgelöst wurde.
+
 ## 1.0.23
 
 - Trakt-Konto über Bestätigungscode und QR-Code verbinden; Merkliste und Gesehen-Status mit lokal verfügbaren Filmen und Serien synchronisieren.

@@ -2647,7 +2647,6 @@ private fun PlayerHome(
             ) showFullscreenPanel(GuidePanel.GRID)
         }
     }
-    val mediaDestination = inGuide || selected == Destination.MOVIES || selected == Destination.SERIES
     fun isMainMenuOpen() = selected == Destination.LIVE && guidePanel == GuidePanel.MENU && !fullscreen
     val mainMenuOpen = isMainMenuOpen()
     LaunchedEffect(mainMenuOpen) { if (!mainMenuOpen) lastBack = 0L }
@@ -4623,9 +4622,9 @@ private fun PlayerHome(
                     header()
                     content()
                 }
-            } else if (mediaDestination) {
+            } else if (vodSectionForScreen != null) {
                 Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    val section = requireNotNull(vodSectionForScreen)
+                    val section = vodSectionForScreen
                     Column(
                         Modifier.width(vodSidebarWidth).fillMaxHeight()
                             .onHorizontalRemote(allowRight = false) { navigateBack() }

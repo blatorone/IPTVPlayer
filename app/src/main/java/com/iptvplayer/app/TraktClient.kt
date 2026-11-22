@@ -91,11 +91,16 @@ internal class TraktApi(private val clientId: String) {
         ).jsonObject()
         TraktDevicePoll.Authorized(json.session(clientId))
     } catch (error: TraktApiException) {
-        when (error.apiCode) {
-            "authorization_pending" -> TraktDevicePoll.Pending
-            "slow_down" -> TraktDevicePoll.SlowDown
-            "expired_token" -> throw TraktApiException(error.status, error.apiCode, "Der Trakt-Bestätigungscode ist abgelaufen. Bitte erneut verbinden.")
-            "access_denied" -> throw TraktApiException(error.status, error.apiCode, "Die Trakt-Verknüpfung wurde abgelehnt.")
+        when {
+            // Trakt's device-token endpoint documents HTTP 400 as the normal
+            // "waiting for user approval" response. It does not always include
+            // an OAuth error code in the response body.
+            error.status == 400 || error.apiCode == "authorization_pending" -> TraktDevicePoll.Pending
+            error.status == 429 || error.apiCode == "slow_down" -> TraktDevicePoll.SlowDown
+            error.status == 410 || error.apiCode == "expired_token" ->
+                throw TraktApiException(error.status, error.apiCode, "Der Trakt-Bestätigungscode ist abgelaufen. Bitte erneut verbinden.")
+            error.status == 418 || error.apiCode == "access_denied" ->
+                throw TraktApiException(error.status, error.apiCode, "Die Trakt-Verknüpfung wurde abgelehnt.")
             else -> throw error
         }
     }

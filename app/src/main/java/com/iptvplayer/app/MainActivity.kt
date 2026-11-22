@@ -385,6 +385,14 @@ private fun PlayerHome(
     var traktDeviceCode by remember { mutableStateOf<TraktDeviceCode?>(null) }
     var traktBusy by remember { mutableStateOf(false) }
     var traktStatus by remember { mutableStateOf<String?>(null) }
+    var traktPlaybackNotice by remember { mutableStateOf<String?>(null) }
+    var traktSyncRequested by remember { mutableStateOf(false) }
+    val playbackNoticeHost = remember { androidx.compose.material3.SnackbarHostState() }
+    LaunchedEffect(traktPlaybackNotice) {
+        val notice = traktPlaybackNotice ?: return@LaunchedEffect
+        playbackNoticeHost.showSnackbar(notice)
+        traktPlaybackNotice = null
+    }
     var episodeSettingsOpen by remember { mutableStateOf(false) }
     var epgSettingsOpen by remember { mutableStateOf(false) }
     var settingsSection by rememberSaveable { mutableStateOf<SettingsSection?>(null) }
@@ -460,6 +468,7 @@ private fun PlayerHome(
     var metadataError by remember { mutableStateOf(false) }
     var pendingSeriesEpisode by remember { mutableStateOf<Pair<PortalTitle, EpisodeResume>?>(null) }
     var pendingMovie by remember { mutableStateOf<WatchedMovie?>(null) }
+    var currentTraktPlayback by remember { mutableStateOf<TraktMedia?>(null) }
     var countries by remember(preferences) {
         mutableStateOf(
             preferences?.getString("countryOrder", null)?.split(',')?.filter { it.isNotBlank() }?.toSet()
@@ -670,6 +679,7 @@ private fun PlayerHome(
             val session = storage?.readTraktSession()
             if (session != null) {
                 traktSession = session
+                traktSyncRequested = true
             }
         } catch (error: CancellationException) {
             throw error
@@ -715,6 +725,7 @@ private fun PlayerHome(
                             val session = result.session.copy(username = username)
                             storage?.writeTraktSession(session)
                             traktSession = session
+                            traktSyncRequested = true
                             traktDeviceCode = null
                             traktStatus = context.getString(R.string.trakt_connected_status, username)
                             return@launch
@@ -758,6 +769,8 @@ private fun PlayerHome(
             "${catalogSession?.first?.sourceLabel.orEmpty()}:${section.name}:${title.id ?: title.name}"
         fun importedSeriesKey(title: PortalTitle): String =
             titleIdentity(title) ?: importedTitleKey(PortalSection.SERIES, title)
+                fun traktLibraryKey(media: TraktMedia): String =
+                    "trakt:${media.section.name}:${media.traktId ?: media.imdbId ?: media.tmdbId ?: normalizedLabel(media.name)}"
         scope.launch {
             try {
                 val localSaved = savedSources.flatMap { source ->
@@ -791,10 +804,9 @@ private fun PlayerHome(
                 var matched = 0
                 for (media in library.watchlist) {
                     val entries = localMatches(media)
-                    if (entries.isEmpty()) continue
                     matched++
-                    val title = entries.first().value
-                    val key = importedTitleKey(media.section, title)
+                    val title = entries.firstOrNull()?.value ?: media.asTitle()
+                    val key = entries.firstOrNull()?.let { importedTitleKey(media.section, title) } ?: traktLibraryKey(media)
                     watchlist = watchlist + key
                     if (media.section == PortalSection.MOVIES) {
                         val bookmark = WatchedMovie(
@@ -805,7 +817,7 @@ private fun PlayerHome(
                         )
                         movieBookmarks = listOf(bookmark) + movieBookmarks.filterNot { it.progressKey == key }
                     } else {
-                        val keyForSeries = importedSeriesKey(title)
+                        val keyForSeries = if (entries.isNotEmpty()) importedSeriesKey(title) else traktLibraryKey(media)
                         val existing = seriesActivity.firstOrNull { it.key == keyForSeries }
                         val refs = entries.mapNotNull { item ->
                             item.value.id?.let { SeriesPortalRef(item.source.identity, it) }
@@ -819,11 +831,10 @@ private fun PlayerHome(
                 }
                 for (media in library.watched) {
                     val entries = localMatches(media)
-                    if (entries.isEmpty()) continue
                     matched++
-                    val title = entries.first().value
+                    val title = entries.firstOrNull()?.value ?: media.asTitle()
                     if (media.section == PortalSection.MOVIES) {
-                        val key = importedTitleKey(PortalSection.MOVIES, title)
+                        val key = entries.firstOrNull()?.let { importedTitleKey(PortalSection.MOVIES, title) } ?: traktLibraryKey(media)
                         val watched = WatchedMovie(
                             displayVodTitle(title), title.year ?: media.year, title.imdbId ?: media.imdbId,
                             title.tmdbId ?: media.tmdbId,
@@ -832,7 +843,7 @@ private fun PlayerHome(
                         )
                         movieHistory = listOf(watched) + movieHistory.filterNot { it.progressKey == key }
                     } else {
-                        val key = importedSeriesKey(title)
+                        val key = if (entries.isNotEmpty()) importedSeriesKey(title) else traktLibraryKey(media)
                         val existing = seriesActivity.firstOrNull { it.key == key }
                         val refs = entries.mapNotNull { it.value.id?.let { id -> SeriesPortalRef(it.source.identity, id) } }.distinct()
                         val tracked = (existing ?: TrackedSeries(
@@ -841,6 +852,91 @@ private fun PlayerHome(
                         )).copy(viewed = true, watchedAt = media.watchedAtMillis ?: System.currentTimeMillis(), refs = (existing?.refs.orEmpty() + refs).distinct())
                         seriesActivity = (seriesActivity.filterNot { it.key == key } + tracked)
                     }
+                }
+                for (media in library.watchedEpisodes.sortedBy { it.watchedAtMillis ?: 0L }) {
+                    val seasonNumber = media.seasonNumber ?: continue
+                    val episodeNumber = media.episodeNumber ?: continue
+                    val entries = localMatches(media)
+                    val title = entries.firstOrNull()?.value ?: media.asTitle()
+                    val trackedKey = if (entries.isNotEmpty()) importedSeriesKey(title) else traktLibraryKey(media)
+                    val old = seriesActivity.firstOrNull { it.key == trackedKey }
+                    val refs = entries.mapNotNull { item ->
+                        item.value.id?.let { SeriesPortalRef(item.source.identity, it) }
+                    }.distinct()
+                    val scope = titleIdentity(title)?.let { "catalogue" } ?: entries.firstOrNull()?.source?.identity
+                    if (scope != null) {
+                        val seriesId = titleIdentity(title) ?: title.id ?: title.name
+                        val episodeKey = "SERIES:$scope:$seriesId:$seasonNumber:$episodeNumber"
+                        progressPreferences?.edit()?.putBoolean("completed:$episodeKey", true)
+                            ?.remove(episodeKey)?.remove("trakt_percent:$episodeKey")?.apply()
+                    }
+                    val watchedAt = media.watchedAtMillis ?: 0L
+                    val lastEpisode = old?.lastEpisode.takeIf { old != null && old.watchedAt > watchedAt }
+                        ?: EpisodeResume("$seasonNumber:$episodeNumber", seasonNumber, episodeNumber.toString(), null,
+                            scope?.let { "SERIES:$it:${titleIdentity(title) ?: title.id ?: title.name}:$seasonNumber:$episodeNumber" }
+                                ?: "SERIES:catalogue:${titleIdentity(title) ?: title.name}:$seasonNumber:$episodeNumber")
+                    val tracked = (old ?: TrackedSeries(
+                        trackedKey, displayVodTitle(title), refs, title.year ?: media.year,
+                        title.imdbId ?: media.imdbId, title.tmdbId ?: media.tmdbId
+                    )).copy(
+                        refs = (old?.refs.orEmpty() + refs).distinct(), viewed = true,
+                        watchedAt = maxOf(old?.watchedAt ?: 0L, watchedAt), lastEpisode = lastEpisode
+                    )
+                    seriesActivity = seriesActivity.filterNot { it.key == trackedKey } + tracked
+                    matched++
+                }
+                for (media in library.playback) {
+                    val percent = media.progressPercent?.takeIf { it > 0f } ?: continue
+                    val entries = localMatches(media)
+                    val match = entries.firstOrNull()
+                    val title = match?.value ?: media.asTitle()
+                    val refs = entries.mapNotNull { item ->
+                        item.value.id?.let { SeriesPortalRef(item.source.identity, it) }
+                    }.distinct()
+                    if (media.section == PortalSection.MOVIES) {
+                        val identity = titleIdentity(title)
+                        val scope = if (identity != null) "catalogue" else match?.source?.identity ?: "trakt"
+                        val id = identity ?: title.id ?: media.traktId?.toString() ?: title.name
+                        val key = "MOVIES:$scope::$id"
+                        val localUpdated = progressPreferences?.getLong("progress_updated:$key", 0L) ?: 0L
+                        if ((progressPreferences?.getLong(key, 0L) ?: 0L) <= 1L ||
+                            (media.watchedAtMillis ?: 0L) >= localUpdated
+                        ) progressPreferences?.edit()
+                            ?.putFloat("trakt_percent:$key", percent)?.putLong(key, 1L)
+                            ?.remove("completed:$key")?.apply()
+                        val entry = WatchedMovie(
+                            displayVodTitle(title), title.year ?: media.year,
+                            title.imdbId ?: media.imdbId, title.tmdbId ?: media.tmdbId,
+                            refs, key, media.watchedAtMillis ?: System.currentTimeMillis()
+                        )
+                        movieHistory = listOf(entry) + movieHistory.filterNot { it.progressKey == key }
+                    } else {
+                        val canonical = titleIdentity(title)
+                        val scope = if (canonical != null) "catalogue" else match?.source?.identity ?: "trakt"
+                        val seriesId = canonical ?: title.id ?: media.traktId?.toString() ?: title.name
+                        val seasonNumber = media.seasonNumber ?: continue
+                        val episodeNumber = media.episodeNumber ?: continue
+                        val key = "SERIES:$scope:$seriesId:$seasonNumber:$episodeNumber"
+                        val resume = EpisodeResume(
+                            "$seasonNumber:$episodeNumber", seasonNumber, episodeNumber.toString(), null, key
+                        )
+                        val localUpdated = progressPreferences?.getLong("progress_updated:$key", 0L) ?: 0L
+                        if ((progressPreferences?.getLong(key, 0L) ?: 0L) <= 1L ||
+                            (media.watchedAtMillis ?: 0L) >= localUpdated
+                        ) progressPreferences?.edit()
+                            ?.putFloat("trakt_percent:$key", percent)?.putLong(key, 1L)?.apply()
+                        val trackedKey = if (match != null) importedSeriesKey(title) else traktLibraryKey(media)
+                        val old = seriesActivity.firstOrNull { it.key == trackedKey }
+                        val tracked = (old ?: TrackedSeries(
+                            trackedKey, displayVodTitle(title), refs, title.year ?: media.year,
+                            title.imdbId ?: media.imdbId, title.tmdbId ?: media.tmdbId
+                        )).copy(
+                            refs = (old?.refs.orEmpty() + refs).distinct(), viewed = true,
+                            watchedAt = media.watchedAtMillis ?: System.currentTimeMillis(), lastEpisode = resume
+                        )
+                        seriesActivity = seriesActivity.filterNot { it.key == trackedKey } + tracked
+                    }
+                    matched++
                 }
                 preferences?.edit()?.putStringSet("watchlist", watchlist)?.apply()
                 progressPreferences?.edit()
@@ -856,6 +952,13 @@ private fun PlayerHome(
             } finally {
                 traktBusy = false
             }
+        }
+    }
+
+    LaunchedEffect(traktSyncRequested, traktBusy, traktSession?.username, restoring) {
+        if (traktSyncRequested && !traktBusy && traktSession != null && !restoring) {
+            traktSyncRequested = false
+            syncTrakt()
         }
     }
 
@@ -1547,9 +1650,34 @@ private fun PlayerHome(
         ) return
         val position = activePlayer.currentPosition
         if (position >= 0 && (!onFailure || position > 0)) {
-            progressPreferences?.edit()?.putLong(key, position)?.apply {
+            progressPreferences?.edit()?.putLong(key, position)
+                ?.putLong("progress_updated:$key", System.currentTimeMillis())?.apply {
                 if (activePlayer.duration > 0) putLong("duration:$key", activePlayer.duration)
             }?.apply()
+        }
+    }
+
+    fun sendTraktScrobble(action: String, notifyUser: Boolean = false) {
+        if (traktSession == null) return
+        val media = currentTraktPlayback ?: return
+        val attempt = playbackAttempt ?: return
+        val activePlayer = player ?: return
+        if (attempt.selection.section == PortalSection.LIVE || activePlayer.currentMediaItem?.mediaId != attempt.mediaId) return
+        val duration = activePlayer.duration
+        val percent = if (duration > 0L) activePlayer.currentPosition.toFloat() * 100f / duration else 0f
+        scope.launch {
+            try {
+                withTraktSession { api, session ->
+                    api.scrobble(action, media, session.accessToken, percent)
+                }
+                if (notifyUser) traktPlaybackNotice = context.getString(
+                    if (percent >= 80f) R.string.trakt_title_watched else R.string.trakt_playback_saved
+                )
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                if (notifyUser) traktPlaybackNotice = context.getString(R.string.trakt_playback_sync_failed)
+            }
         }
     }
 
@@ -1561,6 +1689,10 @@ private fun PlayerHome(
     fun stopPlayback() {
         preparedLiveVariant = null
         savePlaybackPosition()
+        if (currentTraktPlayback != null && playbackAttempt != null && (player?.currentPosition ?: 0L) > 0L) {
+            sendTraktScrobble("stop", notifyUser = true)
+        }
+        currentTraktPlayback = null
         playbackJob?.cancel()
         playbackAttempt = null
         playbackSourceBadge = null
@@ -1687,6 +1819,7 @@ private fun PlayerHome(
         if (playbackAttempt !== attempt) return
         if (attempt.index + 1 >= attempt.variants.size) {
             savePlaybackPosition(onFailure = true)
+            currentTraktPlayback = null
             playbackJob?.cancel()
             playbackAttempt = null
             player?.stop()
@@ -1947,15 +2080,25 @@ private fun PlayerHome(
 
     fun openTrackedSeries(entry: TrackedSeries, onOpen: ((PortalTitle) -> Unit)? = null) {
         val reference = PortalTitle(entry.name, year = entry.year, imdbId = entry.imdb, tmdbId = entry.tmdb)
-        val variants = entry.refs.mapNotNull { ref ->
+        val linkedVariants = entry.refs.mapNotNull { ref ->
             val source = savedSources.firstOrNull { it.identity == ref.sourceId } ?: return@mapNotNull null
             val title = source.catalogs[PortalSection.SERIES]?.titles?.firstOrNull { it.id == ref.portalTitleId }
                 ?: reference.copy(id = ref.portalTitleId)
             SourceItem(source, title)
         }
+        val discoveredVariants = if (linkedVariants.isEmpty()) savedSources.flatMap { source ->
+            source.catalogs[PortalSection.SERIES]?.titles.orEmpty().mapNotNull { candidate ->
+                equivalentCatalogueTitle(reference, listOf(candidate), requireVerifiedIdentity = false)
+                    ?.let { SourceItem(source, it) }
+            }
+        } else emptyList()
+        val variants = (linkedVariants + discoveredVariants).distinctBy { "${it.source.identity}:${it.value.id}" }
         val primary = variants.firstOrNull {
             equivalentCatalogueTitle(reference, listOf(it.value), requireVerifiedIdentity = true) != null
-        } ?: variants.firstOrNull() ?: return
+        } ?: variants.firstOrNull() ?: run {
+            traktPlaybackNotice = context.getString(R.string.trakt_source_missing)
+            return
+        }
         val title = primary.value
         searchedVariants = mapOf(title to (listOf(primary) + variants.filter {
             it != primary && equivalentCatalogueTitle(title, listOf(it.value), requireVerifiedIdentity = true) != null
@@ -2069,6 +2212,19 @@ private fun PlayerHome(
                     StalkerChannel(title.name, title.command.orEmpty(), null, null),
                     selection, variants, progressKey = key
                 )
+                currentTraktPlayback = when (section) {
+                    PortalSection.MOVIES -> TraktMedia(
+                        PortalSection.MOVIES, displayVodTitle(title), title.year, title.imdbId, title.tmdbId, null
+                    )
+                    PortalSection.SERIES -> openedSeries?.let { show ->
+                        TraktMedia(
+                            PortalSection.SERIES, displayVodTitle(show), show.year, show.imdbId, show.tmdbId, null,
+                            seasonNumber = openedSeason?.number,
+                            episodeNumber = title.episode?.toIntOrNull()
+                        )
+                    }
+                    PortalSection.LIVE -> null
+                }
                 if (section == PortalSection.SERIES) {
                     val series = openedSeries
                     val season = openedSeason
@@ -2171,7 +2327,8 @@ private fun PlayerHome(
     }
 
     fun openWatchedMovie(entry: WatchedMovie, resume: Boolean) {
-        val variants = entry.refs.mapNotNull { ref ->
+        val reference = PortalTitle(entry.name, year = entry.year, imdbId = entry.imdb, tmdbId = entry.tmdb)
+        val linkedVariants = entry.refs.mapNotNull { ref ->
             val source = savedSources.firstOrNull { it.identity == ref.sourceId } ?: return@mapNotNull null
             val title = source.catalogs[PortalSection.MOVIES]?.titles?.firstOrNull {
                 ref.portalTitleId.isNotBlank() && it.id == ref.portalTitleId
@@ -2181,7 +2338,17 @@ private fun PlayerHome(
             )
             SourceItem(source, title)
         }
-        val title = variants.firstOrNull()?.value ?: return
+        val discoveredVariants = if (linkedVariants.isEmpty()) savedSources.flatMap { source ->
+            source.catalogs[PortalSection.MOVIES]?.titles.orEmpty().mapNotNull { candidate ->
+                equivalentCatalogueTitle(reference, listOf(candidate), requireVerifiedIdentity = false)
+                    ?.let { SourceItem(source, it) }
+            }
+        } else emptyList()
+        val variants = (linkedVariants + discoveredVariants).distinctBy { "${it.source.identity}:${it.value.id}" }
+        val title = variants.firstOrNull()?.value ?: run {
+            traktPlaybackNotice = context.getString(R.string.trakt_source_missing)
+            return
+        }
         searchedVariants = mapOf(title to variants)
         if (resume) {
             details = PortalSection.MOVIES to title
@@ -2390,6 +2557,7 @@ private fun PlayerHome(
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 if (isPlaying) {
+                    sendTraktScrobble("start")
                     pendingSeriesEpisode?.let { (series, episode) ->
                         pendingSeriesEpisode = null
                         updateTrackedSeries(series, watchedEpisode = episode)
@@ -2436,12 +2604,29 @@ private fun PlayerHome(
                     }
                     if (starting != null && openFullscreen && playbackAttempt?.openFullscreenOnStart == true) fullscreen = true
                     starting = null
-                } else savePlaybackPosition(onFailure = true)
+                } else {
+                    savePlaybackPosition(onFailure = true)
+                    if (player?.playWhenReady == false) sendTraktScrobble("pause")
+                }
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
                 buffering = playbackState == Player.STATE_BUFFERING
                 val attempt = playbackAttempt ?: return
+                if (playbackState == Player.STATE_READY && player?.currentMediaItem?.mediaId == attempt.mediaId) {
+                    val key = attempt.progressKey
+                    val active = player
+                    val percent = key?.let { progressPreferences?.getFloat("trakt_percent:$it", -1f) } ?: -1f
+                    if (key != null && active.duration > 0 && percent in 0.1f..100f) {
+                        val target = (active.duration * percent / 100f).toLong()
+                            .coerceIn(0L, (active.duration - 1_000L).coerceAtLeast(0L))
+                        progressPreferences?.edit()?.putLong(key, target)
+                            ?.putLong("duration:$key", active.duration)
+                            ?.putLong("progress_updated:$key", System.currentTimeMillis())
+                            ?.remove("trakt_percent:$key")?.apply()
+                        active.seekTo(target)
+                    }
+                }
                 if (playbackState == Player.STATE_ENDED && player?.currentMediaItem?.mediaId == attempt.mediaId) {
                     if (attempt.progressKey == null) {
                         scope.launch { failPlayback(attempt, R.string.playback_error) }
@@ -3679,7 +3864,8 @@ private fun PlayerHome(
     )
     Scaffold(
         modifier = Modifier.fillMaxSize().then(if (selected == Destination.SEARCH) Modifier.imePadding() else Modifier),
-        containerColor = MaterialTheme.colorScheme.surface
+        containerColor = MaterialTheme.colorScheme.surface,
+        snackbarHost = { androidx.compose.material3.SnackbarHost(playbackNoticeHost) }
     ) { innerPadding ->
         BoxWithConstraints(Modifier.fillMaxSize()) {
         val vodSidebarWidth = (maxWidth * 0.23f).coerceIn(118.dp, 230.dp)
@@ -4160,7 +4346,7 @@ private fun PlayerHome(
                                 val livePreview = playing.takeIf { vodSection == null }
                                 val infoChannel = programmeChannel ?: livePreview
                                 Row(
-                                    Modifier.fillMaxWidth()
+                                    Modifier.fillMaxWidth().focusGroup()
                                         .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp))
                                         .padding(if (compactGuide) 4.dp else 8.dp),
                                     horizontalArrangement = Arrangement.spacedBy(if (compactGuide) 8.dp else 16.dp)
@@ -4203,7 +4389,7 @@ private fun PlayerHome(
                                             }
                                         }
                                     }
-                                    if (livePreview != null || starting != null && vodSection == null) {
+                                    if (vodSection == null && (playing != null || starting != null)) {
                                         MenuButton(
                                             stringResource(R.string.stop_playback),
                                             Modifier,
@@ -4355,7 +4541,8 @@ private fun PlayerHome(
                                 (trackedSeries(title) ?: seriesActivity.firstOrNull { entry -> entry.refs.any { it in refs } })
                                     ?.let(::resumeFor)
                                     ?.takeIf {
-                                        (progressPreferences?.getLong(it.progressKey, 0L) ?: 0L) > 0 &&
+                                        ((progressPreferences?.getLong(it.progressKey, 0L) ?: 0L) > 0 ||
+                                            (progressPreferences?.getFloat("trakt_percent:${it.progressKey}", 0f) ?: 0f) > 0f) &&
                                             progressPreferences?.getBoolean("completed:${it.progressKey}", false) != true &&
                                             resumeEpisode(seasons.orEmpty(), it) != null
                                     }
@@ -4371,6 +4558,13 @@ private fun PlayerHome(
                             } else null
                             val resumeKey = seriesResume?.progressKey ?: movieResumeKey
                             val resumePosition = resumeKey?.let { progressPreferences?.getLong(it, 0L) ?: 0L }
+                            val resumePercent = resumeKey?.let {
+                                progressPreferences?.getFloat("trakt_percent:$it", -1f)?.takeIf { value -> value > 0f }
+                            }
+                            val resumeLabel = resumePercent?.let {
+                                stringResource(R.string.trakt_resume_progress, it.toInt())
+                            } ?: seriesResume?.let { episodeResumeLabel(it, resumePosition ?: 0L) }
+                                ?: resumePosition?.takeIf { it > 0 }?.let(::playbackTime)
                             val displayTitle = (portalDetail ?: title).let { detail -> detailMetadata?.applyTo(detail) ?: detail }
                             val titleOverview: @Composable () -> Unit = {
                             TitleDetails(
@@ -4382,8 +4576,7 @@ private fun PlayerHome(
                                 newEpisodes = if (section == PortalSection.SERIES) {
                                     trackedSeries(title)?.unseen?.size ?: 0
                                 } else 0,
-                                resumeLabel = seriesResume?.let { episodeResumeLabel(it, resumePosition ?: 0L) }
-                                    ?: resumePosition?.let(::playbackTime),
+                                resumeLabel = resumeLabel,
                                 onResume = if (resumeKey != null && (section == PortalSection.MOVIES || seasons != null)) {
                                     { selectTitle(section, title, seriesResume, movieResumeKey) }
                                 } else null,
@@ -4454,6 +4647,12 @@ private fun PlayerHome(
                                 items(entries, key = { it.key }) { entry ->
                                     val label = if (entry.unseen.isEmpty()) entry.name else
                                         "${entry.name} · ${stringResource(R.string.new_episode_count, entry.unseen.size)}"
+                                    val resume = resumeFor(entry)?.takeIf { episode ->
+                                        val position = progressPreferences?.getLong(episode.progressKey, 0L) ?: 0L
+                                        val remoteProgress = progressPreferences?.getFloat("trakt_percent:${episode.progressKey}", 0f) ?: 0f
+                                        (position > 0L || remoteProgress > 0f) &&
+                                            progressPreferences?.getBoolean("completed:${episode.progressKey}", false) != true
+                                    }
                                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                         HistoryArtwork(
                                             section,
@@ -4462,21 +4661,21 @@ private fun PlayerHome(
                                         )
                                         Column(Modifier.weight(1f)) {
                                             MenuButton(label, Modifier.fillMaxWidth()) { openTrackedSeries(entry) }
-                                            resumeFor(entry)?.let { resume ->
-                                                val position = progressPreferences?.getLong(resume.progressKey, 0L) ?: 0L
+                                            resume?.let { episode ->
+                                                val position = progressPreferences?.getLong(episode.progressKey, 0L) ?: 0L
                                                 Text(
-                                                    episodeResumeLabel(resume, position),
+                                                    episodeResumeLabel(episode, position),
                                                     Modifier.padding(start = 10.dp, bottom = 6.dp),
                                                     style = MaterialTheme.typography.bodySmall
                                                 )
                                             }
                                         }
-                                        resumeFor(entry)?.let { resume ->
+                                        resume?.let { episode ->
                                             MenuButton(stringResource(R.string.resume_playback), Modifier) {
                                                 openTrackedSeries(entry) { title ->
                                                     closeSeries()
                                                     details = section to title
-                                                    selectTitle(section, title, resume)
+                                                    selectTitle(section, title, episode)
                                                 }
                                             }
                                         }
@@ -5541,6 +5740,7 @@ internal fun MenuButton(
                 if (it.isFocused && !focused) onFocused?.invoke()
                 focused = it.isFocused
             }
+            .focusProperties { canFocus = enabled }
             .combinedClickable(enabled = enabled, onClick = onClick, onLongClick = onLongPress),
         color = container,
         contentColor = when {

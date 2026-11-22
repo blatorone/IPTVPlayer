@@ -354,7 +354,7 @@
     <string name="trakt_intro">Tippe auf „Mit Trakt verbinden“. Scanne den QR-Code mit deinem Handy oder öffne die angezeigte Trakt-Seite und gib dort den Gerätecode ein. Nach deiner Freigabe verbindet sich StreamWatch automatisch.</string>
     <string name="trakt_connect">Mit Trakt verbinden</string>
     <string name="trakt_connecting">Verbindung wird vorbereitet …</string>
-    <string name="trakt_sync_now">Jetzt synchronisieren</string>
+    <string name="trakt_sync_now">Trakt-Verlauf und Merkliste synchronisieren</string>
     <string name="trakt_syncing">Synchronisierung läuft …</string>
     <string name="trakt_disconnect">Trakt trennen</string>
     <string name="trakt_connected_as">Verbunden als %1$s</string>
@@ -373,4 +373,9 @@
     <string name="trakt_disconnect_failed">Die gespeicherte Trakt-Anmeldung konnte nicht entfernt werden.</string>
     <string name="trakt_sync_complete">Trakt-Synchronisierung abgeschlossen: %1$d Titel gefunden.</string>
     <string name="trakt_sync_failed">Die Trakt-Synchronisierung ist fehlgeschlagen.</string>
+    <string name="trakt_resume_progress">Fortsetzen bei %1$d%% (Trakt)</string>
+    <string name="trakt_playback_saved">Wiedergabestand wurde an Trakt übertragen.</string>
+    <string name="trakt_title_watched">Bei Trakt als gesehen eingetragen.</string>
+    <string name="trakt_playback_sync_failed">Wiedergabestand konnte nicht an Trakt übertragen werden.</string>
+    <string name="trakt_source_missing">Bei Trakt gespeichert, aber in den vorhandenen Portalen nicht verfügbar.</string>
 </resources>

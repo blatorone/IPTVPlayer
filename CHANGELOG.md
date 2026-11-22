@@ -2,6 +2,12 @@
 
 ## Unveröffentlicht
 
+## 1.0.28
+
+- Trakt-Verlauf, einzelne gesehene Folgen, Merkliste und pausierte Wiedergabestände werden beim Verknüpfen und über „Trakt-Verlauf und Merkliste synchronisieren“ abgeglichen.
+- Filme und Folgen übertragen beim Start, Pausieren und Stoppen ihren Wiedergabestand an Trakt; nach dem Stoppen erscheint eine Bestätigung.
+- Im Live-TV-Informationsfeld sind nicht bedienbare Schaltflächen vom D-Pad-Fokus ausgeschlossen; die Fokusgruppe macht die Stopp-Aktion erreichbar.
+
 ## 1.0.27
 
 - Trakt-Gerätecode bleibt während der normalen HTTP-400-Warteantwort sichtbar; zusätzlich werden Trakts dokumentierte Statuscodes für Warten, Drosselung, Ablauf und Ablehnung behandelt.

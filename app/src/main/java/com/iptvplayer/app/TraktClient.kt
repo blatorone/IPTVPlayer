@@ -44,7 +44,10 @@ internal data class TraktMedia(
     val imdbId: String?,
     val tmdbId: String?,
     val traktId: Long?,
-    val watchedAtMillis: Long? = null
+    val watchedAtMillis: Long? = null,
+    val seasonNumber: Int? = null,
+    val episodeNumber: Int? = null,
+    val progressPercent: Float? = null
 ) {
     fun asTitle(): PortalTitle = PortalTitle(name, year = year, imdbId = imdbId, tmdbId = tmdbId)
 
@@ -57,7 +60,9 @@ internal data class TraktMedia(
 
 internal data class TraktLibrary(
     val watchlist: List<TraktMedia>,
-    val watched: List<TraktMedia>
+    val watched: List<TraktMedia>,
+    val playback: List<TraktMedia> = emptyList(),
+    val watchedEpisodes: List<TraktMedia> = emptyList()
 )
 
 internal class TraktApi(private val clientId: String) {
@@ -125,7 +130,69 @@ internal class TraktApi(private val clientId: String) {
             loadItems("/sync/watchlist/shows", PortalSection.SERIES, accessToken)
         val watched = loadItems("/sync/watched/movies", PortalSection.MOVIES, accessToken) +
             loadItems("/sync/watched/shows", PortalSection.SERIES, accessToken)
-        return TraktLibrary(watchlist.distinctBy(::mediaIdentity), watched.distinctBy(::mediaIdentity))
+        val playback = loadPlaybackProgress(accessToken)
+        val watchedEpisodes = loadItems("/sync/history/episodes", PortalSection.SERIES, accessToken)
+        return TraktLibrary(
+            watchlist.distinctBy(::mediaIdentity), watched.distinctBy(::mediaIdentity),
+            playback.distinctBy { "${mediaIdentity(it)}:${it.seasonNumber}:${it.episodeNumber}" },
+            watchedEpisodes.distinctBy { "${mediaIdentity(it)}:${it.seasonNumber}:${it.episodeNumber}:${it.watchedAtMillis}" }
+        )
+    }
+
+    private suspend fun loadPlaybackProgress(accessToken: String): List<TraktMedia> =
+        loadPlaybackItems("/sync/playback/movies", PortalSection.MOVIES, accessToken) +
+            loadPlaybackItems("/sync/playback/episodes", PortalSection.SERIES, accessToken)
+
+    private suspend fun loadPlaybackItems(path: String, section: PortalSection, token: String): List<TraktMedia> {
+        val result = mutableListOf<TraktMedia>()
+        var page = 1
+        var pageCount: Int? = null
+        var hasMore = true
+        do {
+            val response = request("$path?page=$page&limit=100", "GET", token = token)
+            val array = response.jsonArray()
+            pageCount = response.pageCount ?: pageCount
+            hasMore = array.length() == 100
+            for (index in 0 until array.length()) {
+                val row = array.optJSONObject(index) ?: continue
+                val media = row.optJSONObject(if (section == PortalSection.MOVIES) "movie" else "show") ?: continue
+                val ids = media.optJSONObject("ids") ?: JSONObject()
+                val model = TraktMedia(
+                    section,
+                    media.optString("title").ifBlank { media.optString("name") },
+                    media.optInt("year").takeIf { it > 0 },
+                    ids.optString("imdb").takeIf { it.startsWith("tt") },
+                    ids.optLong("tmdb", 0).takeIf { it > 0 }?.toString(),
+                    ids.optLong("trakt", 0).takeIf { it > 0 },
+                    row.optString("paused_at").toInstantMillis(),
+                    row.optJSONObject("episode")?.optInt("season", -1)?.takeIf { it >= 0 },
+                    row.optJSONObject("episode")?.optInt("number", -1)?.takeIf { it > 0 },
+                    row.optDouble("progress", Double.NaN).takeIf { it.isFinite() }?.toFloat()?.coerceIn(0f, 100f)
+                )
+                if (model.name.isNotBlank()) result += model
+            }
+            page++
+            if (page > 1_000) error("Trakt hat ungewöhnlich viele Wiedergabestände geliefert; der Import wurde begrenzt.")
+        } while (pageCount?.let { page <= it } ?: hasMore)
+        return result
+    }
+
+    suspend fun scrobble(action: String, item: TraktMedia, accessToken: String, progress: Float) {
+        require(action in setOf("start", "pause", "stop"))
+        require(item.ids().length() > 0) { "Für diesen Titel fehlen Trakt-, IMDb- oder TMDB-IDs." }
+        val media = JSONObject().put("title", item.name).put("ids", item.ids())
+        val body = JSONObject().put("progress", progress.coerceIn(0f, 100f))
+        if (item.section == PortalSection.MOVIES) {
+            body.put("movie", media)
+        } else {
+            require((item.seasonNumber ?: 0) >= 0 && (item.episodeNumber ?: 0) > 0) {
+                "Für diese Folge fehlen Staffel- oder Folgennummer."
+            }
+            body.put("show", media).put(
+                "episode", JSONObject().put("season", item.seasonNumber).put("number", item.episodeNumber)
+            )
+        }
+        request("/scrobble/$action", "POST", body, accessToken)
     }
 
     suspend fun setWatchlistItem(accessToken: String, item: TraktMedia, saved: Boolean) {
@@ -175,10 +242,15 @@ internal class TraktApi(private val clientId: String) {
                 val imdb = ids.optString("imdb").takeIf { it.startsWith("tt") }
                 val tmdb = ids.optLong("tmdb", 0).takeIf { it > 0 }?.toString()
                 val trakt = ids.optLong("trakt", 0).takeIf { it > 0 }
-                val watchedAt = row.optString("last_watched_at").toInstantMillis()
+                val watchedAt = row.optString("last_watched_at").ifBlank {
+                    row.optString("watched_at")
+                }.toInstantMillis()
+                val episode = row.optJSONObject("episode")
                 result += TraktMedia(
                     section, media.optString("title").ifBlank { media.optString("name") },
-                    media.optInt("year").takeIf { it > 0 }, imdb, tmdb, trakt, watchedAt
+                    media.optInt("year").takeIf { it > 0 }, imdb, tmdb, trakt, watchedAt,
+                    episode?.optInt("season", -1)?.takeIf { it >= 0 },
+                    episode?.optInt("number", -1)?.takeIf { it > 0 }
                 ).takeIf { it.name.isNotBlank() } ?: continue
             }
             page++

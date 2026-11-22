@@ -44,8 +44,12 @@ internal data class LiveChannelGroup(val variants: List<LiveStreamVariant>) {
     val description: ChannelDescription
         get() {
             val first = variants.first().description
-            val category = variants.map { it.description.category }
-                .firstOrNull { it != LiveCategory.GENERAL } ?: LiveCategory.GENERAL
+            val category = if (variants.any { generalStation.matches(it.description.name) }) {
+                LiveCategory.GENERAL
+            } else {
+                variants.firstOrNull { it.description.category != LiveCategory.GENERAL }
+                    ?.description?.category ?: LiveCategory.GENERAL
+            }
             return first.copy(category = category)
         }
     val identity: String? get() = comparisonName(description) ?: channelIdentity(variants.first().item.value)
@@ -69,6 +73,13 @@ private val qualityPrefix = Regex(
     RegexOption.IGNORE_CASE
 )
 private val trimSeparators = " \t|¦┃│:·_-"
+private val generalStation = Regex(
+    "pro[ ._-]?(?:sieben|7)(?:[ ._-]*(?:fun|maxx))?|" +
+        "das erste|ard|zdf(?:neo)?|rtl(?:[ ._-]*(?:ii|2|up|plus))?|super[ ._-]*rtl|" +
+        "sat[ ._-]?1(?:[ ._-]*gold)?|vox(?:[ ._-]*up)?|kabel[ ._-]?(?:eins|1)|" +
+        "nitro|tele[ ._-]?5|sixx|3sat|arte",
+    RegexOption.IGNORE_CASE
+)
 
 internal fun describeChannel(channel: StalkerChannel, providerCategory: String?): ChannelDescription {
     val providerLabel = providerCategory.orEmpty()
@@ -122,7 +133,8 @@ internal fun describeChannel(channel: StalkerChannel, providerCategory: String?)
         }
     }
     name = name.replace(Regex("\\s+"), " ").trim().ifBlank { channel.name.trim() }
-    val category = LiveCategory.entries.drop(1).firstOrNull { it.words.containsMatchIn(name) }
+    val category = if (generalStation.matches(name)) LiveCategory.GENERAL
+    else LiveCategory.entries.drop(1).firstOrNull { it.words.containsMatchIn(name) }
         ?: LiveCategory.entries.firstOrNull { it.words.containsMatchIn(providerLabel) }
         ?: LiveCategory.GENERAL
     return ChannelDescription(name, country, category, qualities.toList())
@@ -177,7 +189,7 @@ internal fun buildLiveChannelGroups(sources: List<SavedPortal>, combine: Boolean
         val name = comparisonName(description)
         val epg = channelIdentity(item.item.value)?.let {
             val edition = Regex("\\+\\s*\\d*$").find(description.normalizedName)?.value.orEmpty()
-            "$it:${description.country}:$edition"
+            "$it:${description.country}:${description.normalizedName}:$edition"
         }
         for (key in listOfNotNull(name, epg)) {
             val scoped = if (combine) key else "${item.item.source.identity}:$key"

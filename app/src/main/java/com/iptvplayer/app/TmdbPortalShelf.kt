@@ -71,14 +71,14 @@ internal suspend fun loadTmdbPortalShelf(
                 val hits = sources.map { source ->
                     async sourceLookup@ {
                         val (cached, allowed) = bySource.getValue(source)
-                        val known = matchTmdbTitle(item, cached.filter(item::matches))
+                        val known = matchTmdbTitle(item, cached, requireVerifiedIdentity = section == PortalSection.SERIES)
                         if (known != null) return@sourceLookup SourceItem(source, known)
                         try {
                             val found = limiter.withPermit {
                                 val portal = portalFor(source)
                                 portal.loadCatalog(section, portal.openSession(), search = item.title)
                             }
-                            matchTmdbTitle(item, found.titles.filter(allowed).filter(item::matches))
+                            matchTmdbTitle(item, found.titles.filter(allowed), requireVerifiedIdentity = section == PortalSection.SERIES)
                                 ?.let { SourceItem(source, it) }
                         } catch (error: CancellationException) {
                             throw error
@@ -97,10 +97,13 @@ internal suspend fun loadTmdbPortalShelf(
     return TmdbShelfResult(matched.toMap(), next, references.any { it.second == null })
 }
 
-internal fun matchTmdbTitle(reference: TmdbTitle, candidates: List<PortalTitle>): PortalTitle? {
+internal fun matchTmdbTitle(
+    reference: TmdbTitle, candidates: List<PortalTitle>, requireVerifiedIdentity: Boolean = false
+): PortalTitle? {
     val relevant = candidates.filter(reference::matches)
     relevant.firstOrNull { it.tmdbId?.toIntOrNull() == reference.id }?.let { return it }
     val exactYear = relevant.filter { reference.year != null && vodReleaseYear(it) == reference.year }
+    if (requireVerifiedIdentity && exactYear.isEmpty()) return null
     val choices = exactYear.ifEmpty { relevant }
     val externalIds = choices.mapNotNull { it.tmdbId?.toIntOrNull()?.takeIf { id -> id > 0 } }.distinct()
     if (externalIds.size > 1 || externalIds.any { it != reference.id }) return null

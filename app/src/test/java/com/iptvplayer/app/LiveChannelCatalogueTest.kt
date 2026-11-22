@@ -5,6 +5,29 @@ import org.junit.Test
 
 class LiveChannelCatalogueTest {
     @Test
+    fun keepsDifferentChannelsApartEvenWhenThePortalReusesAnEpgId() {
+        val channels = listOf(
+            StalkerChannel("DE ProSieben HD", "main", null, "DE Allgemeines", epgIdentity = "prosieben.de"),
+            StalkerChannel("DE ProSieben FUN HD", "fun", null, "DE Allgemeines", epgIdentity = "prosieben.de")
+        )
+        assertEquals(listOf("main", "fun"), buildLiveChannelGroups(listOf(source("one", channels)), true)
+            .map { it.variants.single().item.value.command })
+    }
+    @Test
+    fun keepsGeneralStationsInGeneralDespitePortalGenre() {
+        val channels = listOf(
+            channel("| DE | ProSieben FUN FHD", "| DE | Filme & Serien", "fun"),
+            channel("DE - Pro7 MAXX HD", "| DE | Filme & Serien", "maxx"),
+            channel("DE ProSieben HD", "| DE | Filme & Serien", "main"),
+            channel("DE VOX HD", "Kino", "vox"),
+            channel("DE Sat.1 FHD", "Serien", "sat"),
+            channel("DE RTL II HD", "Cinema", "rtl")
+        )
+        val groups = buildLiveChannelGroups(listOf(source("one", channels)), combine = true)
+        assertEquals(List(channels.size) { LiveCategory.GENERAL }, groups.map { it.description.category })
+    }
+
+    @Test
     fun mergesPortalCategoriesAndQualitiesIntoOneRtlEntry() {
         val first = source("one", listOf(
             channel("| DE | RTL FHD", "| DE | Allgemeines", "one-fhd"),

@@ -25,7 +25,8 @@ internal class SavedPortal(
     val channels: List<StalkerChannel>,
     val genres: Map<String, String>,
     val catalogs: Map<PortalSection, PortalCatalog>,
-    val epgChannelIds: Set<String> = emptySet()
+    val epgChannelIds: Set<String> = emptySet(),
+    val subscriptionExpiry: java.time.LocalDate? = null
 ) {
     val identity: String by lazy {
         val input = "$address\n${normalizePortalMac(mac)}".encodeToByteArray()
@@ -38,6 +39,7 @@ internal data class SavedPortals(val sources: List<SavedPortal>, val activeId: S
 internal class PortalStorage(context: Context) {
     private val file = AtomicFile(File(context.noBackupFilesDir, "stalker-source.v1"))
     private val metadataFile = AtomicFile(File(context.noBackupFilesDir, "metadata-token.v1"))
+    private val epgSourcesFile = AtomicFile(File(context.noBackupFilesDir, "epg-sources.v1"))
     private companion object {
         val mutex = Mutex()
     }
@@ -77,6 +79,17 @@ internal class PortalStorage(context: Context) {
 
     suspend fun writeMetadataToken(token: String) = mutex.withLock {
         withContext(Dispatchers.IO) { writeEncrypted(metadataFile, token) }
+    }
+
+    suspend fun readEpgSources(): List<String> = mutex.withLock {
+        withContext(Dispatchers.IO) {
+            val urls = JSONArray(readEncrypted(epgSourcesFile) ?: "[]")
+            List(urls.length()) { urls.getString(it) }
+        }
+    }
+
+    suspend fun writeEpgSources(urls: List<String>) = mutex.withLock {
+        withContext(Dispatchers.IO) { writeEncrypted(epgSourcesFile, JSONArray(urls).toString()) }
     }
 
     private fun readEncrypted(target: AtomicFile): String? {
@@ -130,6 +143,7 @@ internal class PortalStorage(context: Context) {
         put("mac", source.mac)
         put("genres", JSONObject(source.genres))
         put("epgChannelIds", JSONArray(source.epgChannelIds))
+        put("subscriptionExpiry", source.subscriptionExpiry?.toString())
         put("channels", JSONArray().apply {
             for (channel in source.channels) {
                 put(JSONObject().apply {
@@ -239,7 +253,8 @@ internal class PortalStorage(context: Context) {
         val epgIds = data.optJSONArray("epgChannelIds")
         return SavedPortal(
             data.getString("address"), data.getString("mac"), channels, genres, catalogs,
-            if (epgIds == null) emptySet() else List(epgIds.length()) { epgIds.getString(it) }.toSet()
+            if (epgIds == null) emptySet() else List(epgIds.length()) { epgIds.getString(it) }.toSet(),
+            parsePortalExpiry(data.optString("subscriptionExpiry"))
         )
     }
 }

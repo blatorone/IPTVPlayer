@@ -5,6 +5,12 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class TmdbMatchingTest {
+    @Test
+    fun filtersClearlyEnglishDescriptionsAndKeepsGermanText() {
+        assertNull(germanDescription("When Rick and Morty leave their home, they run into trouble."))
+        val description = "Rick und Morty verlassen ihr Zuhause und geraten in Schwierigkeiten."
+        assertEquals(description, germanDescription(description))
+    }
     private val title = TmdbTitle(10, "Beispielfilm", "Sample Film", 2025, "Beschreibung", null, 12.0, 7.0)
 
     @Test

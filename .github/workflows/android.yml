@@ -1,0 +1,66 @@
+name: Android
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Android SDK installieren
+        run: sdkmanager "platforms;android-37.0" "build-tools;36.0.0"
+      - name: APKs bauen und testen
+        run: bash gradlew --no-daemon assembleDebug testDebugUnitTest assembleRelease
+      - name: Release signieren und veröffentlichen
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          GH_TOKEN: ${{ secrets.UPDATE_RELEASE_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${RELEASE_KEYSTORE_BASE64:?Release-Keystore fehlt}"
+          : "${RELEASE_STORE_PASSWORD:?Keystore-Passwort fehlt}"
+          : "${RELEASE_KEY_PASSWORD:?Schlüsselpasswort fehlt}"
+          : "${RELEASE_KEY_ALIAS:?Schlüsselalias fehlt}"
+          : "${GH_TOKEN:?Token für den Download-Kanal fehlt}"
+
+          metadata=app/build/outputs/apk/release/output-metadata.json
+          version=$(jq -er '.elements[0].versionName' "$metadata")
+          code=$(jq -er '.elements[0].versionCode' "$metadata")
+          [[ "$GITHUB_REF_NAME" == "v$version" && "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          output=$(jq -er '.elements[0].outputFile' "$metadata")
+
+          keystore=$(mktemp)
+          trap 'rm -f "$keystore"' EXIT
+          printf '%s' "$RELEASE_KEYSTORE_BASE64" | base64 --decode > "$keystore"
+          apk="IPTVPlayer-$code.apk"
+          apksigner="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          "$apksigner" sign --ks "$keystore" --ks-key-alias "$RELEASE_KEY_ALIAS" \
+            --ks-pass env:RELEASE_STORE_PASSWORD --key-pass env:RELEASE_KEY_PASSWORD \
+            --out "$apk" "app/build/outputs/apk/release/$output"
+          "$apksigner" verify "$apk"
+          sha256sum "$apk" > "$apk.sha256"
+          awk -v heading="## $version" '
+            $0 == heading { active = 1; next }
+            /^## / && active { exit }
+            active { print }
+          ' CHANGELOG.md > release-notes.md
+          grep -q '[^[:space:]]' release-notes.md
+          gh release create "$GITHUB_REF_NAME" "$apk" "$apk.sha256" \
+            --repo blatorone/IPTVPlayer-Releases --title "IPTVPlayer $version" --notes-file release-notes.md

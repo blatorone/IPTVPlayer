@@ -6,6 +6,8 @@ Ein nutzerkonfigurierbarer IPTV-Player für Android-Telefone und -Tablets sowie 
 
 ## Quellen und Bibliothek
 
+- Die Quellenliste zeigt das Ablaufdatum eines Stalker-Portals an, sofern das Portal es im Geräteprofil bereitstellt. Das Datum wird beim Hinzufügen und Aktualisieren der Quelle eingelesen.
+
 - Mehrere M3U-/M3U8-Playlisten per URL oder vom Nutzer gewählter Datei hinzufügen, ändern, aktualisieren und entfernen. Relative URLs anhand der Playlist-Quelle auflösen; Metadaten wie `tvg-id`, Name, Logo und Gruppe berücksichtigen. Fehlerhafte Einträge isolieren und Importergebnis anzeigen.
 - Xtream-kompatible Quellen mit Serveradresse und Zugangsdaten unterstützen; Live, Filme, Serien, Kategorien und verfügbare Metadaten übernehmen. Zugangsdaten geschützt ablegen und aus Anzeigen und Logs heraushalten.
 - Stalker-Portale als eigenen Quelltyp unterstützen. Nutzer geben die Portaladresse und die vom Anbieter autorisierten Anmeldedaten oder Gerätekennungen ein. Live-Sender, Kategorien, EPG-Informationen, Filme und Serien übernehmen, soweit das jeweilige Portal sie bereitstellt. Zugangsdaten und Sitzungstokens geschützt behandeln.
@@ -16,12 +18,34 @@ Ein nutzerkonfigurierbarer IPTV-Player für Android-Telefone und -Tablets sowie 
 
 ## Live, EPG und Navigation
 
+- Android TV zeigt die App über einen eigenen Launcher-Eintrag an. Ein Touchscreen ist für den Start und die Bedienung per Fernbedienung keine Voraussetzung.
+- Ohne gespeicherte Quelle bietet der erste Start direkt die Portal-Einrichtung an. Nach dem erfolgreichen ersten Import öffnet sich der Programmführer. Die automatische EPG-Aktualisierung setzt eine eingerichtete Quelle voraus.
+
+- Als EPG-Quelle ist standardmäßig der IPTV-Anbieter ausgewählt. Alternativ können mehrere XMLTV-URLs eingerichtet werden. Aktualisierung beim Start, Intervall, manuelles Aktualisieren und Vorschauzeitraum sind einstellbar. Im Live-Vollbild schließen Senderliste und Programmbeschreibung nach 15 Sekunden oder bei Berührung des Videobildes.
+
+- App-Kopfzeilen und Menürahmen bleiben beim Scrollen stehen. Sender, Suchergebnisse, Filme und Folgen scrollen in ihren jeweiligen Listen. Im Live-Vollbild öffnen horizontale Gesten oder Richtungstasten Senderliste und Programmdetails im Programmführer, während der Sender weiterläuft.
+
+- Nach dem App-Start ist zunächst der Programmführer geöffnet. Sobald der zuletzt erfolgreich gestartete verfügbare Live-Sender wieder läuft, öffnet die App das Vollbild. Im Programmführer startet eine Senderauswahl in der Vorschau. Ein Klick auf die Vorschau öffnet das Vollbild. Ein Senderwechsel in der Vollbild-Senderliste behält das Vollbild bei. Das Hauptmenü erscheint auf Anforderung.
+
+- Live-TV öffnet den zeitbasierten Programmführer mit Kategorien links. Programme werden für sichtbare Zeilen und benachbarte Sender nachgeladen. Beim Öffnen von Live-TV, Filmen oder Serien weicht das Hauptmenü der jeweiligen Bereichsansicht.
+- Über dem Programmraster stehen links die anklickbare Live-Vorschau und daneben die Informationen zur markierten Sendung. Links drücken oder wischen öffnet nacheinander die Sender der aktuellen Kategorie, die Kategorien und das Hauptmenü. In „Alle Sender“ nimmt die Senderliste die Kategorie des laufenden oder markierten Senders. Rechts aus dem Raster öffnet die ausführliche Sendungsbeschreibung.
+- Während die App im Vordergrund sichtbar ist, bleibt der Bildschirm auch ohne Wiedergabe aktiv. Beim Wiederherstellen gespeicherter Quellen erscheint beim Start ein Ladebalken.
+
+- Bei der Live-Kategorisierung hat „Allgemeines“ für erkannte deutschsprachige Allgemein- und Unterhaltungssender Vorrang vor dem Portalgenre. Dazu zählen etwa Das Erste, ZDF, RTL, Sat.1, VOX und die ProSieben-Sender.
+
 - Senderliste, aktuelle und folgende Sendung sowie zeitbasierte EPG-Ansicht anbieten, soweit Daten vorhanden sind. EPG-Zuordnung und Aktualisierungsstatus sichtbar machen.
 - Beim Navigieren durch Listen und EPG läuft der aktuell gestartete Live-Sender weiter. Fokuswechsel oder bloßes Markieren startet keinen anderen Stream; erst ausdrückliche Auswahl wechselt den Sender. Zurück und Oberflächenwechsel dürfen die laufende Wiedergabe nicht unbeabsichtigt beenden. Explizites Stoppen und Verlassen gemäß Lebenszyklus bleiben möglich.
 - Bei abspielbarem Variantenfehler begrenzt und ohne Endlosschleife zur nächsten verfügbaren Variante desselben zusammengeführten Senders wechseln. Fehler, Versuch und aktuelle Quelle nachvollziehbar anzeigen, ohne vertrauliche URLs offenzulegen. Keine anderen Sender automatisch auswählen. Nutzer können erneut versuchen oder Quelle wählen.
 - Touch und Fernbedienung gleichwertig nutzbar: sichtbarer Fokus, logische D-Pad-Reihenfolge, erreichbare Aktionen und vorhersehbare Zurück-Navigation.
+- Die Einstellungen markieren Fokus und Mauszeiger farblich. Auf dem Hauptbildschirm beendet zweimaliges Zurück die App. Die erneute Auswahl des laufenden Senders oder langes Zurück öffnet eine laufende Live-Vorschau im Vollbild.
 
 ## VOD
+
+- Einmaliges Zurück verlässt das Vollbild. Langes Zurück, Live-TV-Richtungen und Gesten sowie Tipp und Wiedergabetaste im Vollbild lassen sich mit Aktionen belegen. Die Standardbelegung lässt sich wiederherstellen.
+- Filme und Serien können getrennt nach dem Vollbild in einer kleinen Vorschau oder im Hintergrund weiterlaufen. Die Option „Aus“ pausiert die Wiedergabe. Die kleine Vorschau ist voreingestellt.
+- Gleichnamige Serienfassungen werden nur bei übereinstimmender IMDb-/TMDB-ID oder bei passendem Titel und bekanntem, gleichem Erscheinungsjahr zusammengeführt. Widersprüchliche IDs trennen die Fassungen.
+
+- Filme und Serien öffnen die zuletzt gewählte sichtbare Kategorie oder die erste verfügbare Kategorie. Der laufende Live-Sender erscheint standardmäßig abgedunkelt hinter dem Katalog neben der linken Kategorienliste. Die Darstellung lässt sich auf eine kleine Vorschau oben rechts oder ausgeblendetes Bild umstellen.
 
 - Film- und Serienkategorien zeigen Poster und bieten Sortierungen nach Name, Erscheinungsjahr und Hinzufügedatum, soweit das Portal die Metadaten liefert. Eine Detailansicht bietet Aktionen für Favoriten, Merkliste und die bewusste Wiedergabe.
 - Filme und Serien lassen sich nach Erscheinungsjahr filtern. Für aktuelle Kinostarts, wöchentliche Trends, Streamingdienst-Verfügbarkeit und Ausstrahlungen verwendet die App nach Einrichtung die offizielle TMDB-Schnittstelle. Die IPTV-Quellen liefern dazu passende Wiedergabevarianten.
@@ -31,6 +55,10 @@ Ein nutzerkonfigurierbarer IPTV-Player für Android-Telefone und -Tablets sowie 
 - Filme und Serien getrennt vom Live-Angebot durchsuchen; Detailansicht und Episodenauswahl bereitstellen, sofern die Quelle sie liefert. VOD startet nur nach bewusster Auswahl und ersetzt dann die laufende Live-Wiedergabe. Pause, Suche und Fortsetzen anbieten, soweit Format und Quelle dies erlauben.
 - Wiedergabeposition lokal speichern und Fortsetzen oder Neustart anbieten; abgeschlossene Einträge angemessen behandeln. Beim Wechsel auf eine abspielbare Variante desselben Films oder derselben Folge die letzte Wiedergabeposition übernehmen. Die nächste Folge startet auf Wunsch am markierten Abspannbeginn oder am tatsächlichen Ende. Die Vorwarnzeit ist einstellbar. Eindeutig markierte Intros können manuell oder automatisch übersprungen werden.
 - Der Filmverlauf zeigt die gespeicherte Position. Der Serienverlauf und die Merkliste zeigen bei angesehenen Serien auch Staffel und Folge. „Fortsetzen“ öffnet den zugehörigen Inhalt direkt an der gespeicherten Stelle.
+- Die regulären Detailseiten zeigen „Fortsetzen“ ebenfalls, sobald ein Filmfortschritt oder eine fortsetzbare Folge vorliegt.
+- Seriendetails zeigen die Aktionen nebeneinander und darunter eine horizontal wählbare Staffelreihe über den Folgen mit verfügbaren Portalbildern, Beschreibungen und lokalem Wiedergabestatus. Die vollständige Serienbeschreibung und die Folgen sind in einem gemeinsamen vertikalen Detailbereich erreichbar.
+- Eindeutig englische Beschreibungen werden im deutschen VOD-Bereich ausgelassen. Folgenbilder und deutsche Folgenbeschreibungen können bei eingerichtetem TMDB-Zugang ergänzt werden. Ohne Folgenbild dient das Serienposter als Ersatz.
+- Für Intro und Abspann lässt sich getrennt zwischen automatischer Erkennung und eigenen Zeitmarken wählen. Im manuellen Modus gelten die gespeicherten Einstellungen für alle Serien. Der Introstart und das Introende beziehen sich auf den Folgenbeginn, der Abspannbeginn auf die verbleibende Laufzeit. Der Vorlauf für den Hinweis zur nächsten Folge bleibt separat einstellbar.
 
 ## Temporäre QR-Playlistverwaltung
 
@@ -42,7 +70,9 @@ Standardmäßig aus; kein Herstellerkonto erforderlich. Nutzer stellen ihren eig
 
 ## Updates und Qualität
 
-GitHub Actions baut und prüft das Projekt; versionierte GitHub-Releases können signierte APKs und SHA-256-Prüfsummen bereitstellen. Ein optionaler Update-Check zeigt Version und Release-Hinweise; Download und Installation erfolgen nur nach Nutzeraktion und Android-Systembestätigung. Signaturkontinuität und Integrität vor Installation berücksichtigen; SHA-256 allein beweist keine Herkunft. Store-Verteilung und Plattformregeln getrennt prüfen. Keine automatische Installation versprechen.
+Unter **Einstellungen → App-Updates** kann die App manuell oder optional beim Start nach einer neueren stabilen Version suchen. Sie zeigt Versionshinweise an und lädt die APK nach Auswahl herunter. Vor der Übergabe an den Android-Paketinstaller prüft sie SHA-256, Paketname, Versionscode und Signatur. Die Installation erfordert die Android-Systembestätigung.
+
+GitHub Actions prüft Änderungen und veröffentlicht bei einem Versions-Tag die signierte APK, die Prüfsumme und die Hinweise aus dem Änderungsprotokoll im öffentlichen Download-Repository. Das Quellrepository kann privat bleiben.
 
 ## Abnahme
 

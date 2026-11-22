@@ -46,8 +46,9 @@ Speicheranbieter und Konfliktregeln auswählen; Opt-in, Auswahl der Daten, lokal
 
 ## 8. CI, Releases und Updates
 
-GitHub Actions für reproduzierbaren Build und geeignete Tests einrichten; Rechte minimieren, Secrets aus Logs halten. Signierung über sichere Repository-Secrets konfigurieren, wenn vorhanden; Release auf expliziten Tag/Workflow begrenzen. APK und SHA-256 veröffentlichen; optionalen nutzerinitiierten Update- und Installationsablauf ergänzen.
-**Fertig:** CI prüft Änderungen; Test-Release erzeugt installierbare signierte APK, Upgrade mit gleichem Schlüssel funktioniert und Release-Artefakte sind prüfbar. Keine Veröffentlichung ohne Auftrag.
+Der Workflow und der Update-Client stehen im Projekt. Der Workflow baut und testet auf Pull Requests und auf `master`. Ein Tag `v<versionName>` veröffentlicht die mit dem bisherigen Schlüssel signierte APK mit Prüfsumme und Hinweisen aus `CHANGELOG.md` im öffentlichen Repository `blatorone/IPTVPlayer-Releases`. Dafür braucht der Workflow die Signing-Secrets `RELEASE_KEYSTORE_BASE64`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_PASSWORD`, `RELEASE_KEY_ALIAS` und `UPDATE_RELEASE_TOKEN` mit Schreibzugriff auf Inhalte des Download-Repositorys.
+
+**Abnahme:** CI auf GitHub ausführen, Signing-Secrets und Download-Kanal einrichten, ein signiertes Test-Release veröffentlichen und das Upgrade auf der Shield mit derselben Signatur prüfen. Nach der einmaligen Installation einer Version mit Update-Client kann die App folgende Releases anbieten.
 
 ## 9. Gesamtprüfung
 
@@ -55,4 +56,4 @@ Abnahme aus `PROJECT_SPEC.md` mit Touch und TV-Fernbedienung durchführen; unter
 
 ## Noch zu entscheiden
 
-Konkrete SDK-/Gerätematrix und Versionen; belastbare Länder-Metadaten; Hintergrundverhalten außerhalb der App; QR-Transport und Schutzmodell; Cloud-Anbieter, Datenumfang, KDF-Parameter und Konflikt-UX; Release-Verteilung und Update-Quelle; automatische nächste Episode. Keine dieser Optionen als fertige Implementierung ausgeben.
+Konkrete SDK-/Gerätematrix und Versionen; belastbare Länder-Metadaten; Hintergrundverhalten außerhalb der App; QR-Transport und Schutzmodell; Cloud-Anbieter, Datenumfang, KDF-Parameter und Konflikt-UX; automatische nächste Episode. Keine dieser Optionen als fertige Implementierung ausgeben.

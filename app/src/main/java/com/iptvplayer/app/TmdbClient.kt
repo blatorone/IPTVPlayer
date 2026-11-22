@@ -24,7 +24,7 @@ internal data class TmdbTitle(
     fun applyTo(portal: PortalTitle): PortalTitle = portal.copy(
         name = title,
         year = year ?: portal.year,
-        description = overview ?: portal.description,
+        description = germanDescription(overview) ?: germanDescription(portal.description),
         poster = poster ?: portal.poster,
         popularity = popularity
     )
@@ -38,6 +38,7 @@ internal data class TmdbTitle(
 }
 
 internal data class TmdbPage(val items: List<TmdbTitle>, val nextPage: Int?)
+internal data class TmdbEpisodeDetails(val description: String?, val picture: String?)
 
 internal fun VodCategory.usesTmdb(section: PortalSection): Boolean =
     this != VodCategory.ALL && this != VodCategory.OTHER &&
@@ -154,6 +155,15 @@ internal class TmdbClient(private val token: String) {
             if (date != null && !date.isAfter(today) && index >= 0) "$number:$index" else null
         }.toSet()
     }
+
+    suspend fun episodeDetails(seriesId: Int, season: Int): Map<Int, TmdbEpisodeDetails> =
+        request("tv/$seriesId/season/$season").optJSONArray("episodes").objects()
+            .mapNotNull { episode ->
+                val number = episode.optInt("episode_number", -1).takeIf { it >= 0 } ?: return@mapNotNull null
+                val picture = episode.optString("still_path").takeIf { it.matches(Regex("/[A-Za-z0-9_.-]+")) }
+                    ?.let { "https://image.tmdb.org/t/p/w300$it" }
+                number to TmdbEpisodeDetails(germanDescription(episode.value("overview")), picture)
+            }.toMap()
 
     private suspend fun request(path: String, parameters: Map<String, String> = emptyMap()): JSONObject =
         withContext(Dispatchers.IO) {

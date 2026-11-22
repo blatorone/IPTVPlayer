@@ -1,21 +1,25 @@
 package com.iptvplayer.app
 
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -54,7 +58,7 @@ private enum class TitleFilter(val label: Int) {
 }
 
 @Composable
-internal fun TitleGrid(
+internal fun ColumnScope.TitleGrid(
     titles: List<PortalTitle>,
     isFavorite: (PortalTitle) -> Boolean,
     isSaved: (PortalTitle) -> Boolean,
@@ -91,7 +95,7 @@ internal fun TitleGrid(
             TitleSort.POPULARITY -> matches.sortedByDescending { it.popularity ?: Double.NEGATIVE_INFINITY }
         }
     }
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Box {
             MenuButton(stringResource(R.string.sort_by, stringResource(sort.label)), Modifier) { sorting = true }
             DropdownMenu(expanded = sorting, onDismissRequest = { sorting = false }) {
@@ -126,8 +130,8 @@ internal fun TitleGrid(
     }
     if (sorted.isEmpty()) Text(stringResource(R.string.no_matching_titles))
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 104.dp),
-        modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp),
+        columns = GridCells.Adaptive(minSize = 92.dp),
+        modifier = Modifier.fillMaxWidth().weight(1f),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
@@ -180,16 +184,20 @@ internal fun TitleDetails(
     favorite: Boolean,
     saved: Boolean,
     newEpisodes: Int,
-    onBack: () -> Unit,
+    resumeLabel: String?,
+    onResume: (() -> Unit)?,
+    compact: Boolean,
     onPlay: () -> Unit,
     onFavorite: () -> Unit,
     onWatch: () -> Unit
 ) {
-    MenuButton(stringResource(android.R.string.cancel), Modifier, onClick = onBack)
     Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        Poster(title, Modifier.width(116.dp).clip(MaterialTheme.shapes.medium))
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(displayVodTitle(title), style = MaterialTheme.typography.headlineSmall)
+        Poster(title, Modifier.width(if (compact) 72.dp else 116.dp).clip(MaterialTheme.shapes.medium))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(if (compact) 3.dp else 8.dp)) {
+            Text(
+                displayVodTitle(title), style = if (compact) MaterialTheme.typography.titleMedium else MaterialTheme.typography.headlineSmall,
+                maxLines = if (compact) 1 else 2, overflow = TextOverflow.Ellipsis
+            )
             vodReleaseYear(title)?.let { Text(stringResource(R.string.title_year, it)) }
             if (fromTmdb) {
                 Text(
@@ -207,75 +215,112 @@ internal fun TitleDetails(
                     .format(Instant.ofEpochSecond(it))
                 Text(stringResource(R.string.title_added, date))
             }
-            Text(title.description ?: stringResource(R.string.no_title_description))
-            MenuButton(
-                stringResource(if (section == PortalSection.SERIES) R.string.open_seasons else R.string.play_movie),
-                Modifier, onClick = onPlay
+            resumeLabel?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (onResume != null) MenuButton(stringResource(R.string.resume_playback), Modifier, onClick = onResume)
+                if (section == PortalSection.MOVIES) {
+                    MenuButton(stringResource(R.string.play_movie), Modifier, onClick = onPlay)
+                }
+                MenuButton(stringResource(R.string.favorites), Modifier, selected = favorite, onClick = onFavorite)
+                MenuButton(stringResource(R.string.watchlist), Modifier, selected = saved, onClick = onWatch)
+            }
+            Text(
+                germanDescription(title.description) ?: stringResource(R.string.no_german_description),
+                style = if (compact) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium,
+                maxLines = if (section == PortalSection.SERIES) Int.MAX_VALUE else 5,
+                overflow = TextOverflow.Ellipsis
             )
-            MenuButton(stringResource(R.string.favorites), Modifier, selected = favorite, onClick = onFavorite)
-            MenuButton(stringResource(R.string.watchlist), Modifier, selected = saved, onClick = onWatch)
         }
     }
 }
 
+internal data class EpisodeCardProgress(val completed: Boolean, val position: Long, val duration: Long)
+
 @Composable
 internal fun SeriesSeasons(
+    modifier: Modifier,
     series: PortalTitle,
     seasons: List<PortalSeason>?,
     selected: PortalSeason?,
     failed: Boolean,
     unseen: Set<String>,
     onSeason: (PortalSeason) -> Unit,
-    onBack: () -> Unit,
-    onEpisode: (PortalTitle) -> Unit
+    episodeProgress: (PortalSeason, PortalTitle) -> EpisodeCardProgress,
+    metadata: Map<Pair<Int, Int>, TmdbEpisodeDetails>,
+    onEpisode: (PortalSeason, PortalTitle) -> Unit,
+    onRetry: () -> Unit,
+    header: @Composable () -> Unit
 ) {
-    MenuButton(
-        stringResource(if (selected == null) R.string.back_to_series_details else R.string.back_to_seasons),
-        Modifier, onClick = onBack
-    )
-    if (selected == null) {
-        Text(displayVodTitle(series), style = MaterialTheme.typography.titleLarge)
-        Text(stringResource(R.string.seasons), style = MaterialTheme.typography.titleMedium)
-        if (seasons == null && !failed) LinearProgressIndicator(Modifier.fillMaxWidth())
-        if (failed || seasons?.isEmpty() == true) Text(stringResource(R.string.no_episodes))
-        LazyColumn(Modifier.heightIn(max = 240.dp)) {
-            items(seasons.orEmpty()) { season ->
-                val newCount = season.episodes.count { seriesEpisodeKey(season, it) in unseen }
-                val label = if (newCount == 0) seasonLabel(season, series) else
-                    "${seasonLabel(season, series)} · ${stringResource(R.string.new_episode_count, newCount)}"
-                MenuButton(
-                    label,
-                    Modifier.fillMaxWidth(),
-                    count = season.episodes.size
-                ) { onSeason(season) }
+    LazyColumn(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        item(key = "overview") { header() }
+        item(key = "seasons") {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(stringResource(R.string.seasons), style = MaterialTheme.typography.titleMedium)
+                if (seasons == null && !failed) LinearProgressIndicator(Modifier.fillMaxWidth())
+                if (failed || seasons?.isEmpty() == true) {
+                    Text(stringResource(R.string.no_episodes))
+                    MenuButton(stringResource(R.string.series_retry_seasons), Modifier, onClick = onRetry)
+                }
+                if (!seasons.isNullOrEmpty()) {
+                    LazyRow(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(seasons) { season ->
+                            MenuButton(seasonLabel(season, series), Modifier, selected = selected == season) {
+                                onSeason(season)
+                            }
+                        }
+                    }
+                }
             }
         }
-        return
-    }
-    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        Poster(selected.title, Modifier.width(100.dp).clip(MaterialTheme.shapes.medium))
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(displayVodTitle(series), style = MaterialTheme.typography.titleMedium)
-            Text(seasonLabel(selected, series), style = MaterialTheme.typography.headlineSmall)
-            selected.title.year?.let { Text(stringResource(R.string.title_year, it)) }
-            Text(stringResource(R.string.episode_count, selected.episodes.size))
-            selected.title.description?.let { Text(it) } ?: series.description?.let { description ->
-                Text(stringResource(R.string.series_description))
-                Text(description)
+        for (season in selected?.let(::listOf) ?: seasons.orEmpty()) {
+            item { Text(seasonLabel(season, series), style = MaterialTheme.typography.titleMedium) }
+            items(season.episodes) { episode ->
+                val label = episode.episode?.let { number ->
+                    if (episode.name == season.title.name || episode.name == series.name) {
+                        stringResource(R.string.episode_number, number)
+                    } else stringResource(R.string.episode_title, episode.name, number)
+                } ?: episode.name
+                val progress = episodeProgress(season, episode)
+                val details = season.number?.let { number ->
+                    episode.episode?.toIntOrNull()?.let { metadata[number to it] }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Box(
+                        Modifier.width(112.dp).aspectRatio(16f / 9f).clip(MaterialTheme.shapes.medium)
+                            .background(MaterialTheme.colorScheme.secondaryContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(label, Modifier.padding(4.dp), style = MaterialTheme.typography.labelSmall, maxLines = 2)
+                        PortalImage(episode.poster ?: details?.picture ?: series.poster ?: season.title.poster, Modifier.fillMaxSize())
+                    }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        val entry = if (seriesEpisodeKey(season, episode) in unseen) {
+                            stringResource(R.string.new_episode_entry, label)
+                        } else label
+                        MenuButton(entry, Modifier.fillMaxWidth()) { onEpisode(season, episode) }
+                        val description = germanDescription(episode.description) ?: details?.description
+                        Text(
+                            description ?: stringResource(R.string.no_german_episode_description),
+                            style = MaterialTheme.typography.bodySmall, maxLines = 3, overflow = TextOverflow.Ellipsis
+                        )
+                        Text(stringResource(when {
+                            progress.completed -> R.string.episode_watched
+                            progress.position > 0 -> R.string.episode_in_progress
+                            else -> R.string.episode_unwatched
+                        }), style = MaterialTheme.typography.labelSmall)
+                        if (progress.completed || progress.duration > 0) {
+                            LinearProgressIndicator(
+                                progress = {
+                                    if (progress.completed) 1f else (progress.position.toFloat() / progress.duration).coerceIn(0f, 1f)
+                                }, modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                }
             }
-        }
-    }
-    LazyColumn(Modifier.heightIn(max = 220.dp)) {
-        items(selected.episodes) { episode ->
-            val label = episode.episode?.let { number ->
-                if (episode.name == selected.title.name || episode.name == series.name) {
-                    stringResource(R.string.episode_number, number)
-                } else stringResource(R.string.episode_title, episode.name, number)
-            } ?: episode.name
-            val entry = if (seriesEpisodeKey(selected, episode) in unseen) {
-                stringResource(R.string.new_episode_entry, label)
-            } else label
-            MenuButton(entry, Modifier.fillMaxWidth()) { onEpisode(episode) }
         }
     }
 }

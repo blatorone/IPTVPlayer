@@ -14,3 +14,8 @@
 .cxx
 local.properties
 /[Ee]xtern/
+/.kotlin/
+/Microsoft/
+/app/release/
+*.jks
+*.keystore

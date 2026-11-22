@@ -115,6 +115,10 @@ internal class StalkerPortal(address: String, macAddress: String) {
         sessionToken ?: withContext(Dispatchers.IO) { authenticate() }.also { sessionToken = it }
     }
 
+    @Volatile
+    var subscriptionExpiry: java.time.LocalDate? = null
+        private set
+
     suspend fun loadCatalog(
         section: PortalSection,
         token: String,
@@ -149,7 +153,7 @@ internal class StalkerPortal(address: String, macAddress: String) {
                         ?: entry.text("release_date", "releasedate")?.take(4)?.toIntOrNull(),
                     addedAt = entry.text("added", "added_at", "created_at", "date_added", "upload_date")
                         ?.let(::catalogTimestamp),
-                    description = entry.text("description", "plot", "about"),
+                    description = entry.text("description", "plot", "about", "overview"),
                     imdbId = entry.text("imdb_id", "imdb"),
                     tmdbId = entry.text("tmdb_id", "tmdb"),
                     popularity = entry.text("popularity", "views", "view_count", "votes", "rating_count", "imdb_votes")
@@ -208,6 +212,8 @@ internal class StalkerPortal(address: String, macAddress: String) {
                                 id = entry.text("id", "episode_id"),
                                 command = command,
                                 episode = entry.text("episode", "episode_number"),
+                                poster = entry.text("screenshot_uri", "screenshot", "cover", "movie_image", "stream_icon", "logo")?.let(::resolveLogo),
+                                description = entry.text("description", "plot", "about", "overview"),
                                 timing = entry.episodeTiming()
                             ))
                         } else for (offset in 0 until episodeRows.length()) {
@@ -220,7 +226,8 @@ internal class StalkerPortal(address: String, macAddress: String) {
                                     command = link,
                                     episode = episodeRow.text("episode", "episode_number", "number")
                                         ?: (offset + 1).toString(),
-                                    description = episodeRow.text("description", "plot", "about"),
+                                    poster = episodeRow.text("screenshot_uri", "screenshot", "cover", "movie_image", "stream_icon", "logo")?.let(::resolveLogo),
+                                    description = episodeRow.text("description", "plot", "about", "overview"),
                                     timing = episodeRow.episodeTiming()
                                 ))
                             } else if (command != null) {
@@ -238,7 +245,7 @@ internal class StalkerPortal(address: String, macAddress: String) {
                         poster = entry.text("screenshot_uri", "cover", "movie_image", "logo")
                             ?.let(::resolveLogo) ?: series.poster,
                         year = entry.text("year", "release_year")?.toIntOrNull(),
-                        description = entry.text("description", "plot", "about")
+                        description = entry.text("description", "plot", "about", "overview")
                     )
                     result[key] = PortalSeason(
                         seasonNumber, title, (previous?.episodes.orEmpty() + episodes).distinct()
@@ -503,12 +510,12 @@ internal class StalkerPortal(address: String, macAddress: String) {
             buildList {
                 for (index in 0 until entries.length()) {
                     val entry = entries.optJSONObject(index) ?: continue
-                    val title = entry.optString("name").ifBlank { entry.optString("title") }
-                    if (title.isNotBlank()) add(PortalProgramme(
-                        title,
-                        entry.optLong("start_timestamp", 0).takeIf { it > 0 },
-                        entry.optLong("stop_timestamp", 0).takeIf { it > 0 },
-                        entry.text("descr", "description", "plot")
+                    val title = entry.text("name", "title") ?: continue
+                    add(PortalProgramme(
+                        decodeProgrammeText(title),
+                        portalProgrammeTime(entry.text("start_timestamp", "start", "time")),
+                        portalProgrammeTime(entry.text("stop_timestamp", "end_timestamp", "stop", "time_to")),
+                        entry.text("descr", "description", "plot")?.let(::decodeProgrammeText)
                     ))
                 }
             }
@@ -577,6 +584,9 @@ internal class StalkerPortal(address: String, macAddress: String) {
                 if (profile?.optInt("blocked", 0) == 1 || profile?.optBoolean("blocked") == true) {
                     throw PortalAuthenticationException()
                 }
+                subscriptionExpiry = sequenceOf("expire_billing_date", "end_date", "expiration_date", "exp_date", "expire_date")
+                    .mapNotNull { field -> parsePortalExpiry(profile?.optString(field)) }
+                    .firstOrNull()
                 endpoint = candidate
                 return token
             } catch (error: Exception) {
@@ -662,6 +672,22 @@ internal class StalkerPortal(address: String, macAddress: String) {
         }
         return paths.map { URI(uri.scheme, uri.authority, it, null, null) }
     }
+}
+
+internal fun parsePortalExpiry(value: String?): java.time.LocalDate? {
+    val text = value?.trim().orEmpty()
+    val date = when {
+        Regex("""\d{4}-\d{2}-\d{2}(?:[T ].*)?""").matches(text) ->
+            runCatching { java.time.LocalDate.parse(text.take(10)) }.getOrNull()
+        Regex("""\d{10}|\d{13}""").matches(text) -> {
+            val epoch = text.toLong()
+            val instant = if (text.length == 10) java.time.Instant.ofEpochSecond(epoch)
+                else java.time.Instant.ofEpochMilli(epoch)
+            instant.atOffset(java.time.ZoneOffset.UTC).toLocalDate()
+        }
+        else -> null
+    }
+    return date?.takeIf { it.year in 2000..2200 }
 }
 
 private fun catalogTimestamp(value: String): Long? {

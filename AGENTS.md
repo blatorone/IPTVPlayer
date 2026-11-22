@@ -15,6 +15,7 @@ Vor Änderungen diese Datei sowie `PROJECT_SPEC.md`, `ARCHITECTURE.md` und `IMPL
 - Relevante Tests und den verfügbaren Gradle-Build ausführen; fehlende Geräte, SDKs oder externe Zugangsdaten und nicht ausgeführte Tests offen benennen. Keine erfolgreiche Prüfung behaupten, die nicht stattfand.
 - Keine Veröffentlichung, kein Push, kein Signaturschlüssel-Upload und keine Änderung externer Dienste ohne ausdrücklichen Auftrag. Release-Schlüssel gehören in sichere Secrets, nie ins Repository.
 - Nach jeder Aufgabe Änderungen, Prüfung und verbleibende Grenzen knapp dokumentieren. Bei Architektur- oder Produktänderungen die betroffenen Dokumente mitführen.
+- Bei Release-Änderungen die Hinweise im Abschnitt der passenden Version in `CHANGELOG.md` pflegen. Der GitHub-Workflow verwendet diesen Abschnitt für die veröffentlichten Release-Hinweise.
 
 ## Definition of Done
 

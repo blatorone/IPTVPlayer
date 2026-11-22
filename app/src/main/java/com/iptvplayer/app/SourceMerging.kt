@@ -72,7 +72,9 @@ private fun TitleFingerprint.matches(other: TitleFingerprint, unambiguous: Boole
     return unambiguous && (country == UNKNOWN_COUNTRY || other.country == UNKNOWN_COUNTRY || country == other.country)
 }
 
-internal fun mergeCatalogueTitles(items: List<SourceItem<PortalTitle>>): List<List<SourceItem<PortalTitle>>> {
+internal fun mergeCatalogueTitles(
+    items: List<SourceItem<PortalTitle>>, requireVerifiedIdentity: Boolean = false
+): List<List<SourceItem<PortalTitle>>> {
     val metadata = items.map { fingerprint(it.value) }
     val unambiguousNames = metadata.groupBy { it.name }.filterValues { titles ->
         titles.mapNotNull { it.year }.distinct().size <= 1 &&
@@ -92,7 +94,7 @@ internal fun mergeCatalogueTitles(items: List<SourceItem<PortalTitle>>): List<Li
             entries.none { info.hasConflictingId(metadata[it]) } &&
                 entries.any { old ->
                     val previous = metadata[old]
-                    val allowInferredMatch = unambiguous &&
+                    val allowInferredMatch = !requireVerifiedIdentity && unambiguous &&
                         items[index].source.identity != items[old].source.identity
                     info.matches(previous, allowInferredMatch)
                 }
@@ -104,9 +106,12 @@ internal fun mergeCatalogueTitles(items: List<SourceItem<PortalTitle>>): List<Li
     return groups.map { indices -> indices.map(items::get) }
 }
 
-internal fun equivalentCatalogueTitle(title: PortalTitle, candidates: List<PortalTitle>): PortalTitle? {
+internal fun equivalentCatalogueTitle(
+    title: PortalTitle, candidates: List<PortalTitle>, requireVerifiedIdentity: Boolean = false
+): PortalTitle? {
     val expected = fingerprint(title)
-    val matches = candidates.map { it to fingerprint(it) }.filter { (_, candidate) -> expected.matches(candidate, true) }
+    val matches = candidates.map { it to fingerprint(it) }
+        .filter { (_, candidate) -> expected.matches(candidate, !requireVerifiedIdentity) }
     if (matches.mapNotNull { it.second.year }.distinct().size > 1 ||
         matches.mapNotNull { it.second.imdb }.distinct().size > 1 ||
         matches.mapNotNull { it.second.tmdb }.distinct().size > 1

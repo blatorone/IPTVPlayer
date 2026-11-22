@@ -60,6 +60,34 @@ class SourceMergingTest {
     }
 
     @Test
+    fun keepsGhostsAdaptationsAndUnknownSeriesSeparate() {
+        val american = PortalTitle("Ghosts", year = 2021, imdbId = "tt11379026")
+        val german = PortalTitle("Ghosts", year = 2025)
+        val unidentified = PortalTitle("Ghosts")
+        val americanVariant = PortalTitle("Ghosts (2021)")
+        val items = listOf(
+            SourceItem(first, american), SourceItem(second, german),
+            SourceItem(second, unidentified), SourceItem(second, americanVariant)
+        )
+        assertEquals(listOf(2, 1, 1), mergeCatalogueTitles(items, requireVerifiedIdentity = true).map { it.size })
+        assertEquals(
+            americanVariant,
+            equivalentCatalogueTitle(american, listOf(german, unidentified, americanVariant), requireVerifiedIdentity = true)
+        )
+        assertEquals(null, equivalentCatalogueTitle(american, listOf(unidentified), requireVerifiedIdentity = true))
+    }
+
+    @Test
+    fun readsOnlyValidPortalExpiryDates() {
+        val expected = java.time.LocalDate.of(2026, 12, 31)
+        assertEquals(expected, parsePortalExpiry("2026-12-31 18:30:00"))
+        assertEquals(expected, parsePortalExpiry("1798675200"))
+        assertEquals(null, parsePortalExpiry("0000-00-00"))
+        assertEquals(null, parsePortalExpiry("2026-02-30"))
+        assertEquals(null, parsePortalExpiry("0"))
+    }
+
+    @Test
     fun mapsDifferentProviderGenreLabelsToTheSameCategory() {
         assertEquals(VodCategory.ACTION, vodCategory(PortalGroup("one", "| DE | Action & Abenteuer")))
         assertEquals(VodCategory.ACTION, vodCategory(PortalGroup("two", "Adventure Movies")))

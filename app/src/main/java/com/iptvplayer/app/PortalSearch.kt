@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -43,7 +43,7 @@ private data class PortalResults(
 )
 
 @Composable
-internal fun PortalSearch(
+internal fun ColumnScope.PortalSearch(
     query: String,
     onQueryChange: (String) -> Unit,
     sources: List<SavedPortal>,
@@ -98,9 +98,10 @@ internal fun PortalSearch(
             }
             pages
     }
-    val hitsBySection = pagesBySection.mapValues { (_, pages) ->
+    val hitsBySection = pagesBySection.mapValues { (section, pages) ->
         val items = pages.flatMap { it.titles }
-        if (combine) mergeCatalogueTitles(items.distinct()) else items.map(::listOf)
+        if (combine) mergeCatalogueTitles(items.distinct(), requireVerifiedIdentity = section == PortalSection.SERIES)
+        else items.map(::listOf)
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         for (section in PortalSection.entries) {
@@ -116,7 +117,7 @@ internal fun PortalSearch(
     if (remote == null && selection != PortalSection.LIVE) LinearProgressIndicator(Modifier.fillMaxWidth())
     if (selection == PortalSection.LIVE) {
         if (live.isEmpty()) Text(stringResource(R.string.search_empty))
-        LazyColumn(Modifier.heightIn(max = 360.dp)) {
+        LazyColumn(Modifier.weight(1f)) {
             items(live) { channel ->
                 val origin = sourceNames(liveSources(channel))
                 Column(Modifier.fillMaxWidth()) {
@@ -140,7 +141,7 @@ internal fun PortalSearch(
         }
         LazyVerticalGrid(
             columns = GridCells.Adaptive(120.dp),
-            modifier = Modifier.heightIn(max = 360.dp),
+            modifier = Modifier.weight(1f),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
@@ -174,7 +175,7 @@ internal fun PortalSearch(
                             val metadata = listOfNotNull(vodReleaseYear(title)?.toString(), origin.takeIf { it.isNotBlank() })
                             if (metadata.isNotEmpty()) Text(metadata.joinToString(" · "), style = MaterialTheme.typography.labelSmall,
                                 maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            title.description?.let {
+                            germanDescription(title.description)?.let {
                                 Text(it, style = MaterialTheme.typography.bodySmall,
                                     maxLines = 2, overflow = TextOverflow.Ellipsis)
                             }

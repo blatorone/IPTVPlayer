@@ -15,7 +15,7 @@ Die vorhandene Projektstruktur hat Vorrang, sofern sie diese Ziele trägt. Fachl
 - **Daten:** Room für Quellenreferenzen, Katalog, Varianten, EPG, Favoriten, Zuordnungen und VOD-Fortschritt; sichere Schlüsselspeicherung für sensible Zugangsdaten, keine Klartext-Secrets in gewöhnlichen Einstellungen oder Backups. Datenbankmigrationen versionieren. Große Datenmengen indizieren und paginieren; Aufbewahrung begrenzen.
 - **QR-Verwaltung:** eigener kurzlebiger lokaler Dienst mit minimalen Endpunkten und Sitzungszustand; zufälliges Token, begrenzte Lebensdauer, Request-Größenlimits, explizite Nutzerfreigabe, Bindung an geeignete lokale Schnittstelle und konsequenter Shutdown. Schutz gegen fremde Webseiten und Wiederverwendung mitbedenken. Ohne überprüfte sichere Transportlösung keine stillschweigende Übertragung von Geheimnissen.
 - **Sync:** optionaler Adapter für vom Nutzer kontrollierten Speicher; versioniertes verschlüsseltes Exportformat mit authentifizierter Verschlüsselung, zufälligem Nonce, KDF-Salt und Formatversion. Secrets bleiben aus Logs. Lokal erzeugte Änderungen und Versionsstände ermöglichen Konflikterkennung; bei unauflösbaren Konflikten Nutzerentscheidung oder sichere Kopie, keine stille Datenvernichtung. Wiederherstellung und Schlüsselverlust testen.
-- **Updates:** Release-Metadaten über dedizierten Adapter abrufen; erlaubte Quelle und Paketidentität prüfen, Versionsvergleich und Nutzerbestätigung vor Download/Installation. Android-Paketinstaller prüft Signaturkompatibilität; Fehler bei unbekannten Quellen und fehlenden Berechtigungen erklären. Keine selbst erfundene automatische Umgehung von Installationsschutz.
+- **Updates:** Der Client liest das neueste stabile GitHub-Release des öffentlichen Download-Kanals ohne Token. Der Versionscode steht im APK-Dateinamen. Der Client lädt die Datei in einen begrenzten App-Cache, prüft GitHubs SHA-256, Paketidentität, Versionscode und Signatur der installierten App und übergibt die APK über einen FileProvider an den Android-Paketinstaller.
 
 ## Identitäten und Datenfluss
 
@@ -26,6 +26,10 @@ Der aktuelle Stalker-Durchstich speichert mehrere Portalquellen mit ihren Sender
 Import → validieren/parsen → Quellobjekte normalisieren → verlässlich zuordnen → transaktional speichern → UI beobachtet Daten. Auswahl → Controller startet Variante → Fehlerklassifikation → begrenzter Failover. Sync serialisiert ausdrücklich ausgewählte lokale Daten → verschlüsselt → überträgt; Gegenrichtung authentifiziert und validiert vor konfliktbewusster Übernahme.
 
 ## Sicherheit und Betriebsgrenzen
+
+Eigene EPG-URLs liegen verschlüsselt außerhalb von Android-Backups. Der XMLTV-Adapter liest begrenzte XML- oder GZip-Dateien, ordnet per EPG-ID oder eindeutigem Sendernamen zu und behält bei fehlgeschlagenen Downloads den letzten gültigen Cache. Der Anbieteradapter aktualisiert sichtbare, bereits geladene und angeheftete Sender in begrenzten Gruppen.
+
+Die automatische Episodenerkennung bevorzugt Portalmarken. Für geeignete direkte Videos liest sie auf dem Gerät verkleinerte Einzelbilder der aktiven Variante. Bei HLS erfasst sie Intro-Stichproben aus der laufenden Vollbildwiedergabe und verwendet einen aus zwei Episoden gelernten Abschnitt bei weiteren Folgen nach Prüfung seines Anfangs. Die Vergleichswerte bleiben in der aktuellen App-Sitzung. Die Abspannanalyse direkter Videos sucht mehrere Stichproben mit heller Schrift auf dunklem Hintergrund ohne anschließende längere Bildsequenz. Bei fehlenden Abspannmarken oder Treffern bleibt der nächste Folgenstart am Dateiende. Manuelle Marken benötigen keine Videoanalyse.
 
 Die optionale TMDB-Verbindung nutzt einen separat verschlüsselten Lesezugang im lokalen Verzeichnis ohne Backup. Ausgewählte Kataloge und VOD-Metadaten stammen aus der offiziellen API. Der Abgleich verwendet nur öffentliche Metadaten wie Titel, Jahr und externe IDs. Portalzugangsdaten und Wiedergabelinks bleiben in den IPTV-Adaptern.
 

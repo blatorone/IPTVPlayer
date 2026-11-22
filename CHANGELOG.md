@@ -2,6 +2,12 @@
 
 ## Unveröffentlicht
 
+## 1.0.18
+
+- Der Vollbild-Ladeindikator erscheint nur bei anhaltendem Puffern während einer bereits laufenden Wiedergabe.
+- Links führt aus einer geöffneten Film- oder Serienkategorie zurück zur Kategorienliste.
+- Fernbedienungsaktionen für Play/Pause, vorherige/nächste Folge, Stopp und Intro-/Folgenhinweise erhalten eindeutigen Fokus und sichtbare Markierung.
+
 ## 1.0.17
 
 - Neues StreamWatch-App-Icon auch für Fire TV und aktualisiertes Android-TV-Banner.

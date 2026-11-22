@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
@@ -92,6 +93,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalConfiguration
@@ -2452,6 +2458,9 @@ private fun PlayerHome(
         else if (selected == Destination.MOVIES && movieWatchlistOpen) movieWatchlistOpen = false
         else if (selected == Destination.SOURCES || selected == Destination.CATEGORIES) selected = Destination.SETTINGS
         else if (selected == Destination.SETTINGS && settingsSection != null) settingsSection = null
+        else if ((selected == Destination.MOVIES && selectedGroup?.first == PortalSection.MOVIES) ||
+            (selected == Destination.SERIES && selectedGroup?.first == PortalSection.SERIES)
+        ) closeGroup()
         else openMainMenu()
     }
     var playerControlsRequest by remember { mutableIntStateOf(0) }
@@ -2727,18 +2736,59 @@ private fun PlayerHome(
     if (fullscreen) {
         val episodeActionFocus = remember { FocusRequester() }
         val episodeActionSecondaryFocus = remember { FocusRequester() }
+        val episodeActionTertiaryFocus = remember { FocusRequester() }
+        var episodeActionSelection by remember { mutableIntStateOf(0) }
         val episodeAction = when {
             watchingPrompt -> 3
             nextEpisodeSeconds != null -> 2
             skipIntroTo != null -> 1
             else -> 0
         }
-        LaunchedEffect(episodeAction, playbackControlsVisible, fullscreenGuidePanel, skipIntroTo) {
+        val episodeActionCount = when {
+            watchingPrompt -> 2
+            else -> (if (skipIntroTo != null) 1 else 0) + (if (nextEpisodeSeconds != null) 2 else 0)
+        }
+        fun requestEpisodeActionFocus(index: Int) {
+            episodeActionSelection = index.coerceIn(0, (episodeActionCount - 1).coerceAtLeast(0))
+            when (episodeActionSelection) {
+                0 -> episodeActionFocus
+                1 -> episodeActionSecondaryFocus
+                else -> episodeActionTertiaryFocus
+            }.requestFocus()
+        }
+        fun activateEpisodeAction() {
+            if (watchingPrompt) {
+                if (episodeActionSelection == 0) advanceEpisode(confirmed = true) else stopPlayback()
+                return
+            }
+            val introOffset = if (skipIntroTo != null) 1 else 0
+            when {
+                skipIntroTo != null && episodeActionSelection == 0 -> {
+                    player?.seekTo(requireNotNull(skipIntroTo))
+                    skipIntroTo = null
+                }
+                nextEpisodeSeconds != null && episodeActionSelection == introOffset ->
+                    advanceEpisode(confirmed = true)
+                nextEpisodeSeconds != null && episodeActionSelection == introOffset + 1 -> stopPlayback()
+            }
+        }
+        val episodeActionKeyModifier = Modifier.onPreviewKeyEvent { event ->
+            if (episodeActionCount == 0) false
+            else {
+                val activate = event.key == Key.DirectionCenter || event.key == Key.Enter ||
+                    event.key == Key.NumPadEnter || event.key == Key.ButtonA
+                if (activate) {
+                    if (event.type == KeyEventType.KeyUp) activateEpisodeAction()
+                    true
+                } else false
+            }
+        }
+        LaunchedEffect(episodeAction, playbackControlsVisible, fullscreenGuidePanel, skipIntroTo != null, nextEpisodeSeconds != null) {
             if (episodeAction != 0 && !playbackControlsVisible &&
                 (fullscreenGuidePanel == GuidePanel.GRID || watchingPrompt || skipIntroTo != null)
             ) {
                 withFrameNanos { }
-                episodeActionFocus.requestFocus()
+                requestEpisodeActionFocus(0)
             }
         }
         val screen = LocalConfiguration.current
@@ -2749,7 +2799,16 @@ private fun PlayerHome(
         val live = vodSection == null
         val seriesOverlay = vodSection == PortalSection.SERIES && playbackSeries != null
         fun navigateFullscreen(input: GuideInput) {
-            if (episodeAction != 0) return
+            if (episodeAction != 0) {
+                val selected = when (input) {
+                    GuideInput.REMOTE_LEFT, GuideInput.SWIPE_LEFT -> (episodeActionSelection - 1).coerceAtLeast(0)
+                    GuideInput.REMOTE_RIGHT, GuideInput.SWIPE_RIGHT ->
+                        (episodeActionSelection + 1).coerceAtMost(episodeActionCount - 1)
+                    else -> episodeActionSelection
+                }
+                if (selected != episodeActionSelection) requestEpisodeActionFocus(selected)
+                return
+            }
             if (runMappedControl(input)) return
             if (input.vertical) {
                 if (live && fullscreenGuidePanel == GuidePanel.GRID) {
@@ -2770,7 +2829,8 @@ private fun PlayerHome(
         }
         val overlayFocus = remember { FocusRequester() }
         fun interceptDirection(input: GuideInput): Boolean {
-            if (playbackControlsVisible || episodeAction != 0) return false
+            if (episodeAction != 0) return true
+            if (playbackControlsVisible) return false
             val custom = controlBindings[input]?.let { it != ControlAction.DEFAULT } == true
             if (input.vertical) return fullscreenGuidePanel == GuidePanel.GRID && (custom || live)
             return custom || seriesOverlay || live && (
@@ -2783,7 +2843,7 @@ private fun PlayerHome(
             interceptGesture = { input -> interceptDirection(input) || live && !input.vertical && !playbackControlsVisible },
             onInput = ::navigateFullscreen
         )
-        Box(Modifier.fillMaxSize().background(Color.Black).then(inputModifier)) {
+        Box(Modifier.fillMaxSize().background(Color.Black).then(episodeActionKeyModifier).then(inputModifier)) {
             PlayerFrame(
                 player, active = true, fullscreen = true, onStop = ::stopPlayback,
                 onSurface = { fullscreenVideoSurface = it },
@@ -2968,32 +3028,28 @@ private fun PlayerHome(
                         if (watchingPrompt) {
                             Text(stringResource(R.string.series_still_watching), style = MaterialTheme.typography.titleMedium)
                             Text(stringResource(R.string.series_still_watching_timeout))
-                                    Row(Modifier.focusGroup()) {
+                            Row(Modifier.focusGroup()) {
                                 MenuButton(
-                                            stringResource(R.string.play_next_episode),
-                                            Modifier.focusRequester(episodeActionFocus).focusProperties {
-                                                left = episodeActionSecondaryFocus
-                                                right = episodeActionSecondaryFocus
-                                                up = episodeActionFocus
-                                                down = episodeActionFocus
-                                            }
+                                    stringResource(R.string.play_next_episode),
+                                    Modifier.focusRequester(episodeActionFocus),
+                                    selected = episodeActionSelection == 0,
+                                    onFocused = { episodeActionSelection = 0 }
                                 ) { advanceEpisode(confirmed = true) }
-                                        MenuButton(
-                                            stringResource(R.string.stop_playback),
-                                            Modifier.focusRequester(episodeActionSecondaryFocus).focusProperties {
-                                                left = episodeActionFocus
-                                                right = episodeActionFocus
-                                                up = episodeActionSecondaryFocus
-                                                down = episodeActionSecondaryFocus
-                                            },
-                                            onClick = ::stopPlayback
-                                        )
+                                MenuButton(
+                                    stringResource(R.string.stop_playback),
+                                    Modifier.focusRequester(episodeActionSecondaryFocus),
+                                    selected = episodeActionSelection == 1,
+                                    onFocused = { episodeActionSelection = 1 },
+                                    onClick = ::stopPlayback
+                                )
                             }
                         } else {
                         skipIntroTo?.let { position ->
                             MenuButton(
                                 stringResource(R.string.skip_intro),
-                                if (episodeAction == 1) Modifier.focusRequester(episodeActionFocus) else Modifier
+                                Modifier.focusRequester(episodeActionFocus),
+                                selected = episodeActionSelection == 0,
+                                onFocused = { episodeActionSelection = 0 }
                             ) {
                                 player?.seekTo(position)
                                 skipIntroTo = null
@@ -3005,25 +3061,24 @@ private fun PlayerHome(
                                 else stringResource(R.string.next_episode_ready, nextEpisodeName)
                             )
                             Row(Modifier.focusGroup()) {
+                                val introOffset = if (skipIntroTo != null) 1 else 0
                                 MenuButton(
                                     stringResource(R.string.play_next_episode),
-                                    Modifier.focusRequester(episodeActionFocus).focusProperties {
-                                        left = episodeActionSecondaryFocus
-                                        right = episodeActionSecondaryFocus
-                                        up = episodeActionFocus
-                                        down = episodeActionFocus
-                                    }
+                                    Modifier.focusRequester(
+                                        if (introOffset == 1) episodeActionSecondaryFocus else episodeActionFocus
+                                    ),
+                                    selected = episodeActionSelection == introOffset,
+                                    onFocused = { episodeActionSelection = introOffset }
                                 ) {
                                     advanceEpisode(confirmed = true)
                                 }
                                 MenuButton(
                                     stringResource(R.string.stop_playback),
-                                    Modifier.focusRequester(episodeActionSecondaryFocus).focusProperties {
-                                        left = episodeActionFocus
-                                        right = episodeActionFocus
-                                        up = episodeActionSecondaryFocus
-                                        down = episodeActionSecondaryFocus
-                                    },
+                                    Modifier.focusRequester(
+                                        if (introOffset == 1) episodeActionTertiaryFocus else episodeActionSecondaryFocus
+                                    ),
+                                    selected = episodeActionSelection == introOffset + 1,
+                                    onFocused = { episodeActionSelection = introOffset + 1 },
                                     onClick = ::stopPlayback
                                 )
                             }
@@ -4611,9 +4666,26 @@ internal fun PlayerFrame(
         if (player == null || !active || !fullscreen) {
             value = false
         } else {
+            var playbackStarted = player.isPlaying || player.playbackState == Player.STATE_READY
+            var bufferingStartedAt: Long? = null
             while (true) {
-                value = player.isLoading || player.playbackState == Player.STATE_BUFFERING
-                delay(250)
+                val now = SystemClock.elapsedRealtime()
+                when {
+                    player.isPlaying || player.playbackState == Player.STATE_READY -> {
+                        playbackStarted = true
+                        bufferingStartedAt = null
+                        value = false
+                    }
+                    playbackStarted && player.playWhenReady && player.playbackState == Player.STATE_BUFFERING -> {
+                        if (bufferingStartedAt == null) bufferingStartedAt = now
+                        value = now - bufferingStartedAt!! >= 1_500L
+                    }
+                    else -> {
+                        bufferingStartedAt = null
+                        value = false
+                    }
+                }
+                delay(200)
             }
         }
     }
@@ -4646,6 +4718,26 @@ internal fun PlayerFrame(
                     object : PlayerView(context) {
                         private var controlsVisible = false
                         private val hideControls = Runnable { hideController() }
+
+                        fun enableRemoteFocus(view: android.view.View) {
+                            view.isFocusable = true
+                            view.isFocusableInTouchMode = true
+                            val focused = android.graphics.drawable.GradientDrawable().apply {
+                                shape = android.graphics.drawable.GradientDrawable.OVAL
+                                setColor(0x553B82F6)
+                                setStroke((2 * resources.displayMetrics.density).toInt().coerceAtLeast(2), android.graphics.Color.WHITE)
+                            }
+                            val idle = android.graphics.drawable.GradientDrawable().apply {
+                                shape = android.graphics.drawable.GradientDrawable.OVAL
+                                setColor(android.graphics.Color.TRANSPARENT)
+                            }
+                            view.foreground = android.graphics.drawable.StateListDrawable().apply {
+                                addState(intArrayOf(android.R.attr.state_focused), focused)
+                                addState(intArrayOf(), idle)
+                            }
+                            view.nextFocusUpId = view.id
+                            view.nextFocusDownId = view.id
+                        }
 
                         init {
                             if (fullscreen) {
@@ -4760,14 +4852,12 @@ internal fun PlayerFrame(
                                 previous.id = android.view.View.generateViewId()
                                 button.id = android.view.View.generateViewId()
                                 next.id = android.view.View.generateViewId()
-                                pause.nextFocusLeftId = previous.id
-                                previous.nextFocusRightId = pause.id
-                                previous.nextFocusLeftId = previous.id
-                                pause.nextFocusRightId = next.id
-                                next.nextFocusLeftId = pause.id
-                                next.nextFocusRightId = button.id
-                                button.nextFocusLeftId = next.id
-                                button.nextFocusRightId = button.id
+                                val controls = listOf(previous, pause, next, button)
+                                controls.forEachIndexed { index, control ->
+                                    enableRemoteFocus(control)
+                                    control.nextFocusLeftId = controls.getOrNull(index - 1)?.id ?: control.id
+                                    control.nextFocusRightId = controls.getOrNull(index + 1)?.id ?: control.id
+                                }
                             }
                             val index = row.indexOfChild(pause).takeIf { it >= 0 } ?: 0
                             row.addView(previous, index, LinearLayout.LayoutParams(size, size))
@@ -5006,7 +5096,12 @@ internal fun MenuButton(
             .combinedClickable(onClick = onClick, onLongClick = onLongPress),
         color = container,
         contentColor = if (highlighted) colors.onTertiaryContainer else colors.onSurface,
-        shape = RoundedCornerShape(8.dp)
+        shape = RoundedCornerShape(8.dp),
+        border = when {
+            highlighted -> BorderStroke(2.dp, colors.primary)
+            selected -> BorderStroke(1.dp, colors.outline)
+            else -> null
+        }
     ) {
         Row(
             modifier = Modifier.heightIn(min = 44.dp).padding(horizontal = 10.dp, vertical = 4.dp),

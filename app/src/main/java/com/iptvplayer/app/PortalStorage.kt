@@ -47,6 +47,7 @@ internal data class StartupChannel(
 internal class PortalStorage(context: Context) {
     private val file = AtomicFile(File(context.noBackupFilesDir, "stalker-source.v1"))
     private val metadataFile = AtomicFile(File(context.noBackupFilesDir, "metadata-token.v1"))
+    private val traktSessionFile = AtomicFile(File(context.noBackupFilesDir, "trakt-session.v1"))
     private val epgSourcesFile = AtomicFile(File(context.noBackupFilesDir, "epg-sources.v1"))
     private val guideCacheFile = AtomicFile(File(context.noBackupFilesDir, "portal-guide.v1"))
     private val startupChannelFile = AtomicFile(File(context.noBackupFilesDir, "last-live.v1"))
@@ -91,6 +92,32 @@ internal class PortalStorage(context: Context) {
 
     suspend fun writeMetadataToken(token: String) = mutex.withLock {
         withContext(Dispatchers.IO) { writeEncrypted(metadataFile, token) }
+    }
+
+    suspend fun readTraktSession(): TraktSession? = mutex.withLock {
+        withContext(Dispatchers.IO) {
+            val data = readEncrypted(traktSessionFile)?.let(::JSONObject) ?: return@withContext null
+            TraktSession(
+                data.getString("clientId"), data.getString("accessToken"), data.getString("refreshToken"),
+                data.getLong("expiresAtMillis"), data.optString("username", "Trakt")
+            )
+        }
+    }
+
+    suspend fun writeTraktSession(session: TraktSession) = mutex.withLock {
+        withContext(Dispatchers.IO) {
+            writeEncrypted(traktSessionFile, JSONObject().apply {
+                put("clientId", session.clientId)
+                put("accessToken", session.accessToken)
+                put("refreshToken", session.refreshToken)
+                put("expiresAtMillis", session.expiresAtMillis)
+                put("username", session.username)
+            }.toString())
+        }
+    }
+
+    suspend fun clearTraktSession() = mutex.withLock {
+        withContext(Dispatchers.IO) { traktSessionFile.delete() }
     }
 
     suspend fun readEpgSources(): List<String> = mutex.withLock {

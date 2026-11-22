@@ -83,6 +83,16 @@ Ein nutzerkonfigurierbarer IPTV-Player für Android-Telefone und -Tablets sowie 
 - Für Intro und Abspann lässt sich getrennt zwischen automatischer Erkennung und eigenen Zeitmarken wählen. Im manuellen Modus gelten die gespeicherten Einstellungen für alle Serien. Der Introstart und das Introende beziehen sich auf den Folgenbeginn, der Abspannbeginn auf die verbleibende Laufzeit. Der Vorlauf für den Hinweis zur nächsten Folge bleibt separat einstellbar.
 - Intros werden standardmäßig erkannt und mit einer anwählbaren Überspringen-Schaltfläche angezeigt. Automatisches Überspringen ist eine separate, standardmäßig ausgeschaltete Option.
 
+## Trakt-Konto
+
+- Nutzer können Trakt in den Einstellungen über den offiziellen Gerätecode-Ablauf verbinden. Die App zeigt Bestätigungscode und einen lokal erzeugten QR-Code; der QR-Code enthält ausschließlich die offizielle Trakt-Bestätigungsadresse. Die Trakt Client ID wird vom Nutzer eingetragen.
+- Zugriffstoken und rotierendes Erneuerungstoken werden verschlüsselt und außerhalb der Android-Backups gespeichert. Merkliste und Gesehen-Status für Filme und Serien werden mit Trakt synchronisiert. Lokale Merklisteinträge werden ergänzend zu Trakt übertragen. Nur Inhalte, die in den eigenen Quellen eindeutig gefunden werden, werden lokal übernommen.
+- Die App weist darauf hin, dass StreamWatch Trakt verwendet, aber nicht von Trakt unterstützt oder zertifiziert wird.
+
+## Live-Startkategorie
+
+- Der Programmführer öffnet die zuletzt gewählte Live-Kategorie. Beim Start wird die Kategorie des zuletzt gespeicherten Senders bevorzugt; die Senderliste zeigt nur Sender dieser Kategorie.
+
 ## Temporäre QR-Playlistverwaltung
 
 Auf ausdrücklichen Start des Nutzers stellt das Gerät eine zeitlich begrenzte Verwaltungsseite im lokalen Netzwerk bereit. Ein QR-Code öffnet sie auf einem anderen Gerät. Nutzer können Quellen eingeben, ändern oder entfernen und müssen Änderungen bestätigen. Der Dienst endet nach Ablauf, beim expliziten Beenden und beim Verlassen des Verwaltungsablaufs; aktive Verbindungen schließen. Ein zufälliges, kurzlebiges Sitzungsgeheimnis schützt die Sitzung; keine Zugangsdaten im QR-Code oder in Logs. Zugriff nur im lokalen Netz, keine Portfreigabe oder Cloud-Vermittlung. Da lokales HTTP mitlesbar sein kann, sensible Daten nur nach verständlichem Hinweis und möglichst über eine abgesicherte Verbindung übertragen; konkrete sichere Transportlösung vor Implementierung entscheiden. Netzwerkisolierung und nicht erreichbare Geräte verständlich behandeln.

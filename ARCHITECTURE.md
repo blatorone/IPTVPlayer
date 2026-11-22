@@ -39,6 +39,14 @@ Die optionale TMDB-Verbindung nutzt einen separat verschlüsselten Lesezugang im
 
 HTTPS bevorzugen; Zertifikatsprüfungen nicht deaktivieren. Unsichere vom Nutzer konfigurierte Quellen verständlich kennzeichnen. URLs können Tokens enthalten und gelten als geheim. Backups, Fehlermeldungen, Absturzberichte und CI-Logs prüfen. QR-Zugriff ist kein Ersatz für Netzwerksicherheit. Abhängigkeiten und Rechte minimal halten. Netzwerk-, Parser-, Datenbank- und Player-Fehler getrennt behandeln; Abbrüche respektieren und Wiederholungen begrenzen.
 
+## Trakt-Integration
+
+Trakt wird über einen vom Nutzer bereitgestellten Client-ID-Wert und den OAuth-Gerätecode-Ablauf angebunden. Die App enthält kein Client Secret. QR-Codes werden lokal mit ZXing erzeugt; Bestätigungscode und Tokens werden nicht protokolliert. Access- und Refresh-Token liegen in einer separaten verschlüsselten Datei außerhalb von Android-Backups. Refresh-Token-Rotation wird unmittelbar gespeichert. Die manuelle Synchronisierung importiert Trakt-Merkliste und Gesehen-Status, wenn ein lokaler Quelltitel eindeutig zugeordnet werden kann, und ergänzt lokale Merklisteeinträge in Trakt. Nicht zuordenbare Einträge bleiben in Trakt, da StreamWatch keine Wiedergabequelle dafür besitzt.
+
+## Live-Startkategorie
+
+Die zuletzt gewählte Live-Kategorie wird in den vorhandenen App-Einstellungen lokal gespeichert. Beim Start wird die gespeicherte Senderidentität einer Kategorie zugeordnet; der Programmführer beschränkt seine Senderspalte auf diese Kategorie. Fehlt die Zuordnung, wird die zuletzt gewählte oder erste sichtbare Kategorie verwendet.
+
 ## Teststrategie
 
 Parser mit kleinen synthetischen Fixtures, relativen URLs, defekten Einträgen, Zeitzonen und großen Eingaben testen. Repository- und Migrationstests mit temporärer Datenbank; Zuordnung und Konflikte deterministisch testen. Player über Fake-Adapter auf Navigation, Nutzerwechsel, Abbruch und endliches Failover prüfen; Media3 auf Geräten mit legalen Testmedien integrieren. Compose-/TV-Tests prüfen Fokus, D-Pad und Zurück. QR-Ablauf, Zugriffsschutz und Shutdown; Sync-Roundtrip, Manipulation, falsche Passphrase und Konflikte; CI und signierte Installation auf realistischen Geräten prüfen.

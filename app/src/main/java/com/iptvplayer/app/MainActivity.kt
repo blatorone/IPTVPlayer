@@ -301,6 +301,7 @@ private enum class SettingsSection(val label: Int) {
     PLAYBACK(R.string.settings_playback),
     CONTROLS(R.string.settings_controls),
     METADATA(R.string.settings_metadata),
+    SYNC(R.string.settings_sync),
     UPDATES(R.string.settings_updates),
     ABOUT(R.string.settings_about)
 }
@@ -380,6 +381,13 @@ private fun PlayerHome(
     }
     var metadataClient by remember { mutableStateOf<TmdbClient?>(null) }
     var metadataSettingsOpen by remember { mutableStateOf(false) }
+    var traktClientId by remember(preferences) {
+        mutableStateOf(preferences?.getString("trakt_client_id", "").orEmpty())
+    }
+    var traktSession by remember { mutableStateOf<TraktSession?>(null) }
+    var traktDeviceCode by remember { mutableStateOf<TraktDeviceCode?>(null) }
+    var traktBusy by remember { mutableStateOf(false) }
+    var traktStatus by remember { mutableStateOf<String?>(null) }
     var episodeSettingsOpen by remember { mutableStateOf(false) }
     var epgSettingsOpen by remember { mutableStateOf(false) }
     var settingsSection by rememberSaveable { mutableStateOf<SettingsSection?>(null) }
@@ -489,8 +497,12 @@ private fun PlayerHome(
     var liveSession by remember { mutableStateOf<Pair<StalkerPortal, String?>?>(null) }
     var channels by remember { mutableStateOf(emptyList<StalkerChannel>()) }
     var genres by remember { mutableStateOf(emptyMap<String, String>()) }
-    var category by remember { mutableStateOf<String?>(null) }
-    var lastLiveCategory by rememberSaveable { mutableStateOf<String?>(null) }
+    var category by remember(preferences) {
+        mutableStateOf(preferences?.getString("last_live_category", null))
+    }
+    var lastLiveCategory by remember(preferences) {
+        mutableStateOf(preferences?.getString("last_live_category", null))
+    }
     var restoreLiveFocus by remember { mutableStateOf(false) }
     val categoryScroll = rememberLazyListState()
     val guideScroll = rememberLazyListState()
@@ -653,6 +665,210 @@ private fun PlayerHome(
             throw error
         } catch (_: Exception) {
             metadataError = true
+        }
+    }
+
+    LaunchedEffect(storage) {
+        try {
+            val session = storage?.readTraktSession()
+            if (session != null) {
+                traktSession = session
+                if (traktClientId.isBlank()) {
+                    traktClientId = session.clientId
+                    preferences?.edit()?.putString("trakt_client_id", session.clientId)?.apply()
+                }
+            }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            traktStatus = context.getString(R.string.trakt_session_read_failed)
+        }
+    }
+
+    suspend fun <T> withTraktSession(action: suspend (TraktApi, TraktSession) -> T): T {
+        val clientId = traktClientId.trim()
+        require(clientId.isNotBlank()) { context.getString(R.string.trakt_client_id_required) }
+        val api = TraktApi(clientId)
+        var session = storage?.readTraktSession() ?: traktSession
+            ?: error(context.getString(R.string.trakt_not_connected))
+        require(session.clientId == clientId) { context.getString(R.string.trakt_client_id_changed) }
+        if (session.expiresAtMillis <= System.currentTimeMillis() + 60_000L) {
+            session = api.refresh(session)
+            storage?.writeTraktSession(session)
+            traktSession = session
+        }
+        return action(api, session)
+    }
+
+    fun connectTrakt() {
+        if (traktBusy) return
+        val clientId = traktClientId.trim()
+        if (clientId.isBlank()) {
+            traktStatus = context.getString(R.string.trakt_client_id_required)
+            return
+        }
+        preferences?.edit()?.putString("trakt_client_id", clientId)?.apply()
+        traktBusy = true
+        traktStatus = null
+        scope.launch {
+            try {
+                val api = TraktApi(clientId)
+                val code = api.beginDeviceAuthorization()
+                traktDeviceCode = code
+                var interval = code.intervalSeconds
+                val deadline = SystemClock.elapsedRealtime() + code.expiresInSeconds * 1_000L
+                while (SystemClock.elapsedRealtime() < deadline) {
+                    delay(interval * 1_000L)
+                    when (val result = api.pollDeviceAuthorization(code)) {
+                        TraktDevicePoll.Pending -> Unit
+                        TraktDevicePoll.SlowDown -> interval = (interval + 5).coerceAtMost(60)
+                        is TraktDevicePoll.Authorized -> {
+                            val username = runCatching { api.accountName(result.session.accessToken) }
+                                .getOrDefault("Trakt")
+                            val session = result.session.copy(username = username)
+                            storage?.writeTraktSession(session)
+                            traktSession = session
+                            traktDeviceCode = null
+                            traktStatus = context.getString(R.string.trakt_connected_status, username)
+                            return@launch
+                        }
+                    }
+                }
+                traktDeviceCode = null
+                traktStatus = context.getString(R.string.trakt_code_expired)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                traktDeviceCode = null
+                traktStatus = error.message ?: context.getString(R.string.trakt_connect_failed)
+            } finally {
+                traktBusy = false
+            }
+        }
+    }
+
+    fun disconnectTrakt() {
+        if (traktBusy) return
+        scope.launch {
+            try {
+                storage?.clearTraktSession()
+                traktSession = null
+                traktDeviceCode = null
+                traktStatus = context.getString(R.string.trakt_disconnected_status)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                traktStatus = context.getString(R.string.trakt_disconnect_failed)
+            }
+        }
+    }
+
+    fun syncTrakt() {
+        if (traktBusy) return
+        traktBusy = true
+        traktStatus = null
+        fun importedTitleKey(section: PortalSection, title: PortalTitle): String =
+            "${catalogSession?.first?.sourceLabel.orEmpty()}:${section.name}:${title.id ?: title.name}"
+        fun importedSeriesKey(title: PortalTitle): String =
+            titleIdentity(title) ?: importedTitleKey(PortalSection.SERIES, title)
+        scope.launch {
+            try {
+                val localSaved = savedSources.flatMap { source ->
+                    listOf(PortalSection.MOVIES, PortalSection.SERIES).flatMap { section ->
+                        source.catalogs[section]?.titles.orEmpty().filter { title ->
+                            importedTitleKey(section, title) in watchlist
+                        }.map { title ->
+                            TraktMedia(section, displayVodTitle(title), title.year, title.imdbId, title.tmdbId, null)
+                        }
+                    }
+                }.distinctBy { "${it.section}:${it.imdbId ?: it.tmdbId ?: normalizedLabel(it.name)}" }
+                val library = withTraktSession { api, session ->
+                    val remote = api.loadLibrary(session.accessToken)
+                    localSaved.forEach { item ->
+                        if (item.imdbId != null || item.tmdbId != null) {
+                            api.setWatchlistItem(session.accessToken, item, saved = true)
+                        }
+                    }
+                    remote
+                }
+                fun localMatches(media: TraktMedia): List<SourceItem<PortalTitle>> {
+                    val expected = media.asTitle()
+                    return savedSources.flatMap { source ->
+                        source.catalogs[media.section]?.titles.orEmpty().mapNotNull { title ->
+                            equivalentCatalogueTitle(
+                                expected, listOf(title), requireVerifiedIdentity = false
+                            )?.let { SourceItem(source, it) }
+                        }
+                    }.distinctBy { "${it.source.identity}:${it.value.id ?: it.value.name}" }
+                }
+                var matched = 0
+                for (media in library.watchlist) {
+                    val entries = localMatches(media)
+                    if (entries.isEmpty()) continue
+                    matched++
+                    val title = entries.first().value
+                    val key = importedTitleKey(media.section, title)
+                    watchlist = watchlist + key
+                    if (media.section == PortalSection.MOVIES) {
+                        val bookmark = WatchedMovie(
+                            displayVodTitle(title), title.year ?: media.year, title.imdbId ?: media.imdbId,
+                            title.tmdbId ?: media.tmdbId,
+                            entries.mapNotNull { item -> item.value.id?.let { SeriesPortalRef(item.source.identity, it) } }.distinct(),
+                            key, 0L
+                        )
+                        movieBookmarks = listOf(bookmark) + movieBookmarks.filterNot { it.progressKey == key }
+                    } else {
+                        val keyForSeries = importedSeriesKey(title)
+                        val existing = seriesActivity.firstOrNull { it.key == keyForSeries }
+                        val refs = entries.mapNotNull { item ->
+                            item.value.id?.let { SeriesPortalRef(item.source.identity, it) }
+                        }.distinct()
+                        val tracked = (existing ?: TrackedSeries(
+                            keyForSeries, displayVodTitle(title), refs, title.year ?: media.year,
+                            title.imdbId ?: media.imdbId, title.tmdbId ?: media.tmdbId
+                        )).copy(saved = true, refs = (existing?.refs.orEmpty() + refs).distinct())
+                        seriesActivity = (seriesActivity.filterNot { it.key == keyForSeries } + tracked)
+                    }
+                }
+                for (media in library.watched) {
+                    val entries = localMatches(media)
+                    if (entries.isEmpty()) continue
+                    matched++
+                    val title = entries.first().value
+                    if (media.section == PortalSection.MOVIES) {
+                        val key = importedTitleKey(PortalSection.MOVIES, title)
+                        val watched = WatchedMovie(
+                            displayVodTitle(title), title.year ?: media.year, title.imdbId ?: media.imdbId,
+                            title.tmdbId ?: media.tmdbId,
+                            entries.mapNotNull { it.value.id?.let { id -> SeriesPortalRef(it.source.identity, id) } }.distinct(),
+                            key, media.watchedAtMillis ?: System.currentTimeMillis()
+                        )
+                        movieHistory = listOf(watched) + movieHistory.filterNot { it.progressKey == key }
+                    } else {
+                        val key = importedSeriesKey(title)
+                        val existing = seriesActivity.firstOrNull { it.key == key }
+                        val refs = entries.mapNotNull { it.value.id?.let { id -> SeriesPortalRef(it.source.identity, id) } }.distinct()
+                        val tracked = (existing ?: TrackedSeries(
+                            key, displayVodTitle(title), refs, title.year ?: media.year,
+                            title.imdbId ?: media.imdbId, title.tmdbId ?: media.tmdbId
+                        )).copy(viewed = true, watchedAt = media.watchedAtMillis ?: System.currentTimeMillis(), refs = (existing?.refs.orEmpty() + refs).distinct())
+                        seriesActivity = (seriesActivity.filterNot { it.key == key } + tracked)
+                    }
+                }
+                preferences?.edit()?.putStringSet("watchlist", watchlist)?.apply()
+                progressPreferences?.edit()
+                    ?.putString("movie_bookmarks", encodeMovieHistory(movieBookmarks))
+                    ?.putString("movie_history", encodeMovieHistory(movieHistory))
+                    ?.putString("series_activity", encodeSeriesActivity(seriesActivity))
+                    ?.apply()
+                traktStatus = context.getString(R.string.trakt_sync_complete, matched)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                traktStatus = error.message ?: context.getString(R.string.trakt_sync_failed)
+            } finally {
+                traktBusy = false
+            }
         }
     }
 
@@ -1561,25 +1777,60 @@ private fun PlayerHome(
     }
 
     var restoredLastLiveChannel by remember { mutableStateOf(false) }
+    LaunchedEffect(category) {
+        if (category != null) {
+            lastLiveCategory = category
+            preferences?.edit()?.putString("last_live_category", category)?.apply()
+        }
+    }
+    LaunchedEffect(restoring, liveCategories) {
+        if (restoring || liveCategories.isEmpty()) return@LaunchedEffect
+        val available = liveCategories.keys
+            .filter { visibleCategory(PortalSection.LIVE, it, it) }
+            .sortedBy { categoryNames.values.indexOf(it) }
+        if (category !in available) {
+            val savedKey = preferences?.getString("last_live_channel", null)
+            val inferred = savedKey?.let { key -> liveCategories.entries.firstOrNull { (_, items) ->
+                items.any { (programmeKey(it) ?: liveGroups[it]?.identity) == key }
+            }?.key }
+            category = inferred ?: lastLiveCategory?.takeIf { it in available } ?: available.firstOrNull()
+        }
+    }
     LaunchedEffect(restoring, liveCategories, playbackError) {
         if (restoring || restoredLastLiveChannel) return@LaunchedEffect
         val retryFromCatalogue = cachedStartupAttempt && playbackError != null
         if (cachedStartupAttempt && !retryFromCatalogue && playbackSelection != null) return@LaunchedEffect
         restoredLastLiveChannel = true
         if (selected != Destination.LIVE || playbackSelection != null && !retryFromCatalogue) return@LaunchedEffect
-        val savedKey = preferences?.getString("last_live_channel", null) ?: return@LaunchedEffect
-        val visibleChannels = liveCategories.entries
-            .filter { visibleCategory(PortalSection.LIVE, it.key, it.key) }
-            .sortedBy { categoryNames.values.indexOf(it.key) }
-            .flatMap { it.value }
-        val index = visibleChannels.indexOfFirst { channel ->
-            (programmeKey(channel) ?: liveGroups[channel]?.identity) == savedKey
+        val orderedCategories = liveCategories.keys
+            .filter { visibleCategory(PortalSection.LIVE, it, it) }
+            .sortedBy { categoryNames.values.indexOf(it) }
+        val savedKey = preferences?.getString("last_live_channel", null)
+        val categoryWithLastChannel = savedKey?.let { key ->
+            liveCategories.entries.firstOrNull { (_, items) -> items.any { channel ->
+                (programmeKey(channel) ?: liveGroups[channel]?.identity) == key
+            } }?.key
         }
-        if (index >= 0) {
-            guideScroll.requestScrollToItem(index)
-            programmeChannel = visibleChannels[index]
-            restoreLiveFocus = true
-            if (playLastChannelAtStartup) playChannel(visibleChannels[index])
+        val restoredCategory = categoryWithLastChannel
+            ?: category?.takeIf { it in orderedCategories }
+            ?: lastLiveCategory?.takeIf { it in orderedCategories }
+            ?: orderedCategories.firstOrNull()
+        category = restoredCategory
+        lastLiveCategory = restoredCategory
+        if (restoredCategory != null) {
+            val visibleChannels = liveCategories[restoredCategory].orEmpty()
+            val index = visibleChannels.indexOfFirst { channel ->
+                (programmeKey(channel) ?: liveGroups[channel]?.identity) == savedKey
+            }
+            if (index >= 0) {
+                guideScroll.requestScrollToItem(index)
+                programmeChannel = visibleChannels[index]
+                restoreLiveFocus = true
+                if (playLastChannelAtStartup) playChannel(visibleChannels[index])
+            } else {
+                guideScroll.requestScrollToItem(0)
+                programmeChannel = visibleChannels.firstOrNull()
+            }
         }
     }
 
@@ -3731,6 +3982,21 @@ private fun PlayerHome(
                                         }
                                     }
                                 }
+                                SettingsSection.SYNC -> TraktSettings(
+                                    clientId = traktClientId,
+                                    onClientIdChange = { value ->
+                                        traktClientId = value.trim()
+                                        preferences?.edit()?.putString("trakt_client_id", value.trim())?.apply()
+                                    },
+                                    accountName = traktSession?.username,
+                                    deviceCode = traktDeviceCode,
+                                    busy = traktBusy,
+                                    status = traktStatus,
+                                    onOpenDeveloperApps = { uriHandler.openUri("https://developer.trakt.tv/apps") },
+                                    onConnect = ::connectTrakt,
+                                    onSync = ::syncTrakt,
+                                    onDisconnect = ::disconnectTrakt
+                                )
                             }
                         }
                     }
@@ -5265,6 +5531,7 @@ internal fun MenuButton(
     hiddenIndicator: Boolean = false,
     leadingIcon: Int? = null,
     iconOnly: Boolean = false,
+    enabled: Boolean = true,
     onFocused: (() -> Unit)? = null,
     onLongPress: (() -> Unit)? = null,
     onClick: () -> Unit
@@ -5275,24 +5542,29 @@ internal fun MenuButton(
     val highlighted = focused || hovered
     val colors = MaterialTheme.colorScheme
     val container = when {
+        !enabled -> Color.Transparent
         highlighted -> colors.tertiaryContainer
         selected -> colors.secondaryContainer
         else -> Color.Transparent
     }
     Surface(
         modifier = modifier
-            .hoverable(interactions)
+            .then(if (enabled) Modifier.hoverable(interactions) else Modifier)
             .onFocusChanged {
                 if (it.isFocused && !focused) onFocused?.invoke()
                 focused = it.isFocused
             }
-            .combinedClickable(onClick = onClick, onLongClick = onLongPress),
+            .combinedClickable(enabled = enabled, onClick = onClick, onLongClick = onLongPress),
         color = container,
-        contentColor = if (highlighted) colors.onTertiaryContainer else colors.onSurface,
+        contentColor = when {
+            !enabled -> colors.onSurface.copy(alpha = 0.38f)
+            highlighted -> colors.onTertiaryContainer
+            else -> colors.onSurface
+        },
         shape = RoundedCornerShape(8.dp),
         border = when {
-            highlighted -> BorderStroke(2.dp, colors.primary)
-            selected -> BorderStroke(2.dp, colors.primary)
+            enabled && highlighted -> BorderStroke(2.dp, colors.primary)
+            enabled && selected -> BorderStroke(2.dp, colors.primary)
             else -> null
         }
     ) {

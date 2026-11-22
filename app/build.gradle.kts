@@ -13,8 +13,8 @@ android {
         applicationId = "com.iptvplayer.app"
         minSdk = 26
         targetSdk = 37
-        versionCode = 23
-        versionName = "1.0.22"
+        versionCode = 24
+        versionName = "1.0.23"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -39,6 +39,7 @@ dependencies {
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.hls)
     implementation(libs.media3.ui)
+    implementation(libs.zxing.core)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)

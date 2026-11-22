@@ -56,6 +56,12 @@ Der Workflow und der Update-Client stehen im Projekt. Der Workflow baut und test
 
 Abnahme aus `PROJECT_SPEC.md` mit Touch und TV-Fernbedienung durchführen; unterschiedliche Bildschirmgrößen, schlechte Verbindung, Neustart, größere Bibliotheken, Migration, Datenschutz und Ressourcenverbrauch prüfen. Nicht verfügbare Fire-TV-/Shield-Geräte ausdrücklich als Testlücke benennen. Dokumentation und bekannte Grenzen aktualisieren.
 
+## Ergänzung: Trakt-Konto und Live-Wiederherstellung
+
+- Trakt-Gerätecode-Verknüpfung mit lokalem QR-Code, verschlüsselter Sitzung, Token-Erneuerung sowie manueller Merkliste-/Gesehen-Synchronisierung ist in die bestehende App integriert. Für den tatsächlichen OAuth-Aufruf muss der Nutzer eine Trakt Client ID in den Einstellungen hinterlegen.
+- Live-Kategorie wird zusammen mit dem zuletzt verwendeten Live-Sender lokal wiederhergestellt. Der Programmführer startet in der Kategorie dieses Senders.
+- Build-Prüfung: `assembleDebug` erfolgreich. OAuth mit einem echten Trakt-Konto und Bedienung auf Shield/Fire TV müssen noch auf Geräten geprüft werden.
+
 ## Noch zu entscheiden
 
 Aus der Sichtung der TV-Referenz folgen weitere Funktionspakete für Aufnahmen, Anbieterarchive, Erinnerungen, Kindersicherung, Datensicherung, erweiterte Fernbedienungsbelegung und gerätespezifische Wiedergabe. Für Aufnahmen und Archiv sind getrennte Abnahmekriterien zu Speicherziel, Gerät und unterstützter Quelle erforderlich.

@@ -133,6 +133,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -345,7 +346,11 @@ private fun PlayerHome(
     var selected by rememberSaveable { mutableStateOf<Destination?>(Destination.LIVE) }
     var pendingVodCategory by rememberSaveable { mutableStateOf<Destination?>(null) }
     var lastFocused by rememberSaveable { mutableStateOf(Destination.LIVE) }
+    var lastSettingsSection by rememberSaveable { mutableStateOf(SettingsSection.GENERAL) }
     val initialFocus = remember { FocusRequester() }
+    val settingsFocusRequesters = remember {
+        SettingsSection.entries.associateWith { FocusRequester() }
+    }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val resources = LocalResources.current
@@ -1111,6 +1116,8 @@ private fun PlayerHome(
     }
     var epgFetchedAt by remember { mutableStateOf(emptyMap<String, Long>()) }
     val epgInFlight = remember { mutableSetOf<String>() }
+    val epgRequestLimit = remember { Semaphore(6) }
+    val xmlTvRequestLimit = remember { Semaphore(3) }
     var guideCacheLoaded by remember(storage) { mutableStateOf(storage == null) }
     var externalGuides by remember { mutableStateOf(emptyList<XmlTvGuide>()) }
     LaunchedEffect(storage) {
@@ -1172,8 +1179,10 @@ private fun PlayerHome(
             for (item in variants) {
                 val portal = sessionFor(item.source)
                 try {
-                    entries = portal.loadProgramme(item.value, portal.openSession())
-                        .guideWindow(System.currentTimeMillis() / 1_000, epgHorizonHours)
+                    entries = epgRequestLimit.withPermit {
+                        portal.loadProgramme(item.value, portal.openSession())
+                            .guideWindow(System.currentTimeMillis() / 1_000, epgHorizonHours)
+                    }
                     answered = true
                     if (entries.isNotEmpty()) break
                 } catch (error: CancellationException) {
@@ -1197,12 +1206,11 @@ private fun PlayerHome(
     }
 
     suspend fun loadProviderSchedules(channels: List<StalkerChannel>, force: Boolean = false): Boolean {
-        var success = true
-        for (batch in channels.distinct().chunked(4)) {
-            val results = coroutineScope { batch.map { async { loadProviderSchedule(it, force) } }.map { it.await() } }
-            success = success && results.all { it }
+        val results = coroutineScope {
+            channels.distinct().map { channel -> async { loadProviderSchedule(channel, force) } }
+                .map { it.await() }
         }
-        return success
+        return results.all { it }
     }
 
     val pinnedProgramme = programmeChannel?.let(::programmeKey) in pinnedProgrammeKeys
@@ -1231,14 +1239,22 @@ private fun PlayerHome(
             if (useXmlTv) {
                 val sources = xmlTvSources.mapNotNull(::guideSourceUri)
                 val maxAge = if (epgRefreshHours > 0) epgRefreshHours * 3_600_000L else Long.MAX_VALUE
-                val cached = sources.map {
-                    loadXmlTvGuide(context.cacheDir, it, epgHorizonHours, false, false, maxAge)
+                val cached = coroutineScope {
+                    sources.map { uri -> async {
+                        xmlTvRequestLimit.withPermit {
+                            loadXmlTvGuide(context.cacheDir, uri, epgHorizonHours, false, false, maxAge)
+                        }
+                    } }.awaitAll()
                 }
                 externalGuides = cached.mapNotNull { it.guide }
-                val results = sources.zip(cached).map { (uri, entry) ->
-                    if (entry.guide == null || refresh && (epgRefreshRequest > 0 || entry.needsRefresh)) {
-                        loadXmlTvGuide(context.cacheDir, uri, epgHorizonHours, refresh = true)
-                    } else entry
+                val results = coroutineScope {
+                    sources.zip(cached).map { (uri, entry) -> async {
+                        if (entry.guide == null || refresh && (epgRefreshRequest > 0 || entry.needsRefresh)) {
+                            xmlTvRequestLimit.withPermit {
+                                loadXmlTvGuide(context.cacheDir, uri, epgHorizonHours, refresh = true)
+                            }
+                        } else entry
+                    } }.awaitAll()
                 }
                 externalGuides = results.mapNotNull { it.guide }
                 epgUpdateFailed = results.any { it.failed }
@@ -1250,7 +1266,11 @@ private fun PlayerHome(
                     key in pinnedProgrammeKeys || key in epgCache
                 }
                 if (epgRefreshRequest == 0) delay(700)
-                epgUpdateFailed = !loadProviderSchedules(available.take(12) + known, force = epgRefreshRequest > 0)
+                val refreshTargets = if (epgRefreshRequest == 0) {
+                    val visible = sequenceOf(playing, programmeChannel).filterNotNull().filter { it in available }
+                    visible.toList() + available.filter { programmeKey(it) in pinnedProgrammeKeys }
+                } else available.take(12) + known
+                epgUpdateFailed = !loadProviderSchedules(refreshTargets, force = epgRefreshRequest > 0)
             }
         } finally {
             epgUpdating = false
@@ -1514,7 +1534,7 @@ private fun PlayerHome(
         } catch (_: Exception) {
             null
         } ?: return@LaunchedEffect
-        if (!restoring || selected != Destination.LIVE || playbackSelection != null ||
+        if (selected != Destination.LIVE || playbackSelection != null ||
             cached.scope != startupChannelScope() || cached.key != preferences?.getString("last_live_channel", null)
         ) return@LaunchedEffect
         val channel = StalkerChannel(cached.name, "", null, null)
@@ -3619,11 +3639,14 @@ private fun PlayerHome(
                     Destination.SETTINGS -> {
                         val section = settingsSection
                         if (section == null) {
-                            SettingsSection.entries.forEachIndexed { index, item ->
+                            SettingsSection.entries.forEach { item ->
                                 MenuButton(
                                     stringResource(item.label),
-                                    if (index == 0) Modifier.focusRequester(initialFocus) else Modifier
-                                ) { settingsSection = item }
+                                    Modifier.focusRequester(settingsFocusRequesters.getValue(item))
+                                ) {
+                                    lastSettingsSection = item
+                                    settingsSection = item
+                                }
                             }
                         } else {
                             MenuButton(stringResource(R.string.navigation_back), Modifier.focusRequester(initialFocus)) {
@@ -4435,8 +4458,13 @@ private fun PlayerHome(
             }
             LaunchedEffect(destination, settingsSection) {
                 if (!inGuide && !restoreLiveFocus) {
-                    if (destination == Destination.SETTINGS) contentScroll.scrollTo(0)
-                    initialFocus.requestFocus()
+                    if (destination == Destination.SETTINGS) {
+                        contentScroll.scrollTo(0)
+                        withFrameNanos { }
+                        if (settingsSection == null) {
+                            settingsFocusRequesters[lastSettingsSection]?.requestFocus() ?: initialFocus.requestFocus()
+                        } else initialFocus.requestFocus()
+                    } else initialFocus.requestFocus()
                 }
             }
             LaunchedEffect(inGuide, guidePanel) {

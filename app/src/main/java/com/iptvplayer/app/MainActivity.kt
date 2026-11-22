@@ -132,15 +132,11 @@ class MainActivity : ComponentActivity() {
     private lateinit var player: ExoPlayer
     private val storage by lazy { PortalStorage(applicationContext) }
     private var longBackAction: (() -> Boolean)? = null
-    private var menuBackAction: ((Boolean) -> Boolean)? = null
+    private var screenBackAction: ((Boolean) -> Boolean)? = null
     private var consumedLongBack = false
 
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
         if (event.keyCode == android.view.KeyEvent.KEYCODE_BACK) {
-            if (menuBackAction?.invoke(
-                    event.action == android.view.KeyEvent.ACTION_UP && !event.isCanceled
-                ) == true
-            ) return true
             if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount > 0) {
                 if (consumedLongBack || longBackAction?.invoke() == true) {
                     consumedLongBack = true
@@ -151,6 +147,10 @@ class MainActivity : ComponentActivity() {
                 consumedLongBack = false
                 return true
             }
+            if (screenBackAction?.invoke(
+                    event.action == android.view.KeyEvent.ACTION_UP && !event.isCanceled
+                ) == true
+            ) return true
         }
         return super.dispatchKeyEvent(event)
     }
@@ -166,7 +166,7 @@ class MainActivity : ComponentActivity() {
                     player = player,
                     storage = storage,
                     registerLongBack = { longBackAction = it },
-                    registerMenuBack = { menuBackAction = it },
+                    registerScreenBack = { screenBackAction = it },
                     onExit = ::finish,
                     onFullscreen = { fullscreen ->
                         val controller = WindowCompat.getInsetsController(window, window.decorView)
@@ -290,7 +290,7 @@ private fun PlayerHome(
     player: ExoPlayer? = null,
     storage: PortalStorage? = null,
     registerLongBack: (((() -> Boolean)?) -> Unit) = {},
-    registerMenuBack: ((((Boolean) -> Boolean)?) -> Unit) = {},
+    registerScreenBack: ((((Boolean) -> Boolean)?) -> Unit) = {},
     onExit: () -> Unit = {},
     onFullscreen: (Boolean) -> Unit = {},
     canPlay: () -> Boolean = { false }
@@ -482,6 +482,8 @@ private fun PlayerHome(
     var openedSeries by remember { mutableStateOf<PortalTitle?>(null) }
     var seasons by remember { mutableStateOf<List<PortalSeason>?>(null) }
     var openedSeason by remember { mutableStateOf<PortalSeason?>(null) }
+    val seriesDetailScroll = rememberLazyListState()
+    var catalogueReturnTitle by remember { mutableStateOf<PortalTitle?>(null) }
     var episodeVariants by remember { mutableStateOf(emptyMap<PortalTitle, List<SourceItem<PortalTitle>>>()) }
     var episodeError by remember { mutableStateOf(false) }
     var resumeEpisodeMissing by remember { mutableStateOf(false) }
@@ -1432,6 +1434,7 @@ private fun PlayerHome(
             )
         ) return
         closeSeries()
+        if (section == PortalSection.SERIES) seriesDetailScroll.requestScrollToItem(0)
         details = section to title
         if (section == PortalSection.SERIES && isTitleSaved(section, title) && trackedSeries(title) == null) {
             updateTrackedSeries(title, saved = true)
@@ -1998,6 +2001,7 @@ private fun PlayerHome(
     val guideChannelFocus = remember { FocusRequester() }
     fun openMainMenu() {
         if (selected == Destination.MOVIES || selected == Destination.SERIES) {
+            catalogueReturnTitle = null
             closeGroup()
             closeSeries()
             details = null
@@ -2011,7 +2015,7 @@ private fun PlayerHome(
         selected = Destination.LIVE
     }
     fun navigateGuide(input: GuideInput) {
-        guidePanel = guidePanel.after(input)
+        guidePanel = guidePanel.afterProgrammeGuide(input)
     }
     fun showFullscreenPanel(panel: GuidePanel) {
         if (panel != GuidePanel.GRID) fullscreenOverlayContent = panel
@@ -2046,6 +2050,10 @@ private fun PlayerHome(
     fun leaveFullscreen() {
         savePlaybackPosition()
         restoreLiveFocus = vodSection == null && (selected == null || selected == Destination.LIVE)
+        if (restoreLiveFocus && inGuide) {
+            if (category != null && playing !in liveCategories[category].orEmpty()) category = null
+            programmeChannel = playing
+        }
         if (vodSection != null && cataloguePlaybackView == VodLiveView.HIDDEN) player?.pause()
         fullscreen = false
         lastBack = 0L
@@ -2113,7 +2121,7 @@ private fun PlayerHome(
                 showFullscreenPanel(panel)
                 return true
             }
-            if (inGuide && !fullscreen) {
+            if (inGuide && !fullscreen && panel != GuidePanel.CHANNELS) {
                 guidePanel = panel
                 return true
             }
@@ -2135,17 +2143,19 @@ private fun PlayerHome(
         !controlSettingsOpen &&
             (runMappedControl(GuideInput.LONG_BACK) || (!fullscreen && openCurrentFullscreen()))
     })
-    val menuBack by rememberUpdatedState<(Boolean) -> Boolean>({ released ->
-        val open = isMainMenuOpen()
-        if (open && released) navigateBack()
-        open
+    val screenBack by rememberUpdatedState<(Boolean) -> Boolean>({ released ->
+        val handled = !fullscreen && (
+            isMainMenuOpen() || selected == Destination.MOVIES || selected == Destination.SERIES
+        )
+        if (handled && released) navigateBack()
+        handled
     })
     DisposableEffect(Unit) {
         registerLongBack { longBack() }
-        registerMenuBack { released -> menuBack(released) }
+        registerScreenBack { released -> screenBack(released) }
         onDispose {
             registerLongBack(null)
-            registerMenuBack(null)
+            registerScreenBack(null)
         }
     }
     BackHandler(onBack = ::navigateBack)
@@ -2714,6 +2724,7 @@ private fun PlayerHome(
             val recentCategoryKey = "last_vod_category_${vodSectionForScreen?.name}"
             fun openVodCategory(group: PortalGroup) {
                 val section = vodSectionForScreen ?: return
+                catalogueReturnTitle = null
                 preferences?.edit()?.putString(recentCategoryKey, group.id)?.apply()
                 closeSeries()
                 details = null
@@ -3111,6 +3122,8 @@ private fun PlayerHome(
                                 horizonHours = epgHorizonHours,
                                 active = guidePanel == GuidePanel.GRID,
                                 channelColumnFocus = guideChannelFocus,
+                                restorePlayingFocus = restoreLiveFocus,
+                                onPlayingFocusRestored = { restoreLiveFocus = false },
                                 onChannelLeft = ::openMainMenu,
                                 onVisibleChannels = { visible -> if (!useXmlTv) loadProviderSchedules(visible) },
                                 onHighlight = {
@@ -3126,34 +3139,7 @@ private fun PlayerHome(
                                 )
                             }
                             }
-                            if (guidePanel == GuidePanel.CHANNELS) {
-                                val channelCategory = guideChannelCategory(
-                                    category, groups, liveCategories, programmeChannel ?: playing.takeIf { vodSection == null }
-                                )
-                                val channelsInPanel = liveCategories[channelCategory].orEmpty()
-                                Column(
-                                    Modifier.width(250.dp).fillMaxHeight()
-                                        .background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(12.dp))
-                                        .padding(8.dp)
-                                ) {
-                                    MenuButton(
-                                        channelCategory ?: stringResource(R.string.channels),
-                                        Modifier.fillMaxWidth().focusRequester(guidePanelFocus)
-                                    ) { guidePanel = GuidePanel.CATEGORIES }
-                                    if (channelsInPanel.isEmpty()) Text(stringResource(R.string.no_channels))
-                                    LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                        items(channelsInPanel) { channel ->
-                                            MenuButton(
-                                                channel.name, Modifier.fillMaxWidth(), logo = channel.logo,
-                                                selected = channel === playing
-                                            ) {
-                                                guidePanel = GuidePanel.GRID
-                                                playChannel(channel, openFullscreenOnStart = false)
-                                            }
-                                        }
-                                    }
-                                }
-                            } else if (guidePanel == GuidePanel.DETAILS) {
+                            if (guidePanel == GuidePanel.DETAILS) {
                                 val channel = programmeChannel ?: playing.takeIf { vodSection == null }
                                 val now = System.currentTimeMillis() / 1_000
                                 val schedule = channel?.let(::effectiveProgrammes).orEmpty()
@@ -3203,7 +3189,7 @@ private fun PlayerHome(
                                             MenuButton(group, Modifier.fillMaxWidth(), selected = category == group) {
                                                 category = group
                                                 guideScroll.requestScrollToItem(0)
-                                                guidePanel = GuidePanel.CHANNELS
+                                                guidePanel = GuidePanel.GRID
                                             }
                                         }
                                     }
@@ -3292,6 +3278,7 @@ private fun PlayerHome(
                                     { selectTitle(section, title, seriesResume, movieResumeKey) }
                                 } else null,
                                 compact = compactMedia,
+                                onBack = ::navigateBack,
                                 onPlay = { selectTitle(section, title) },
                                 onFavorite = { toggleSavedTitle(section, title, true) },
                                 onWatch = { toggleSavedTitle(section, title, false) }
@@ -3300,6 +3287,7 @@ private fun PlayerHome(
                             if (section == PortalSection.SERIES) {
                                 SeriesSeasons(
                                     modifier = Modifier.weight(1f),
+                                    scroll = seriesDetailScroll,
                                     series = displayTitle, seasons = seasons, selected = openedSeason,
                                     failed = episodeError, unseen = trackedSeries(title)?.unseen.orEmpty(),
                                     metadata = episodeMetadata,
@@ -3322,6 +3310,7 @@ private fun PlayerHome(
                                         closeSeries()
                                         selectTitle(section, title, loadOnly = true)
                                     },
+                                    onBack = ::navigateBack,
                                     header = {
                                         titleOverview()
                                         if (resumeEpisodeMissing) Text(
@@ -3434,6 +3423,7 @@ private fun PlayerHome(
                             if (group != null) {
                                 Text(group.name, style = MaterialTheme.typography.titleSmall)
                                 if (groupUsesTmdb) Text(stringResource(R.string.tmdb_catalogue_source))
+                                guideState.SaveableStateProvider("vod-${section.name}-${group.id}") {
                                 CatalogOverview(
                                     modifier = Modifier.weight(1f),
                                     catalog = if (uncategorizedSelected) baseCatalog else groupCatalog,
@@ -3451,14 +3441,18 @@ private fun PlayerHome(
                                     isFavorite = { titleKey(section, it) in favorites },
                                     isSaved = { isTitleSaved(section, it) },
                                     preferPopularity = group.id == VodCategory.POPULAR.id,
+                                    returnTitle = catalogueReturnTitle,
+                                    onTitleFocusRestored = { catalogueReturnTitle = null },
                                     newEpisodes = { title ->
                                         if (section == PortalSection.SERIES) trackedSeries(title)?.unseen?.size ?: 0 else 0
                                     },
                                     onSelect = {
+                                        catalogueReturnTitle = it
                                         searchedVariants = emptyMap()
                                         showTitle(section, it)
                                     }
                                 )
+                                }
                             } else {
                                 if (visibleVodGroups.isEmpty()) CatalogCategories(
                                 groups = visibleVodGroups,
@@ -3478,7 +3472,9 @@ private fun PlayerHome(
             if (inGuide) {
                 Column(
                     Modifier.fillMaxSize().guideNavigationInput(interceptRemote = { input ->
-                        guidePanel != GuidePanel.GRID || controlBindings[input]?.let { it != ControlAction.DEFAULT } == true
+                        guidePanel != GuidePanel.GRID || controlBindings[input]?.let {
+                            it != ControlAction.DEFAULT && it != ControlAction.CHANNELS
+                        } == true
                     }) {
                         if (!runMappedControl(it)) navigateGuide(it)
                     },
@@ -3492,7 +3488,7 @@ private fun PlayerHome(
                     val section = requireNotNull(vodSectionForScreen)
                     Column(
                         Modifier.width(vodSidebarWidth).fillMaxHeight()
-                            .onHorizontalRemote(allowRight = false) { openMainMenu() }
+                            .onHorizontalRemote(allowRight = false) { navigateBack() }
                             .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(10.dp))
                             .padding(6.dp),
                         verticalArrangement = Arrangement.spacedBy(3.dp)
@@ -4026,6 +4022,8 @@ private fun CatalogOverview(
     isFavorite: (PortalTitle) -> Boolean,
     isSaved: (PortalTitle) -> Boolean,
     preferPopularity: Boolean,
+    returnTitle: PortalTitle?,
+    onTitleFocusRestored: () -> Unit,
     newEpisodes: (PortalTitle) -> Int,
     onSelect: (PortalTitle) -> Unit
 ) {
@@ -4050,7 +4048,10 @@ private fun CatalogOverview(
         catalog.total?.let { total ->
             Text(stringResource(R.string.catalog_count, catalog.titles.size, total))
         }
-        TitleGrid(catalog.titles, isFavorite, isSaved, preferPopularity, newEpisodes, onSelect)
+        TitleGrid(
+            catalog.titles, isFavorite, isSaved, preferPopularity, newEpisodes,
+            returnTitle, onTitleFocusRestored, onSelect
+        )
         if (catalog.nextPage != null && !loading && canLoadMore) {
             MenuButton(stringResource(R.string.catalog_load_more), Modifier, onClick = onLoadMore)
         }

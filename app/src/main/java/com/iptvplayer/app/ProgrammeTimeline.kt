@@ -47,6 +47,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 
 private const val GUIDE_INTERVAL = 1_800L
 private const val GUIDE_WINDOW = 4 * GUIDE_INTERVAL
@@ -66,6 +67,8 @@ internal fun ProgrammeTimeline(
     horizonHours: Int,
     active: Boolean,
     channelColumnFocus: FocusRequester,
+    restorePlayingFocus: Boolean,
+    onPlayingFocusRestored: () -> Unit,
     onChannelLeft: () -> Unit,
     onVisibleChannels: suspend (List<StalkerChannel>) -> Unit,
     onHighlight: (StalkerChannel) -> Unit,
@@ -92,6 +95,8 @@ internal fun ProgrammeTimeline(
     val displayed = remember(channels, pinnedIds, onlyPinned) {
         if (onlyPinned) channels.filter { programmeKey(it) in pinnedIds } else channels
     }
+    val playingIndex = if (restorePlayingFocus) displayed.indexOf(playing) else -1
+    val playingFocus = remember { FocusRequester() }
     val loadVisible by rememberUpdatedState(onVisibleChannels)
     LaunchedEffect(displayed, scroll, refreshKey) {
         snapshotFlow { scroll.layoutInfo.visibleItemsInfo.map { it.index } }
@@ -105,10 +110,24 @@ internal fun ProgrammeTimeline(
     LaunchedEffect(displayed, highlighted) {
         if (highlighted !in displayed) displayed.firstOrNull()?.let(onHighlight)
     }
+    LaunchedEffect(active, restorePlayingFocus, playing) {
+        if (active && restorePlayingFocus) {
+            offset = 0
+            if (playing in channels && playing !in displayed) onlyPinned = false
+        }
+    }
+    LaunchedEffect(active, playingIndex) {
+        if (active && playingIndex >= 0) {
+            val layout = snapshotFlow { scroll.layoutInfo }.first { it.totalItemsCount > playingIndex }
+            if (layout.visibleItemsInfo.none { it.index == playingIndex }) scroll.scrollToItem(playingIndex)
+        }
+    }
     LaunchedEffect(active, displayed.isEmpty()) {
-        if (active && displayed.isNotEmpty()) {
+        if (active && displayed.isNotEmpty() && playingIndex < 0) {
             withFrameNanos { }
-            channelColumnFocus.requestFocus()
+            if (channelColumnFocus.requestFocus() && restorePlayingFocus && playing !in channels) {
+                onPlayingFocusRestored()
+            }
         }
     }
     Column(Modifier.fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(if (compact) 2.dp else 4.dp)) {
@@ -158,10 +177,17 @@ internal fun ProgrammeTimeline(
             val channelFocus = remember { FocusRequester() }
             val timelineFocus = remember { FocusRequester() }
             val entryFocus = if (index == scroll.firstVisibleItemIndex) Modifier.focusRequester(channelColumnFocus) else Modifier
+            val restoreFocus = if (active && index == playingIndex) {
+                LaunchedEffect(channel) {
+                    withFrameNanos { }
+                    if (playingFocus.requestFocus()) onPlayingFocusRestored()
+                }
+                Modifier.focusRequester(playingFocus)
+            } else Modifier
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 GuideChannelCell(
                     channel, channel.number ?: index + 1L,
-                    Modifier.weight(1.25f).then(entryFocus).focusRequester(channelFocus)
+                    Modifier.weight(1.25f).then(entryFocus).then(restoreFocus).focusRequester(channelFocus)
                         .focusProperties { canFocus = active }
                         .onHorizontalRemote { right ->
                             if (right) timelineFocus.requestFocus() else onChannelLeft()

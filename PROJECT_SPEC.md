@@ -28,7 +28,7 @@ Ein nutzerkonfigurierbarer IPTV-Player für Android-Telefone und -Tablets sowie 
 - Nach dem App-Start ist zunächst der Programmführer geöffnet. Sobald der zuletzt erfolgreich gestartete verfügbare Live-Sender wieder läuft, öffnet die App das Vollbild. Im Programmführer startet eine Senderauswahl in der Vorschau. Ein Klick auf die Vorschau öffnet das Vollbild. Ein Senderwechsel in der Vollbild-Senderliste behält das Vollbild bei. Das Hauptmenü erscheint auf Anforderung.
 
 - Live-TV öffnet den zeitbasierten Programmführer mit Kategorien links. Programme werden für sichtbare Zeilen und benachbarte Sender nachgeladen. Beim Öffnen von Live-TV, Filmen oder Serien weicht das Hauptmenü der jeweiligen Bereichsansicht.
-- Über dem Programmraster stehen links die anklickbare Live-Vorschau und daneben die Informationen zur markierten Sendung. Auf Touch-Geräten öffnet Wischen die Senderliste, Kategorien, das Hauptmenü oder die Programmbeschreibung. In „Alle Sender“ nimmt die Senderliste die Kategorie des laufenden oder markierten Senders. Die Auswahl einer Sendung in der Zeitleiste öffnet deren Details.
+- Über dem Programmraster stehen links die anklickbare Live-Vorschau und daneben die Informationen zur markierten Sendung. Die Senderliste öffnet mit Links nur im Live-Vollbild. In „Alle Sender“ nimmt sie die Kategorie des laufenden oder markierten Senders. Die Auswahl einer Sendung in der Zeitleiste öffnet deren Details.
 - Während die App im Vordergrund sichtbar ist, bleibt der Bildschirm auch ohne Wiedergabe aktiv. Beim Wiederherstellen gespeicherter Quellen erscheint beim Start ein Ladebalken.
 
 - Bei der Live-Kategorisierung hat „Allgemeines“ für erkannte deutschsprachige Allgemein- und Unterhaltungssender Vorrang vor dem Portalgenre. Dazu zählen etwa Das Erste, ZDF, RTL, Sat.1, VOX und die ProSieben-Sender.
@@ -41,7 +41,7 @@ Ein nutzerkonfigurierbarer IPTV-Player für Android-Telefone und -Tablets sowie 
 
 ## VOD
 
-- Einmaliges Zurück verlässt das Vollbild. Langes Zurück, Live-TV-Richtungen und Gesten sowie Tipp und Wiedergabetaste im Vollbild lassen sich mit Aktionen belegen. Die Standardbelegung lässt sich wiederherstellen.
+- Langes Zurück öffnet standardmäßig die aktive Live-TV-, Film- oder Serienwiedergabe im Vollbild. Einmaliges Zurück kehrt zum laufenden Sender im Programmführer oder zur geöffneten Film- oder Serienansicht samt Staffel zurück. Langes Zurück, Live-TV-Richtungen und Gesten sowie Tipp und Wiedergabetaste im Vollbild lassen sich mit Aktionen belegen. Die Standardbelegung lässt sich wiederherstellen.
 - Filme und Serien können getrennt nach dem Vollbild in einer kleinen Vorschau oder im Hintergrund weiterlaufen. Die Option „Aus“ pausiert die Wiedergabe. Die kleine Vorschau ist voreingestellt.
 - Gleichnamige Serienfassungen werden nur bei übereinstimmender IMDb-/TMDB-ID oder bei passendem Titel und bekanntem, gleichem Erscheinungsjahr zusammengeführt. Widersprüchliche IDs trennen die Fassungen.
 
@@ -52,7 +52,7 @@ Ein nutzerkonfigurierbarer IPTV-Player für Android-Telefone und -Tablets sowie 
 - Die App vergleicht bei Serien auf der Merkliste und im Serienverlauf die Folgenliste mit dem zuletzt erfassten Stand. Neue Folgen werden in den Listen, Seriendetails und Staffelansichten markiert.
 - Die Suche berücksichtigt die Länderauswahl und zeigt Trefferzahlen auf den Schaltflächen für Live-TV, Filme und Serien. Sender erscheinen mit Logo, VOD-Titel mit Poster und verfügbaren Informationen. Die Herkunft bleibt am Treffer sichtbar.
 - Die Suche startet Film- und Serienabfragen gleichzeitig. Jede Schaltfläche zeigt ihre Trefferzahl, sobald die Abfrage für den Bereich fertig ist. Bis dahin zeigt sie Auslassungspunkte.
-- Filme und Serien zeigen oben keine allgemeine Überschrift oder Zurück-Schaltfläche. Merkliste und Verlauf sind unten in der Seitenleiste erreichbar. Zurück schließt Staffel oder Details und kehrt aus der Katalogansicht ins Hauptmenü zurück. Links öffnet aus der Seitenleiste ebenfalls das Hauptmenü.
+- Filme und Serien zeigen oben keine allgemeine Überschrift oder Zurück-Schaltfläche. Merkliste und Verlauf sind unten in der Seitenleiste erreichbar. Zurück und Links am Rand der Detailansicht führen eine Ebene zurück. Bei der Rückkehr in die Kategorie bleiben Filter, Scrollposition und der zuletzt ausgewählte Titel erhalten.
 
 - Filme und Serien getrennt vom Live-Angebot durchsuchen; Detailansicht und Episodenauswahl bereitstellen, sofern die Quelle sie liefert. VOD startet nur nach bewusster Auswahl und ersetzt dann die laufende Live-Wiedergabe. Pause, Suche und Fortsetzen anbieten, soweit Format und Quelle dies erlauben.
 - Wiedergabeposition lokal speichern und Fortsetzen oder Neustart anbieten; abgeschlossene Einträge angemessen behandeln. Beim Wechsel auf eine abspielbare Variante desselben Films oder derselben Folge die letzte Wiedergabeposition übernehmen. Die nächste Folge startet auf Wunsch am markierten Abspannbeginn oder am tatsächlichen Ende. Die Vorwarnzeit ist einstellbar. Eindeutig markierte Intros können manuell oder automatisch übersprungen werden.

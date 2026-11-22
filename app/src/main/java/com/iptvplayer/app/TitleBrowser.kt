@@ -17,10 +17,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
@@ -28,13 +31,18 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -64,13 +72,15 @@ internal fun ColumnScope.TitleGrid(
     isSaved: (PortalTitle) -> Boolean,
     preferPopularity: Boolean,
     newEpisodes: (PortalTitle) -> Int,
+    returnTitle: PortalTitle?,
+    onTitleFocusRestored: () -> Unit,
     onSelect: (PortalTitle) -> Unit
 ) {
-    var sort by remember(preferPopularity) {
+    var sort by rememberSaveable(preferPopularity) {
         mutableStateOf(if (preferPopularity) TitleSort.POPULARITY else TitleSort.NAME)
     }
-    var filter by remember { mutableStateOf(TitleFilter.ALL) }
-    var year by remember { mutableStateOf<Int?>(null) }
+    var filter by rememberSaveable { mutableStateOf(TitleFilter.ALL) }
+    var year by rememberSaveable { mutableStateOf<Int?>(null) }
     var sorting by remember { mutableStateOf(false) }
     var filtering by remember { mutableStateOf(false) }
     var selectingYear by remember { mutableStateOf(false) }
@@ -129,18 +139,34 @@ internal fun ColumnScope.TitleGrid(
         }
     }
     if (sorted.isEmpty()) Text(stringResource(R.string.no_matching_titles))
+    val scroll = rememberLazyGridState()
+    val returnIndex = if (returnTitle == null) -1 else sorted.indexOf(returnTitle)
+    val returnFocus = remember { FocusRequester() }
+    LaunchedEffect(returnTitle, returnIndex) {
+        if (returnTitle == null) return@LaunchedEffect
+        if (returnIndex < 0) onTitleFocusRestored()
+        else if (scroll.layoutInfo.visibleItemsInfo.none { it.index == returnIndex }) scroll.scrollToItem(returnIndex)
+    }
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 92.dp),
         modifier = Modifier.fillMaxWidth().weight(1f),
+        state = scroll,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        items(sorted) { title ->
+        itemsIndexed(sorted) { index, title ->
             var focused by remember { mutableStateOf(false) }
+            val restoreFocus = if (index == returnIndex) {
+                LaunchedEffect(title) {
+                    withFrameNanos { }
+                    if (returnFocus.requestFocus()) onTitleFocusRestored()
+                }
+                Modifier.focusRequester(returnFocus)
+            } else Modifier
             Surface(
                 shape = MaterialTheme.shapes.medium,
                 color = if (focused) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
-                modifier = Modifier.clip(MaterialTheme.shapes.medium)
+                modifier = restoreFocus.clip(MaterialTheme.shapes.medium)
                     .onFocusChanged { focused = it.isFocused }
                     .clickable { onSelect(title) }
             ) {
@@ -187,6 +213,7 @@ internal fun TitleDetails(
     resumeLabel: String?,
     onResume: (() -> Unit)?,
     compact: Boolean,
+    onBack: () -> Unit,
     onPlay: () -> Unit,
     onFavorite: () -> Unit,
     onWatch: () -> Unit
@@ -216,12 +243,14 @@ internal fun TitleDetails(
                 Text(stringResource(R.string.title_added, date))
             }
             resumeLabel?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            val leftEdge = Modifier.onHorizontalRemote(allowRight = false) { onBack() }
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (onResume != null) MenuButton(stringResource(R.string.resume_playback), Modifier, onClick = onResume)
+                if (onResume != null) MenuButton(stringResource(R.string.resume_playback), leftEdge, onClick = onResume)
                 if (section == PortalSection.MOVIES) {
-                    MenuButton(stringResource(R.string.play_movie), Modifier, onClick = onPlay)
+                    MenuButton(stringResource(R.string.play_movie), if (onResume == null) leftEdge else Modifier, onClick = onPlay)
                 }
-                MenuButton(stringResource(R.string.favorites), Modifier, selected = favorite, onClick = onFavorite)
+                val favoriteModifier = if (section == PortalSection.SERIES && onResume == null) leftEdge else Modifier
+                MenuButton(stringResource(R.string.favorites), favoriteModifier, selected = favorite, onClick = onFavorite)
                 MenuButton(stringResource(R.string.watchlist), Modifier, selected = saved, onClick = onWatch)
             }
             Text(
@@ -239,6 +268,7 @@ internal data class EpisodeCardProgress(val completed: Boolean, val position: Lo
 @Composable
 internal fun SeriesSeasons(
     modifier: Modifier,
+    scroll: LazyListState,
     series: PortalTitle,
     seasons: List<PortalSeason>?,
     selected: PortalSeason?,
@@ -249,9 +279,11 @@ internal fun SeriesSeasons(
     metadata: Map<Pair<Int, Int>, TmdbEpisodeDetails>,
     onEpisode: (PortalSeason, PortalTitle) -> Unit,
     onRetry: () -> Unit,
+    onBack: () -> Unit,
     header: @Composable () -> Unit
 ) {
-    LazyColumn(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    val leftEdge = Modifier.onHorizontalRemote(allowRight = false) { onBack() }
+    LazyColumn(modifier.fillMaxWidth(), state = scroll, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item(key = "overview") { header() }
         item(key = "seasons") {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -259,15 +291,15 @@ internal fun SeriesSeasons(
                 if (seasons == null && !failed) LinearProgressIndicator(Modifier.fillMaxWidth())
                 if (failed || seasons?.isEmpty() == true) {
                     Text(stringResource(R.string.no_episodes))
-                    MenuButton(stringResource(R.string.series_retry_seasons), Modifier, onClick = onRetry)
+                    MenuButton(stringResource(R.string.series_retry_seasons), leftEdge, onClick = onRetry)
                 }
                 if (!seasons.isNullOrEmpty()) {
                     LazyRow(
                         Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(seasons) { season ->
-                            MenuButton(seasonLabel(season, series), Modifier, selected = selected == season) {
+                        itemsIndexed(seasons) { index, season ->
+                            MenuButton(seasonLabel(season, series), if (index == 0) leftEdge else Modifier, selected = selected == season) {
                                 onSeason(season)
                             }
                         }
@@ -300,7 +332,7 @@ internal fun SeriesSeasons(
                         val entry = if (seriesEpisodeKey(season, episode) in unseen) {
                             stringResource(R.string.new_episode_entry, label)
                         } else label
-                        MenuButton(entry, Modifier.fillMaxWidth()) { onEpisode(season, episode) }
+                        MenuButton(entry, leftEdge.fillMaxWidth()) { onEpisode(season, episode) }
                         val description = germanDescription(episode.description) ?: details?.description
                         Text(
                             description ?: stringResource(R.string.no_german_episode_description),

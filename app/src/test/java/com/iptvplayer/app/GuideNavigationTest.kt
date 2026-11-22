@@ -5,6 +5,15 @@ import org.junit.Test
 
 class GuideNavigationTest {
     @Test
+    fun leftOpensTheChannelListOnlyInFullscreen() {
+        for (input in listOf(GuideInput.REMOTE_LEFT, GuideInput.SWIPE_LEFT)) {
+            assertEquals(GuidePanel.CHANNELS, GuidePanel.GRID.after(input))
+            assertEquals(GuidePanel.MENU, GuidePanel.GRID.afterProgrammeGuide(input))
+            assertEquals(GuidePanel.GRID, GuidePanel.DETAILS.afterProgrammeGuide(input))
+        }
+    }
+
+    @Test
     fun touchDirectionsDependOnTheOpenPanel() {
         val channels = GuidePanel.GRID.after(GuideInput.SWIPE_LEFT)
         val categories = channels.after(GuideInput.SWIPE_LEFT)

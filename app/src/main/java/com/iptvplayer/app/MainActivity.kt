@@ -2858,6 +2858,9 @@ private fun PlayerHome(
                 controlsRequest = playerControlsRequest,
                 controlsDismissRequest = dismissPlaybackControls,
                 controlsAllowed = fullscreenGuidePanel == GuidePanel.GRID && !watchingPrompt,
+                actionPromptActive = episodeAction != 0 &&
+                    (fullscreenGuidePanel == GuidePanel.GRID || watchingPrompt || skipIntroTo != null),
+                onEpisodeActionConfirm = ::activateEpisodeAction,
                 episodeActionVisible = episodeAction != 0 || fullscreenGuidePanel != GuidePanel.GRID || skipIntroTo != null,
                 onControlsVisible = { playbackControlsVisible = it }
             )
@@ -4652,6 +4655,8 @@ internal fun PlayerFrame(
     controlsRequest: Int = 0,
     controlsDismissRequest: Int = 0,
     controlsAllowed: Boolean = true,
+    actionPromptActive: Boolean = false,
+    onEpisodeActionConfirm: (() -> Unit)? = null,
     onPreviousEpisode: (() -> Unit)? = null,
     onNextEpisode: (() -> Unit)? = null,
     hasPreviousEpisode: Boolean = false,
@@ -4701,6 +4706,8 @@ internal fun PlayerFrame(
     val nextEpisode by rememberUpdatedState(onNextEpisode)
     val canPreviousEpisode by rememberUpdatedState(hasPreviousEpisode)
     val canNextEpisode by rememberUpdatedState(hasNextEpisode)
+    val captureActionKeys by rememberUpdatedState(actionPromptActive)
+    val confirmEpisodeAction by rememberUpdatedState(onEpisodeActionConfirm)
     var shownControlsRequest by remember { mutableIntStateOf(controlsRequest) }
     var previousDismissRequest by remember { mutableIntStateOf(controlsDismissRequest) }
     var previousEpisodeAction by remember { mutableStateOf(episodeActionVisible) }
@@ -4781,6 +4788,33 @@ internal fun PlayerFrame(
                         }
 
                         override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+                            if (fullscreen && captureActionKeys) {
+                                val direction = when (event.keyCode) {
+                                    android.view.KeyEvent.KEYCODE_DPAD_LEFT -> GuideInput.REMOTE_LEFT
+                                    android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> GuideInput.REMOTE_RIGHT
+                                    android.view.KeyEvent.KEYCODE_DPAD_UP -> GuideInput.REMOTE_UP
+                                    android.view.KeyEvent.KEYCODE_DPAD_DOWN -> GuideInput.REMOTE_DOWN
+                                    else -> null
+                                }
+                                if (direction != null) {
+                                    if (event.action == android.view.KeyEvent.ACTION_UP && !event.isCanceled) {
+                                        guideInput?.invoke(direction)
+                                    }
+                                    return true
+                                }
+                                if (event.keyCode in setOf(
+                                        android.view.KeyEvent.KEYCODE_DPAD_CENTER,
+                                        android.view.KeyEvent.KEYCODE_ENTER,
+                                        android.view.KeyEvent.KEYCODE_NUMPAD_ENTER,
+                                        android.view.KeyEvent.KEYCODE_BUTTON_A
+                                    )
+                                ) {
+                                    if (event.action == android.view.KeyEvent.ACTION_UP && !event.isCanceled) {
+                                        confirmEpisodeAction?.invoke()
+                                    }
+                                    return true
+                                }
+                            }
                             if (event.keyCode == android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE &&
                                 event.action == android.view.KeyEvent.ACTION_DOWN &&
                                 (event.repeatCount == 0 && mediaKey?.invoke() == true)
@@ -5099,7 +5133,7 @@ internal fun MenuButton(
         shape = RoundedCornerShape(8.dp),
         border = when {
             highlighted -> BorderStroke(2.dp, colors.primary)
-            selected -> BorderStroke(1.dp, colors.outline)
+            selected -> BorderStroke(2.dp, colors.primary)
             else -> null
         }
     ) {

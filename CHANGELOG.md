@@ -2,6 +2,10 @@
 
 ## Unveröffentlicht
 
+## 1.0.19
+
+- Die Folgen-Aktionsfenster fangen Fernbedienungstasten direkt am Player ab; Links/Rechts wechseln nur zwischen den Aktionen und OK bestätigt die Auswahl.
+
 ## 1.0.18
 
 - Der Vollbild-Ladeindikator erscheint nur bei anhaltendem Puffern während einer bereits laufenden Wiedergabe.

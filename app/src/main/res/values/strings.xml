@@ -334,6 +334,8 @@
     <string name="episode_countdown">%1$s startet in %2$d Sekunden</string>
     <string name="next_episode_ready">Nächste Folge: %1$s</string>
     <string name="play_next_episode">Jetzt abspielen</string>
+    <string name="previous_episode">Vorherige Folge</string>
+    <string name="next_episode">Nächste Folge</string>
     <string name="portal_popular">Beliebt laut Portal</string>
     <string name="portal_cinema">Kinofilme laut Portal</string>
     <string name="tvmaze_episode_provider">Folgeninformationen von TVmaze</string>

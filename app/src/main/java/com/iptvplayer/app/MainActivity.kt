@@ -414,6 +414,7 @@ private fun PlayerHome(
     var playbackVideoSurface by remember { mutableStateOf<SurfaceView?>(null) }
     var detectedTiming by remember { mutableStateOf<Pair<String, EpisodeTiming>?>(null) }
     var nextEpisodeAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var previousEpisodeAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     var nextEpisodeName by remember { mutableStateOf("") }
     var nextEpisodeSeconds by remember { mutableStateOf<Int?>(null) }
     var checkSeriesInactivity by remember(preferences) {
@@ -1298,6 +1299,7 @@ private fun PlayerHome(
         pendingSeriesEpisode = null
         pendingMovie = null
         nextEpisodeAction = null
+        previousEpisodeAction = null
         nextEpisodeSeconds = null
         skipIntroTo = null
         watchingPrompt = false
@@ -1779,6 +1781,15 @@ private fun PlayerHome(
                         playbackEpisode = title
                         overlaySeason = season
                         playbackEpisodeVariants = availableVariants
+                        precedingEpisode(seasonList, season, title)?.let { (previousSeason, previous) ->
+                            previousEpisodeAction = {
+                                openedSeries = series
+                                openedSeason = previousSeason
+                                seasons = seasonList
+                                episodeVariants = availableVariants
+                                selectTitle(PortalSection.SERIES, previous)
+                            }
+                        } ?: run { previousEpisodeAction = null }
                         followingEpisode(seasonList, season, title)?.let { (followingSeason, following) ->
                             nextEpisodeName = following.episode?.let {
                                 resources.getString(R.string.episode_number, it)
@@ -2705,6 +2716,10 @@ private fun PlayerHome(
                 onSurface = { fullscreenVideoSurface = it },
                 onGuideInput = ::navigateFullscreen,
                 interceptGuideKey = ::interceptDirection,
+                onPreviousEpisode = { previousEpisodeAction?.invoke() },
+                onNextEpisode = { nextEpisodeAction?.invoke() },
+                hasPreviousEpisode = previousEpisodeAction != null,
+                hasNextEpisode = nextEpisodeAction != null,
                 onTouchAction = { runMappedControl(GuideInput.TAP) },
                 onMediaKey = { runMappedControl(GuideInput.PLAY_PAUSE) },
                 controlsRequest = playerControlsRequest,
@@ -2863,7 +2878,7 @@ private fun PlayerHome(
             }
             if (episodeAction != 0 && (fullscreenGuidePanel == GuidePanel.GRID || watchingPrompt || skipIntroTo != null)) {
                 Surface(
-                    modifier = Modifier.align(Alignment.CenterEnd).padding(20.dp),
+                modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp),
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Column(Modifier.padding(12.dp)) {
@@ -4459,6 +4474,10 @@ internal fun PlayerFrame(
     controlsRequest: Int = 0,
     controlsDismissRequest: Int = 0,
     controlsAllowed: Boolean = true,
+    onPreviousEpisode: (() -> Unit)? = null,
+    onNextEpisode: (() -> Unit)? = null,
+    hasPreviousEpisode: Boolean = false,
+    hasNextEpisode: Boolean = false,
     episodeActionVisible: Boolean = false,
     onControlsVisible: ((Boolean) -> Unit)? = null
 ) {
@@ -4470,6 +4489,10 @@ internal fun PlayerFrame(
     val mediaKey by rememberUpdatedState(onMediaKey)
     val allowControls by rememberUpdatedState(controlsAllowed)
     val controlsVisibility by rememberUpdatedState(onControlsVisible)
+    val previousEpisode by rememberUpdatedState(onPreviousEpisode)
+    val nextEpisode by rememberUpdatedState(onNextEpisode)
+    val canPreviousEpisode by rememberUpdatedState(hasPreviousEpisode)
+    val canNextEpisode by rememberUpdatedState(hasNextEpisode)
     var shownControlsRequest by remember { mutableIntStateOf(controlsRequest) }
     var previousDismissRequest by remember { mutableIntStateOf(controlsDismissRequest) }
     var previousEpisodeAction by remember { mutableStateOf(episodeActionVisible) }
@@ -4566,6 +4589,21 @@ internal fun PlayerFrame(
                         controllerAutoShow = false
                         findViewById<LinearLayout>(androidx.media3.ui.R.id.exo_center_controls)?.let { row ->
                             val size = (48 * context.resources.displayMetrics.density).toInt()
+                            fun actionButton(icon: Int, label: Int, action: () -> Unit) = ImageButton(context).apply {
+                                setImageResource(icon)
+                                contentDescription = context.getString(label)
+                                tooltipText = contentDescription
+                                isFocusable = true
+                                val background = TypedValue()
+                                if (context.theme.resolveAttribute(
+                                        android.R.attr.selectableItemBackgroundBorderless, background, true
+                                    )
+                                ) setBackgroundResource(background.resourceId)
+                                setOnClickListener { action() }
+                            }
+                            val previous = actionButton(android.R.drawable.ic_media_previous, R.string.previous_episode) {
+                                previousEpisode?.invoke()
+                            }
                             val button = ImageButton(context).apply {
                                 setImageResource(R.drawable.ic_player_stop)
                                 contentDescription = context.getString(R.string.stop_playback)
@@ -4578,14 +4616,33 @@ internal fun PlayerFrame(
                                 ) setBackgroundResource(background.resourceId)
                                 setOnClickListener { stop() }
                             }
+                            val next = actionButton(android.R.drawable.ic_media_next, R.string.next_episode) {
+                                nextEpisode?.invoke()
+                            }
                             val pause = row.findViewById<android.view.View>(androidx.media3.ui.R.id.exo_play_pause)
                             if (pause != null) {
+                                previous.id = android.view.View.generateViewId()
                                 button.id = android.view.View.generateViewId()
-                                pause.nextFocusRightId = button.id
-                                button.nextFocusLeftId = pause.id
+                                next.id = android.view.View.generateViewId()
+                                pause.nextFocusLeftId = previous.id
+                                previous.nextFocusRightId = pause.id
+                                previous.nextFocusLeftId = previous.id
+                                pause.nextFocusRightId = next.id
+                                next.nextFocusLeftId = pause.id
+                                next.nextFocusRightId = button.id
+                                button.nextFocusLeftId = next.id
+                                button.nextFocusRightId = pause.id
                             }
-                            val index = row.indexOfChild(pause).takeIf { it >= 0 }?.plus(1) ?: row.childCount
-                            row.addView(button, index, LinearLayout.LayoutParams(size, size))
+                            val index = row.indexOfChild(pause).takeIf { it >= 0 } ?: 0
+                            row.addView(previous, index, LinearLayout.LayoutParams(size, size))
+                            row.addView(next, row.indexOfChild(pause).coerceAtLeast(0) + 1, LinearLayout.LayoutParams(size, size))
+                            row.addView(button, row.indexOfChild(next) + 1, LinearLayout.LayoutParams(size, size))
+                            previous.tag = "previous_episode_action"
+                            next.tag = "next_episode_action"
+                            previous.isEnabled = canPreviousEpisode
+                            previous.alpha = if (canPreviousEpisode) 1f else 0.35f
+                            next.isEnabled = canNextEpisode
+                            next.alpha = if (canNextEpisode) 1f else 0.35f
                         }
                         this.player = player
                         if (fullscreen) post { if (allowControls) requestFocus() }
@@ -4600,6 +4657,14 @@ internal fun PlayerFrame(
                 },
                 update = { view ->
                     onSurface?.invoke(view.videoSurfaceView as? SurfaceView)
+                    view.findViewWithTag<android.view.View>("previous_episode_action")?.let { button ->
+                        button.isEnabled = canPreviousEpisode
+                        button.alpha = if (canPreviousEpisode) 1f else 0.35f
+                    }
+                    view.findViewWithTag<android.view.View>("next_episode_action")?.let { button ->
+                        button.isEnabled = canNextEpisode
+                        button.alpha = if (canNextEpisode) 1f else 0.35f
+                    }
                     view.useController = openFullscreen == null && controlsAllowed
                     if (previousEpisodeAction != episodeActionVisible) {
                         previousEpisodeAction = episodeActionVisible

@@ -2,6 +2,11 @@
 
 ## Unveröffentlicht
 
+## 1.0.15
+
+- Seriensteuerung im Vollbild mit vorheriger und nächster Folge sowie Stopp per Fernbedienung.
+- Intro- und Outro-Aktionen unten rechts angeordnet.
+
 - Neuer App-Name StreamWatch, adaptives Launcher-Icon und passendes Android-TV-Banner.
 - Fernbedienungsfokus auf dem ersten Film, der primären Serienaktion oder dem zuletzt gesehenen Live-Sender.
 - Lesbarere Programmbeschreibung mit eigener Spalte neben dem EPG auf breiten Bildschirmen.

@@ -50,3 +50,21 @@ internal fun followingEpisode(
         it to ordered(it.episodes).first()
     }
 }
+
+internal fun precedingEpisode(
+    seasons: List<PortalSeason>, season: PortalSeason, episode: PortalTitle
+): Pair<PortalSeason, PortalTitle>? {
+    val orderedSeasons = seasons.map { current ->
+        current to if (current.episodes.all { it.episode?.toIntOrNull() != null }) {
+            current.episodes.sortedBy { it.episode?.toIntOrNull() }
+        } else current.episodes
+    }
+    val seasonIndex = orderedSeasons.indexOfFirst { it.first == season }
+    if (seasonIndex < 0) return null
+    val episodes = orderedSeasons[seasonIndex].second
+    val episodeIndex = episodes.indexOf(episode)
+    if (episodeIndex < 0) return null
+    episodes.getOrNull(episodeIndex - 1)?.let { return season to it }
+    val previousSeason = orderedSeasons.take(seasonIndex).lastOrNull { it.second.isNotEmpty() } ?: return null
+    return previousSeason.first to previousSeason.second.last()
+}

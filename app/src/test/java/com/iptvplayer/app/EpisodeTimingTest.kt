@@ -55,4 +55,15 @@ class EpisodeTimingTest {
         assertEquals(upcoming to first, followingEpisode(listOf(current, upcoming), current, second))
         assertNull(followingEpisode(listOf(current, upcoming), upcoming, first))
     }
+
+    @Test
+    fun selectsPreviousNumberAndContinuesIntoThePreviousSeason() {
+        val first = PortalTitle("Eins", episode = "1")
+        val second = PortalTitle("Zwei", episode = "2")
+        val current = PortalSeason(1, PortalTitle("Staffel 1"), listOf(second, first))
+        val previousSeason = PortalSeason(0, PortalTitle("Staffel 0"), listOf(second))
+        assertEquals(current to first, precedingEpisode(listOf(previousSeason, current), current, second))
+        assertEquals(previousSeason to second, precedingEpisode(listOf(previousSeason, current), current, first))
+        assertNull(precedingEpisode(listOf(previousSeason, current), previousSeason, second))
+    }
 }

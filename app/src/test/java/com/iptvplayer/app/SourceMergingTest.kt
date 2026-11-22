@@ -88,6 +88,8 @@ class SourceMergingTest {
         assertEquals(null, parsePortalExpiry("0000-00-00"))
         assertEquals(null, parsePortalExpiry("2026-02-30"))
         assertEquals(null, parsePortalExpiry("0"))
+        assertEquals(expected, parseSparklePortalDate("December 31, 2026, 06:30 PM"))
+        assertEquals(expected, parseSparklePortalDate("12.31.2026"))
     }
 
     @Test

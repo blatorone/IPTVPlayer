@@ -706,6 +706,20 @@ internal fun parsePortalExpiry(value: String?): java.time.LocalDate? {
     return date?.takeIf { it.year in 2000..2200 }
 }
 
+internal fun parseSparklePortalDate(value: String?, locale: java.util.Locale = java.util.Locale.US): LocalDate? {
+    val text = value?.trim().orEmpty()
+    if (text.isEmpty()) return null
+    val patterns = listOf("MMMM d, yyyy, hh:mm a", "MM.dd.yyyy")
+    return patterns.firstNotNullOfOrNull { pattern ->
+        runCatching {
+            java.text.SimpleDateFormat(pattern, locale).apply {
+                isLenient = false
+                timeZone = java.util.TimeZone.getTimeZone("UTC")
+            }.parse(text)?.toInstant()?.atZone(ZoneOffset.UTC)?.toLocalDate()
+        }.getOrNull()
+    }?.takeIf { it.year in 2000..2200 }
+}
+
 private fun subscriptionDate(data: JSONObject, allowDateInPhoneField: Boolean = false): LocalDate? {
     val fields = listOf(
         "expire_billing_date", "end_date", "expiration_date", "exp_date", "expire_date", "expires_at",
@@ -713,10 +727,11 @@ private fun subscriptionDate(data: JSONObject, allowDateInPhoneField: Boolean = 
     )
     val sections = listOf(data) + listOf("account", "subscription", "user_info").mapNotNull(data::optJSONObject)
     return sections.firstNotNullOfOrNull { section ->
-        fields.firstNotNullOfOrNull { parsePortalExpiry(section.optString(it)) }
-            ?: if (allowDateInPhoneField) section.optString("phone").trim().takeIf {
-                '-' in it || '.' in it || '/' in it
-            }?.let(::parsePortalExpiry) else null
+        val phoneDate = if (allowDateInPhoneField) {
+            parseSparklePortalDate(section.optString("phone"))
+                ?: section.optString("phone").trim().takeIf { it.isNotEmpty() }?.let(::parsePortalExpiry)
+        } else null
+        phoneDate ?: fields.firstNotNullOfOrNull { parsePortalExpiry(section.optString(it)) }
     }
 }
 

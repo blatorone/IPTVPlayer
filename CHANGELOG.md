@@ -2,6 +2,14 @@
 
 ## Unveröffentlicht
 
+## 1.0.17
+
+- Neues StreamWatch-App-Icon auch für Fire TV und aktualisiertes Android-TV-Banner.
+- Wiederholte längere Pufferstopps wechseln zur nächsten Streamvariante; im Vollbild wird der Ladevorgang angezeigt.
+- Folgen- und „Schaust du noch?“-Auswahl per Fernbedienung fokussierbar, ohne die Serienliste versehentlich zu öffnen.
+- Folgenliste im Serien-Vollbild zeigt Folgenummern und blendet sich nach der eingestellten Zeit aus.
+- Weitere vom Stalker-Portal gelieferte Ablaufdatumsformate werden erkannt.
+
 ## 1.0.16
 
 - Portaladressen und MAC-Adressen lassen sich zwischen Geräten exportieren und importieren.

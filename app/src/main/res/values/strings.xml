@@ -80,6 +80,7 @@
     <string name="control_previous_channel">Vorheriger Sender</string>
     <string name="series_overlay_episodes">Folgen</string>
     <string name="series_overlay_seasons">Staffeln</string>
+    <string name="series_overlay_season_episodes">%1$s · Folgen</string>
     <string name="control_settings">Tasten und Gesten belegen</string>
     <string name="control_reset">Standard wiederherstellen</string>
     <string name="settings_library">Quellen und Bibliothek</string>

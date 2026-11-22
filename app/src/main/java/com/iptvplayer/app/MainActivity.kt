@@ -25,6 +25,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -60,6 +61,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.TextButton as MaterialTextButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -2226,6 +2228,38 @@ private fun PlayerHome(
             }
         }
     }
+    LaunchedEffect(playbackAttempt, player) {
+        val attempt = playbackAttempt ?: return@LaunchedEffect
+        val activePlayer = player ?: return@LaunchedEffect
+        var hasPlayed = activePlayer.playbackState == Player.STATE_READY
+        var bufferingSince: Long? = null
+        var countedThisBuffer = false
+        var prolongedBufferEpisodes = 0
+        while (playbackAttempt === attempt) {
+            val now = SystemClock.elapsedRealtime()
+            if (activePlayer.playbackState == Player.STATE_READY) hasPlayed = true
+            if (hasPlayed && canPlay() && activePlayer.playWhenReady &&
+                activePlayer.playbackState == Player.STATE_BUFFERING
+            ) {
+                if (bufferingSince == null) {
+                    bufferingSince = now
+                    countedThisBuffer = false
+                }
+                if (!countedThisBuffer && now - bufferingSince!! >= 4_000) {
+                    countedThisBuffer = true
+                    prolongedBufferEpisodes++
+                    if (prolongedBufferEpisodes >= 3) {
+                        failPlayback(attempt, R.string.playback_timeout)
+                        return@LaunchedEffect
+                    }
+                }
+            } else if (activePlayer.playbackState != Player.STATE_BUFFERING) {
+                bufferingSince = null
+                countedThisBuffer = false
+            }
+            delay(250)
+        }
+    }
     LaunchedEffect(playbackAttempt, starting) {
         val attempt = playbackAttempt ?: return@LaunchedEffect
         if (starting != null || attempt.selection.section != PortalSection.LIVE) return@LaunchedEffect
@@ -2313,11 +2347,19 @@ private fun PlayerHome(
         if (panel != GuidePanel.GRID) fullscreenOverlayContent = panel
         fullscreenGuidePanel = panel
     }
-    LaunchedEffect(fullscreen, fullscreenGuidePanel, guideAppearance.closeSeconds, overlayInteraction, categoryMenu) {
+    LaunchedEffect(
+        fullscreen, fullscreenGuidePanel, guideAppearance.closeSeconds, overlayInteraction,
+        categoryMenu, vodSection, watchingPrompt, nextEpisodeSeconds, skipIntroTo
+    ) {
         if (!fullscreen) showFullscreenPanel(GuidePanel.GRID)
-        else if (vodSection == null && fullscreenGuidePanel != GuidePanel.GRID && guideAppearance.closeSeconds > 0 && categoryMenu == null) {
+        else if ((vodSection == null || vodSection == PortalSection.SERIES && playbackSeries != null) &&
+            fullscreenGuidePanel != GuidePanel.GRID && guideAppearance.closeSeconds > 0 &&
+            categoryMenu == null && !watchingPrompt && nextEpisodeSeconds == null && skipIntroTo == null
+        ) {
             delay(guideAppearance.closeSeconds * 1_000L)
-            showFullscreenPanel(GuidePanel.GRID)
+            if (fullscreenGuidePanel != GuidePanel.GRID && !watchingPrompt &&
+                nextEpisodeSeconds == null && skipIntroTo == null
+            ) showFullscreenPanel(GuidePanel.GRID)
         }
     }
     val mediaDestination = inGuide || selected == Destination.MOVIES || selected == Destination.SERIES
@@ -2684,6 +2726,7 @@ private fun PlayerHome(
     }
     if (fullscreen) {
         val episodeActionFocus = remember { FocusRequester() }
+        val episodeActionSecondaryFocus = remember { FocusRequester() }
         val episodeAction = when {
             watchingPrompt -> 3
             nextEpisodeSeconds != null -> 2
@@ -2706,6 +2749,7 @@ private fun PlayerHome(
         val live = vodSection == null
         val seriesOverlay = vodSection == PortalSection.SERIES && playbackSeries != null
         fun navigateFullscreen(input: GuideInput) {
+            if (episodeAction != 0) return
             if (runMappedControl(input)) return
             if (input.vertical) {
                 if (live && fullscreenGuidePanel == GuidePanel.GRID) {
@@ -2726,7 +2770,7 @@ private fun PlayerHome(
         }
         val overlayFocus = remember { FocusRequester() }
         fun interceptDirection(input: GuideInput): Boolean {
-            if (playbackControlsVisible || watchingPrompt) return false
+            if (playbackControlsVisible || episodeAction != 0) return false
             val custom = controlBindings[input]?.let { it != ControlAction.DEFAULT } == true
             if (input.vertical) return fullscreenGuidePanel == GuidePanel.GRID && (custom || live)
             return custom || seriesOverlay || live && (
@@ -2803,6 +2847,7 @@ private fun PlayerHome(
                         Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                             MenuButton(
                                 if (seriesOverlay && panel == GuidePanel.CHANNELS) overlaySeason?.title?.name
+                                    ?.let { seasonName -> stringResource(R.string.series_overlay_season_episodes, seasonName) }
                                     ?: stringResource(R.string.series_overlay_episodes)
                                 else if (seriesOverlay && panel == GuidePanel.CATEGORIES) stringResource(R.string.series_overlay_seasons)
                                 else if (panel == GuidePanel.CHANNELS) channelCategory ?: stringResource(R.string.channels)
@@ -2823,7 +2868,16 @@ private fun PlayerHome(
                                                 Modifier.weight(1f), state = rememberLazyListState(current)
                                             ) {
                                                 items(episodes) { episode ->
-                                                    MenuButton(episode.name, Modifier.fillMaxWidth(), selected = episode == playbackEpisode) {
+                                                    val seasonName = overlaySeason?.title?.name
+                                                    val episodeTitle = episode.name.takeUnless { name ->
+                                                        name.equals(seasonName, ignoreCase = true) ||
+                                                            Regex("(?i)^(season|staffel)\\s*\\d+$").matches(name.trim())
+                                                    }
+                                                    val episodeLabel = episode.episode?.let { number ->
+                                                        if (episodeTitle.isNullOrBlank()) stringResource(R.string.episode_number, number)
+                                                        else stringResource(R.string.episode_title, episodeTitle, number)
+                                                    } ?: episodeTitle ?: episode.name
+                                                    MenuButton(episodeLabel, Modifier.fillMaxWidth(), selected = episode == playbackEpisode) {
                                                         val series = playbackSeries ?: return@MenuButton
                                                         val season = overlaySeason ?: return@MenuButton
                                                         openedSeries = series
@@ -2914,11 +2968,26 @@ private fun PlayerHome(
                         if (watchingPrompt) {
                             Text(stringResource(R.string.series_still_watching), style = MaterialTheme.typography.titleMedium)
                             Text(stringResource(R.string.series_still_watching_timeout))
-                            Row {
+                                    Row(Modifier.focusGroup()) {
                                 MenuButton(
-                                    stringResource(R.string.play_next_episode), Modifier.focusRequester(episodeActionFocus)
+                                            stringResource(R.string.play_next_episode),
+                                            Modifier.focusRequester(episodeActionFocus).focusProperties {
+                                                left = episodeActionSecondaryFocus
+                                                right = episodeActionSecondaryFocus
+                                                up = episodeActionFocus
+                                                down = episodeActionFocus
+                                            }
                                 ) { advanceEpisode(confirmed = true) }
-                                MenuButton(stringResource(R.string.stop_playback), Modifier, onClick = ::stopPlayback)
+                                        MenuButton(
+                                            stringResource(R.string.stop_playback),
+                                            Modifier.focusRequester(episodeActionSecondaryFocus).focusProperties {
+                                                left = episodeActionFocus
+                                                right = episodeActionFocus
+                                                up = episodeActionSecondaryFocus
+                                                down = episodeActionSecondaryFocus
+                                            },
+                                            onClick = ::stopPlayback
+                                        )
                             }
                         } else {
                         skipIntroTo?.let { position ->
@@ -2935,13 +3004,28 @@ private fun PlayerHome(
                                 if (autoNextEpisode) stringResource(R.string.episode_countdown, nextEpisodeName, seconds)
                                 else stringResource(R.string.next_episode_ready, nextEpisodeName)
                             )
-                            Row {
+                            Row(Modifier.focusGroup()) {
                                 MenuButton(
-                                    stringResource(R.string.play_next_episode), Modifier.focusRequester(episodeActionFocus)
+                                    stringResource(R.string.play_next_episode),
+                                    Modifier.focusRequester(episodeActionFocus).focusProperties {
+                                        left = episodeActionSecondaryFocus
+                                        right = episodeActionSecondaryFocus
+                                        up = episodeActionFocus
+                                        down = episodeActionFocus
+                                    }
                                 ) {
                                     advanceEpisode(confirmed = true)
                                 }
-                                MenuButton(stringResource(R.string.stop_playback), Modifier, onClick = ::stopPlayback)
+                                MenuButton(
+                                    stringResource(R.string.stop_playback),
+                                    Modifier.focusRequester(episodeActionSecondaryFocus).focusProperties {
+                                        left = episodeActionFocus
+                                        right = episodeActionFocus
+                                        up = episodeActionSecondaryFocus
+                                        down = episodeActionSecondaryFocus
+                                    },
+                                    onClick = ::stopPlayback
+                                )
                             }
                         }
                         }
@@ -4520,6 +4604,19 @@ internal fun PlayerFrame(
     episodeActionVisible: Boolean = false,
     onControlsVisible: ((Boolean) -> Unit)? = null
 ) {
+    val buffering by produceState(
+        initialValue = false,
+        player, active, fullscreen
+    ) {
+        if (player == null || !active || !fullscreen) {
+            value = false
+        } else {
+            while (true) {
+                value = player.isLoading || player.playbackState == Player.STATE_BUFFERING
+                delay(250)
+            }
+        }
+    }
     val stop by rememberUpdatedState(onStop)
     val openFullscreen by rememberUpdatedState(onOpenFullscreen)
     val guideInput by rememberUpdatedState(onGuideInput)
@@ -4670,7 +4767,7 @@ internal fun PlayerFrame(
                                 next.nextFocusLeftId = pause.id
                                 next.nextFocusRightId = button.id
                                 button.nextFocusLeftId = next.id
-                                button.nextFocusRightId = pause.id
+                                button.nextFocusRightId = button.id
                             }
                             val index = row.indexOfChild(pause).takeIf { it >= 0 } ?: 0
                             row.addView(previous, index, LinearLayout.LayoutParams(size, size))
@@ -4725,6 +4822,13 @@ internal fun PlayerFrame(
                     }
                 }
             )
+            if (fullscreen && buffering) {
+                CircularProgressIndicator(
+                    modifier = Modifier.align(Alignment.Center).size(42.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    strokeWidth = 3.dp
+                )
+            }
         } else if (showEmpty) {
             Text(stringResource(R.string.no_playback))
         }

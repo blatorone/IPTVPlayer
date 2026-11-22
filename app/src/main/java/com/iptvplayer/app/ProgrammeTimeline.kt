@@ -2,6 +2,7 @@ package com.iptvplayer.app
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -30,8 +31,12 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -45,6 +50,7 @@ import kotlinx.coroutines.flow.collectLatest
 
 private const val GUIDE_INTERVAL = 1_800L
 private const val GUIDE_WINDOW = 4 * GUIDE_INTERVAL
+private data class GuideSlot(val programme: PortalProgramme, val from: Long, val stop: Long)
 
 @Composable
 internal fun ProgrammeTimeline(
@@ -58,6 +64,9 @@ internal fun ProgrammeTimeline(
     compact: Boolean,
     refreshKey: Int,
     horizonHours: Int,
+    active: Boolean,
+    channelColumnFocus: FocusRequester,
+    onChannelLeft: () -> Unit,
     onVisibleChannels: suspend (List<StalkerChannel>) -> Unit,
     onHighlight: (StalkerChannel) -> Unit,
     onProgrammeFocus: (StalkerChannel, PortalProgramme) -> Unit,
@@ -74,6 +83,11 @@ internal fun ProgrammeTimeline(
         }
     }
     val start = now - now % GUIDE_INTERVAL + offset
+    val latest = ((horizonHours * 3_600L - 1) / GUIDE_WINDOW) * GUIDE_WINDOW
+    val channelEntry = Modifier.focusProperties {
+        canFocus = active
+        down = channelColumnFocus
+    }
     val rowHeight = if (compact) 36.dp else 48.dp
     val displayed = remember(channels, pinnedIds, onlyPinned) {
         if (onlyPinned) channels.filter { programmeKey(it) in pinnedIds } else channels
@@ -91,6 +105,12 @@ internal fun ProgrammeTimeline(
     LaunchedEffect(displayed, highlighted) {
         if (highlighted !in displayed) displayed.firstOrNull()?.let(onHighlight)
     }
+    LaunchedEffect(active, displayed.isEmpty()) {
+        if (active && displayed.isNotEmpty()) {
+            withFrameNanos { }
+            channelColumnFocus.requestFocus()
+        }
+    }
     Column(Modifier.fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(if (compact) 2.dp else 4.dp)) {
     Row(
         Modifier.fillMaxWidth(),
@@ -98,14 +118,13 @@ internal fun ProgrammeTimeline(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(guideDate(start), Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
-        MenuButton(stringResource(R.string.guide_previous_window), Modifier) { offset = (offset - GUIDE_WINDOW).coerceAtLeast(-GUIDE_WINDOW) }
-        MenuButton(stringResource(R.string.guide_now), Modifier) { offset = 0 }
-        MenuButton(stringResource(R.string.guide_next_window), Modifier) {
-            val latest = ((horizonHours * 3_600L - 1) / GUIDE_WINDOW) * GUIDE_WINDOW
+        MenuButton(stringResource(R.string.guide_previous_window), channelEntry) { offset = (offset - GUIDE_WINDOW).coerceAtLeast(-GUIDE_WINDOW) }
+        MenuButton(stringResource(R.string.guide_now), channelEntry) { offset = 0 }
+        MenuButton(stringResource(R.string.guide_next_window), channelEntry) {
             offset = (offset + GUIDE_WINDOW).coerceAtMost(latest)
         }
         MenuButton(
-            stringResource(R.string.guide_pinned_only), Modifier, selected = onlyPinned
+            stringResource(R.string.guide_pinned_only), channelEntry, selected = onlyPinned
         ) { onlyPinned = !onlyPinned }
     }
     if (displayed.isEmpty()) {
@@ -136,9 +155,18 @@ internal fun ProgrammeTimeline(
     ) {
         itemsIndexed(displayed) { index, channel ->
             val schedule = programmes(channel)
+            val channelFocus = remember { FocusRequester() }
+            val timelineFocus = remember { FocusRequester() }
+            val entryFocus = if (index == scroll.firstVisibleItemIndex) Modifier.focusRequester(channelColumnFocus) else Modifier
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 GuideChannelCell(
-                    channel, channel.number ?: index + 1L, Modifier.weight(1.25f), channel === highlighted, channel === playing,
+                    channel, channel.number ?: index + 1L,
+                    Modifier.weight(1.25f).then(entryFocus).focusRequester(channelFocus)
+                        .focusProperties { canFocus = active }
+                        .onHorizontalRemote { right ->
+                            if (right) timelineFocus.requestFocus() else onChannelLeft()
+                        },
+                    channel === highlighted, channel === playing,
                     rowHeight = rowHeight,
                     compact = compact,
                     onFocus = { onHighlight(channel) }
@@ -147,10 +175,15 @@ internal fun ProgrammeTimeline(
                     onPlay(channel)
                 }
                 TimelineRow(
-                    Modifier.weight(3f), schedule, start, now,
+                    Modifier.weight(3f), schedule, start, now, offset,
                     rowHeight = rowHeight,
                     compact = compact,
                     loading = schedule == null && programmeKey(channel) != null,
+                    active = active,
+                    channelFocus = channelFocus,
+                    timelineFocus = timelineFocus,
+                    canPageRight = offset < latest,
+                    onPage = { right -> offset += if (right) GUIDE_WINDOW else -GUIDE_WINDOW },
                     onFocus = { programme -> onProgrammeFocus(channel, programme) },
                     onProgramme = { programme ->
                         onProgrammeFocus(channel, programme)
@@ -247,41 +280,90 @@ private fun TimelineRow(
     schedule: List<PortalProgramme>?,
     start: Long,
     now: Long,
+    offset: Long,
     rowHeight: Dp,
     compact: Boolean,
     loading: Boolean,
+    active: Boolean,
+    channelFocus: FocusRequester,
+    timelineFocus: FocusRequester,
+    canPageRight: Boolean,
+    onPage: (Boolean) -> Unit,
     onFocus: (PortalProgramme) -> Unit,
     onProgramme: (PortalProgramme) -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
     val end = start + GUIDE_WINDOW
-    BoxWithConstraints(modifier.height(rowHeight).background(colors.surfaceContainer)) {
-        val width = maxWidth
+    val slots = remember(schedule, start, offset) {
         val timed = schedule.orEmpty().filter { it.startSeconds != null }.sortedBy { it.startSeconds }
-        var drawn = false
-        for ((index, programme) in timed.withIndex()) {
-            val from = programme.startSeconds ?: continue
+        val timedSlots = timed.mapIndexedNotNull { index, programme ->
+            val from = programme.startSeconds ?: return@mapIndexedNotNull null
             val stop = programme.endSeconds?.takeIf { it > from }
                 ?: timed.getOrNull(index + 1)?.startSeconds?.takeIf { it > from }
                 ?: (from + GUIDE_INTERVAL)
-            if (from >= end || stop <= start) continue
-            drawn = true
+            GuideSlot(programme, from, stop).takeIf { from < end && stop > start }
+        }
+        if (timedSlots.isNotEmpty() || offset != 0L) timedSlots
+        else schedule?.firstOrNull { it.startSeconds == null }
+            ?.let { listOf(GuideSlot(it, start, end)) }.orEmpty()
+    }
+    val entryIndex = if (offset == 0L) {
+        slots.indexOfFirst { it.stop > now }.takeIf { it >= 0 } ?: slots.lastIndex.coerceAtLeast(0)
+    } else 0
+    val cellFocus = remember(slots.size) { List(slots.size.coerceAtLeast(1)) { FocusRequester() } }
+    var pageTarget by remember { mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(start, pageTarget) {
+        val forward = pageTarget ?: return@LaunchedEffect
+        withFrameNanos { }
+        val index = if (forward || offset == 0L) entryIndex else cellFocus.lastIndex
+        cellFocus[index].requestFocus()
+        pageTarget = null
+    }
+    fun move(index: Int, right: Boolean) {
+        when {
+            right && index < cellFocus.lastIndex -> cellFocus[index + 1].requestFocus()
+            right && canPageRight -> {
+                pageTarget = true
+                onPage(true)
+            }
+            !right && offset == 0L && index <= entryIndex -> channelFocus.requestFocus()
+            !right && index > 0 -> cellFocus[index - 1].requestFocus()
+            !right && offset > 0 -> {
+                pageTarget = false
+                onPage(false)
+            }
+            !right -> channelFocus.requestFocus()
+        }
+    }
+    fun cellModifier(index: Int): Modifier {
+        val entry = if (index == entryIndex) Modifier.focusRequester(timelineFocus) else Modifier
+        return entry.focusRequester(cellFocus[index]).focusProperties { canFocus = active }
+            .onHorizontalRemote { move(index, it) }
+    }
+    BoxWithConstraints(modifier.height(rowHeight).background(colors.surfaceContainer)) {
+        val width = maxWidth
+        for ((index, slot) in slots.withIndex()) {
+            val (programme, from, stop) = slot
             val left = (maxOf(from, start) - start).toFloat() / GUIDE_WINDOW
             val span = (minOf(stop, end) - maxOf(from, start)).toFloat() / GUIDE_WINDOW
             ProgrammeCell(
-                programme, Modifier.offset(x = width * left).width(width * span).fillMaxHeight(),
+                programme, Modifier.offset(x = width * left).width(width * span).fillMaxHeight()
+                    .then(cellModifier(index)),
                 current = now in from until stop, compact = compact,
                 onFocus = { onFocus(programme) }, onSelect = onProgramme
             )
         }
-        if (!drawn) {
-            val untimed = schedule?.firstOrNull { it.startSeconds == null }?.takeIf { now in start until end }
-            if (untimed != null) {
-                ProgrammeCell(untimed, Modifier.fillMaxWidth().fillMaxHeight(), false, compact, { onFocus(untimed) }, onProgramme)
-            } else {
+        if (slots.isEmpty()) {
+            var focused by remember { mutableStateOf(false) }
+            Box(
+                Modifier.fillMaxWidth().fillMaxHeight().then(cellModifier(0))
+                    .background(if (focused) colors.tertiaryContainer else colors.surfaceContainer)
+                    .onFocusChanged { focused = it.isFocused }.focusable(),
+                contentAlignment = Alignment.CenterStart
+            ) {
                 Text(
                     stringResource(if (loading) R.string.guide_loading else R.string.no_guide),
-                    Modifier.align(Alignment.CenterStart).padding(horizontal = 8.dp),
+                    Modifier.padding(horizontal = 8.dp),
                     style = MaterialTheme.typography.labelSmall,
                     color = colors.onSurfaceVariant,
                     maxLines = 1, overflow = TextOverflow.Ellipsis

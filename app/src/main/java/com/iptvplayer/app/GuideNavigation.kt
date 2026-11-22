@@ -38,7 +38,10 @@ internal enum class ControlAction(val label: Int) {
 }
 
 @Composable
-internal fun Modifier.guideNavigationInput(onInput: (GuideInput) -> Unit): Modifier {
+internal fun Modifier.guideNavigationInput(
+    interceptRemote: (GuideInput) -> Boolean = { true },
+    onInput: (GuideInput) -> Unit
+): Modifier {
     val current = rememberUpdatedState(onInput)
     return onPreviewKeyEvent { event ->
         val input = when (event.key) {
@@ -46,7 +49,7 @@ internal fun Modifier.guideNavigationInput(onInput: (GuideInput) -> Unit): Modif
             Key.DirectionRight -> GuideInput.REMOTE_RIGHT
             else -> null
         }
-        if (input == null) false else {
+        if (input == null || !interceptRemote(input)) false else {
             if (event.type == KeyEventType.KeyUp) current.value(input)
             true
         }
@@ -73,6 +76,18 @@ internal fun Modifier.guideNavigationInput(onInput: (GuideInput) -> Unit): Modif
         }
     }
 }
+
+internal fun Modifier.onHorizontalRemote(
+    allowRight: Boolean = true,
+    onDirection: (right: Boolean) -> Unit
+): Modifier =
+    onPreviewKeyEvent { event ->
+        val right = event.key == Key.DirectionRight
+        if (event.key != Key.DirectionLeft && !(right && allowRight)) false else {
+            if (event.type == KeyEventType.KeyUp) onDirection(right)
+            true
+        }
+    }
 
 internal fun guideChannelCategory(
     selected: String?,

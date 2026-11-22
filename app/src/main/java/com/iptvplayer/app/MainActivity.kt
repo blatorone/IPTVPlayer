@@ -82,6 +82,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
@@ -131,10 +132,15 @@ class MainActivity : ComponentActivity() {
     private lateinit var player: ExoPlayer
     private val storage by lazy { PortalStorage(applicationContext) }
     private var longBackAction: (() -> Boolean)? = null
+    private var menuBackAction: ((Boolean) -> Boolean)? = null
     private var consumedLongBack = false
 
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
         if (event.keyCode == android.view.KeyEvent.KEYCODE_BACK) {
+            if (menuBackAction?.invoke(
+                    event.action == android.view.KeyEvent.ACTION_UP && !event.isCanceled
+                ) == true
+            ) return true
             if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount > 0) {
                 if (consumedLongBack || longBackAction?.invoke() == true) {
                     consumedLongBack = true
@@ -160,6 +166,7 @@ class MainActivity : ComponentActivity() {
                     player = player,
                     storage = storage,
                     registerLongBack = { longBackAction = it },
+                    registerMenuBack = { menuBackAction = it },
                     onExit = ::finish,
                     onFullscreen = { fullscreen ->
                         val controller = WindowCompat.getInsetsController(window, window.decorView)
@@ -210,6 +217,7 @@ private enum class VodLiveView(val label: Int) {
 private val mainDestinations = Destination.entries.filter {
     it != Destination.SOURCES && it != Destination.CATEGORIES
 }
+private const val EXIT_CONFIRMATION_MS = 3_000L
 
 private val playerColors = darkColorScheme(
     primary = Color(0xFF8BB8FF),
@@ -282,6 +290,7 @@ private fun PlayerHome(
     player: ExoPlayer? = null,
     storage: PortalStorage? = null,
     registerLongBack: (((() -> Boolean)?) -> Unit) = {},
+    registerMenuBack: ((((Boolean) -> Boolean)?) -> Unit) = {},
     onExit: () -> Unit = {},
     onFullscreen: (Boolean) -> Unit = {},
     canPlay: () -> Boolean = { false }
@@ -1986,6 +1995,21 @@ private fun PlayerHome(
     var fullscreenOverlayContent by remember { mutableStateOf(GuidePanel.CHANNELS) }
     var guideProgramme by remember { mutableStateOf<PortalProgramme?>(null) }
     val guidePanelFocus = remember { FocusRequester() }
+    val guideChannelFocus = remember { FocusRequester() }
+    fun openMainMenu() {
+        if (selected == Destination.MOVIES || selected == Destination.SERIES) {
+            closeGroup()
+            closeSeries()
+            details = null
+            movieHistoryOpen = false
+            movieWatchlistOpen = false
+            seriesActivityView = null
+        }
+        pendingVodCategory = null
+        lastBack = 0L
+        guidePanel = GuidePanel.MENU
+        selected = Destination.LIVE
+    }
     fun navigateGuide(input: GuideInput) {
         guidePanel = guidePanel.after(input)
     }
@@ -2001,7 +2025,9 @@ private fun PlayerHome(
         }
     }
     val mediaDestination = inGuide || selected == Destination.MOVIES || selected == Destination.SERIES
-    val insideCategory = (selected == null || inGuide) && category != null
+    fun isMainMenuOpen() = selected == Destination.LIVE && guidePanel == GuidePanel.MENU && !fullscreen
+    val mainMenuOpen = isMainMenuOpen()
+    LaunchedEffect(mainMenuOpen) { if (!mainMenuOpen) lastBack = 0L }
     fun returnToCategories() {
         lastLiveCategory = category
         category = null
@@ -2013,7 +2039,7 @@ private fun PlayerHome(
     }
     LaunchedEffect(lastBack) {
         if (lastBack != 0L) {
-            delay(1_500)
+            delay(EXIT_CONFIRMATION_MS)
             lastBack = 0
         }
     }
@@ -2038,18 +2064,18 @@ private fun PlayerHome(
                 return
             }
             leaveFullscreen()
-        } else if (inGuide && guidePanel == GuidePanel.GRID && !insideCategory) {
+        } else if (isMainMenuOpen()) {
             val now = SystemClock.elapsedRealtime()
-            if (lastBack != 0L && now - lastBack <= 1_500) {
+            if (lastBack != 0L && now - lastBack <= EXIT_CONFIRMATION_MS) {
                 savePlaybackPosition()
                 onExit()
             } else {
                 lastBack = now
-                android.widget.Toast.makeText(context, R.string.press_back_again_to_exit, android.widget.Toast.LENGTH_SHORT).show()
             }
-        } else if (inGuide && guidePanel != GuidePanel.GRID) {
-            navigateGuide(GuideInput.BACK)
-        } else if (insideCategory) returnToCategories()
+        } else if (inGuide) {
+            if (guidePanel == GuidePanel.GRID) openMainMenu()
+            else guidePanel = GuidePanel.GRID
+        } else if (selected == null && category != null) returnToCategories()
         else if (selected == Destination.SERIES && openedSeason != null) openedSeason = null
         else if (selected == Destination.SERIES && openedSeries != null) {
             closeSeries()
@@ -2065,15 +2091,8 @@ private fun PlayerHome(
         else if (selected == Destination.SERIES && seriesActivityView != null) seriesActivityView = null
         else if (selected == Destination.MOVIES && movieHistoryOpen) movieHistoryOpen = false
         else if (selected == Destination.MOVIES && movieWatchlistOpen) movieWatchlistOpen = false
-        else if (selected == Destination.MOVIES || selected == Destination.SERIES || selected == Destination.SEARCH) {
-            closeGroup()
-            pendingVodCategory = null
-            guidePanel = GuidePanel.MENU
-            selected = Destination.LIVE
-        }
-        else selected = if (selected == Destination.SOURCES || selected == Destination.CATEGORIES) {
-            Destination.SETTINGS
-        } else Destination.LIVE
+        else if (selected == Destination.SOURCES || selected == Destination.CATEGORIES) selected = Destination.SETTINGS
+        else openMainMenu()
     }
     var playerControlsRequest by remember { mutableIntStateOf(0) }
     fun runMappedControl(input: GuideInput): Boolean {
@@ -2116,9 +2135,18 @@ private fun PlayerHome(
         !controlSettingsOpen &&
             (runMappedControl(GuideInput.LONG_BACK) || (!fullscreen && openCurrentFullscreen()))
     })
+    val menuBack by rememberUpdatedState<(Boolean) -> Boolean>({ released ->
+        val open = isMainMenuOpen()
+        if (open && released) navigateBack()
+        open
+    })
     DisposableEffect(Unit) {
         registerLongBack { longBack() }
-        onDispose { registerLongBack(null) }
+        registerMenuBack { released -> menuBack(released) }
+        onDispose {
+            registerLongBack(null)
+            registerMenuBack(null)
+        }
     }
     BackHandler(onBack = ::navigateBack)
     if (controlSettingsOpen) ControlMappingDialog(
@@ -2260,7 +2288,7 @@ private fun PlayerHome(
         }
         val live = vodSection == null
         val overlayFocus = remember { FocusRequester() }
-        val inputModifier = if (live) Modifier.guideNavigationInput(::navigateFromLiveFullscreen) else Modifier
+        val inputModifier = if (live) Modifier.guideNavigationInput(onInput = ::navigateFromLiveFullscreen) else Modifier
         Box(Modifier.fillMaxSize().background(Color.Black).then(inputModifier)) {
             PlayerFrame(
                 player, active = true, fullscreen = true, onStop = ::stopPlayback,
@@ -2733,25 +2761,28 @@ private fun PlayerHome(
                         }
                     )
                 }
+                if (mainMenuOpen && lastBack != 0L) {
+                    Text(
+                        stringResource(R.string.press_back_again_to_exit),
+                        Modifier.padding(10.dp),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
             }
             val header: @Composable () -> Unit = {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (inGuide) {
-                        val atGuideRoot = inGuide && guidePanel == GuidePanel.GRID
-                        MenuButton(
-                            stringResource(if (atGuideRoot) R.string.guide_main_menu else R.string.navigation_back),
-                            Modifier.focusRequester(initialFocus)
-                        ) {
-                            if (atGuideRoot) guidePanel = GuidePanel.MENU else navigateBack()
-                        }
-                    }
                     if (vodSectionForScreen != null) Box(Modifier.weight(1f))
                     else if (destination != Destination.SEARCH) Text(
                         text = stringResource(if (inGuide) R.string.destination_guide else destination?.label ?: R.string.destination_live),
                         style = if (compactGuide) MaterialTheme.typography.titleSmall else MaterialTheme.typography.headlineSmall
                     )
                     if (inGuide) {
-                        MenuButton(category ?: stringResource(R.string.guide_all_channels), Modifier) {
+                        MenuButton(category ?: stringResource(R.string.guide_all_channels),
+                            Modifier.focusRequester(initialFocus).focusProperties {
+                                canFocus = guidePanel == GuidePanel.GRID
+                                down = guideChannelFocus
+                            }
+                        ) {
                             guidePanel = GuidePanel.CATEGORIES
                         }
                     }
@@ -3078,6 +3109,9 @@ private fun PlayerHome(
                                 compact = compactGuide,
                                 refreshKey = epgRefreshRequest,
                                 horizonHours = epgHorizonHours,
+                                active = guidePanel == GuidePanel.GRID,
+                                channelColumnFocus = guideChannelFocus,
+                                onChannelLeft = ::openMainMenu,
                                 onVisibleChannels = { visible -> if (!useXmlTv) loadProviderSchedules(visible) },
                                 onHighlight = {
                                     programmeChannel = it
@@ -3443,7 +3477,9 @@ private fun PlayerHome(
             }
             if (inGuide) {
                 Column(
-                    Modifier.fillMaxSize().guideNavigationInput {
+                    Modifier.fillMaxSize().guideNavigationInput(interceptRemote = { input ->
+                        guidePanel != GuidePanel.GRID || controlBindings[input]?.let { it != ControlAction.DEFAULT } == true
+                    }) {
                         if (!runMappedControl(it)) navigateGuide(it)
                     },
                     verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -3456,6 +3492,7 @@ private fun PlayerHome(
                     val section = requireNotNull(vodSectionForScreen)
                     Column(
                         Modifier.width(vodSidebarWidth).fillMaxHeight()
+                            .onHorizontalRemote(allowRight = false) { openMainMenu() }
                             .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(10.dp))
                             .padding(6.dp),
                         verticalArrangement = Arrangement.spacedBy(3.dp)
@@ -3550,7 +3587,7 @@ private fun PlayerHome(
                 }
             }
             LaunchedEffect(destination) {
-                if (!restoreLiveFocus) initialFocus.requestFocus()
+                if (!inGuide && !restoreLiveFocus) initialFocus.requestFocus()
             }
             LaunchedEffect(inGuide, guidePanel) {
                 if (inGuide) {

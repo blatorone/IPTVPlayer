@@ -27,6 +27,25 @@ internal data class LearnedOpening(val range: LongRange, val frames: List<Episod
         frames.joinToString(";") { "${it.timeMs},${it.fingerprint}" }
 }
 
+internal data class OpeningReference(val mediaId: String, val frames: List<EpisodeFrame>) {
+    fun encode(): String = "$mediaId|" + frames.take(180).joinToString(";") {
+        "${it.timeMs},${it.fingerprint}"
+    }
+}
+
+internal fun decodeOpeningReference(encoded: String?): OpeningReference? {
+    val value = encoded ?: return null
+    val separator = value.indexOf('|')
+    if (separator <= 0) return null
+    val mediaId = value.substring(0, separator)
+    val frames = value.substring(separator + 1).split(';').take(180).mapNotNull { row ->
+        val columns = row.split(',').mapNotNull(String::toLongOrNull)
+        if (columns.size != 2 || columns[0] !in 0..180_000) null
+        else EpisodeFrame(columns[0], columns[1], false)
+    }
+    return frames.takeIf { it.size >= 4 }?.let { OpeningReference(mediaId, it) }
+}
+
 internal fun decodeLearnedOpening(encoded: String?): LearnedOpening? {
     val rows = encoded?.split(';') ?: return null
     val bounds = rows.first().split(',').mapNotNull(String::toLongOrNull)

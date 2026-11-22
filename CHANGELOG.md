@@ -2,6 +2,14 @@
 
 ## Unveröffentlicht
 
+## 1.0.21
+
+- Fernbedienungseingaben für Intro- und Folgenhinweise werden beim Verlassen des Vollbildplayers freigegeben, damit die Navigation in Menüs und Folgenlisten wieder funktioniert.
+- Hauptmenüeinträge haben eine feste Hoch-/Runter-Fokusreihenfolge; Wiederholen der Links-/Rechts-Taste bewegt die Seek-Leiste weiter.
+- Die Seek-Leiste markiert bei Fokus nur noch den Positionspunkt.
+- Intro-Erkennung liest echte Videobilder auch aus Nicht-HLS-Streams und speichert Vergleichsbilder lokal für spätere Folgen.
+- Die Oberflächenerkennung prüft außerdem den Abspann auf eine passende Sprungmarke.
+
 ## 1.0.20
 
 - Fernbedienungsfokus im Folgenhinweis bleibt auf den beiden Aktionen; Links/Rechts wählen nur „Nächste Folge“ oder „Wiedergabe stoppen“ und OK bestätigt.

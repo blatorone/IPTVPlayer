@@ -126,6 +126,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.Log
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.DefaultTimeBar
 import androidx.media3.ui.PlayerView
 import android.view.SurfaceView
 import kotlinx.coroutines.CancellationException
@@ -2631,7 +2632,18 @@ private fun PlayerHome(
         val uri = item.localConfiguration?.uri ?: return@LaunchedEffect
         val hls = item.localConfiguration?.mimeType == MimeTypes.APPLICATION_M3U8 ||
             uri.lastPathSegment.orEmpty().endsWith(".m3u8", ignoreCase = true)
-        val previous = seriesOpenings[seriesKey]
+        val referenceKey = seriesKey?.let { (source, key) ->
+            val identity = "$source\n$key"
+            "opening-samples:" + java.security.MessageDigest.getInstance("SHA-256")
+                .digest(identity.encodeToByteArray())
+                .joinToString("") { "%02x".format(it) }
+        }
+        val previous = seriesOpenings[seriesKey]?.takeIf { it.first != selection.id }
+            ?: referenceKey?.let { key ->
+                decodeOpeningReference(progressPreferences?.getString(key, null))
+                    ?.takeIf { it.mediaId != selection.id }
+                    ?.let { it.mediaId to it.frames }
+            }
         val learnedKey = seriesKey?.let { (source, key) ->
             val identity = "$source\n$key\n$hls"
             "opening:" + java.security.MessageDigest.getInstance("SHA-256").digest(identity.encodeToByteArray())
@@ -2639,25 +2651,53 @@ private fun PlayerHome(
         }
         val learned = learnedKey?.let { decodeLearnedOpening(progressPreferences?.getString(it, null)) }
         var timing = EpisodeTiming()
-        val updates = if (hls) flow {
+        val sampleFromSurface = uri.scheme in setOf("http", "https")
+        val updates = if (sampleFromSurface) flow {
             val opening = mutableListOf<EpisodeFrame>()
-            while (active.currentMediaItem == item &&
-                (if (scanOpening) active.currentPosition < 180_000 else active.duration - active.currentPosition < 240_000)
-            ) {
+            val credits = mutableListOf<EpisodeFrame>()
+            var openingComplete = !scanOpening
+            var creditsComplete = !scanCredits
+            var lastOpeningBucket = -HLS_INTRO_FRAME_INTERVAL_MS
+            var lastCreditsBucket = -5_000L
+            while (active.currentMediaItem == item && (!openingComplete || !creditsComplete)) {
                 val position = active.currentPosition
-                val bucket = position / HLS_INTRO_FRAME_INTERVAL_MS * HLS_INTRO_FRAME_INTERVAL_MS
+                val inOpening = !openingComplete && position < 180_000L
+                if (!openingComplete && position >= 180_000L) openingComplete = true
+                val inCredits = !creditsComplete && active.duration - position <= 240_000L
                 val surface = fullscreenVideoSurface ?: playbackVideoSurface
-                if (surface != null && active.isPlaying &&
-                    (opening.lastOrNull()?.timeMs ?: -1) < bucket
-                ) {
-                    sampleEpisodeSurface(surface, bucket)?.let {
-                        opening += it
-                        emit(EpisodeVideoAnalysis(opening.toList()))
+                if (surface != null && active.isPlaying) {
+                    if (inOpening) {
+                        val bucket = position / HLS_INTRO_FRAME_INTERVAL_MS * HLS_INTRO_FRAME_INTERVAL_MS
+                        if (bucket > lastOpeningBucket) {
+                            sampleEpisodeSurface(surface, bucket)?.let { frame ->
+                                opening += frame
+                                lastOpeningBucket = bucket
+                            }
+                        }
+                    }
+                    if (inCredits) {
+                        val bucket = position / 5_000L * 5_000L
+                        if (bucket > lastCreditsBucket) {
+                            sampleEpisodeSurface(surface, bucket)?.let { frame ->
+                                credits += frame
+                                lastCreditsBucket = bucket
+                            }
+                        }
+                    }
+                    if (opening.isNotEmpty() || credits.isNotEmpty()) {
+                        emit(EpisodeVideoAnalysis(opening.toList(), findCreditsStart(credits)))
                     }
                 }
-                delay(150)
+                if (active.playbackState == Player.STATE_ENDED ||
+                    active.duration > 0 && position >= active.duration - 1_000L
+                ) {
+                    openingComplete = true
+                    creditsComplete = true
+                }
+                delay(if (inOpening || inCredits) 150 else 500)
             }
         } else analyzeEpisodeVideo(uri, duration, scanOpening, scanCredits)
+        var savedOpeningFrameCount = 0
         updates.collect { analysis ->
             if (active.currentMediaItem != item) return@collect
             if (seriesKey != null && analysis.opening.isNotEmpty()) {
@@ -2665,7 +2705,7 @@ private fun PlayerHome(
                     val intro = withContext(Dispatchers.Default) {
                         learned?.let { confirmKnownOpening(analysis.opening, it.frames, it.range) }
                             ?: previous?.takeIf { it.first != selection.id }?.let {
-                                if (hls) findRepeatedOpening(analysis.opening, it.second, HLS_INTRO_FRAME_INTERVAL_MS)
+                                if (sampleFromSurface) findRepeatedOpening(analysis.opening, it.second, HLS_INTRO_FRAME_INTERVAL_MS)
                                 else findRepeatedOpening(analysis.opening, it.second)
                             }
                     }
@@ -2685,6 +2725,15 @@ private fun PlayerHome(
                 }
                 if (previous?.first != selection.id || analysis.opening.size > previous.second.size) {
                     seriesOpenings[seriesKey] = selection.id to analysis.opening
+                }
+                if (referenceKey != null && analysis.opening.size >= 12 &&
+                    (analysis.opening.size - savedOpeningFrameCount >= 5 ||
+                        active.currentPosition >= 175_000L || active.playbackState == Player.STATE_ENDED)
+                ) {
+                    progressPreferences?.edit()?.putString(
+                        referenceKey, OpeningReference(selection.id, analysis.opening).encode()
+                    )?.apply()
+                    savedOpeningFrameCount = analysis.opening.size
                 }
             }
             analysis.creditsStartMs?.takeIf { it > active.currentPosition }?.let {
@@ -2858,6 +2907,9 @@ private fun PlayerHome(
                     true
                 } else false
             } else null)
+        }
+        DisposableEffect(Unit) {
+            onDispose { registerPromptInput(null) }
         }
         val overlayFocus = remember { FocusRequester() }
         fun interceptDirection(input: GuideInput): Boolean {
@@ -3416,6 +3468,16 @@ private fun PlayerHome(
                 ) { it.id }
             }.orEmpty()
             val recentCategoryKey = "last_vod_category_${vodSectionForScreen?.name}"
+            val destinationFocusRequesters = remember {
+                mainDestinations.associateWith { FocusRequester() }
+            }
+            fun destinationFocusRequester(item: Destination): FocusRequester = when {
+                item == lastFocused && !inGuide && destination != Destination.SEARCH &&
+                    destination != Destination.SETTINGS && destination != Destination.SOURCES &&
+                    destination != Destination.CATEGORIES -> initialFocus
+                inGuide && item == Destination.LIVE -> guidePanelFocus
+                else -> destinationFocusRequesters.getValue(item)
+            }
             fun openVodCategory(group: PortalGroup) {
                 val section = vodSectionForScreen ?: return
                 catalogueReturnTitle = null
@@ -3445,21 +3507,19 @@ private fun PlayerHome(
                     color = MaterialTheme.colorScheme.primary
                 )
                 mainDestinations.forEach { item ->
+                    val position = mainDestinations.indexOf(item)
+                    val previousItem = mainDestinations.getOrNull(position - 1) ?: item
+                    val nextItem = mainDestinations.getOrNull(position + 1) ?: item
                     MenuButton(
                         label = stringResource(item.label),
                         leadingIcon = item.icon.takeUnless { mainMenuStyle == MainMenuStyle.TEXT },
                         iconOnly = mainMenuStyle == MainMenuStyle.ICONS,
-                        modifier = if (
-                            item == lastFocused && !inGuide && destination != Destination.SEARCH &&
-                            destination != Destination.SETTINGS &&
-                            destination != Destination.SOURCES && destination != Destination.CATEGORIES
-                        ) {
-                            Modifier.fillMaxWidth().focusRequester(initialFocus)
-                        } else if (inGuide && item == Destination.LIVE) {
-                            Modifier.fillMaxWidth().focusRequester(guidePanelFocus)
-                        } else {
-                            Modifier.fillMaxWidth()
-                        },
+                        modifier = Modifier.fillMaxWidth()
+                            .focusRequester(destinationFocusRequester(item))
+                            .focusProperties {
+                                up = destinationFocusRequester(previousItem)
+                                down = destinationFocusRequester(nextItem)
+                            },
                         selected = item == (destination ?: Destination.LIVE) ||
                             (item == Destination.SETTINGS &&
                                 destination in listOf(Destination.SOURCES, Destination.CATEGORIES)),
@@ -4868,7 +4928,7 @@ internal fun PlayerFrame(
                                             else -> 0L
                                         }
                                         if (delta != 0L) {
-                                            if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                                            if (event.action == android.view.KeyEvent.ACTION_DOWN) {
                                                 val duration = player?.duration?.takeIf { it > 0L } ?: Long.MAX_VALUE
                                                 player?.seekTo((player.currentPosition + delta).coerceIn(0L, duration))
                                             }
@@ -4945,6 +5005,11 @@ internal fun PlayerFrame(
                                     control.nextFocusLeftId = controls.getOrNull(index - 1)?.id ?: control.id
                                     control.nextFocusRightId = controls.getOrNull(index + 1)?.id ?: control.id
                                 }
+                                findViewById<android.view.View>(androidx.media3.ui.R.id.exo_progress)?.let { progress ->
+                                    controls.forEach { it.nextFocusDownId = progress.id }
+                                    progress.nextFocusUpId = pause.id
+                                    progress.nextFocusDownId = progress.id
+                                }
                             }
                             val index = row.indexOfChild(pause).takeIf { it >= 0 } ?: 0
                             row.addView(previous, index, LinearLayout.LayoutParams(size, size))
@@ -4960,20 +5025,14 @@ internal fun PlayerFrame(
                         findViewById<android.view.View>(androidx.media3.ui.R.id.exo_progress)?.let { progress ->
                             progress.isFocusable = true
                             progress.isFocusableInTouchMode = true
-                            val focused = android.graphics.drawable.GradientDrawable().apply {
-                                shape = android.graphics.drawable.GradientDrawable.RECTANGLE
-                                cornerRadius = 4 * context.resources.displayMetrics.density
-                                setColor(0x223B82F6)
-                                setStroke((2 * context.resources.displayMetrics.density).toInt().coerceAtLeast(2), android.graphics.Color.WHITE)
-                            }
-                            val idle = android.graphics.drawable.GradientDrawable().apply {
-                                shape = android.graphics.drawable.GradientDrawable.RECTANGLE
-                                cornerRadius = 4 * context.resources.displayMetrics.density
-                                setColor(android.graphics.Color.TRANSPARENT)
-                            }
-                            progress.foreground = android.graphics.drawable.StateListDrawable().apply {
-                                addState(intArrayOf(android.R.attr.state_focused), focused)
-                                addState(intArrayOf(), idle)
+                            progress.defaultFocusHighlightEnabled = false
+                            (progress as? DefaultTimeBar)?.let { timeBar ->
+                                progress.setOnFocusChangeListener { _, focused ->
+                                    timeBar.setScrubberColor(
+                                        if (focused) android.graphics.Color.rgb(59, 130, 246)
+                                        else android.graphics.Color.WHITE
+                                    )
+                                }
                             }
                         }
                         this.player = player

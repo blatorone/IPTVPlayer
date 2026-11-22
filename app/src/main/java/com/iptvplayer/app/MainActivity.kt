@@ -73,6 +73,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -149,9 +150,13 @@ class MainActivity : ComponentActivity() {
     private var longBackAction: (() -> Boolean)? = null
     private var screenBackAction: ((Boolean) -> Boolean)? = null
     private var playbackInputAction: (() -> Unit)? = null
+    private var promptInputAction: ((android.view.KeyEvent) -> Boolean)? = null
     private var consumedLongBack = false
 
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        // Modal playback prompts own the remote while visible, before PlayerView or
+        // Compose can route directional keys to the guide/list behind the prompt.
+        if (promptInputAction?.invoke(event) == true) return true
         if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0) playbackInputAction?.invoke()
         if (event.keyCode == android.view.KeyEvent.KEYCODE_BACK) {
             if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount > 0) {
@@ -190,6 +195,7 @@ class MainActivity : ComponentActivity() {
                     registerLongBack = { longBackAction = it },
                     registerScreenBack = { screenBackAction = it },
                     registerPlaybackInput = { playbackInputAction = it },
+                    registerPromptInput = { promptInputAction = it },
                     onExit = ::finish,
                     onFullscreen = { fullscreen ->
                         val controller = WindowCompat.getInsetsController(window, window.decorView)
@@ -330,6 +336,7 @@ private fun PlayerHome(
     registerLongBack: (((() -> Boolean)?) -> Unit) = {},
     registerScreenBack: ((((Boolean) -> Boolean)?) -> Unit) = {},
     registerPlaybackInput: (((() -> Unit)?) -> Unit) = {},
+    registerPromptInput: ((((android.view.KeyEvent) -> Boolean)?) -> Unit) = {},
     onExit: () -> Unit = {},
     onFullscreen: (Boolean) -> Unit = {},
     canPlay: () -> Boolean = { false }
@@ -2548,6 +2555,7 @@ private fun PlayerHome(
             registerLongBack(null)
             registerScreenBack(null)
             registerPlaybackInput(null)
+            registerPromptInput(null)
         }
     }
     BackHandler(onBack = ::navigateBack)
@@ -2826,6 +2834,30 @@ private fun PlayerHome(
                 guideProgramme = null
             }
             showFullscreenPanel(fullscreenGuidePanel.after(input))
+        }
+        SideEffect {
+            registerPromptInput(if (episodeAction != 0) { event ->
+                val input = when (event.keyCode) {
+                    android.view.KeyEvent.KEYCODE_DPAD_LEFT -> GuideInput.REMOTE_LEFT
+                    android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> GuideInput.REMOTE_RIGHT
+                    android.view.KeyEvent.KEYCODE_DPAD_UP -> GuideInput.REMOTE_UP
+                    android.view.KeyEvent.KEYCODE_DPAD_DOWN -> GuideInput.REMOTE_DOWN
+                    else -> null
+                }
+                if (input != null) {
+                    if (event.action == android.view.KeyEvent.ACTION_UP && !event.isCanceled) navigateFullscreen(input)
+                    true
+                } else if (event.keyCode in setOf(
+                        android.view.KeyEvent.KEYCODE_DPAD_CENTER,
+                        android.view.KeyEvent.KEYCODE_ENTER,
+                        android.view.KeyEvent.KEYCODE_NUMPAD_ENTER,
+                        android.view.KeyEvent.KEYCODE_BUTTON_A
+                    )
+                ) {
+                    if (event.action == android.view.KeyEvent.ACTION_UP && !event.isCanceled) activateEpisodeAction()
+                    true
+                } else false
+            } else null)
         }
         val overlayFocus = remember { FocusRequester() }
         fun interceptDirection(input: GuideInput): Boolean {
@@ -4758,9 +4790,7 @@ internal fun PlayerFrame(
                                     if (controlsVisible) {
                                         postDelayed(hideControls, 6_000L)
                                         post {
-                                            if (controlsVisible) findViewById<android.view.View>(
-                                                androidx.media3.ui.R.id.exo_play_pause
-                                            )?.requestFocus()
+                                            if (controlsVisible) focusInitialControllerTarget()
                                         }
                                     } else if (allowControls) {
                                         post { if (!controlsVisible && allowControls) requestFocus() }
@@ -4772,6 +4802,14 @@ internal fun PlayerFrame(
                         private fun extendControlsTimeout() {
                             removeCallbacks(hideControls)
                             postDelayed(hideControls, 6_000L)
+                        }
+
+                        private fun focusInitialControllerTarget() {
+                            val progress = findViewById<android.view.View>(androidx.media3.ui.R.id.exo_progress)
+                            val canSeek = player?.isCurrentMediaItemSeekable == true &&
+                                (player?.duration ?: 0L) > 0L
+                            if (canSeek && progress?.requestFocus() == true) return
+                            findViewById<android.view.View>(androidx.media3.ui.R.id.exo_play_pause)?.requestFocus()
                         }
 
                         override fun onDetachedFromWindow() {
@@ -4822,6 +4860,21 @@ internal fun PlayerFrame(
                             if (fullscreen && allowControls) {
                                 if (controlsVisible) {
                                     extendControlsTimeout()
+                                    val progress = findViewById<android.view.View>(androidx.media3.ui.R.id.exo_progress)
+                                    if (progress?.hasFocus() == true && player?.isCurrentMediaItemSeekable == true) {
+                                        val delta = when (event.keyCode) {
+                                            android.view.KeyEvent.KEYCODE_DPAD_LEFT -> -10_000L
+                                            android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> 10_000L
+                                            else -> 0L
+                                        }
+                                        if (delta != 0L) {
+                                            if (event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                                                val duration = player?.duration?.takeIf { it > 0L } ?: Long.MAX_VALUE
+                                                player?.seekTo((player.currentPosition + delta).coerceIn(0L, duration))
+                                            }
+                                            return true
+                                        }
+                                    }
                                 } else {
                                     val direction = when (event.keyCode) {
                                         android.view.KeyEvent.KEYCODE_DPAD_LEFT -> GuideInput.REMOTE_LEFT
@@ -4903,6 +4956,25 @@ internal fun PlayerFrame(
                             previous.alpha = if (canPreviousEpisode) 1f else 0.35f
                             next.isEnabled = canNextEpisode
                             next.alpha = if (canNextEpisode) 1f else 0.35f
+                        }
+                        findViewById<android.view.View>(androidx.media3.ui.R.id.exo_progress)?.let { progress ->
+                            progress.isFocusable = true
+                            progress.isFocusableInTouchMode = true
+                            val focused = android.graphics.drawable.GradientDrawable().apply {
+                                shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                                cornerRadius = 4 * context.resources.displayMetrics.density
+                                setColor(0x223B82F6)
+                                setStroke((2 * context.resources.displayMetrics.density).toInt().coerceAtLeast(2), android.graphics.Color.WHITE)
+                            }
+                            val idle = android.graphics.drawable.GradientDrawable().apply {
+                                shape = android.graphics.drawable.GradientDrawable.RECTANGLE
+                                cornerRadius = 4 * context.resources.displayMetrics.density
+                                setColor(android.graphics.Color.TRANSPARENT)
+                            }
+                            progress.foreground = android.graphics.drawable.StateListDrawable().apply {
+                                addState(intArrayOf(android.R.attr.state_focused), focused)
+                                addState(intArrayOf(), idle)
+                            }
                         }
                         this.player = player
                         if (fullscreen) post { if (allowControls) requestFocus() }

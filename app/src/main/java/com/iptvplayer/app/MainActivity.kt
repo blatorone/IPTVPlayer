@@ -195,8 +195,8 @@ private enum class Destination(val label: Int) {
     LIVE(R.string.destination_live),
     MOVIES(R.string.destination_movies),
     SERIES(R.string.destination_series),
-    SEARCH(R.string.search),
     SETTINGS(R.string.destination_settings),
+    SEARCH(R.string.search),
     CATEGORIES(R.string.category_settings),
     SOURCES(R.string.destination_sources)
 }
@@ -2054,15 +2054,23 @@ private fun PlayerHome(
         else if (selected == Destination.SERIES && openedSeries != null) {
             closeSeries()
             details = null
+            seriesActivityView = null
         }
-        else if (details != null && selected in listOf(Destination.SERIES, Destination.MOVIES)) details = null
+        else if (details != null && selected in listOf(Destination.SERIES, Destination.MOVIES)) {
+            details = null
+            movieHistoryOpen = false
+            movieWatchlistOpen = false
+            seriesActivityView = null
+        }
         else if (selected == Destination.SERIES && seriesActivityView != null) seriesActivityView = null
         else if (selected == Destination.MOVIES && movieHistoryOpen) movieHistoryOpen = false
         else if (selected == Destination.MOVIES && movieWatchlistOpen) movieWatchlistOpen = false
-        else if (
-            (selected == Destination.MOVIES && selectedGroup?.first == PortalSection.MOVIES) ||
-            (selected == Destination.SERIES && selectedGroup?.first == PortalSection.SERIES)
-        ) closeGroup()
+        else if (selected == Destination.MOVIES || selected == Destination.SERIES || selected == Destination.SEARCH) {
+            closeGroup()
+            pendingVodCategory = null
+            guidePanel = GuidePanel.MENU
+            selected = Destination.LIVE
+        }
         else selected = if (selected == Destination.SOURCES || selected == Destination.CATEGORIES) {
             Destination.SETTINGS
         } else Destination.LIVE
@@ -2704,7 +2712,7 @@ private fun PlayerHome(
                     MenuButton(
                         label = stringResource(item.label),
                         modifier = if (
-                            item == lastFocused && !inGuide &&
+                            item == lastFocused && !inGuide && destination != Destination.SEARCH &&
                             destination != Destination.SETTINGS &&
                             destination != Destination.SOURCES && destination != Destination.CATEGORIES
                         ) {
@@ -2728,7 +2736,7 @@ private fun PlayerHome(
             }
             val header: @Composable () -> Unit = {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (mediaDestination) {
+                    if (inGuide) {
                         val atGuideRoot = inGuide && guidePanel == GuidePanel.GRID
                         MenuButton(
                             stringResource(if (atGuideRoot) R.string.guide_main_menu else R.string.navigation_back),
@@ -2737,9 +2745,9 @@ private fun PlayerHome(
                             if (atGuideRoot) guidePanel = GuidePanel.MENU else navigateBack()
                         }
                     }
-                    Text(
+                    if (vodSectionForScreen != null) Box(Modifier.weight(1f))
+                    else if (destination != Destination.SEARCH) Text(
                         text = stringResource(if (inGuide) R.string.destination_guide else destination?.label ?: R.string.destination_live),
-                        modifier = if (destination == Destination.MOVIES || destination == Destination.SERIES) Modifier.weight(1f) else Modifier,
                         style = if (compactGuide) MaterialTheme.typography.titleSmall else MaterialTheme.typography.headlineSmall
                     )
                     if (inGuide) {
@@ -3172,6 +3180,7 @@ private fun PlayerHome(
                     Destination.SEARCH -> PortalSearch(
                         query = searchQuery,
                         onQueryChange = { searchQuery = it },
+                        focusRequester = initialFocus,
                         sources = sourcesForBrowsing,
                         channels = liveCategories.values.flatten(),
                         liveSources = { channel -> liveVariants[channel].orEmpty().map { it.source } },
@@ -3417,24 +3426,6 @@ private fun PlayerHome(
                                     }
                                 )
                             } else {
-                                if (section == PortalSection.SERIES) {
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        MenuButton(
-                                            stringResource(R.string.watchlist), Modifier,
-                                            count = seriesActivity.filter { it.saved }.sumOf { it.unseen.size }
-                                                .takeIf { it > 0 }
-                                        ) { seriesActivityView = SeriesActivityView.WATCHLIST }
-                                        MenuButton(
-                                            stringResource(R.string.series_history), Modifier,
-                                            count = seriesActivity.filter { it.viewed }.sumOf { it.unseen.size }
-                                                .takeIf { it > 0 }
-                                        ) { seriesActivityView = SeriesActivityView.HISTORY }
-                                    }
-                                } else {
-                                    MenuButton(stringResource(R.string.movie_history), Modifier) {
-                                        movieHistoryOpen = true
-                                    }
-                                }
                                 if (visibleVodGroups.isEmpty()) CatalogCategories(
                                 groups = visibleVodGroups,
                                 loading = section in catalogLoading ||
@@ -3463,22 +3454,37 @@ private fun PlayerHome(
             } else if (mediaDestination) {
                 Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     val section = requireNotNull(vodSectionForScreen)
-                    LazyColumn(
+                    Column(
                         Modifier.width(vodSidebarWidth).fillMaxHeight()
                             .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(10.dp))
                             .padding(6.dp),
                         verticalArrangement = Arrangement.spacedBy(3.dp)
                     ) {
-                        item {
-                            MenuButton(stringResource(R.string.manage_categories), Modifier.fillMaxWidth()) {
-                                categoryMenu = section to null
+                        MenuButton(
+                            stringResource(R.string.manage_categories),
+                            Modifier.fillMaxWidth().focusRequester(initialFocus)
+                        ) { categoryMenu = section to null }
+                        LazyColumn(
+                            Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            items(visibleVodGroups, key = { it.id }) { group ->
+                                MenuButton(
+                                    group.name, Modifier.fillMaxWidth(),
+                                    selected = selectedGroup?.first == section && selectedGroup?.second?.id == group.id &&
+                                        !movieHistoryOpen && !movieWatchlistOpen && seriesActivityView == null,
+                                    hiddenIndicator = categoryKey(section, group.id) in hiddenCategories,
+                                    onLongPress = { categoryMenu = section to group.id }
+                                ) { openVodCategory(group) }
                             }
                         }
-                        item {
                             MenuButton(
                                 stringResource(R.string.watchlist), Modifier.fillMaxWidth(),
                                 selected = if (section == PortalSection.MOVIES) movieWatchlistOpen else
-                                    seriesActivityView == SeriesActivityView.WATCHLIST
+                                    seriesActivityView == SeriesActivityView.WATCHLIST,
+                                count = if (section == PortalSection.SERIES) {
+                                    seriesActivity.filter { it.saved }.sumOf { it.unseen.size }.takeIf { it > 0 }
+                                } else null
                             ) {
                                 closeSeries()
                                 details = null
@@ -3487,15 +3493,16 @@ private fun PlayerHome(
                                     movieWatchlistOpen = true
                                 } else seriesActivityView = SeriesActivityView.WATCHLIST
                             }
-                        }
-                        item {
                             MenuButton(
                                 stringResource(
                                     if (section == PortalSection.MOVIES) R.string.movie_history else R.string.series_history
                                 ),
                                 Modifier.fillMaxWidth(),
                                 selected = if (section == PortalSection.MOVIES) movieHistoryOpen else
-                                    seriesActivityView == SeriesActivityView.HISTORY
+                                    seriesActivityView == SeriesActivityView.HISTORY,
+                                count = if (section == PortalSection.SERIES) {
+                                    seriesActivity.filter { it.viewed }.sumOf { it.unseen.size }.takeIf { it > 0 }
+                                } else null
                             ) {
                                 closeSeries()
                                 details = null
@@ -3504,21 +3511,12 @@ private fun PlayerHome(
                                     movieHistoryOpen = true
                                 } else seriesActivityView = SeriesActivityView.HISTORY
                             }
-                        }
-                        items(visibleVodGroups, key = { it.id }) { group ->
-                            MenuButton(
-                                group.name, Modifier.fillMaxWidth(),
-                                selected = selectedGroup?.first == section && selectedGroup?.second?.id == group.id,
-                                hiddenIndicator = categoryKey(section, group.id) in hiddenCategories,
-                                onLongPress = { categoryMenu = section to group.id }
-                            ) { openVodCategory(group) }
-                        }
                     }
                     Column(
                         Modifier.weight(1f).fillMaxHeight(),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        header()
+                        if (restoring || connecting || cataloguePlaybackView == VodLiveView.CORNER && playing != null) header()
                         content()
                     }
                 }
@@ -3534,7 +3532,7 @@ private fun PlayerHome(
                         menu()
                     }
                     Column(Modifier.weight(3.6f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        header()
+                        if (destination != Destination.SEARCH || restoring || connecting) header()
                         Column(
                             Modifier.weight(1f).then(if (destination == Destination.SEARCH) Modifier else Modifier.verticalScroll(contentScroll)),
                             verticalArrangement = Arrangement.spacedBy(12.dp)

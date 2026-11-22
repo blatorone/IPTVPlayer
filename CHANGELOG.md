@@ -1,5 +1,10 @@
 # Änderungen
 
+## 1.0.10
+
+- Vereinfachte Navigation in Filme und Serien mit Merkliste und Verlauf unten in der Seitenleiste.
+- Suchbuttons zeigen die Trefferzahlen automatisch, sobald der jeweilige Bereich fertig geladen ist.
+
 ## 1.0.9
 
 - App-Updates in den Einstellungen mit optionaler Prüfung beim Start.

@@ -18,6 +18,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -26,12 +27,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 
@@ -46,6 +50,7 @@ private data class PortalResults(
 internal fun ColumnScope.PortalSearch(
     query: String,
     onQueryChange: (String) -> Unit,
+    focusRequester: FocusRequester,
     sources: List<SavedPortal>,
     channels: List<StalkerChannel>,
     liveSources: (StalkerChannel) -> List<SavedPortal>,
@@ -62,7 +67,7 @@ internal fun ColumnScope.PortalSearch(
         value = query,
         onValueChange = onQueryChange,
         label = { Text(stringResource(R.string.search)) },
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
         singleLine = true
     )
     val term = query.trim()
@@ -80,41 +85,48 @@ internal fun ColumnScope.PortalSearch(
     fun sourceNames(items: List<SavedPortal>): String =
         items.mapNotNull { labels[it.identity] }.distinct().joinToString(", ")
 
-    val remote by produceState<Map<PortalSection, List<PortalResults>>?>(null, sources, term, countries) {
-        value = null
+    var remote by remember(sources, term, countries) {
+        mutableStateOf(emptyMap<PortalSection, List<PortalResults>>())
+    }
+    LaunchedEffect(sources, term, countries) {
         delay(400)
         val limiter = Semaphore(4)
-        value = coroutineScope {
-            searchedSections.associateWith { section ->
-                sources.map { source ->
-                    async { searchPortal(source, portalFor(source), section, term, countries, limiter) }
+        for (section in searchedSections) {
+            launch {
+                val pages = coroutineScope {
+                    sources.map { source ->
+                        async { searchPortal(source, portalFor(source), section, term, countries, limiter) }
+                    }.map { it.await() }
                 }
-            }.mapValues { (_, jobs) -> jobs.map { it.await() } }
+                remote = remote + (section to pages)
+            }
         }
     }
-    val pagesBySection = searchedSections.associateWith { section ->
-            val pages = remote?.get(section) ?: sources.map {
-                localResults(it, section, term, countries)
-            }
-            pages
+    val cached = remember(sources, term, countries) {
+        searchedSections.associateWith { section -> sources.map { localResults(it, section, term, countries) } }
     }
-    val hitsBySection = pagesBySection.mapValues { (section, pages) ->
-        val items = pages.flatMap { it.titles }
-        if (combine) mergeCatalogueTitles(items.distinct(), requireVerifiedIdentity = section == PortalSection.SERIES)
-        else items.map(::listOf)
+    val pagesBySection = cached + remote
+    val hitsBySection = remember(pagesBySection, combine) {
+        pagesBySection.mapValues { (section, pages) ->
+            val items = pages.flatMap { it.titles }
+            if (combine) mergeCatalogueTitles(items.distinct(), requireVerifiedIdentity = section == PortalSection.SERIES)
+            else items.map(::listOf)
+        }
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         for (section in PortalSection.entries) {
+            val loading = section != PortalSection.LIVE && section !in remote
             val count = if (section == PortalSection.LIVE) live.size else {
                 pagesBySection.getValue(section).singleOrNull()?.total ?: hitsBySection.getValue(section).size
             }
             MenuButton(
-                stringResource(section.label), Modifier.weight(1f),
-                selected = selection == section, count = count
+                stringResource(if (loading) R.string.search_section_loading else R.string.search_section_count,
+                    stringResource(section.label), count), Modifier.weight(1f),
+                selected = selection == section
             ) { selection = section }
         }
     }
-    if (remote == null && selection != PortalSection.LIVE) LinearProgressIndicator(Modifier.fillMaxWidth())
+    if (remote.size < searchedSections.size) LinearProgressIndicator(Modifier.fillMaxWidth())
     if (selection == PortalSection.LIVE) {
         if (live.isEmpty()) Text(stringResource(R.string.search_empty))
         LazyColumn(Modifier.weight(1f)) {
@@ -135,8 +147,8 @@ internal fun ColumnScope.PortalSearch(
         }
     } else {
         val hits = hitsBySection.getValue(selection)
-        if (hits.isEmpty() && remote != null) Text(stringResource(R.string.search_empty))
-        if (remote != null && pagesBySection.getValue(selection).any { it.incomplete }) {
+        if (hits.isEmpty() && selection in remote) Text(stringResource(R.string.search_empty))
+        if (selection in remote && pagesBySection.getValue(selection).any { it.incomplete }) {
             Text(stringResource(R.string.search_partial), style = MaterialTheme.typography.bodySmall)
         }
         LazyVerticalGrid(

@@ -90,6 +90,15 @@
     <string name="vod_series_playback">Serien nach dem Vollbild: %1$s</string>
     <string name="vod_playback_off">Aus (pausieren)</string>
     <string name="app_name">StreamWatch</string>
+    <string name="export_portals">Portale exportieren</string>
+    <string name="import_portals">Portale importieren</string>
+    <string name="portal_transfer_privacy">Der Export enthält Portaladressen und MAC-Adressen. Behandle die Datei wie Zugangsdaten.</string>
+    <string name="portals_exported">Portale wurden exportiert.</string>
+    <string name="portal_transfer_failed">Portaldatei konnte nicht gelesen oder gespeichert werden.</string>
+    <plurals name="portals_imported">
+        <item quantity="one">%1$d Portal importiert.</item>
+        <item quantity="other">%1$d Portale importiert.</item>
+    </plurals>
     <string name="destination_live">Live-TV</string>
     <string name="destination_guide">Programmführer</string>
     <string name="destination_movies">Filme</string>

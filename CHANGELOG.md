@@ -2,6 +2,11 @@
 
 ## Unveröffentlicht
 
+## 1.0.16
+
+- Portaladressen und MAC-Adressen lassen sich zwischen Geräten exportieren und importieren.
+- Fire-TV-Launcher-Fallback auf das StreamWatch-Symbol umgestellt.
+
 ## 1.0.15
 
 - Seriensteuerung im Vollbild mit vorheriger und nächster Folge sowie Stopp per Fernbedienung.

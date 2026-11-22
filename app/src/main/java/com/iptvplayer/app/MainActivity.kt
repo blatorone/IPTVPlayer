@@ -18,6 +18,8 @@ import android.util.TypedValue
 import android.content.Context
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
@@ -557,6 +559,33 @@ private fun PlayerHome(
     var mac by remember { mutableStateOf("") }
     var storedSource by remember { mutableStateOf<SavedPortal?>(null) }
     var savedSources by remember { mutableStateOf(emptyList<SavedPortal>()) }
+    var portalTransferStatus by remember { mutableStateOf<String?>(null) }
+    val exportPortals = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) runCatching {
+            context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { writer ->
+                writer.write(exportPortalCredentials(savedSources))
+            } ?: error("Datei konnte nicht erstellt werden")
+        }.onSuccess { portalTransferStatus = context.getString(R.string.portals_exported) }
+            .onFailure { portalTransferStatus = context.getString(R.string.portal_transfer_failed) }
+    }
+    val importPortals = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) runCatching {
+            val json = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                ?: error("Datei konnte nicht geöffnet werden")
+            val credentials = importPortalCredentials(json)
+            val added = credentials.map { credential ->
+                SavedPortal(credential.address, credential.mac, emptyList(), emptyMap(), emptyMap())
+            }
+            val merged = (savedSources + added).distinctBy { it.identity }
+            savedSources = merged
+            scope.launch {
+                storage?.write(SavedPortals(merged, storedSource?.identity ?: merged.first().identity))
+            }
+            added.size
+        }.onSuccess { count ->
+            portalTransferStatus = context.resources.getQuantityString(R.plurals.portals_imported, count, count)
+        }.onFailure { portalTransferStatus = context.getString(R.string.portal_transfer_failed) }
+    }
     val secondarySessions = remember { mutableMapOf<String, StalkerPortal>() }
     val sourcesForBrowsing = remember(savedSources, storedSource, mergeSources) {
         val active = storedSource
@@ -3468,6 +3497,16 @@ private fun PlayerHome(
                         ) { showHiddenCategories = !showHiddenCategories }
                     }
                     Destination.SOURCES -> {
+                        if (savedSources.isNotEmpty()) {
+                            MenuButton(stringResource(R.string.export_portals), Modifier) {
+                                exportPortals.launch("streamwatch-portals.json")
+                            }
+                        }
+                        MenuButton(stringResource(R.string.import_portals), Modifier) {
+                            importPortals.launch(arrayOf("application/json", "text/plain"))
+                        }
+                        Text(stringResource(R.string.portal_transfer_privacy))
+                        portalTransferStatus?.let { Text(it) }
                         MenuButton(
                             label = stringResource(R.string.add_portal),
                             modifier = Modifier.focusRequester(initialFocus),

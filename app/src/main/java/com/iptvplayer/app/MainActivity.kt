@@ -6543,7 +6543,6 @@ internal fun MenuButton(
         shape = RoundedCornerShape(12.dp),
         border = when {
             enabled && highlighted -> BorderStroke(2.dp, colors.primary)
-            enabled && selected -> BorderStroke(2.dp, colors.primary)
             else -> null
         }
     ) {

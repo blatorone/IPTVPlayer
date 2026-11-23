@@ -1,5 +1,9 @@
 # Änderungen
 
+## 1.0.39
+
+- Auswahlmarkierungen zeigen weiterhin den Seitenstrich; der Rahmen erscheint nur am aktuell fokussierten Element.
+
 ## 1.0.38
 
 - Verlauf und Merkliste zeigen Titel in größeren Poster-Karten mit einheitlichem Hintergrund, passend zur Streaming-Startseite.

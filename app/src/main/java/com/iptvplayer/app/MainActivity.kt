@@ -697,7 +697,14 @@ private fun PlayerHome(
     var savedSources by remember { mutableStateOf(emptyList<SavedPortal>()) }
     var sourceContentCounts by remember { mutableStateOf<Map<String, PortalContentCounts>>(emptyMap()) }
     var combinedContentCounts by remember { mutableStateOf(PortalContentCounts(0, 0, 0)) }
-    LaunchedEffect(savedSources) {
+    val sourceContentKeys = savedSources.map { source ->
+        listOf(
+            source.identity, source.enabled, System.identityHashCode(source.channels),
+            System.identityHashCode(source.genres), System.identityHashCode(source.catalogs),
+            source.epgChannelIds.hashCode()
+        )
+    }
+    LaunchedEffect(sourceContentKeys) {
         val snapshot = savedSources
         val counts = withContext(Dispatchers.Default) {
             val perSource = snapshot.associate { source ->
@@ -776,7 +783,7 @@ private fun PlayerHome(
         }.onFailure { portalTransferStatus = context.getString(R.string.portal_transfer_failed) }
     }
     val secondarySessions = remember { mutableMapOf<String, StalkerPortal>() }
-    val sourcesForBrowsing = remember(savedSources, storedSource, mergeSources) {
+    val sourcesForBrowsing = remember(sourceContentKeys, storedSource?.identity, mergeSources) {
         val enabledSources = savedSources.filter { it.enabled }
         val active = storedSource?.takeIf { it.enabled }
         if (mergeSources) enabledSources.ifEmpty { listOfNotNull(active) } else listOfNotNull(active)
@@ -2132,6 +2139,9 @@ private fun PlayerHome(
             current.address, current.mac, current.channels, current.genres, current.catalogs,
             current.epgChannelIds, current.subscriptionExpiry, nextEnabled, nextReachable, autoDisabled
         )
+        if (current.enabled == nextEnabled && current.reachable == nextReachable &&
+            current.autoDisabled == autoDisabled
+        ) return
         if (storedSource?.identity == identity && !nextEnabled) {
             val fallback = savedSources.firstOrNull { source ->
                 source.enabled && runCatching { source.identity != identity }.getOrDefault(false)
@@ -3030,6 +3040,48 @@ private fun PlayerHome(
                 autoDisabled = false
             )
             val sameSource = snapshot.identity == storedSource?.identity
+            val unchanged = previous != null &&
+                previous.channels.map { channel ->
+                    listOf(
+                        channel.name, channel.command, channel.genreId, channel.genreName, channel.id,
+                        channel.logo, channel.direct, channel.epgIdentity, channel.number
+                    )
+                } == snapshot.channels.map { channel ->
+                    listOf(
+                        channel.name, channel.command, channel.genreId, channel.genreName, channel.id,
+                        channel.logo, channel.direct, channel.epgIdentity, channel.number
+                    )
+                } && previous.genres == snapshot.genres && previous.catalogs == snapshot.catalogs &&
+                previous.subscriptionExpiry == snapshot.subscriptionExpiry
+            if (unchanged) {
+                if (activate || sameSource) {
+                    if (!sameSource) {
+                        closeSeries()
+                        closeGroup()
+                        details = null
+                        searchedVariants = emptyMap()
+                        category = null
+                        lastLiveCategory = null
+                        channelScrollByCategory.clear()
+                        categoryScroll.requestScrollToItem(0)
+                        guideScroll.requestScrollToItem(0)
+                        programmeChannel = null
+                    }
+                    liveSession = source to token
+                    catalogSession = source to token
+                    catalogLoading = emptySet()
+                    catalogErrors = emptySet()
+                    channels = snapshot.channels
+                    genres = snapshot.genres
+                    catalogs = snapshot.catalogs
+                    epgChannelIds = snapshot.epgChannelIds
+                    save(snapshot, activate)
+                } else {
+                    updatePortalStatus(sourceIdentity, reachable = true)
+                }
+                AppDiagnostics.record(context, "portal_refresh_unchanged")
+                return importStatuses.values.all { it is ImportStatus.Count || it is ImportStatus.Loaded }
+            }
             if (activate || sameSource) {
                 if (!sameSource) {
                     closeSeries()
@@ -3464,16 +3516,36 @@ private fun PlayerHome(
         guidePanel = GuidePanel.MENU
         selected = Destination.LIVE
     }
+    fun guideChannelKey(channel: StalkerChannel): String {
+        val description = liveGroups[channel]?.description ?: describeChannel(channel, channel.genreName)
+        return channelIdentity(channel) ?: if (description.country != UNKNOWN_COUNTRY) {
+            "station:${description.country}:${description.normalizedName}"
+        } else {
+            "entry:${channel.id ?: channel.command}:${description.normalizedName}"
+        }
+    }
+    fun restoreGuideChannel(channel: StalkerChannel) {
+        val key = guideChannelKey(channel)
+        val entry = liveCategories.entries.firstNotNullOfOrNull { (group, items) ->
+            items.firstOrNull { guideChannelKey(it) == key }?.let { group to it }
+        }
+        if (entry == null) {
+            programmeChannel = channel
+        } else {
+            category = entry.first
+            lastLiveCategory = entry.first
+            programmeChannel = entry.second
+            val index = liveCategories.getValue(entry.first).indexOf(entry.second)
+            if (index >= 0) guideScroll.requestScrollToItem(index)
+        }
+        restoreLiveFocus = true
+    }
     fun restoreGuideEntryFocus() {
         val savedKey = preferences?.getString("last_live_channel", null)
         val channel = playing.takeIf { vodSection == null } ?: savedKey?.let { key ->
             liveGroups.keys.firstOrNull { (programmeKey(it) ?: liveGroups[it]?.identity) == key }
         }
-        if (channel != null) {
-            if (category != null && channel !in liveCategories[category].orEmpty()) category = null
-            programmeChannel = channel
-        }
-        restoreLiveFocus = true
+        if (channel != null) restoreGuideChannel(channel) else restoreLiveFocus = true
     }
     fun navigateGuide(input: GuideInput) {
         if (input in setOf(GuideInput.REMOTE_LEFT, GuideInput.SWIPE_LEFT) &&
@@ -3532,8 +3604,7 @@ private fun PlayerHome(
         }
         restoreLiveFocus = vodSection == null && (selected == null || selected == Destination.LIVE)
         if (restoreLiveFocus && inGuide) {
-            if (category != null && playing !in liveCategories[category].orEmpty()) category = null
-            programmeChannel = playing
+            playing?.let(::restoreGuideChannel)
         }
         if (vodSection != null && cataloguePlaybackView == VodLiveView.HIDDEN) player?.pause()
         fullscreen = false

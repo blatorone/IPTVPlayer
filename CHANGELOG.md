@@ -1,5 +1,10 @@
 # Änderungen
 
+## 1.0.49
+
+- Portalaktualisierungen vergleichen gespeicherte Sender, Kategorien und Kataloge mit der Antwort. Unveränderte Daten lösen keine erneute Speicherung oder Sendergruppierung aus; geänderte Inhalte werden übernommen.
+- Beim Verlassen des Live-Vollbilds wird der laufende Sender anhand stabiler Kanalmerkmale in seiner Kategorie wiederhergestellt und fokussiert.
+
 ## 1.0.48
 
 - Gespeicherte Sender und Kategorien bleiben beim Start die sofort nutzbare Quelle. Standardmäßig prüft der Start nur den Portalzugang; vollständige Kataloge werden nicht bei jedem App-Start neu geladen.

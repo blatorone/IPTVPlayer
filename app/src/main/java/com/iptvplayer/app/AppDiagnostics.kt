@@ -47,6 +47,16 @@ internal object AppDiagnostics {
         val name = "StreamWatch-Diagnose-${System.currentTimeMillis()}.txt"
         val target = DocumentsContract.createDocument(resolver, document, "text/plain", name)
             ?: error("Die Diagnose-Datei konnte im gewählten Ordner nicht angelegt werden.")
+        writeReport(context, target)
+        return target
+    }
+
+    fun exportToDocument(context: Context, target: Uri) {
+        writeReport(context, target)
+    }
+
+    private fun writeReport(context: Context, target: Uri) {
+        val resolver = context.contentResolver
         val events = File(context.filesDir, "streamwatch-events.log")
         val crash = File(context.filesDir, "streamwatch-crash.log")
         resolver.openOutputStream(target, "w")?.bufferedWriter(Charsets.UTF_8)?.use { writer ->
@@ -60,7 +70,6 @@ internal object AppDiagnostics {
             if (crash.exists()) writer.append(crash.readText(Charsets.UTF_8))
             else writer.appendLine("Kein Absturzbericht vorhanden.")
         } ?: error("Die Diagnose-Datei konnte nicht geschrieben werden.")
-        return target
     }
 
     private fun writeCrash(context: Context, thread: Thread, error: Throwable) {

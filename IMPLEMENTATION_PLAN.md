@@ -75,6 +75,12 @@ Abnahme aus `PROJECT_SPEC.md` mit Touch und TV-Fernbedienung durchführen; unter
 - D-Pad-Steuerung im Player: Play/Pause erhält den anfänglichen Fokus, Live zeigt nur verwendbare Aktionen und VOD nutzt Links/Rechts zum Suchen.
 - Debug- und Release-Build sowie Veröffentlichung über das bestehende Release-Workflow-Tag vorsehen. Shield/Fire-TV-Abnahme bleibt mangels aktuellem Gerätezugriff offen.
 
+## StreamWatch 1.0.36
+
+- Hintergrundberechnung großer VOD-Gruppen und geschützter Portalstatus-Callback, damit Quellenfehler nicht mehr die UI beenden.
+- Diagnoseexport als einzelne Datei zusätzlich zur Ordnerauswahl; interne Protokolle bleiben frei von Portaladressen und Inhalten.
+- Shield-Start per ADB gemessen: Start war erfolgreich, die erste sichtbare Ansicht erschien aber nach etwa 82 Sekunden. Nach dem Hintergrundumbau muss der Release auf der Shield erneut auf Startzeit und Portalabruf geprüft werden.
+
 ## Noch zu entscheiden
 
 Aus der Sichtung der TV-Referenz folgen weitere Funktionspakete für Aufnahmen, Anbieterarchive, Erinnerungen, Kindersicherung, Datensicherung, erweiterte Fernbedienungsbelegung und gerätespezifische Wiedergabe. Für Aufnahmen und Archiv sind getrennte Abnahmekriterien zu Speicherziel, Gerät und unterstützter Quelle erforderlich.

@@ -646,6 +646,11 @@ private fun PlayerHome(
             }
         }
     }
+    val saveDiagnosticsFile = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
+        if (uri != null) runCatching { AppDiagnostics.exportToDocument(context, uri) }
+            .onSuccess { diagnosticsStatus = context.getString(R.string.diagnostics_export_complete) }
+            .onFailure { diagnosticsStatus = context.getString(R.string.diagnostics_export_failed) }
+    }
     val exportPortals = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) runCatching {
             context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { writer ->
@@ -730,6 +735,7 @@ private fun PlayerHome(
     }
 
     LaunchedEffect(storage) {
+        AppDiagnostics.record(context, "portal_library_restore_started")
         try {
             metadataClient = storage?.readMetadataToken()?.let(::TmdbClient)
         } catch (error: CancellationException) {
@@ -1240,8 +1246,12 @@ private fun PlayerHome(
         }
         it.id to label
     }
-    val vodGroups = remember(sourcesForBrowsing, combine, fallbackGroup, countries, metadataClient) {
-        listOf(PortalSection.MOVIES, PortalSection.SERIES).associateWith { section ->
+    val vodGroups by produceState(
+        initialValue = emptyMap<PortalSection, Map<String, List<SourceItem<PortalGroup>>>>(),
+        sourcesForBrowsing, combine, fallbackGroup, countries, metadataClient
+    ) {
+        value = withContext(Dispatchers.Default) {
+            listOf(PortalSection.MOVIES, PortalSection.SERIES).associateWith { section ->
             val entries = sourcesForBrowsing.flatMap { source ->
                 source.catalogs[section]?.availableGroups(fallbackGroup).orEmpty().map { SourceItem(source, it) }
             }
@@ -1279,6 +1289,7 @@ private fun PlayerHome(
                 }
                 groups
             } else entries.associate { it.value.id to listOf(it) }
+            }
         }
     }
     fun sessionFor(source: SavedPortal): StalkerPortal =
@@ -1819,6 +1830,7 @@ private fun PlayerHome(
             storageError = R.string.portal_restore_failed
         } finally {
             restoring = false
+            AppDiagnostics.record(context, "portal_library_restore_completed")
         }
     }
 
@@ -1842,7 +1854,9 @@ private fun PlayerHome(
     }
 
     suspend fun updatePortalStatus(identity: String, reachable: Boolean? = null, enabled: Boolean? = null) {
-        val current = savedSources.firstOrNull { it.identity == identity } ?: return
+        val current = savedSources.firstOrNull { source ->
+            runCatching { source.identity == identity }.getOrDefault(false)
+        } ?: return
         val nextReachable = reachable ?: current.reachable
         val nextEnabled = enabled ?: if (reachable == false && autoDisableUnavailablePortals) false else current.enabled
         val updated = SavedPortal(
@@ -1850,7 +1864,9 @@ private fun PlayerHome(
             current.epgChannelIds, current.subscriptionExpiry, nextEnabled, nextReachable
         )
         if (storedSource?.identity == identity && !nextEnabled) {
-            val fallback = savedSources.firstOrNull { it.identity != identity && it.enabled }
+            val fallback = savedSources.firstOrNull { source ->
+                source.enabled && runCatching { source.identity != identity }.getOrDefault(false)
+            }
             storedSource = fallback
             preferences?.edit()?.putString("active_portal_cache", fallback?.identity)?.apply()
             liveSession = fallback?.let { StalkerPortal(it.address, it.mac) to null }
@@ -2624,13 +2640,16 @@ private fun PlayerHome(
     }
 
     suspend fun refreshPortal(enteredAddress: String, enteredMac: String, activate: Boolean): Boolean {
+        AppDiagnostics.record(context, "portal_refresh_started")
         sourceError = null
         importStatuses = emptyMap()
         try {
             val source = StalkerPortal(enteredAddress, enteredMac)
             val token = source.openSession()
-            val previous = savedSources.firstOrNull {
-                it.address == enteredAddress && normalizePortalMac(it.mac) == normalizePortalMac(enteredMac)
+            val previous = savedSources.firstOrNull { candidate ->
+                candidate.address == enteredAddress && runCatching {
+                    normalizePortalMac(candidate.mac) == normalizePortalMac(enteredMac)
+                }.getOrDefault(false)
             }
             val sourceIdentity = SavedPortal(
                 enteredAddress, enteredMac, emptyList(), emptyMap(), emptyMap()
@@ -2742,15 +2761,25 @@ private fun PlayerHome(
                 secondarySessions[snapshot.identity] = source
             }
             save(snapshot, activate)
+            AppDiagnostics.record(context, "portal_refresh_completed")
             return importStatuses.values.all { it is ImportStatus.Count || it is ImportStatus.Loaded } &&
                 storageError == null
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
+            AppDiagnostics.record(context, "portal_refresh_failed:${error.javaClass.simpleName}")
             val identity = runCatching {
                 SavedPortal(enteredAddress, enteredMac, emptyList(), emptyMap(), emptyMap()).identity
             }.getOrNull()
-            if (identity != null) updatePortalStatus(identity, reachable = false)
+            if (identity != null) {
+                try {
+                    updatePortalStatus(identity, reachable = false)
+                } catch (statusError: CancellationException) {
+                    throw statusError
+                } catch (_: Exception) {
+                    AppDiagnostics.record(context, "portal_status_update_failed")
+                }
+            }
             sourceError = when (error) {
                 is InvalidPortalAddressException -> R.string.portal_invalid_address
                 is PortalAuthenticationException -> R.string.portal_auth_failed
@@ -4484,6 +4513,10 @@ private fun PlayerHome(
                                         runCatching { chooseDiagnosticsFolder.launch(null) }
                                             .onFailure { diagnosticsStatus = context.getString(R.string.diagnostics_folder_open_failed) }
                                     }
+                                    MenuButton(stringResource(R.string.diagnostics_save_file), Modifier) {
+                                        runCatching { saveDiagnosticsFile.launch("StreamWatch-Diagnose.txt") }
+                                            .onFailure { diagnosticsStatus = context.getString(R.string.diagnostics_folder_open_failed) }
+                                    }
                                     MenuButton(stringResource(R.string.diagnostics_export), Modifier, enabled = diagnosticsTree != null) {
                                         diagnosticsTree?.let { tree ->
                                             runCatching { AppDiagnostics.export(context, tree) }
@@ -4624,8 +4657,15 @@ private fun PlayerHome(
                                 selected = source.enabled
                             ) {
                                 scope.launch {
-                                    updatePortalStatus(source.identity, enabled = !source.enabled)
-                                    if (!source.enabled) refreshPortal(source.address, source.mac, activate = false)
+                                    try {
+                                        updatePortalStatus(source.identity, enabled = !source.enabled)
+                                        if (!source.enabled) refreshPortal(source.address, source.mac, activate = false)
+                                    } catch (error: CancellationException) {
+                                        throw error
+                                    } catch (_: Exception) {
+                                        AppDiagnostics.record(context, "portal_toggle_failed")
+                                        sourceError = R.string.portal_error
+                                    }
                                 }
                             }
                         }

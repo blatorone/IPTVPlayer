@@ -1,5 +1,12 @@
 # Änderungen
 
+## 1.0.36
+
+- Große VOD-Kataloggruppen werden im Hintergrund berechnet, damit die erste App-Ansicht nicht auf der UI-Schleife warten muss.
+- Fehler beim Aktivieren oder Aktualisieren einer Portalquelle werden abgefangen und protokolliert, statt die App zu beenden.
+- Diagnoseberichte lassen sich auch direkt als Datei exportieren; eine Ordnerauswahl ist nicht mehr erforderlich.
+- Der Diagnoseverlauf vermerkt den Start und Abschluss von Bibliothekswiederherstellung und Portalaktualisierung, ohne Portaladressen oder Inhalte zu protokollieren.
+
 ## 1.0.35
 
 - Film- und Serienkataloge erhalten eine Streaming-Startseite mit Titelbereichen und horizontalen Posterreihen; der Live-Programmführer behält sein eigenes EPG-Raster.

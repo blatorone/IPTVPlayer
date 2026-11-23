@@ -27,7 +27,9 @@ Import → validieren/parsen → Quellobjekte normalisieren → verlässlich zuo
 
 ## Sicherheit und Betriebsgrenzen
 
-Eine kleine verschlüsselte Momentaufnahme der zuletzt gespielten Live-Variante wird getrennt von der Bibliothek gelesen. Der Schnellstart darf die Wiedergabe aus dieser Momentaufnahme beginnen, ohne auf die große Katalogwiederherstellung zu warten; der Datenabgleich erfolgt danach. Bestätigte Intro-Fingerabdrücke bleiben lokal und werden vor einer erneuten Skip-Empfehlung mit der laufenden Folge verglichen.
+Eine kleine verschlüsselte Momentaufnahme der zuletzt gespielten Live-Variante wird getrennt von der Bibliothek gelesen. Der Schnellstart darf die Wiedergabe aus dieser Momentaufnahme beginnen, ohne auf die große Katalogwiederherstellung zu warten. Die zuletzt gespeicherten Quellen und Kategorien bleiben während des automatischen Portal-Refreshs sichtbar und bedienbar; Portalantworten ersetzen den lokalen Katalog erst nach erfolgreicher Übernahme. Bestätigte Intro-Fingerabdrücke bleiben lokal und werden vor einer erneuten Skip-Empfehlung mit der laufenden Folge verglichen.
+
+Jeder gespeicherte Portal-Datensatz enthält zusätzlich `enabled` und einen nullable `reachable`-Status. Bestehende verschlüsselte Datensätze ohne diese Felder werden als aktiviert und ungeprüft geladen. Ein fehlgeschlagener Portal-Handshake aktualisiert nur den Status und lässt den gespeicherten Katalog bestehen. Wird eine Quelle deaktiviert, bleibt sie in der verschlüsselten Bibliothek, aber die aktive Quellenprojektion und Hintergrund-Metadatenabfragen schließen sie aus. Eine erfolgreiche erneute Anmeldung setzt den Status auf erreichbar.
 
 Eigene EPG-URLs liegen verschlüsselt außerhalb von Android-Backups. Der XMLTV-Adapter liest begrenzte XML- oder GZip-Dateien, ordnet per EPG-ID oder eindeutigem Sendernamen zu und behält bei fehlgeschlagenen Downloads den letzten gültigen Cache. Der Anbieteradapter aktualisiert sichtbare, bereits geladene und angeheftete Sender in begrenzten Gruppen.
 

@@ -4,26 +4,34 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.itemsIndexed
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
@@ -139,58 +147,187 @@ internal fun ColumnScope.TitleGrid(
             }
         }
     }
-    if (sorted.isEmpty()) Text(stringResource(R.string.no_matching_titles))
-    val scroll = rememberLazyGridState()
-    val returnIndex = when {
-        returnTitle != null -> sorted.indexOf(returnTitle)
-        focusFirstTitle && sorted.isNotEmpty() -> 0
-        else -> -1
-    }
+    val allRow = rememberLazyListState()
+    val returnIndex = returnTitle?.let { target -> sorted.indexOfFirst { it == target } } ?: -1
+    val heroFocus = remember { FocusRequester() }
     val returnFocus = remember { FocusRequester() }
     LaunchedEffect(returnTitle, returnIndex, focusFirstTitle) {
-        if (returnIndex >= 0 && scroll.layoutInfo.visibleItemsInfo.none { it.index == returnIndex }) {
-            scroll.scrollToItem(returnIndex)
-        } else if (returnIndex < 0 && returnTitle != null) onTitleFocusRestored()
+        if (returnIndex >= 0) {
+            if (allRow.layoutInfo.visibleItemsInfo.none { it.index == returnIndex }) allRow.scrollToItem(returnIndex)
+        } else if (returnTitle != null) onTitleFocusRestored()
+        if (focusFirstTitle && sorted.isNotEmpty()) {
+            withFrameNanos { }
+            if (heroFocus.requestFocus()) onTitleFocusRestored()
+        }
     }
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 92.dp),
-        modifier = Modifier.fillMaxWidth().weight(1f),
-        state = scroll,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        itemsIndexed(sorted) { index, title ->
-            var focused by remember { mutableStateOf(false) }
-            val restoreFocus = if (index == returnIndex) {
-                LaunchedEffect(title) {
-                    withFrameNanos { }
-                    if (returnFocus.requestFocus()) onTitleFocusRestored()
-                }
-                Modifier.focusRequester(returnFocus)
-            } else Modifier
-            Surface(
-                shape = MaterialTheme.shapes.medium,
-                color = if (focused) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
-                modifier = restoreFocus.clip(MaterialTheme.shapes.medium)
-                    .onFocusChanged { focused = it.isFocused }
-                    .clickable { onSelect(title) }
-            ) {
-                Column {
-                    Poster(title, Modifier.fillMaxWidth())
-                    Text(
-                        displayVodTitle(title), Modifier.padding(8.dp),
-                        style = MaterialTheme.typography.labelLarge,
-                        maxLines = 2, overflow = TextOverflow.Ellipsis
-                    )
-                    val unseen = newEpisodes(title)
-                    if (unseen > 0) Text(
-                        stringResource(R.string.new_episode_count, unseen),
-                        Modifier.padding(horizontal = 8.dp),
-                        color = MaterialTheme.colorScheme.primary,
-                        style = MaterialTheme.typography.labelSmall
-                    )
-                }
+    BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
+        val compact = maxWidth < 600.dp || maxHeight < 430.dp
+        val cardWidth = if (compact) 112.dp else 150.dp
+        val hero = sorted.firstOrNull()
+        LazyColumn(
+            Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(if (compact) 12.dp else 18.dp)
+        ) {
+            if (hero != null) item(key = "hero-${posterShelfKey(hero)}") {
+                FeaturedTitle(
+                    title = hero,
+                    height = (maxHeight * if (compact) 0.30f else 0.36f).coerceIn(150.dp, 300.dp),
+                    modifier = Modifier.then(if (focusFirstTitle) Modifier.focusRequester(heroFocus) else Modifier),
+                    onSelect = { onSelect(hero) }
+                )
             }
+            if (matches.isEmpty()) item { Text(stringResource(R.string.no_matching_titles)) }
+            val popular = sorted.filter { it.popularity != null }.sortedByDescending { it.popularity }
+            if (popular.isNotEmpty()) item(key = "shelf-popular") {
+                TitleShelf(
+                    title = stringResource(R.string.catalog_shelf_popular),
+                    titles = popular.take(20), cardWidth = cardWidth,
+                    newEpisodes = newEpisodes, onSelect = onSelect
+                )
+            }
+            val recentlyAdded = sorted.filter { it.addedAt != null }.sortedByDescending { it.addedAt }
+            if (recentlyAdded.isNotEmpty()) item(key = "shelf-recent") {
+                TitleShelf(
+                    title = stringResource(R.string.catalog_shelf_recent),
+                    titles = recentlyAdded.take(20), cardWidth = cardWidth,
+                    newEpisodes = newEpisodes, onSelect = onSelect
+                )
+            }
+            if (sorted.isNotEmpty()) item(key = "shelf-all") {
+                TitleShelf(
+                    title = stringResource(R.string.catalog_shelf_all),
+                    titles = sorted, cardWidth = cardWidth, state = allRow,
+                    focusIndex = returnIndex, focusRequester = returnFocus,
+                    newEpisodes = newEpisodes, onFocusRestored = onTitleFocusRestored,
+                    onSelect = onSelect
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FeaturedTitle(
+    title: PortalTitle,
+    height: androidx.compose.ui.unit.Dp,
+    modifier: Modifier = Modifier,
+    onSelect: () -> Unit
+) {
+    var focused by remember { mutableStateOf(false) }
+    val interactions = remember { MutableInteractionSource() }
+    val hovered by interactions.collectIsHoveredAsState()
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = Color(0xFF111922),
+        border = if (focused || hovered) BorderStroke(3.dp, MaterialTheme.colorScheme.primary) else null,
+        modifier = modifier.fillMaxWidth().height(height).onFocusChanged { focused = it.isFocused }
+            .hoverable(interactions, enabled = true).clickable(interactionSource = interactions, indication = null) { onSelect() }
+    ) {
+        Box(Modifier.fillMaxSize()) {
+            Text(title.name.take(1), Modifier.align(Alignment.Center), style = MaterialTheme.typography.displayLarge)
+            PortalImage(title.poster, Modifier.fillMaxSize())
+            Box(
+                Modifier.fillMaxSize().background(
+                    Brush.horizontalGradient(
+                        0f to Color(0xF2080C12), 0.48f to Color(0xA8080C12), 1f to Color(0x18080C12)
+                    )
+                )
+            )
+            Column(
+                Modifier.align(Alignment.BottomStart).fillMaxWidth(0.78f).padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(displayVodTitle(title), style = MaterialTheme.typography.headlineSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                val details = listOfNotNull(vodReleaseYear(title)?.toString(), title.description?.takeIf { it.isNotBlank() })
+                if (details.isNotEmpty()) Text(
+                    details.joinToString(" · "), style = MaterialTheme.typography.bodySmall,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis
+                )
+                Text(stringResource(R.string.catalog_featured_action), color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.labelLarge)
+            }
+        }
+    }
+}
+
+@Composable
+private fun TitleShelf(
+    title: String,
+    titles: List<PortalTitle>,
+    cardWidth: androidx.compose.ui.unit.Dp,
+    state: LazyListState = rememberLazyListState(),
+    focusIndex: Int = -1,
+    focusRequester: FocusRequester? = null,
+    newEpisodes: (PortalTitle) -> Int,
+    onFocusRestored: () -> Unit = {},
+    onSelect: (PortalTitle) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        Text(title, style = MaterialTheme.typography.titleMedium)
+        LazyRow(
+            Modifier.fillMaxWidth().height(cardWidth * 1.67f + 48.dp),
+            state = state,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            itemsIndexed(titles, key = { index, item -> "${posterShelfKey(item)}-$index" }) { index, item ->
+                val shouldRestore = index == focusIndex && focusRequester != null
+                if (shouldRestore) LaunchedEffect(item) {
+                    withFrameNanos { }
+                    if (focusRequester!!.requestFocus()) onFocusRestored()
+                }
+                PosterShelfCard(
+                    item, cardWidth, newEpisodes(item),
+                    modifier = if (shouldRestore) Modifier.focusRequester(focusRequester!!) else Modifier,
+                    onFocused = if (shouldRestore) onFocusRestored else null,
+                    onSelect = { onSelect(item) }
+                )
+            }
+        }
+    }
+}
+
+private fun posterShelfKey(title: PortalTitle): String = listOfNotNull(
+    title.imdbId, title.tmdbId, title.id, title.year?.toString(), displayVodTitle(title)
+).joinToString("|")
+
+@Composable
+private fun PosterShelfCard(
+    title: PortalTitle,
+    width: androidx.compose.ui.unit.Dp,
+    unseen: Int,
+    modifier: Modifier = Modifier,
+    onFocused: (() -> Unit)? = null,
+    onSelect: () -> Unit
+) {
+    var focused by remember { mutableStateOf(false) }
+    val interactions = remember { MutableInteractionSource() }
+    val hovered by interactions.collectIsHoveredAsState()
+    val highlighted = focused || hovered
+    Surface(
+        modifier = modifier.width(width).fillMaxHeight().onFocusChanged {
+            focused = it.isFocused
+            if (it.isFocused) onFocused?.invoke()
+        }.hoverable(interactions, enabled = true).clickable(interactionSource = interactions, indication = null) { onSelect() },
+        shape = RoundedCornerShape(12.dp),
+        color = if (highlighted) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surfaceContainer,
+        border = if (highlighted) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
+    ) {
+        Column {
+            Box(Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))) {
+                Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.secondaryContainer), contentAlignment = Alignment.Center) {
+                    Text(title.name.take(1), style = MaterialTheme.typography.headlineMedium)
+                }
+                PortalImage(title.poster, Modifier.fillMaxSize())
+                if (unseen > 0) Surface(
+                    Modifier.align(Alignment.TopStart).padding(5.dp),
+                    color = MaterialTheme.colorScheme.primary, shape = RoundedCornerShape(6.dp)
+                ) { Text(stringResource(R.string.new_episode_count, unseen), Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimary, maxLines = 1) }
+            }
+            Text(
+                displayVodTitle(title), Modifier.fillMaxWidth().padding(horizontal = 7.dp, vertical = 6.dp),
+                style = MaterialTheme.typography.labelMedium, maxLines = 2, overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }

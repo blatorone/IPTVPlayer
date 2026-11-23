@@ -1,5 +1,14 @@
 # Änderungen
 
+## 1.0.35
+
+- Film- und Serienkataloge erhalten eine Streaming-Startseite mit Titelbereichen und horizontalen Posterreihen; der Live-Programmführer behält sein eigenes EPG-Raster.
+- Vollbildsteuerung startet mit Fokus auf Play/Pause. Live-TV zeigt nur verfügbare Aktionen und macht Stopp per Fernbedienung erreichbar; VOD spult mit Links/Rechts in 10-Sekunden-Schritten.
+- Portalstatus wird gespeichert. Nichterreichbare Quellen lassen sich deaktivieren; optional werden sie automatisch deaktiviert und aus Suche, Zusammenführung und Wiedergabe ausgeschlossen.
+- Portalaktualisierungen melden geladene und nicht erreichbare Quellen. Die Quelleinstellung bietet Aktivieren/Deaktivieren und die automatische Behandlung.
+- MAC-Adressen lassen sich über Präfixvorgaben und einzelne Hex-Zeichen eingeben; Portaladressen können mit HTTP/HTTPS-Vorgabe oder vollständig manuell bearbeitet werden.
+- Trakt-Episoden werden auch dann den lokalen Episoden zugeordnet, wenn das Portal keine externe Serien-ID liefert, sofern Titel und Jahr eindeutig passen.
+
 ## 1.0.34
 
 - Die Wiederherstellung und Zusammenführung großer Live-Senderlisten läuft im Hintergrund, damit Start und Fernbedienungsbedienung währenddessen reaktionsfähig bleiben.

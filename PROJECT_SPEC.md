@@ -9,9 +9,13 @@ Ein nutzerkonfigurierbarer IPTV-Player für Android-Telefone und -Tablets sowie 
 ## Quellen und Bibliothek
 
 - Der Schnellstart kann die letzte Live-Auswahl aus einer kleinen verschlüsselten Momentaufnahme öffnen, während die Bibliothek wiederhergestellt wird. Ein fehlendes oder unpassendes Abbild verwendet den normalen Startpfad.
+- Der gespeicherte Quellen- und Katalogstand bleibt nach dem Start sichtbar und bedienbar, während alle gespeicherten Portale aktualisiert werden. Neue oder korrigierte Daten werden nach erfolgreicher Übernahme ergänzt; ein fehlgeschlagener Refresh lässt den letzten lokalen Stand bestehen.
 - Die Quellenübersicht zeigt ein lokal gespeichertes Ablaufdatum aus dem Geräteprofil oder den Kontoinformationen des Portals. Weitere Formatvarianten werden nur für angemeldete Portale geprüft.
 
 - Die Quellenliste zeigt das Ablaufdatum eines Stalker-Portals an, sofern das Portal es im Geräteprofil bereitstellt. Das Datum wird beim Hinzufügen und Aktualisieren der Quelle eingelesen.
+
+- Der Portalstatus (erreichbar, nicht erreichbar oder ungeprüft) wird lokal gespeichert. Portale können manuell deaktiviert werden; standardmäßig deaktiviert die App eine beim Handshake nicht erreichbare Quelle automatisch. Deaktivierte Quellen bleiben gespeichert, werden aber aus Suche, Zusammenführung, Metadatenabgleich und Wiedergabe ausgeschlossen. Eine Aktivierung stellt die Quelle wieder her und stößt eine Aktualisierung an.
+- Nach Portalaktualisierungen zeigt eine kurze Meldung die erfolgreichen und nicht erreichbaren Quellen an. Die Quellenverwaltung zeigt ihren Status und bietet Aktivieren/Deaktivieren sowie eine Einstellung für die automatische Deaktivierung.
 
 - Mehrere M3U-/M3U8-Playlisten per URL oder vom Nutzer gewählter Datei hinzufügen, ändern, aktualisieren und entfernen. Relative URLs anhand der Playlist-Quelle auflösen; Metadaten wie `tvg-id`, Name, Logo und Gruppe berücksichtigen. Fehlerhafte Einträge isolieren und Importergebnis anzeigen.
 - Xtream-kompatible Quellen mit Serveradresse und Zugangsdaten unterstützen; Live, Filme, Serien, Kategorien und verfügbare Metadaten übernehmen. Zugangsdaten geschützt ablegen und aus Anzeigen und Logs heraushalten.
@@ -25,6 +29,8 @@ Ein nutzerkonfigurierbarer IPTV-Player für Android-Telefone und -Tablets sowie 
 
 - Die Live-Oberfläche orientiert sich an den bereitgestellten StreamWatch-Referenzen: Kategorien links, Senderliste daneben sowie Vorschau und Programminformationen rechts; der Programmführer ergänzt die horizontale Zeitleiste darunter. Eine gemeinsame dunkle Petrolpalette und gleichartige Fokus-/Hover-Zustände halten Schaltflächen in Navigation, Senderlisten und Programmzeitleiste konsistent. Der Fokus nutzt Türkis, laufende Sendungen einen warmen Akzent.
 - Der sichtbare Trakt-Verlauf zeigt höchstens die zehn neuesten Filme beziehungsweise Serien, die einer gespeicherten Portalquelle zugeordnet werden können. Bei der Zuordnung wird dieselbe portalbasierte Suche und Identitätsprüfung wie bei der Suche verwendet.
+
+- Im Vollbild startet die Fernbedienungsbedienung auf Play/Pause. Im Live-TV sind nur Play/Pause und Stopp sichtbar; Stopp ist per D-Pad erreichbar. Bei Filmen und Serien bewegen Links/Rechts die Wiedergabeposition in Zehn-Sekunden-Schritten, auch wenn die Steuerleiste ausgeblendet ist.
 
 - Die Programmbeschreibung bleibt an Sender und Zeit der markierten Sendung gebunden. Das Kontextmenü einer Kategorie erlaubt das Verschieben oder Ein- und Ausblenden. Die Reihenfolge wird getrennt für Live-TV, Filme und Serien gespeichert. Das Hauptmenü kann Symbole, Text oder beides anzeigen.
 
@@ -57,6 +63,8 @@ Ein nutzerkonfigurierbarer IPTV-Player für Android-Telefone und -Tablets sowie 
 Im Programmführer erscheint während aktiver Live-Wiedergabe eine fokussierbare Stopp-Aktion, die den Stream beendet.
 
 ## VOD
+
+- Film- und Serienkataloge verwenden eine Streaming-Startseite mit hervorgehobenem Titel, horizontalen Posterreihen für beliebte und neu hinzugefügte Inhalte sowie einer vollständigen Titelreihe. Kategorien, Filter, Sortierung und Fernbedienungsfokus bleiben erreichbar. Der Live-Programmbereich behält separat seine IPTV-Zeitleiste.
 
 - Beim automatischen Folgenwechsel pausiert „Schaust du noch?“ nach einer einstellbaren Anzahl von Folgen ohne Eingabe. Die Abfrage ist standardmäßig nach drei Folgen aktiv. Ohne Bestätigung wird nach 30 Sekunden gestoppt.
 

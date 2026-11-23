@@ -68,6 +68,13 @@ Abnahme aus `PROJECT_SPEC.md` mit Touch und TV-Fernbedienung durchführen; unter
 - Trakt-Import und Portalstaffelabfragen begrenzen Zustandsaktualisierungen und gleichzeitige Anfragen. Lokale Titelzuordnungen beim Trakt-Import laufen auf einem Hintergrund-Dispatcher; die Navigation bleibt waehrend des Abgleichs bedienbar. Das Verhalten auf einem realen Shield/Fire-TV-Geraet muss mit einem Diagnosebericht und realer Bibliothek geprueft werden.
 - Umgesetzt: Episodenstatus, Titelbeschreibung/Bewertung und bekannte nächste Ausstrahlung verwenden Trakt, falls verbunden, sonst TMDB bei eingerichtetem Zugang, andernfalls TVmaze. Das Datum wird in Seriendetails angezeigt. Länderspezifische Ausstrahlungszeiten bleiben gesondert zu prüfen; Trakt liefert die bekannte Ausstrahlung der Serie, nicht zwingend die vom Nutzer gewählte Portalregion.
 
+## StreamWatch 1.0.35
+
+- Film- und Serienübersicht auf horizontale Posterreihen mit hervorgehobenem Titel umgestellt; der Live-Programmführer bleibt separat.
+- Portal-Erreichbarkeit und Aktivierung werden im verschlüsselten lokalen Portalbestand gespeichert. Automatische Deaktivierung nicht erreichbarer Quellen ist standardmäßig aktiv und kann umgestellt werden.
+- D-Pad-Steuerung im Player: Play/Pause erhält den anfänglichen Fokus, Live zeigt nur verwendbare Aktionen und VOD nutzt Links/Rechts zum Suchen.
+- Debug- und Release-Build sowie Veröffentlichung über das bestehende Release-Workflow-Tag vorsehen. Shield/Fire-TV-Abnahme bleibt mangels aktuellem Gerätezugriff offen.
+
 ## Noch zu entscheiden
 
 Aus der Sichtung der TV-Referenz folgen weitere Funktionspakete für Aufnahmen, Anbieterarchive, Erinnerungen, Kindersicherung, Datensicherung, erweiterte Fernbedienungsbelegung und gerätespezifische Wiedergabe. Für Aufnahmen und Archiv sind getrennte Abnahmekriterien zu Speicherziel, Gerät und unterstützter Quelle erforderlich.

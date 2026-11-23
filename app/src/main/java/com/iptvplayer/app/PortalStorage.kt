@@ -26,7 +26,9 @@ internal class SavedPortal(
     val genres: Map<String, String>,
     val catalogs: Map<PortalSection, PortalCatalog>,
     val epgChannelIds: Set<String> = emptySet(),
-    val subscriptionExpiry: java.time.LocalDate? = null
+    val subscriptionExpiry: java.time.LocalDate? = null,
+    val enabled: Boolean = true,
+    val reachable: Boolean? = null
 ) {
     val identity: String by lazy {
         val input = "$address\n${normalizePortalMac(mac)}".encodeToByteArray()
@@ -262,6 +264,8 @@ internal class PortalStorage(context: Context) {
         put("genres", JSONObject(source.genres))
         put("epgChannelIds", JSONArray(source.epgChannelIds))
         put("subscriptionExpiry", source.subscriptionExpiry?.toString())
+        put("enabled", source.enabled)
+        source.reachable?.let { put("reachable", it) }
         put("channels", JSONArray().apply {
             for (channel in source.channels) {
                 put(JSONObject().apply {
@@ -372,7 +376,9 @@ internal class PortalStorage(context: Context) {
         return SavedPortal(
             data.getString("address"), data.getString("mac"), channels, genres, catalogs,
             if (epgIds == null) emptySet() else List(epgIds.length()) { epgIds.getString(it) }.toSet(),
-            parsePortalExpiry(data.optString("subscriptionExpiry"))
+            parsePortalExpiry(data.optString("subscriptionExpiry")),
+            data.optBoolean("enabled", true),
+            if (data.has("reachable") && !data.isNull("reachable")) data.optBoolean("reachable") else null
         )
     }
 }

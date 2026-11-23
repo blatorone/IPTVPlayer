@@ -140,6 +140,10 @@
     <string name="portal_section_count">%1$s: %2$d</string>
     <string name="portal_section_loaded">%1$s: %2$d geladen. Das Portal meldet keine Gesamtzahl.</string>
     <string name="catalog_count">%1$d von %2$d Titeln geladen</string>
+    <string name="catalog_featured_action">Details öffnen</string>
+    <string name="catalog_shelf_popular">Beliebt</string>
+    <string name="catalog_shelf_recent">Neu hinzugefügt</string>
+    <string name="catalog_shelf_all">Alle Titel</string>
     <string name="catalog_load_failed">Der Katalog konnte nicht vollständig geladen werden.</string>
     <string name="catalog_load_more">Weitere Titel laden</string>
     <string name="portal_section_partial">%1$s: %2$d Sender geladen. Die vollständige Liste konnte nicht abgerufen werden.</string>
@@ -389,4 +393,23 @@
     <string name="diagnostics_export">Diagnosebericht jetzt exportieren</string>
     <string name="diagnostics_export_complete">Diagnosebericht wurde im ausgewählten Ordner gespeichert.</string>
     <string name="diagnostics_export_failed">Der Diagnosebericht konnte nicht gespeichert werden. Bitte wähle den Ordner erneut aus.</string>
+    <string name="portal_pick_saved">Gespeichertes Portal verwenden</string>
+    <string name="portal_address_http">HTTP-Portaladresse</string>
+    <string name="portal_address_https">HTTPS-Portaladresse</string>
+    <string name="portal_address_manual">VollstÃ¤ndige Adresse manuell eingeben</string>
+    <string name="portal_address_host">Serveradresse</string>
+    <string name="portal_mac_prefix">MAC-Adressbereich</string>
+    <string name="portal_mac_prefix_custom">Benutzerdefinierter Bereich</string>
+    <string name="portal_mac_custom_prefix_digits">Erste sechs Hex-Zeichen</string>
+    <string name="portal_mac_device_digits">Letzte sechs Hex-Zeichen</string>
+    <string name="portal_mac_preview">MAC-Adresse: %1$s</string>
+    <string name="auto_disable_unavailable_portals">Nicht erreichbare Portale automatisch deaktivieren</string>
+    <string name="portal_status_reachable">Status: erreichbar</string>
+    <string name="portal_status_unreachable">Status: nicht erreichbar</string>
+    <string name="portal_status_unknown">Status: noch nicht geprüft</string>
+    <string name="disable_portal">Portal deaktivieren</string>
+    <string name="enable_portal">Portal aktivieren und aktualisieren</string>
+    <string name="portals_refresh_success">Portalaktualisierung abgeschlossen. %1$d Quelle(n) erreichbar.</string>
+    <string name="portals_refresh_with_unavailable">Portalaktualisierung abgeschlossen. %1$d erreichbar; nicht erreichbar: %2$s</string>
+    <string name="no_enabled_portals">Alle Portale sind deaktiviert. Aktiviere mindestens eine Quelle für die Aktualisierung.</string>
 </resources>

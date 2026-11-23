@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 
@@ -403,12 +404,18 @@ private fun PlayerHome(
     var traktBusy by remember { mutableStateOf(false) }
     var traktStatus by remember { mutableStateOf<String?>(null) }
     var traktPlaybackNotice by remember { mutableStateOf<String?>(null) }
+    var portalRefreshNotice by remember { mutableStateOf<String?>(null) }
     var traktSyncRequested by remember { mutableStateOf(false) }
     val playbackNoticeHost = remember { androidx.compose.material3.SnackbarHostState() }
     LaunchedEffect(traktPlaybackNotice) {
         val notice = traktPlaybackNotice ?: return@LaunchedEffect
         playbackNoticeHost.showSnackbar(notice)
         traktPlaybackNotice = null
+    }
+    LaunchedEffect(portalRefreshNotice) {
+        val notice = portalRefreshNotice ?: return@LaunchedEffect
+        playbackNoticeHost.showSnackbar(notice)
+        portalRefreshNotice = null
     }
     var episodeSettingsOpen by remember { mutableStateOf(false) }
     var epgSettingsOpen by remember { mutableStateOf(false) }
@@ -607,7 +614,7 @@ private fun PlayerHome(
     var openedSeason by remember { mutableStateOf<PortalSeason?>(null) }
     val seriesDetailScroll = rememberLazyListState()
     var catalogueReturnTitle by remember { mutableStateOf<PortalTitle?>(null) }
-    var focusFirstMovie by remember { mutableStateOf(false) }
+    var focusFirstTitle by remember { mutableStateOf(false) }
     var focusSeriesPrimary by remember { mutableStateOf(false) }
     var episodeVariants by remember { mutableStateOf(emptyMap<PortalTitle, List<SourceItem<PortalTitle>>>()) }
     var episodeError by remember { mutableStateOf(false) }
@@ -667,8 +674,9 @@ private fun PlayerHome(
     }
     val secondarySessions = remember { mutableMapOf<String, StalkerPortal>() }
     val sourcesForBrowsing = remember(savedSources, storedSource, mergeSources) {
-        val active = storedSource
-        if (mergeSources) savedSources.ifEmpty { listOfNotNull(active) } else listOfNotNull(active)
+        val enabledSources = savedSources.filter { it.enabled }
+        val active = storedSource?.takeIf { it.enabled }
+        if (mergeSources) enabledSources.ifEmpty { listOfNotNull(active) } else listOfNotNull(active)
     }
     val combine = mergeSources
     fun categoryOrderKey(section: PortalSection): String =
@@ -688,6 +696,11 @@ private fun PlayerHome(
     var editing by remember { mutableStateOf(false) }
     var initialPortalPromptDismissed by rememberSaveable { mutableStateOf(false) }
     var restoring by remember { mutableStateOf(storage != null) }
+    var startupPortalRefresh by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var startupPortalRefreshStarted by remember { mutableStateOf(false) }
+    var autoDisableUnavailablePortals by remember(preferences) {
+        mutableStateOf(preferences?.getBoolean("auto_disable_unavailable_portals", true) ?: true)
+    }
     var storageError by remember { mutableStateOf<Int?>(null) }
     val detailMetadata by produceState<TmdbTitle?>(null, metadataClient, details, mergeSources, traktSession?.username) {
         value = null
@@ -838,7 +851,8 @@ private fun PlayerHome(
                     "trakt:${media.section.name}:${media.traktId ?: media.imdbId ?: media.tmdbId ?: normalizedLabel(media.name)}"
         scope.launch {
             try {
-                val localSaved = savedSources.flatMap { source ->
+                val enabledSavedSources = savedSources.filter { it.enabled }
+                val localSaved = enabledSavedSources.flatMap { source ->
                     listOf(PortalSection.MOVIES, PortalSection.SERIES).flatMap { section ->
                         source.catalogs[section]?.titles.orEmpty().filter { title ->
                             importedTitleKey(section, title) in watchlist
@@ -869,17 +883,20 @@ private fun PlayerHome(
                     if (cached != null && (cached.isNotEmpty() || !searchPortalIfMissing)) return cached
                     val expected = media.asTitle()
                     var matches = cached ?: withContext(Dispatchers.Default) {
-                        savedSources.flatMap { source ->
+                        enabledSavedSources.flatMap { source ->
                             val titles = source.catalogs[media.section]?.titles.orEmpty()
                             equivalentCatalogueTitle(
                                 expected,
                                 titles,
-                                requireVerifiedIdentity = media.section == PortalSection.SERIES
+                                // Trakt IDs often exist while portal titles omit external IDs. Exact
+                                // title plus release year is still a safe local match; conflicting IDs
+                                // remain rejected by equivalentCatalogueTitle.
+                                requireVerifiedIdentity = false
                             )?.let { listOf(SourceItem(source, it)) }.orEmpty()
                         }
                     }
                     if (matches.isEmpty() && searchPortalIfMissing) {
-                        for (source in savedSources) {
+                        for (source in enabledSavedSources) {
                             try {
                                 val portal = if (source.identity == storedSource?.identity) {
                                     liveSession?.first ?: secondarySessions.getOrPut(source.identity) {
@@ -895,7 +912,7 @@ private fun PlayerHome(
                                 val candidate = equivalentCatalogueTitle(
                                     expected,
                                     found.filter { it.source.identity == source.identity }.map { it.value },
-                                    requireVerifiedIdentity = media.section == PortalSection.SERIES
+                                    requireVerifiedIdentity = false
                                 )
                                 if (candidate != null) matches = matches + SourceItem(source, candidate)
                             } catch (error: CancellationException) {
@@ -986,17 +1003,27 @@ private fun PlayerHome(
                     val refs = entries.mapNotNull { item ->
                         item.value.id?.let { SeriesPortalRef(item.source.identity, it) }
                     }.distinct()
-                    val scope = titleIdentity(title)?.let { "catalogue" } ?: entries.firstOrNull()?.source?.identity
-                    if (scope != null) {
-                        val seriesId = titleIdentity(title) ?: title.id ?: title.name
-                        val episodeKey = "SERIES:$scope:$seriesId:$seasonNumber:$episodeNumber"
-                        completedEpisodes += episodeKey
-                    }
+                    val episodeKeys = buildList {
+                        val canonical = titleIdentity(title)
+                        if (canonical != null) add("SERIES:catalogue:$canonical:$seasonNumber:$episodeNumber")
+                        entries.forEach { item ->
+                            val variantCanonical = titleIdentity(item.value)
+                            val scope = variantCanonical?.let { "catalogue" } ?: item.source.identity
+                            val seriesId = variantCanonical ?: item.value.id ?: item.value.name
+                            add("SERIES:$scope:$seriesId:$seasonNumber:$episodeNumber")
+                        }
+                        if (isEmpty() && title.id != null) {
+                            add("SERIES:trakt:${title.id}:$seasonNumber:$episodeNumber")
+                        }
+                    }.distinct()
+                    completedEpisodes += episodeKeys
+                    val episodeProgressKey = episodeKeys.firstOrNull()
                     val watchedAt = media.watchedAtMillis ?: 0L
                     val lastEpisode = old?.lastEpisode.takeIf { old != null && old.watchedAt > watchedAt }
-                        ?: EpisodeResume("$seasonNumber:$episodeNumber", seasonNumber, episodeNumber.toString(), null,
-                            scope?.let { "SERIES:$it:${titleIdentity(title) ?: title.id ?: title.name}:$seasonNumber:$episodeNumber" }
-                                ?: "SERIES:catalogue:${titleIdentity(title) ?: title.name}:$seasonNumber:$episodeNumber")
+                        ?: EpisodeResume(
+                            "$seasonNumber:$episodeNumber", seasonNumber, episodeNumber.toString(), null,
+                            episodeProgressKey ?: "SERIES:catalogue:${titleIdentity(title) ?: title.name}:$seasonNumber:$episodeNumber"
+                        )
                     val tracked = (old ?: TrackedSeries(
                         trackedKey, displayVodTitle(title), refs, title.year ?: media.year,
                         title.imdbId ?: media.imdbId, title.tmdbId ?: media.tmdbId
@@ -1081,6 +1108,7 @@ private fun PlayerHome(
                     ?.putString("series_activity", encodeSeriesActivity(seriesActivity))
                     ?.apply()
                 traktStatus = context.getString(R.string.trakt_sync_complete, matched)
+                traktPlaybackNotice = context.getString(R.string.trakt_sync_complete, matched)
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
@@ -1385,7 +1413,7 @@ private fun PlayerHome(
         })
     }
 
-    val trackedSources = savedSources.map { it.identity }
+    val trackedSources = savedSources.filter { it.enabled }.map { it.identity }
     val trackedTitles = seriesActivity.map { it.key to it.refs }
     val trackedEpisodeChecks = seriesActivity.map { it.key to it.checkedAt }
     LaunchedEffect(metadataClient, traktSession?.username, trackedSources, trackedTitles, trackedEpisodeChecks) {
@@ -1763,7 +1791,7 @@ private fun PlayerHome(
             storage?.read()?.let { library ->
                 savedSources = library.sources
                 val saved = library.sources.firstOrNull { it.identity == library.activeId }
-                    ?: library.sources.firstOrNull()
+                    ?.takeIf { it.enabled } ?: library.sources.firstOrNull { it.enabled }
                 if (saved != null) {
                     preferences?.edit()?.putString("active_portal_cache", saved.identity)?.apply()
                     val session = StalkerPortal(saved.address, saved.mac) to null
@@ -1776,6 +1804,13 @@ private fun PlayerHome(
                     genres = saved.genres
                     catalogs = saved.catalogs
                     epgChannelIds = saved.epgChannelIds
+                } else {
+                    storedSource = null
+                    liveSession = null
+                    catalogSession = null
+                    channels = emptyList()
+                    genres = emptyMap()
+                    catalogs = emptyMap()
                 }
             }
         } catch (error: CancellationException) {
@@ -1795,13 +1830,39 @@ private fun PlayerHome(
             savedSources.toMutableList().apply { this[index] = source }
         }
         try {
-            storage?.write(SavedPortals(savedSources, storedSource?.identity ?: source.identity))
+            storage?.write(SavedPortals(
+                savedSources, storedSource?.identity ?: savedSources.firstOrNull()?.identity ?: source.identity
+            ))
             storageError = null
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
             storageError = R.string.portal_save_failed
         }
+    }
+
+    suspend fun updatePortalStatus(identity: String, reachable: Boolean? = null, enabled: Boolean? = null) {
+        val current = savedSources.firstOrNull { it.identity == identity } ?: return
+        val nextReachable = reachable ?: current.reachable
+        val nextEnabled = enabled ?: if (reachable == false && autoDisableUnavailablePortals) false else current.enabled
+        val updated = SavedPortal(
+            current.address, current.mac, current.channels, current.genres, current.catalogs,
+            current.epgChannelIds, current.subscriptionExpiry, nextEnabled, nextReachable
+        )
+        if (storedSource?.identity == identity && !nextEnabled) {
+            val fallback = savedSources.firstOrNull { it.identity != identity && it.enabled }
+            storedSource = fallback
+            preferences?.edit()?.putString("active_portal_cache", fallback?.identity)?.apply()
+            liveSession = fallback?.let { StalkerPortal(it.address, it.mac) to null }
+            catalogSession = liveSession
+            channels = fallback?.channels.orEmpty()
+            genres = fallback?.genres.orEmpty()
+            catalogs = fallback?.catalogs.orEmpty()
+            epgChannelIds = fallback?.epgChannelIds.orEmpty()
+            category = null
+            programmeChannel = null
+        }
+        save(updated, activate = false)
     }
 
     fun toggleProgrammeChannel(channel: StalkerChannel) {
@@ -1811,7 +1872,8 @@ private fun PlayerHome(
         val ids = if (id in source.epgChannelIds) source.epgChannelIds - id else source.epgChannelIds + id
         if (storedSource?.identity == source.identity) epgChannelIds = ids
         val snapshot = SavedPortal(
-            source.address, source.mac, source.channels, source.genres, source.catalogs, ids, source.subscriptionExpiry
+            source.address, source.mac, source.channels, source.genres, source.catalogs, ids,
+            source.subscriptionExpiry, source.enabled, source.reachable
         )
         scope.launch { save(snapshot, activate = false) }
     }
@@ -2034,7 +2096,9 @@ private fun PlayerHome(
 
     fun startupChannelScope(): String {
         val activeId = storedSource?.identity ?: preferences?.getString("active_portal_cache", null)
-        val sourceScope = if (mergeSources) "combined" else "${activeId.orEmpty()}:${activeId in mergedIndividualPortals}"
+        val enabledScope = savedSources.filter { it.enabled }.map { it.identity }.sorted().joinToString(",")
+        val sourceScope = if (mergeSources) "combined:$enabledScope" else
+            "${activeId.orEmpty()}:${activeId in mergedIndividualPortals}:${activeId in enabledScope.split(',')}"
         return listOf(sourceScope, countries.joinToString(","), hiddenCategories.sorted().joinToString(",")).joinToString("|")
     }
 
@@ -2147,7 +2211,7 @@ private fun PlayerHome(
     }
 
     fun switchSource(source: SavedPortal) {
-        if (connecting || source.identity == storedSource?.identity) return
+        if (!source.enabled || connecting || source.identity == storedSource?.identity) return
         closeGroup()
         closeSeries()
         details = null
@@ -2205,7 +2269,7 @@ private fun PlayerHome(
         section: PortalSection, reference: PortalTitle, refs: List<SeriesPortalRef>
     ): Boolean = refs.any { ref ->
         if (ref.portalTitleId.isBlank()) return@any false
-        val source = savedSources.firstOrNull { it.identity == ref.sourceId } ?: return@any false
+        val source = savedSources.firstOrNull { it.identity == ref.sourceId && it.enabled } ?: return@any false
         val cached = source.catalogs[section]?.titles?.firstOrNull { it.id == ref.portalTitleId }
         if (cached == null) true else equivalentCatalogueTitle(
             reference,
@@ -2222,7 +2286,7 @@ private fun PlayerHome(
         val artwork by produceState<PortalTitle?>(null, section, title, refs, savedSources) {
             value = null
             for (ref in refs) {
-                val source = savedSources.firstOrNull { it.identity == ref.sourceId } ?: continue
+                val source = savedSources.firstOrNull { it.identity == ref.sourceId && it.enabled } ?: continue
                 val cached = source.catalogs[section]?.titles?.firstOrNull {
                     ref.portalTitleId.isNotBlank() && it.id == ref.portalTitleId
                 }
@@ -2278,12 +2342,12 @@ private fun PlayerHome(
     fun openTrackedSeries(entry: TrackedSeries, onOpen: ((PortalTitle) -> Unit)? = null) {
         val reference = PortalTitle(entry.name, year = entry.year, imdbId = entry.imdb, tmdbId = entry.tmdb)
         val linkedVariants = entry.refs.mapNotNull { ref ->
-            val source = savedSources.firstOrNull { it.identity == ref.sourceId } ?: return@mapNotNull null
+            val source = savedSources.firstOrNull { it.identity == ref.sourceId && it.enabled } ?: return@mapNotNull null
             val title = source.catalogs[PortalSection.SERIES]?.titles?.firstOrNull { it.id == ref.portalTitleId }
                 ?: reference.copy(id = ref.portalTitleId)
             SourceItem(source, title)
         }
-        val discoveredVariants = if (linkedVariants.isEmpty()) savedSources.flatMap { source ->
+        val discoveredVariants = if (linkedVariants.isEmpty()) sourcesForBrowsing.flatMap { source ->
             source.catalogs[PortalSection.SERIES]?.titles.orEmpty().mapNotNull { candidate ->
                 equivalentCatalogueTitle(reference, listOf(candidate), requireVerifiedIdentity = false)
                     ?.let { SourceItem(source, it) }
@@ -2532,7 +2596,7 @@ private fun PlayerHome(
     fun openWatchedMovie(entry: WatchedMovie, resume: Boolean) {
         val reference = PortalTitle(entry.name, year = entry.year, imdbId = entry.imdb, tmdbId = entry.tmdb)
         val linkedVariants = entry.refs.mapNotNull { ref ->
-            val source = savedSources.firstOrNull { it.identity == ref.sourceId } ?: return@mapNotNull null
+            val source = savedSources.firstOrNull { it.identity == ref.sourceId && it.enabled } ?: return@mapNotNull null
             val title = source.catalogs[PortalSection.MOVIES]?.titles?.firstOrNull {
                 ref.portalTitleId.isNotBlank() && it.id == ref.portalTitleId
             } ?: PortalTitle(
@@ -2541,7 +2605,7 @@ private fun PlayerHome(
             )
             SourceItem(source, title)
         }
-        val discoveredVariants = if (linkedVariants.isEmpty()) savedSources.flatMap { source ->
+        val discoveredVariants = if (linkedVariants.isEmpty()) sourcesForBrowsing.flatMap { source ->
             source.catalogs[PortalSection.MOVIES]?.titles.orEmpty().mapNotNull { candidate ->
                 equivalentCatalogueTitle(reference, listOf(candidate), requireVerifiedIdentity = false)
                     ?.let { SourceItem(source, it) }
@@ -2568,6 +2632,9 @@ private fun PlayerHome(
             val previous = savedSources.firstOrNull {
                 it.address == enteredAddress && normalizePortalMac(it.mac) == normalizePortalMac(enteredMac)
             }
+            val sourceIdentity = SavedPortal(
+                enteredAddress, enteredMac, emptyList(), emptyMap(), emptyMap()
+            ).identity
             var refreshedChannels = previous?.channels.orEmpty()
             var refreshedGenres = previous?.genres.orEmpty()
             var refreshedCatalogs = previous?.catalogs.orEmpty()
@@ -2636,12 +2703,17 @@ private fun PlayerHome(
             val changed = importStatuses.values.any {
                 it is ImportStatus.Count || it is ImportStatus.Loaded || it is ImportStatus.Partial
             }
-            if (!changed) return false
+            if (!changed) {
+                updatePortalStatus(sourceIdentity, reachable = true, enabled = if (activate) true else null)
+                return false
+            }
             val snapshot = SavedPortal(
                 enteredAddress, enteredMac, refreshedChannels, refreshedGenres,
                 refreshedCatalogs,
                 savedSources.firstOrNull { it.identity == previous?.identity }?.epgChannelIds.orEmpty(),
-                previous?.subscriptionExpiry ?: source.loadSubscriptionExpiry(token)
+                previous?.subscriptionExpiry ?: source.loadSubscriptionExpiry(token),
+                enabled = activate || previous?.enabled != false,
+                reachable = true
             )
             val sameSource = snapshot.identity == storedSource?.identity
             if (activate || sameSource) {
@@ -2675,6 +2747,10 @@ private fun PlayerHome(
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
+            val identity = runCatching {
+                SavedPortal(enteredAddress, enteredMac, emptyList(), emptyMap(), emptyMap()).identity
+            }.getOrNull()
+            if (identity != null) updatePortalStatus(identity, reachable = false)
             sourceError = when (error) {
                 is InvalidPortalAddressException -> R.string.portal_invalid_address
                 is PortalAuthenticationException -> R.string.portal_auth_failed
@@ -2707,23 +2783,62 @@ private fun PlayerHome(
     }
 
     fun refreshAllSources() {
-        val sources = savedSources
-        if (connecting || sources.isEmpty()) return
+        val sources = savedSources.filter { it.enabled }
+        if (connecting || startupPortalRefresh != null || sources.isEmpty()) return
         connecting = true
         batchSummary = null
         scope.launch {
             var completed = 0
+            val unavailable = mutableListOf<String>()
             try {
                 for ((index, source) in sources.withIndex()) {
                     batchProgress = (index + 1) to sources.size
                     if (refreshPortal(source.address, source.mac, activate = false)) completed++
+                    if (savedSources.firstOrNull { it.identity == source.identity }?.reachable == false) {
+                        unavailable += runCatching { java.net.URI(source.address).host }.getOrNull().orEmpty()
+                            .ifBlank { "Portal" }
+                    }
                 }
                 batchSummary = completed to (sources.size - completed)
+                val reachableCount = sources.count { source ->
+                    savedSources.firstOrNull { it.identity == source.identity }?.reachable == true
+                }
+                portalRefreshNotice = if (unavailable.isEmpty()) {
+                    context.getString(R.string.portals_refresh_success, reachableCount)
+                } else context.getString(R.string.portals_refresh_with_unavailable, reachableCount, unavailable.joinToString(", "))
                 if (completed > 0 && automaticCountries) askForCountries = true
             } finally {
                 batchProgress = null
                 connecting = false
             }
+        }
+    }
+
+    LaunchedEffect(restoring) {
+        if (restoring || startupPortalRefreshStarted || savedSources.isEmpty()) return@LaunchedEffect
+        startupPortalRefreshStarted = true
+        val sources = savedSources.filter { it.enabled }
+        var completed = 0
+        val unavailable = mutableListOf<String>()
+        try {
+            for ((index, source) in sources.withIndex()) {
+                startupPortalRefresh = (index + 1) to sources.size
+                if (refreshPortal(source.address, source.mac, activate = false)) completed++
+                if (savedSources.firstOrNull { it.identity == source.identity }?.reachable == false) {
+                    unavailable += runCatching { java.net.URI(source.address).host }.getOrNull().orEmpty()
+                        .ifBlank { "Portal" }
+                }
+            }
+            if (sources.isNotEmpty()) {
+                val reachableCount = sources.count { source ->
+                    savedSources.firstOrNull { it.identity == source.identity }?.reachable == true
+                }
+                portalRefreshNotice = if (unavailable.isEmpty()) {
+                    context.getString(R.string.portals_refresh_success, reachableCount)
+                } else context.getString(R.string.portals_refresh_with_unavailable, reachableCount, unavailable.joinToString(", "))
+            }
+        } finally {
+            startupPortalRefresh = null
         }
     }
 
@@ -2742,7 +2857,8 @@ private fun PlayerHome(
                     catalogs = catalogs + (section to catalog)
                     storedSource?.let { saved ->
                         save(SavedPortal(
-                            saved.address, saved.mac, channels, genres, catalogs, epgChannelIds, saved.subscriptionExpiry
+                            saved.address, saved.mac, channels, genres, catalogs, epgChannelIds,
+                            saved.subscriptionExpiry, saved.enabled, saved.reachable
                         ))
                     }
                 }
@@ -3578,7 +3694,7 @@ private fun PlayerHome(
         )
         Box(Modifier.fillMaxSize().background(Color.Black).then(episodeActionKeyModifier).then(inputModifier)) {
             PlayerFrame(
-                player, active = true, fullscreen = true, onStop = ::stopPlayback,
+                player, active = true, fullscreen = true, isLivePlayback = vodSection == null, onStop = ::stopPlayback,
                 onSurface = { fullscreenVideoSurface = it },
                 onGuideInput = ::navigateFullscreen,
                 interceptGuideKey = ::interceptDirection,
@@ -4075,7 +4191,6 @@ private fun PlayerHome(
         snackbarHost = { androidx.compose.material3.SnackbarHost(playbackNoticeHost) }
     ) { innerPadding ->
         BoxWithConstraints(Modifier.fillMaxSize()) {
-        val vodSidebarWidth = (maxWidth * 0.23f).coerceIn(118.dp, 230.dp)
         val vodSectionForScreen = when (selected) {
             Destination.MOVIES -> PortalSection.MOVIES
             Destination.SERIES -> PortalSection.SERIES
@@ -4084,7 +4199,7 @@ private fun PlayerHome(
         if (vodSectionForScreen != null && cataloguePlaybackView == VodLiveView.BACKGROUND &&
             playing != null && player != null
         ) {
-            Box(Modifier.fillMaxSize().padding(start = vodSidebarWidth + 36.dp)) {
+            Box(Modifier.fillMaxSize().padding(horizontal = 24.dp)) {
                 AndroidView(
                     factory = { viewContext ->
                         (android.view.LayoutInflater.from(viewContext)
@@ -4131,7 +4246,7 @@ private fun PlayerHome(
             fun openVodCategory(group: PortalGroup) {
                 val section = vodSectionForScreen ?: return
                 catalogueReturnTitle = null
-                focusFirstMovie = section == PortalSection.MOVIES
+                focusFirstTitle = true
                 preferences?.edit()?.putString(recentCategoryKey, group.id)?.apply()
                 closeSeries()
                 details = null
@@ -4219,9 +4334,12 @@ private fun PlayerHome(
                         }
                     }
                 }
-                if (restoring || connecting) {
+                if (restoring || connecting || startupPortalRefresh != null) {
                     LinearProgressIndicator(Modifier.fillMaxWidth())
                     if (restoring) Text(stringResource(R.string.startup_loading))
+                    startupPortalRefresh?.let { (current, total) ->
+                        Text(stringResource(R.string.refresh_all_progress, current, total))
+                    }
                 }
             }
             val content: @Composable ColumnScope.() -> Unit = {
@@ -4302,6 +4420,15 @@ private fun PlayerHome(
                                     )
                                     MenuButton(stringResource(R.string.category_settings), Modifier) {
                                         selected = Destination.CATEGORIES
+                                    }
+                                    MenuButton(
+                                        stringResource(R.string.auto_disable_unavailable_portals), Modifier,
+                                        selected = autoDisableUnavailablePortals
+                                    ) {
+                                        autoDisableUnavailablePortals = !autoDisableUnavailablePortals
+                                        preferences?.edit()?.putBoolean(
+                                            "auto_disable_unavailable_portals", autoDisableUnavailablePortals
+                                        )?.apply()
                                     }
                                 }
                                 SettingsSection.GUIDE ->
@@ -4431,7 +4558,8 @@ private fun PlayerHome(
                             }
                         )
                         Button(
-                            enabled = savedSources.isNotEmpty() && !connecting && !restoring,
+                            enabled = savedSources.isNotEmpty() && !connecting && !restoring &&
+                                startupPortalRefresh == null,
                             onClick = ::refreshAllSources
                         ) { Text(stringResource(R.string.refresh_all_sources)) }
                         MenuButton(
@@ -4463,6 +4591,11 @@ private fun PlayerHome(
                                 runCatching { java.net.URI(source.address).host }.getOrNull().orEmpty()
                             }
                             val isActive = source.identity == storedSource?.identity
+                            Text(stringResource(when (source.reachable) {
+                                true -> R.string.portal_status_reachable
+                                false -> R.string.portal_status_unreachable
+                                null -> R.string.portal_status_unknown
+                            }))
                             MenuButton(
                                 listOf(
                                     stringResource(
@@ -4485,6 +4618,16 @@ private fun PlayerHome(
                                     } else switchSource(source)
                                 }
                             )
+                            MenuButton(
+                                stringResource(if (source.enabled) R.string.disable_portal else R.string.enable_portal),
+                                Modifier,
+                                selected = source.enabled
+                            ) {
+                                scope.launch {
+                                    updatePortalStatus(source.identity, enabled = !source.enabled)
+                                    if (!source.enabled) refreshPortal(source.address, source.mac, activate = false)
+                                }
+                            }
                         }
                         storedSource?.takeUnless { mergeSources }?.let { saved ->
                             MenuButton(stringResource(R.string.edit_portal), Modifier) {
@@ -4498,8 +4641,10 @@ private fun PlayerHome(
                         if (editing) PortalEditor(
                             address = address,
                             mac = mac,
+                            existingSources = savedSources,
                             onAddressChange = { address = it },
                             onMacChange = { mac = it },
+                            onSelectExisting = { address = it.address; mac = it.mac },
                             onDismiss = { editing = false },
                             onSubmit = ::importPortal
                         )
@@ -5053,10 +5198,10 @@ private fun PlayerHome(
                                     isSaved = { isTitleSaved(section, it) },
                                     preferPopularity = group.id == VodCategory.POPULAR.id,
                                     returnTitle = catalogueReturnTitle,
-                                    focusFirstTitle = focusFirstMovie,
+                                    focusFirstTitle = focusFirstTitle,
                                     onTitleFocusRestored = {
                                         catalogueReturnTitle = null
-                                        focusFirstMovie = false
+                                        focusFirstTitle = false
                                     },
                                     newEpisodes = { title ->
                                         if (section == PortalSection.SERIES) trackedSeries(title)?.unseen?.size ?: 0 else 0
@@ -5099,74 +5244,106 @@ private fun PlayerHome(
                     content()
                 }
             } else if (vodSectionForScreen != null) {
-                Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    val section = vodSectionForScreen
-                    Column(
-                        Modifier.width(vodSidebarWidth).fillMaxHeight()
-                            .onHorizontalRemote(allowRight = false) { navigateBack() }
-                            .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(10.dp))
-                            .padding(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(3.dp)
+                val section = vodSectionForScreen
+                Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface, RoundedCornerShape(14.dp))
+                            .focusGroup().padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        MenuButton(
-                            stringResource(R.string.manage_categories),
-                            Modifier.fillMaxWidth().focusRequester(initialFocus)
-                        ) { categoryMenu = section to null }
-                        LazyColumn(
-                            Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(3.dp)
+                        Text(
+                            stringResource(R.string.app_name),
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Row(
+                            Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            items(visibleVodGroups, key = { it.id }) { group ->
+                            mainDestinations.forEach { item ->
+                                val index = mainDestinations.indexOf(item)
+                                val previous = mainDestinations.getOrNull(index - 1) ?: item
+                                val next = mainDestinations.getOrNull(index + 1) ?: item
                                 MenuButton(
-                                    group.name, Modifier.fillMaxWidth(),
+                                    stringResource(item.label),
+                                    Modifier.focusRequester(destinationFocusRequester(item)).focusProperties {
+                                        left = destinationFocusRequester(previous)
+                                        right = destinationFocusRequester(next)
+                                    },
+                                    leadingIcon = item.icon.takeUnless { mainMenuStyle == MainMenuStyle.TEXT },
+                                    selected = item == destination,
+                                    onClick = {
+                                        lastFocused = item
+                                        guidePanel = GuidePanel.GRID
+                                        if (item == Destination.LIVE) restoreGuideEntryFocus()
+                                        pendingVodCategory = item.takeIf {
+                                            it == Destination.MOVIES || it == Destination.SERIES
+                                        }
+                                        selected = item
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    Row(
+                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                            visibleVodGroups.forEach { group ->
+                                MenuButton(
+                                    group.name,
+                                    Modifier,
                                     selected = selectedGroup?.first == section && selectedGroup?.second?.id == group.id &&
                                         !movieHistoryOpen && !movieWatchlistOpen && seriesActivityView == null,
                                     hiddenIndicator = categoryKey(section, group.id) in hiddenCategories,
                                     onLongPress = { categoryMenu = section to group.id }
                                 ) { openVodCategory(group) }
                             }
+                        MenuButton(
+                            stringResource(R.string.manage_categories),
+                            Modifier
+                        ) {
+                            categoryMenu = section to null
                         }
-                            MenuButton(
-                                stringResource(R.string.watchlist), Modifier.fillMaxWidth(),
-                                selected = if (section == PortalSection.MOVIES) movieWatchlistOpen else
-                                    seriesActivityView == SeriesActivityView.WATCHLIST,
-                                count = if (section == PortalSection.SERIES) {
-                                    seriesActivity.filter { it.saved }.sumOf { it.unseen.size }.takeIf { it > 0 }
-                                } else null
-                            ) {
-                                closeSeries()
-                                details = null
-                                if (section == PortalSection.MOVIES) {
-                                    movieHistoryOpen = false
-                                    movieWatchlistOpen = true
-                                } else seriesActivityView = SeriesActivityView.WATCHLIST
-                            }
-                            MenuButton(
-                                stringResource(
-                                    if (section == PortalSection.MOVIES) R.string.movie_history else R.string.series_history
-                                ),
-                                Modifier.fillMaxWidth(),
-                                selected = if (section == PortalSection.MOVIES) movieHistoryOpen else
-                                    seriesActivityView == SeriesActivityView.HISTORY,
-                                count = if (section == PortalSection.SERIES) {
-                                    seriesActivity.filter { it.viewed }.sumOf { it.unseen.size }.takeIf { it > 0 }
-                                } else null
-                            ) {
-                                closeSeries()
-                                details = null
-                                if (section == PortalSection.MOVIES) {
-                                    movieWatchlistOpen = false
-                                    movieHistoryOpen = true
-                                } else seriesActivityView = SeriesActivityView.HISTORY
-                            }
+                        MenuButton(
+                            stringResource(R.string.watchlist), Modifier,
+                            selected = if (section == PortalSection.MOVIES) movieWatchlistOpen else
+                                seriesActivityView == SeriesActivityView.WATCHLIST,
+                            count = if (section == PortalSection.SERIES) {
+                                seriesActivity.filter { it.saved }.sumOf { it.unseen.size }.takeIf { it > 0 }
+                            } else null
+                        ) {
+                            closeSeries()
+                            details = null
+                            if (section == PortalSection.MOVIES) {
+                                movieHistoryOpen = false
+                                movieWatchlistOpen = true
+                            } else seriesActivityView = SeriesActivityView.WATCHLIST
+                        }
+                        MenuButton(
+                            stringResource(if (section == PortalSection.MOVIES) R.string.movie_history else R.string.series_history),
+                            Modifier,
+                            selected = if (section == PortalSection.MOVIES) movieHistoryOpen else
+                                seriesActivityView == SeriesActivityView.HISTORY,
+                            count = if (section == PortalSection.SERIES) {
+                                seriesActivity.filter { it.viewed }.sumOf { it.unseen.size }.takeIf { it > 0 }
+                            } else null
+                        ) {
+                            closeSeries()
+                            details = null
+                            if (section == PortalSection.MOVIES) {
+                                movieWatchlistOpen = false
+                                movieHistoryOpen = true
+                            } else seriesActivityView = SeriesActivityView.HISTORY
+                        }
                     }
-                    Column(
-                        Modifier.weight(1f).fillMaxHeight(),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        if (restoring || connecting || cataloguePlaybackView == VodLiveView.CORNER && playing != null) header()
-                        content()
-                    }
+                    if (restoring || connecting || startupPortalRefresh != null ||
+                        cataloguePlaybackView == VodLiveView.CORNER && playing != null
+                    ) header()
+                    content()
                 }
             } else if (maxWidth >= 560.dp) {
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -5223,11 +5400,53 @@ private fun PlayerHome(
 private fun PortalEditor(
     address: String,
     mac: String,
+    existingSources: List<SavedPortal>,
     onAddressChange: (String) -> Unit,
     onMacChange: (String) -> Unit,
+    onSelectExisting: (SavedPortal) -> Unit,
     onDismiss: () -> Unit,
     onSubmit: () -> Unit
 ) {
+    var addressMode by remember { mutableStateOf(portalAddressMode(address)) }
+    val initialMacHex = remember {
+        runCatching { normalizePortalMac(mac).filter(Char::isLetterOrDigit) }
+            .getOrDefault("001A79000000")
+    }
+    var prefix by remember { mutableStateOf(initialMacHex.take(6)) }
+    var customPrefixDigits by remember { mutableStateOf(initialMacHex.take(6).toList()) }
+    var customPrefix by remember { mutableStateOf(initialMacHex.take(6) !in portalMacPrefixes) }
+    var deviceDigits by remember { mutableStateOf(initialMacHex.drop(6).take(6).padEnd(6, '0').toList()) }
+    var prefixMenu by remember { mutableStateOf(false) }
+    var savedPortalMenu by remember { mutableStateOf(false) }
+    var addressModeMenu by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        if (mac.isBlank()) onMacChange(initialMacHex.chunked(2).joinToString(":"))
+    }
+
+    fun publishMac() {
+        val prefixValue = if (customPrefix) customPrefixDigits.joinToString("") else prefix
+        val hex = (prefixValue + deviceDigits.joinToString(""))
+            .uppercase(java.util.Locale.ROOT).take(12).padEnd(12, '0')
+        onMacChange(hex.chunked(2).joinToString(":"))
+    }
+
+    fun setMac(value: String) {
+        val hex = runCatching { normalizePortalMac(value).filter(Char::isLetterOrDigit) }
+            .getOrDefault("001A79000000")
+        prefix = hex.take(6)
+        customPrefixDigits = hex.take(6).toList()
+        customPrefix = prefix !in portalMacPrefixes
+        deviceDigits = hex.drop(6).take(6).toList()
+        onMacChange(hex.chunked(2).joinToString(":"))
+    }
+
+    fun chooseAddressMode(next: PortalAddressMode) {
+        val host = portalAddressHost(address, addressMode)
+        addressMode = next
+        onAddressChange(if (next == PortalAddressMode.CUSTOM || host.isBlank()) "" else portalComposeAddress(next, host))
+    }
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
@@ -5240,7 +5459,7 @@ private fun PortalEditor(
             contentAlignment = Alignment.Center
         ) {
             Surface(
-                modifier = Modifier.widthIn(max = 480.dp).fillMaxWidth(),
+                modifier = Modifier.widthIn(max = 560.dp).fillMaxWidth(),
                 shape = MaterialTheme.shapes.large
             ) {
                 Column(
@@ -5252,27 +5471,172 @@ private fun PortalEditor(
                         style = MaterialTheme.typography.titleLarge
                     )
                     Text(stringResource(R.string.stalker_hint))
-                    OutlinedTextField(
-                        value = address,
-                        onValueChange = onAddressChange,
-                        label = { Text(stringResource(R.string.portal_address)) },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                    OutlinedTextField(
-                        value = mac,
-                        onValueChange = onMacChange,
-                        label = { Text(stringResource(R.string.portal_mac)) },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
+                    if (existingSources.isNotEmpty()) Box {
+                        MenuButton(stringResource(R.string.portal_pick_saved), Modifier.fillMaxWidth()) {
+                            savedPortalMenu = true
+                        }
+                        DropdownMenu(savedPortalMenu, onDismissRequest = { savedPortalMenu = false }) {
+                            existingSources.forEachIndexed { index, source ->
+                                val host = runCatching { java.net.URI(source.address).host }.getOrNull()
+                                    .orEmpty().ifBlank { "Portal ${index + 1}" }
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.saved_portal_label, index + 1, host)) },
+                                    onClick = {
+                                        onSelectExisting(source)
+                                        addressMode = portalAddressMode(source.address)
+                                        setMac(source.mac)
+                                        savedPortalMenu = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    Box {
+                        MenuButton(
+                            stringResource(when (addressMode) {
+                                PortalAddressMode.HTTP -> R.string.portal_address_http
+                                PortalAddressMode.HTTPS -> R.string.portal_address_https
+                                PortalAddressMode.CUSTOM -> R.string.portal_address_manual
+                            }), Modifier.fillMaxWidth()
+                        ) { addressModeMenu = true }
+                        DropdownMenu(addressModeMenu, onDismissRequest = { addressModeMenu = false }) {
+                            PortalAddressMode.entries.forEach { mode ->
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(when (mode) {
+                                        PortalAddressMode.HTTP -> R.string.portal_address_http
+                                        PortalAddressMode.HTTPS -> R.string.portal_address_https
+                                        PortalAddressMode.CUSTOM -> R.string.portal_address_manual
+                                    })) },
+                                    onClick = { chooseAddressMode(mode); addressModeMenu = false }
+                                )
+                            }
+                        }
+                    }
+                    if (addressMode == PortalAddressMode.CUSTOM) {
+                        OutlinedTextField(
+                            value = address,
+                            onValueChange = onAddressChange,
+                            label = { Text(stringResource(R.string.portal_address)) },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                    } else {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(addressMode.prefix)
+                            OutlinedTextField(
+                                value = portalAddressHost(address, addressMode),
+                                onValueChange = { host ->
+                                    onAddressChange(if (host.isBlank()) "" else portalComposeAddress(addressMode, host))
+                                },
+                                label = { Text(stringResource(R.string.portal_address_host)) },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true
+                            )
+                            Text("/c")
+                        }
+                    }
+                    Text(stringResource(R.string.portal_mac_prefix))
+                    Box {
+                        MenuButton(
+                            if (customPrefix) stringResource(R.string.portal_mac_prefix_custom)
+                            else "${prefix.chunked(2).joinToString(":")}: ",
+                            Modifier.fillMaxWidth()
+                        ) { prefixMenu = true }
+                        DropdownMenu(prefixMenu, onDismissRequest = { prefixMenu = false }) {
+                            portalMacPrefixes.forEach { value ->
+                                DropdownMenuItem(
+                                    text = { Text("${value.chunked(2).joinToString(":")}: ") },
+                                    onClick = {
+                                        prefix = value
+                                        customPrefix = false
+                                        publishMac()
+                                        prefixMenu = false
+                                    }
+                                )
+                            }
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.portal_mac_prefix_custom)) },
+                                onClick = {
+                                    customPrefix = true
+                                    publishMac()
+                                    prefixMenu = false
+                                }
+                            )
+                        }
+                    }
+                    if (customPrefix) {
+                        Text(stringResource(R.string.portal_mac_custom_prefix_digits))
+                        MacDigitRow(customPrefixDigits) { index, value ->
+                            customPrefixDigits = customPrefixDigits.toMutableList().also { it[index] = value }
+                            publishMac()
+                        }
+                    } else {
+                        Text("${prefix.chunked(2).joinToString(":")}: ")
+                    }
+                    Text(stringResource(R.string.portal_mac_device_digits))
+                    MacDigitRow(deviceDigits) { index, value ->
+                        deviceDigits = deviceDigits.toMutableList().also { it[index] = value }
+                        publishMac()
+                    }
+                    Text(stringResource(R.string.portal_mac_preview, mac), style = MaterialTheme.typography.bodySmall)
                     Button(
-                        enabled = address.isNotBlank() && mac.isNotBlank(),
+                        enabled = (addressMode == PortalAddressMode.CUSTOM && address.isNotBlank() ||
+                            addressMode != PortalAddressMode.CUSTOM && portalAddressHost(address, addressMode).isNotBlank()) &&
+                            runCatching { normalizePortalMac(mac) }.isSuccess,
                         onClick = onSubmit
                     ) {
                         Text(stringResource(R.string.connect_portal))
                     }
                     MenuButton(stringResource(android.R.string.cancel), Modifier, onClick = onDismiss)
+                }
+            }
+        }
+    }
+}
+
+private enum class PortalAddressMode(val prefix: String) {
+    HTTP("http://"), HTTPS("https://"), CUSTOM("")
+}
+
+private val portalMacPrefixes = listOf("001A79", "001B79", "001C79", "002A01", "002A79")
+
+private fun portalAddressMode(address: String): PortalAddressMode = when {
+    address.isBlank() -> PortalAddressMode.HTTP
+    address.startsWith("https://", ignoreCase = true) && address.endsWith("/c", ignoreCase = true) -> PortalAddressMode.HTTPS
+    address.startsWith("http://", ignoreCase = true) && address.endsWith("/c", ignoreCase = true) -> PortalAddressMode.HTTP
+    else -> PortalAddressMode.CUSTOM
+}
+
+private fun portalAddressHost(address: String, mode: PortalAddressMode): String {
+    var value = address.trim()
+    if (value.startsWith("https://", ignoreCase = true)) value = value.drop(8)
+    else if (value.startsWith("http://", ignoreCase = true)) value = value.drop(7)
+    value = value.trimEnd('/')
+    if (value.endsWith("/c", ignoreCase = true)) value = value.dropLast(2).trimEnd('/')
+    return value
+}
+
+private fun portalComposeAddress(mode: PortalAddressMode, host: String): String {
+    val normalized = host.trim().removePrefix("/").trimEnd('/')
+        .let { if (it.endsWith("/c", ignoreCase = true)) it.dropLast(2).trimEnd('/') else it }
+    return if (normalized.isBlank()) "" else "${mode.prefix}$normalized/c"
+}
+
+@Composable
+private fun MacDigitRow(values: List<Char>, onChange: (Int, Char) -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
+        values.forEachIndexed { index, value ->
+            if (index > 0 && index % 2 == 0) Text(":", style = MaterialTheme.typography.titleMedium)
+            var expanded by remember(index) { mutableStateOf(false) }
+            Box {
+                MenuButton(value.toString(), Modifier.width(36.dp)) { expanded = true }
+                DropdownMenu(expanded, onDismissRequest = { expanded = false }) {
+                    "0123456789ABCDEF".forEach { digit ->
+                        DropdownMenuItem(
+                            text = { Text(digit.toString()) },
+                            onClick = { onChange(index, digit); expanded = false }
+                        )
+                    }
                 }
             }
         }
@@ -5506,6 +5870,7 @@ internal fun PlayerFrame(
     active: Boolean,
     showEmpty: Boolean = true,
     fullscreen: Boolean = false,
+    isLivePlayback: Boolean = false,
     onStop: () -> Unit,
     onSurface: ((SurfaceView?) -> Unit)? = null,
     onOpenFullscreen: (() -> Unit)? = null,
@@ -5562,6 +5927,7 @@ internal fun PlayerFrame(
     val touchAction by rememberUpdatedState(onTouchAction)
     val mediaKey by rememberUpdatedState(onMediaKey)
     val allowControls by rememberUpdatedState(controlsAllowed)
+    val livePlayback by rememberUpdatedState(isLivePlayback)
     val controlsVisibility by rememberUpdatedState(onControlsVisible)
     val previousEpisode by rememberUpdatedState(onPreviousEpisode)
     val nextEpisode by rememberUpdatedState(onNextEpisode)
@@ -5634,10 +6000,6 @@ internal fun PlayerFrame(
                         }
 
                         private fun focusInitialControllerTarget() {
-                            val progress = findViewById<android.view.View>(androidx.media3.ui.R.id.exo_progress)
-                            val canSeek = player?.isCurrentMediaItemSeekable == true &&
-                                (player?.duration ?: 0L) > 0L
-                            if (canSeek && progress?.requestFocus() == true) return
                             findViewById<android.view.View>(androidx.media3.ui.R.id.exo_play_pause)?.requestFocus()
                         }
 
@@ -5687,10 +6049,23 @@ internal fun PlayerFrame(
                                 (event.repeatCount == 0 && mediaKey?.invoke() == true)
                             ) return true
                             if (fullscreen && allowControls) {
+                                if (!livePlayback && event.keyCode in setOf(
+                                        android.view.KeyEvent.KEYCODE_DPAD_LEFT,
+                                        android.view.KeyEvent.KEYCODE_DPAD_RIGHT
+                                    ) && player?.isCurrentMediaItemSeekable == true
+                                ) {
+                                    val delta = if (event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_LEFT) -10_000L else 10_000L
+                                    if (event.action == android.view.KeyEvent.ACTION_DOWN) {
+                                        val duration = player?.duration?.takeIf { it > 0L } ?: Long.MAX_VALUE
+                                        player?.seekTo((player.currentPosition + delta).coerceIn(0L, duration))
+                                        if (!controlsVisible) showController()
+                                    }
+                                    return true
+                                }
                                 if (controlsVisible) {
                                     extendControlsTimeout()
                                     val progress = findViewById<android.view.View>(androidx.media3.ui.R.id.exo_progress)
-                                    if (progress?.hasFocus() == true && player?.isCurrentMediaItemSeekable == true) {
+                                    if (!livePlayback && player?.isCurrentMediaItemSeekable == true) {
                                         val delta = when (event.keyCode) {
                                             android.view.KeyEvent.KEYCODE_DPAD_LEFT -> -10_000L
                                             android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> 10_000L
@@ -5731,6 +6106,15 @@ internal fun PlayerFrame(
                     }.apply {
                         useController = true
                         controllerAutoShow = false
+                        listOf(
+                            androidx.media3.ui.R.id.exo_prev,
+                            androidx.media3.ui.R.id.exo_next,
+                            androidx.media3.ui.R.id.exo_rew,
+                            androidx.media3.ui.R.id.exo_ffwd
+                        ).forEach { id ->
+                            findViewById<android.view.View>(id)?.visibility =
+                                if (livePlayback) android.view.View.GONE else android.view.View.VISIBLE
+                        }
                         findViewById<LinearLayout>(androidx.media3.ui.R.id.exo_center_controls)?.let { row ->
                             val size = (48 * context.resources.displayMetrics.density).toInt()
                             fun actionButton(icon: Int, label: Int, action: () -> Unit) = ImageButton(context).apply {
@@ -5760,6 +6144,7 @@ internal fun PlayerFrame(
                                 ) setBackgroundResource(background.resourceId)
                                 setOnClickListener { stop() }
                             }
+                            button.tag = "stop_playback_action"
                             val next = actionButton(android.R.drawable.ic_media_next, R.string.next_episode) {
                                 nextEpisode?.invoke()
                             }
@@ -5768,7 +6153,15 @@ internal fun PlayerFrame(
                                 previous.id = android.view.View.generateViewId()
                                 button.id = android.view.View.generateViewId()
                                 next.id = android.view.View.generateViewId()
-                                val controls = listOf(previous, pause, next, button)
+                                previous.visibility = if (!livePlayback && canPreviousEpisode) android.view.View.VISIBLE else android.view.View.GONE
+                                next.visibility = if (!livePlayback && canNextEpisode) android.view.View.VISIBLE else android.view.View.GONE
+                                button.visibility = android.view.View.VISIBLE
+                                val controls = buildList {
+                                    if (previous.visibility == android.view.View.VISIBLE) add(previous)
+                                    add(pause)
+                                    if (next.visibility == android.view.View.VISIBLE) add(next)
+                                    if (button.visibility == android.view.View.VISIBLE) add(button)
+                                }
                                 controls.forEachIndexed { index, control ->
                                     enableRemoteFocus(control)
                                     control.nextFocusLeftId = controls.getOrNull(index - 1)?.id ?: control.id
@@ -5787,9 +6180,7 @@ internal fun PlayerFrame(
                             previous.tag = "previous_episode_action"
                             next.tag = "next_episode_action"
                             previous.isEnabled = canPreviousEpisode
-                            previous.alpha = if (canPreviousEpisode) 1f else 0.35f
                             next.isEnabled = canNextEpisode
-                            next.alpha = if (canNextEpisode) 1f else 0.35f
                         }
                         findViewById<android.view.View>(androidx.media3.ui.R.id.exo_progress)?.let { progress ->
                             progress.isFocusable = true
@@ -5817,13 +6208,37 @@ internal fun PlayerFrame(
                 },
                 update = { view ->
                     onSurface?.invoke(view.videoSurfaceView as? SurfaceView)
+                    listOf(
+                        androidx.media3.ui.R.id.exo_prev,
+                        androidx.media3.ui.R.id.exo_next,
+                        androidx.media3.ui.R.id.exo_rew,
+                        androidx.media3.ui.R.id.exo_ffwd
+                    ).forEach { id ->
+                        view.findViewById<android.view.View>(id)?.visibility =
+                            if (livePlayback) android.view.View.GONE else android.view.View.VISIBLE
+                    }
                     view.findViewWithTag<android.view.View>("previous_episode_action")?.let { button ->
+                        button.visibility = if (!livePlayback && canPreviousEpisode) android.view.View.VISIBLE else android.view.View.GONE
                         button.isEnabled = canPreviousEpisode
-                        button.alpha = if (canPreviousEpisode) 1f else 0.35f
                     }
                     view.findViewWithTag<android.view.View>("next_episode_action")?.let { button ->
+                        button.visibility = if (!livePlayback && canNextEpisode) android.view.View.VISIBLE else android.view.View.GONE
                         button.isEnabled = canNextEpisode
-                        button.alpha = if (canNextEpisode) 1f else 0.35f
+                    }
+                    val pause = view.findViewById<android.view.View>(androidx.media3.ui.R.id.exo_play_pause)
+                    val stopButton = view.findViewWithTag<android.view.View>("stop_playback_action")
+                    val previousButton = view.findViewWithTag<android.view.View>("previous_episode_action")
+                    val nextButton = view.findViewWithTag<android.view.View>("next_episode_action")
+                    val visibleControls = listOfNotNull(previousButton, pause, nextButton, stopButton)
+                        .filter { it.visibility == android.view.View.VISIBLE }
+                    visibleControls.forEachIndexed { index, control ->
+                        control.nextFocusLeftId = visibleControls.getOrNull(index - 1)?.id ?: control.id
+                        control.nextFocusRightId = visibleControls.getOrNull(index + 1)?.id ?: control.id
+                        control.nextFocusDownId = androidx.media3.ui.R.id.exo_progress
+                    }
+                    view.findViewById<android.view.View>(androidx.media3.ui.R.id.exo_progress)?.let { progress ->
+                        progress.nextFocusUpId = pause?.id ?: progress.id
+                        progress.nextFocusDownId = progress.id
                     }
                     view.useController = openFullscreen == null && controlsAllowed
                     if (previousEpisodeAction != episodeActionVisible) {

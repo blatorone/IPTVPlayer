@@ -66,7 +66,7 @@ Im Programmführer erscheint während aktiver Live-Wiedergabe eine fokussierbare
 
 ## VOD
 
-- Film- und Serienkataloge verwenden eine Streaming-Startseite mit hervorgehobenem Titel, horizontalen Posterreihen für beliebte und neu hinzugefügte Inhalte sowie einer vollständigen Titelreihe. Kategorien, Filter, Sortierung und Fernbedienungsfokus bleiben erreichbar. Der Live-Programmbereich behält separat seine IPTV-Zeitleiste.
+- Film- und Serienkataloge verwenden eine Streaming-Startseite mit hervorgehobenem Titel, horizontalen Posterreihen für beliebte, neu hinzugefügte und serienbezogen neu verfügbare Folgen sowie einer vollständigen Titelreihe. Kategorien, Filter, Sortierung und Fernbedienungsfokus bleiben erreichbar. Für Anbieter-Kategorien ist die Anzeige von Markensymbol, Symbol mit Namen oder Name allein wählbar. Der Live-Programmbereich behält separat seine IPTV-Zeitleiste.
 
 - Beim automatischen Folgenwechsel pausiert „Schaust du noch?“ nach einer einstellbaren Anzahl von Folgen ohne Eingabe. Die Abfrage ist standardmäßig nach drei Folgen aktiv. Ohne Bestätigung wird nach 30 Sekunden gestoppt.
 
@@ -92,7 +92,7 @@ Im Programmführer erscheint während aktiver Live-Wiedergabe eine fokussierbare
 
 - Filme und Serien getrennt vom Live-Angebot durchsuchen; Detailansicht und Episodenauswahl bereitstellen, sofern die Quelle sie liefert. VOD startet nur nach bewusster Auswahl und ersetzt dann die laufende Live-Wiedergabe. Pause, Suche und Fortsetzen anbieten, soweit Format und Quelle dies erlauben.
 - Wiedergabeposition lokal speichern und Fortsetzen oder Neustart anbieten; abgeschlossene Einträge angemessen behandeln. Beim Wechsel auf eine abspielbare Variante desselben Films oder derselben Folge die letzte Wiedergabeposition übernehmen. Die nächste Folge startet auf Wunsch am markierten Abspannbeginn oder am tatsächlichen Ende. Die Vorwarnzeit ist einstellbar. Eindeutig markierte Intros können manuell oder automatisch übersprungen werden.
-- Der Filmverlauf zeigt die gespeicherte Position. Der Serienverlauf und die Merkliste zeigen bei angesehenen Serien auch Staffel und Folge. „Fortsetzen“ öffnet den zugehörigen Inhalt direkt an der gespeicherten Stelle.
+- Der Filmverlauf zeigt die gespeicherte Position. Der Serienverlauf und die Merkliste zeigen bei angesehenen Serien auch Staffel und Folge. „Fortsetzen“ öffnet den zugehörigen Inhalt an der unter Berücksichtigung abgeschlossener Trakt-Folgen nächsten passenden Stelle.
 - Die regulären Detailseiten zeigen „Fortsetzen“ ebenfalls, sobald ein Filmfortschritt oder eine fortsetzbare Folge vorliegt.
 - Seriendetails zeigen die Aktionen nebeneinander und darunter eine horizontal wählbare Staffelreihe über den Folgen mit verfügbaren Portalbildern, Beschreibungen und lokalem Wiedergabestatus. Die vollständige Serienbeschreibung und die Folgen sind in einem gemeinsamen vertikalen Detailbereich erreichbar.
 - Eindeutig englische Beschreibungen werden im deutschen VOD-Bereich ausgelassen. Folgenbilder und deutsche Folgenbeschreibungen können bei eingerichtetem TMDB-Zugang ergänzt werden. Ohne Folgenbild dient das Serienposter als Ersatz.

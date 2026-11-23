@@ -143,6 +143,7 @@
     <string name="catalog_featured_action">Details öffnen</string>
     <string name="catalog_shelf_popular">Beliebt</string>
     <string name="catalog_shelf_recent">Neu hinzugefügt</string>
+    <string name="catalog_shelf_new_episodes">Neue Folgen</string>
     <string name="catalog_shelf_all">Alle Titel</string>
     <string name="catalog_load_failed">Der Katalog konnte nicht vollständig geladen werden.</string>
     <string name="catalog_load_more">Weitere Titel laden</string>
@@ -272,6 +273,10 @@
     <string name="vod_category_max">HBO und Max</string>
     <string name="vod_category_paramount">Paramount+</string>
     <string name="vod_category_peacock">Peacock</string>
+    <string name="provider_category_style_setting">Anbieter-Kategorien: %1$s</string>
+    <string name="provider_style_symbols">Nur Symbole</string>
+    <string name="provider_style_both">Symbole und Namen</string>
+    <string name="provider_style_labels">Nur Namen</string>
     <string name="all_years">Alle Jahre</string>
     <string name="playback_source_badge">Quelle: %1$s</string>
     <string name="series_history">Serienverlauf</string>

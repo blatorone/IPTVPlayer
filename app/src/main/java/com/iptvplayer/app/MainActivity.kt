@@ -247,6 +247,22 @@ private enum class MainMenuStyle(val label: Int) {
     BOTH(R.string.menu_style_both), TEXT(R.string.menu_style_text), ICONS(R.string.menu_style_icons)
 }
 
+private enum class ProviderCategoryStyle(val label: Int) {
+    SYMBOLS(R.string.provider_style_symbols), BOTH(R.string.provider_style_both), LABELS(R.string.provider_style_labels)
+}
+
+private fun providerCategoryMark(name: String): String? = when (serviceCategory(name)) {
+    VodCategory.NETFLIX -> "N"
+    VodCategory.PRIME -> "prime"
+    VodCategory.APPLE -> "tv+"
+    VodCategory.DISNEY -> "D+"
+    VodCategory.MAX -> "MAX"
+    VodCategory.PARAMOUNT -> "P+"
+    VodCategory.SKY -> "sky"
+    VodCategory.PEACOCK -> "●"
+    else -> null
+}
+
 private enum class VodLiveView(val label: Int) {
     BACKGROUND(R.string.vod_live_background),
     CORNER(R.string.vod_live_corner),
@@ -424,6 +440,11 @@ private fun PlayerHome(
         mutableStateOf(MainMenuStyle.entries.firstOrNull {
             it.name == preferences?.getString("main_menu_style", null)
         } ?: MainMenuStyle.BOTH)
+    }
+    var providerCategoryStyle by remember(preferences) {
+        mutableStateOf(ProviderCategoryStyle.entries.firstOrNull {
+            it.name == preferences?.getString("provider_category_style", null)
+        } ?: ProviderCategoryStyle.BOTH)
     }
     var guideAppearancePage by remember { mutableStateOf<GuideAppearancePage?>(null) }
     var guideAppearance by remember(preferences) { mutableStateOf(readGuideAppearance(preferences)) }
@@ -2332,8 +2353,11 @@ private fun PlayerHome(
         val source = titleEntries(section, root ?: title).firstOrNull()?.source?.identity.orEmpty()
         val seriesId = root?.let { titleIdentity(it) ?: it.id ?: it.name }
         val id = if (root != null) {
-            val episode = title.episode?.toIntOrNull()?.toString() ?: title.episode ?: title.id ?: title.name
-            "${season?.number ?: season?.title?.name}:$episode"
+            val seasonNumber = season?.number ?: Regex("\\d+").find(season?.title?.name.orEmpty())?.value
+            val rawEpisode = title.episode.orEmpty()
+            val episode = Regex("\\d+").findAll(rawEpisode).lastOrNull()?.value?.toIntOrNull()?.toString()
+                ?: title.id ?: title.name
+            "${seasonNumber ?: season?.title?.name}:$episode"
         } else canonical ?: title.id ?: title.name
         return PlaybackSelection(
             if (canonical != null) "catalogue" else source, section, id, title.episode, seriesId
@@ -4471,6 +4495,15 @@ private fun PlayerHome(
                                         mainMenuStyle = styles[(mainMenuStyle.ordinal + 1) % styles.size]
                                         preferences?.edit()?.putString("main_menu_style", mainMenuStyle.name)?.apply()
                                     }
+                                    MenuButton(
+                                        stringResource(R.string.provider_category_style_setting, stringResource(providerCategoryStyle.label)),
+                                        Modifier
+                                    ) {
+                                        providerCategoryStyle = ProviderCategoryStyle.entries[
+                                            (providerCategoryStyle.ordinal + 1) % ProviderCategoryStyle.entries.size
+                                        ]
+                                        preferences?.edit()?.putString("provider_category_style", providerCategoryStyle.name)?.apply()
+                                    }
                                     MenuButton(stringResource(R.string.guide_grid_appearance), Modifier) {
                                         guideAppearancePage = GuideAppearancePage.GRID
                                     }
@@ -5108,12 +5141,10 @@ private fun PlayerHome(
                                 items(entries, key = { it.key }) { entry ->
                                     val label = if (entry.unseen.isEmpty()) entry.name else
                                         "${entry.name} · ${stringResource(R.string.new_episode_count, entry.unseen.size)}"
-                                    val resume = resumeFor(entry)?.takeIf { episode ->
-                                        val position = progressPreferences?.getLong(episode.progressKey, 0L) ?: 0L
-                                        val remoteProgress = progressPreferences?.getFloat("trakt_percent:${episode.progressKey}", 0f) ?: 0f
-                                        (position > 0L || remoteProgress > 0f) &&
-                                            progressPreferences?.getBoolean("completed:${episode.progressKey}", false) != true
-                                    }
+                                    // A Trakt-Watched-Eintrag kann ohne Prozentwert gespeichert sein.
+                                    // Die Detailseite berechnet dann aus der letzten gesehenen Folge
+                                    // die nächste nicht abgeschlossene Folge.
+                                    val resume = resumeFor(entry)
                                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                         HistoryArtwork(
                                             section,
@@ -5131,13 +5162,9 @@ private fun PlayerHome(
                                                 )
                                             }
                                         }
-                                        resume?.let { episode ->
+                                        resume?.let {
                                             MenuButton(stringResource(R.string.resume_playback), Modifier) {
-                                                openTrackedSeries(entry) { title ->
-                                                    closeSeries()
-                                                    details = section to title
-                                                    selectTitle(section, title, episode)
-                                                }
+                                                openTrackedSeries(entry)
                                             }
                                         }
                                     }
@@ -5336,6 +5363,10 @@ private fun PlayerHome(
                                 MenuButton(
                                     group.name,
                                     Modifier,
+                                    providerMark = providerCategoryMark(group.name).takeIf {
+                                        providerCategoryStyle != ProviderCategoryStyle.LABELS
+                                    },
+                                    providerMarkOnly = providerCategoryStyle == ProviderCategoryStyle.SYMBOLS,
                                     selected = selectedGroup?.first == section && selectedGroup?.second?.id == group.id &&
                                         !movieHistoryOpen && !movieWatchlistOpen && seriesActivityView == null,
                                     hiddenIndicator = categoryKey(section, group.id) in hiddenCategories,
@@ -6460,6 +6491,8 @@ internal fun MenuButton(
     count: Int? = null,
     hiddenIndicator: Boolean = false,
     leadingIcon: Int? = null,
+    providerMark: String? = null,
+    providerMarkOnly: Boolean = false,
     iconOnly: Boolean = false,
     enabled: Boolean = true,
     onFocused: (() -> Unit)? = null,
@@ -6508,6 +6541,29 @@ internal fun MenuButton(
                     .background(if (focused) colors.onTertiaryContainer else colors.primary))
             }
             ChannelLogo(logo, Modifier.padding(end = 8.dp))
+            providerMark?.let { mark ->
+                Surface(
+                    color = when (mark) {
+                        "N" -> Color(0xFFE50914)
+                        "prime" -> Color(0xFF1689D4)
+                        "tv+" -> Color(0xFF30343B)
+                        "D+" -> Color(0xFF132A75)
+                        "MAX" -> Color(0xFF4A248A)
+                        "P+" -> Color(0xFF0756A8)
+                        "sky" -> Color(0xFF0072C6)
+                        else -> colors.primaryContainer
+                    },
+                    contentColor = Color.White,
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier.padding(end = if (providerMarkOnly) 0.dp else 8.dp)
+                ) {
+                    Text(
+                        mark,
+                        Modifier.padding(horizontal = if (mark.length > 1) 6.dp else 8.dp, vertical = 3.dp),
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                }
+            }
             leadingIcon?.let { icon ->
                 Icon(
                     painterResource(icon),
@@ -6520,7 +6576,7 @@ internal fun MenuButton(
                 HiddenCategoryIcon()
                 Box(Modifier.width(8.dp))
             }
-            if (!iconOnly || leadingIcon == null) Text(
+            if ((!iconOnly || leadingIcon == null) && !providerMarkOnly) Text(
                 label,
                 modifier = if (count == null) Modifier else Modifier.weight(1f),
                 style = MaterialTheme.typography.labelLarge,

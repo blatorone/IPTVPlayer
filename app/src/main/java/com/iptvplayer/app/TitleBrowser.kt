@@ -163,7 +163,8 @@ internal fun ColumnScope.TitleGrid(
     BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
         val compact = maxWidth < 600.dp || maxHeight < 430.dp
         val cardWidth = if (compact) 112.dp else 150.dp
-        val hero = sorted.firstOrNull()
+        val popular = sorted.filter { it.popularity != null }.sortedByDescending { it.popularity }
+        val hero = popular.firstOrNull() ?: sorted.firstOrNull()
         LazyColumn(
             Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(if (compact) 12.dp else 18.dp)
@@ -177,11 +178,18 @@ internal fun ColumnScope.TitleGrid(
                 )
             }
             if (matches.isEmpty()) item { Text(stringResource(R.string.no_matching_titles)) }
-            val popular = sorted.filter { it.popularity != null }.sortedByDescending { it.popularity }
             if (popular.isNotEmpty()) item(key = "shelf-popular") {
                 TitleShelf(
                     title = stringResource(R.string.catalog_shelf_popular),
                     titles = popular.take(20), cardWidth = cardWidth,
+                    newEpisodes = newEpisodes, onSelect = onSelect
+                )
+            }
+            val withNewEpisodes = sorted.filter { newEpisodes(it) > 0 }
+            if (withNewEpisodes.isNotEmpty()) item(key = "shelf-new-episodes") {
+                TitleShelf(
+                    title = stringResource(R.string.catalog_shelf_new_episodes),
+                    titles = withNewEpisodes, cardWidth = cardWidth,
                     newEpisodes = newEpisodes, onSelect = onSelect
                 )
             }

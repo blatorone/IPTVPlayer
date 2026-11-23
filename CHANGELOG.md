@@ -1,5 +1,12 @@
 # Änderungen
 
+## 1.0.37
+
+- Streaming-Anbieter-Kategorien lassen sich in den Darstellungseinstellungen als Marken-Symbol, Symbol mit Namen oder nur als Name anzeigen.
+- Verlauf und Merkliste verwenden weiterhin die Posteransicht. Serien aus dem Trakt-Verlauf zeigen „Fortsetzen“ auch ohne lokalen Prozentwert; die Detailseite setzt anhand des Trakt-Stands bei der nächsten offenen Folge an.
+- Episoden-Fortschrittsschlüssel normalisieren Staffel- und Folgennummern, damit Trakt-Gesehen-Markierungen mit den Folgen aus den Portalen übereinstimmen.
+- Die Serienübersicht setzt den Titel mit der höchsten verfügbaren Popularität in die große Startfläche und ergänzt ein Poster-Regal für Serien mit neuen Folgen.
+
 ## 1.0.36
 
 - Große VOD-Kataloggruppen werden im Hintergrund berechnet, damit die erste App-Ansicht nicht auf der UI-Schleife warten muss.

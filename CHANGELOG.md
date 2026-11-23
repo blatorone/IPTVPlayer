@@ -1,5 +1,12 @@
 # Änderungen
 
+## 1.0.41
+
+- Automatische Portalaktualisierung beim Start lässt sich unabhängig von der EPG-Aktualisierung schalten. Gespeicherte Kataloge bleiben während des Hintergrundabgleichs bedienbar und werden bei fehlgeschlagenem Abruf behalten.
+- Automatisch deaktivierte, nicht erreichbare Portale werden bei später erfolgreicher Prüfung wieder aktiviert. Manuell deaktivierte Quellen bleiben davon unberührt.
+- Trakt importierte Episoden werden direkt in der Episodenliste als gesehen markiert; gespeicherte Episodenfortschritte werden als Balken angezeigt.
+- Fokusrahmen und Seitenmarkierung sind in allen gemeinsamen Menüschaltflächen vereinheitlicht; die App öffnet nach einem frischen Start wieder den Live-Bereich.
+
 ## 1.0.40
 
 - Poster und Senderlogos werden in einem begrenzten Cache auf dem Gerät abgelegt und nach einem App-Neustart wiederverwendet. Der Cache wird nach 30 Tagen erneuert und auf 48 MB begrenzt; der Bitmap-RAM-Cache ist auf 12 MB begrenzt.

@@ -28,7 +28,9 @@ internal class SavedPortal(
     val epgChannelIds: Set<String> = emptySet(),
     val subscriptionExpiry: java.time.LocalDate? = null,
     val enabled: Boolean = true,
-    val reachable: Boolean? = null
+    val reachable: Boolean? = null,
+    /** True only when the app disabled the source after an unsuccessful check. */
+    val autoDisabled: Boolean = false
 ) {
     val identity: String by lazy {
         val input = "$address\n${normalizePortalMac(mac)}".encodeToByteArray()
@@ -265,6 +267,7 @@ internal class PortalStorage(context: Context) {
         put("epgChannelIds", JSONArray(source.epgChannelIds))
         put("subscriptionExpiry", source.subscriptionExpiry?.toString())
         put("enabled", source.enabled)
+        put("autoDisabled", source.autoDisabled)
         source.reachable?.let { put("reachable", it) }
         put("channels", JSONArray().apply {
             for (channel in source.channels) {
@@ -378,7 +381,8 @@ internal class PortalStorage(context: Context) {
             if (epgIds == null) emptySet() else List(epgIds.length()) { epgIds.getString(it) }.toSet(),
             parsePortalExpiry(data.optString("subscriptionExpiry")),
             data.optBoolean("enabled", true),
-            if (data.has("reachable") && !data.isNull("reachable")) data.optBoolean("reachable") else null
+            if (data.has("reachable") && !data.isNull("reachable")) data.optBoolean("reachable") else null,
+            data.optBoolean("autoDisabled", false)
         )
     }
 }

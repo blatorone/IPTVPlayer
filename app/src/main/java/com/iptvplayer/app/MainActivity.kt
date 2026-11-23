@@ -378,7 +378,7 @@ private fun PlayerHome(
     onFullscreen: (Boolean) -> Unit = {},
     canPlay: () -> Boolean = { false }
 ) {
-    var selected by rememberSaveable { mutableStateOf<Destination?>(Destination.LIVE) }
+    var selected by remember { mutableStateOf<Destination?>(Destination.LIVE) }
     var pendingVodCategory by rememberSaveable { mutableStateOf<Destination?>(null) }
     var lastFocused by rememberSaveable { mutableStateOf(Destination.LIVE) }
     var lastSettingsSection by rememberSaveable { mutableStateOf(SettingsSection.GENERAL) }
@@ -450,6 +450,9 @@ private fun PlayerHome(
     var guideAppearance by remember(preferences) { mutableStateOf(readGuideAppearance(preferences)) }
     var useXmlTv by remember(preferences) { mutableStateOf(preferences?.getBoolean("xmltv_enabled", false) ?: false) }
     var epgAtStartup by remember(preferences) { mutableStateOf(preferences?.getBoolean("epg_at_startup", true) ?: true) }
+    var refreshPortalsAtStartup by remember(preferences) {
+        mutableStateOf(preferences?.getBoolean("refresh_portals_at_startup", true) ?: true)
+    }
     var playLastChannelAtStartup by remember(preferences) {
         mutableStateOf(preferences?.getBoolean("play_last_channel_at_startup", true) ?: true)
     }
@@ -1056,7 +1059,8 @@ private fun PlayerHome(
                         title.imdbId ?: media.imdbId, title.tmdbId ?: media.tmdbId
                     )).copy(
                         refs = (old?.refs.orEmpty() + refs).distinct(), viewed = true,
-                        watchedAt = maxOf(old?.watchedAt ?: 0L, watchedAt), lastEpisode = lastEpisode
+                        watchedAt = maxOf(old?.watchedAt ?: 0L, watchedAt), lastEpisode = lastEpisode,
+                        watchedEpisodes = (old?.watchedEpisodes.orEmpty() + "$seasonNumber:$episodeNumber")
                     )
                     updatedSeries[trackedKey] = tracked
                     matched++
@@ -1879,10 +1883,22 @@ private fun PlayerHome(
             runCatching { source.identity == identity }.getOrDefault(false)
         } ?: return
         val nextReachable = reachable ?: current.reachable
-        val nextEnabled = enabled ?: if (reachable == false && autoDisableUnavailablePortals) false else current.enabled
+        val userChangedEnabled = enabled != null
+        val autoDisabled = when {
+            userChangedEnabled -> false
+            reachable == false && autoDisableUnavailablePortals && current.enabled -> true
+            reachable == true && current.autoDisabled && autoDisableUnavailablePortals -> false
+            else -> current.autoDisabled
+        }
+        val nextEnabled = when {
+            userChangedEnabled -> enabled == true
+            reachable == false && autoDisableUnavailablePortals && current.enabled -> false
+            reachable == true && current.autoDisabled && autoDisableUnavailablePortals -> true
+            else -> current.enabled
+        }
         val updated = SavedPortal(
             current.address, current.mac, current.channels, current.genres, current.catalogs,
-            current.epgChannelIds, current.subscriptionExpiry, nextEnabled, nextReachable
+            current.epgChannelIds, current.subscriptionExpiry, nextEnabled, nextReachable, autoDisabled
         )
         if (storedSource?.identity == identity && !nextEnabled) {
             val fallback = savedSources.firstOrNull { source ->
@@ -1910,7 +1926,7 @@ private fun PlayerHome(
         if (storedSource?.identity == source.identity) epgChannelIds = ids
         val snapshot = SavedPortal(
             source.address, source.mac, source.channels, source.genres, source.catalogs, ids,
-            source.subscriptionExpiry, source.enabled, source.reachable
+            source.subscriptionExpiry, source.enabled, source.reachable, source.autoDisabled
         )
         scope.launch { save(snapshot, activate = false) }
     }
@@ -2726,7 +2742,14 @@ private fun PlayerHome(
                                     previous?.catalogs?.get(section)?.groups.orEmpty()
                                 })
                             }
-                            refreshedCatalogs = refreshedCatalogs + (section to catalog)
+                            val retainedCatalog = previous?.catalogs?.get(section)
+                            val mergedCatalog = if (retainedCatalog == null) catalog else catalog.copy(
+                                titles = (catalog.titles + retainedCatalog.titles).distinctBy {
+                                    it.id ?: it.command ?: "${normalizedLabel(it.name)}:${it.year ?: 0}"
+                                },
+                                groups = catalog.groups.ifEmpty { retainedCatalog.groups }
+                            )
+                            refreshedCatalogs = refreshedCatalogs + (section to mergedCatalog)
                             catalog.total?.let { ImportStatus.Count(it) }
                                 ?: ImportStatus.Loaded(catalog.titles.size)
                         }
@@ -2755,8 +2778,9 @@ private fun PlayerHome(
                 refreshedCatalogs,
                 savedSources.firstOrNull { it.identity == previous?.identity }?.epgChannelIds.orEmpty(),
                 previous?.subscriptionExpiry ?: source.loadSubscriptionExpiry(token),
-                enabled = activate || previous?.enabled != false,
-                reachable = true
+                enabled = activate || previous?.enabled != false || previous?.autoDisabled == true,
+                reachable = true,
+                autoDisabled = false
             )
             val sameSource = snapshot.identity == storedSource?.identity
             if (activate || sameSource) {
@@ -2836,7 +2860,7 @@ private fun PlayerHome(
     }
 
     fun refreshAllSources() {
-        val sources = savedSources.filter { it.enabled }
+        val sources = savedSources.filter { it.enabled || it.autoDisabled }
         if (connecting || startupPortalRefresh != null || sources.isEmpty()) return
         connecting = true
         batchSummary = null
@@ -2872,10 +2896,10 @@ private fun PlayerHome(
         }
     }
 
-    LaunchedEffect(restoring) {
-        if (restoring || startupPortalRefreshStarted || savedSources.isEmpty()) return@LaunchedEffect
+    LaunchedEffect(restoring, refreshPortalsAtStartup) {
+        if (restoring || startupPortalRefreshStarted || !refreshPortalsAtStartup || savedSources.isEmpty()) return@LaunchedEffect
         startupPortalRefreshStarted = true
-        val sources = savedSources.filter { it.enabled }
+        val sources = savedSources.filter { it.enabled || it.autoDisabled }
         var completed = 0
         val unavailable = mutableListOf<String>()
         try {
@@ -2921,7 +2945,7 @@ private fun PlayerHome(
                     storedSource?.let { saved ->
                         save(SavedPortal(
                             saved.address, saved.mac, channels, genres, catalogs, epgChannelIds,
-                            saved.subscriptionExpiry, saved.enabled, saved.reachable
+                            saved.subscriptionExpiry, saved.enabled, saved.reachable, saved.autoDisabled
                         ))
                     }
                 }
@@ -4397,12 +4421,9 @@ private fun PlayerHome(
                         }
                     }
                 }
-                if (restoring || connecting || startupPortalRefresh != null) {
+                if (restoring || connecting) {
                     LinearProgressIndicator(Modifier.fillMaxWidth())
                     if (restoring) Text(stringResource(R.string.startup_loading))
-                    startupPortalRefresh?.let { (current, total) ->
-                        Text(stringResource(R.string.refresh_all_progress, current, total))
-                    }
                 }
             }
             val content: @Composable ColumnScope.() -> Unit = {
@@ -4476,6 +4497,15 @@ private fun PlayerHome(
                                     }
                                 }
                                 SettingsSection.SOURCES -> {
+                                    MenuButton(
+                                        stringResource(R.string.portal_refresh_at_start), Modifier,
+                                        selected = refreshPortalsAtStartup
+                                    ) {
+                                        refreshPortalsAtStartup = !refreshPortalsAtStartup
+                                        preferences?.edit()?.putBoolean(
+                                            "refresh_portals_at_startup", refreshPortalsAtStartup
+                                        )?.apply()
+                                    }
                                     MenuButton(
                                         label = stringResource(R.string.destination_sources),
                                         modifier = Modifier,
@@ -4988,10 +5018,11 @@ private fun PlayerHome(
                             val refs = titleEntries(section, title).mapNotNull { item ->
                                 item.value.id?.takeIf(String::isNotBlank)?.let { SeriesPortalRef(item.source.identity, it) }
                             }.toSet()
+                            val trackedEntry = if (section == PortalSection.SERIES) {
+                                trackedSeries(title) ?: seriesActivity.firstOrNull { entry -> entry.refs.any { it in refs } }
+                            } else null
                             val seriesResume = if (section == PortalSection.SERIES) {
-                                val tracked = trackedSeries(title)
-                                    ?: seriesActivity.firstOrNull { entry -> entry.refs.any { it in refs } }
-                                val savedResume = tracked?.let(::resumeFor)
+                                val savedResume = trackedEntry?.let(::resumeFor)
                                 val savedEpisode = savedResume?.let { resumeEpisode(seasons.orEmpty(), it) }
                                 if (savedResume == null || savedEpisode == null) null
                                 else if (progressPreferences?.getBoolean("completed:${savedResume.progressKey}", false) != true) {
@@ -5003,7 +5034,8 @@ private fun PlayerHome(
                                     // Continue with the next episode that is not already completed.
                                     nextEpisodeAfter(seasons.orEmpty(), savedResume) { season, episode ->
                                         val key = titleSelection(section, episode, season).progressKey
-                                        progressPreferences?.getBoolean("completed:$key", false) == true
+                                        progressPreferences?.getBoolean("completed:$key", false) == true ||
+                                            seriesEpisodeKey(season, episode) in trackedEntry?.watchedEpisodes.orEmpty()
                                     }?.let { (season, episode) ->
                                         EpisodeResume(
                                             seriesEpisodeKey(season, episode), season.number, episode.episode,
@@ -5109,9 +5141,16 @@ private fun PlayerHome(
                                         val savedKey = seriesResume?.takeIf { it.episodeKey == seriesEpisodeKey(season, episode) }
                                             ?.progressKey ?: key
                                         val prefs = progressPreferences
-                                        val completed = prefs?.getBoolean("completed:$savedKey", false) == true
-                                        val position = prefs?.getLong(savedKey, 0L) ?: 0L
-                                        val duration = prefs?.getLong("duration:$savedKey", 0L) ?: 0L
+                                        val episodeKey = seriesEpisodeKey(season, episode)
+                                        val completed = prefs?.getBoolean("completed:$savedKey", false) == true ||
+                                            episodeKey in trackedEntry?.watchedEpisodes.orEmpty()
+                                        val localPosition = prefs?.getLong(savedKey, 0L) ?: 0L
+                                        val localDuration = prefs?.getLong("duration:$savedKey", 0L) ?: 0L
+                                        val traktPercent = prefs?.getFloat("trakt_percent:$savedKey", 0f) ?: 0f
+                                        val position = localPosition.takeIf { it > 0L } ?:
+                                            (traktPercent.coerceIn(0f, 100f) * 10L).toLong()
+                                        val duration = localDuration.takeIf { it > 0L } ?:
+                                            if (traktPercent > 0f) 1000L else 0L
                                         EpisodeCardProgress(completed, position, duration)
                                     },
                                     onEpisode = { season, episode ->
@@ -5436,7 +5475,7 @@ private fun PlayerHome(
                             } else seriesActivityView = SeriesActivityView.HISTORY
                         }
                     }
-                    if (restoring || connecting || startupPortalRefresh != null ||
+                    if (restoring || connecting ||
                         cataloguePlaybackView == VodLiveView.CORNER && playing != null
                     ) header()
                     content()
@@ -6531,8 +6570,6 @@ internal fun MenuButton(
     val colors = MaterialTheme.colorScheme
     val container = when {
         !enabled -> Color.Transparent
-        highlighted -> colors.tertiaryContainer
-        selected -> colors.secondaryContainer
         else -> Color.Transparent
     }
     Surface(
@@ -6547,7 +6584,6 @@ internal fun MenuButton(
         color = container,
         contentColor = when {
             !enabled -> colors.onSurface.copy(alpha = 0.38f)
-            highlighted -> colors.onTertiaryContainer
             else -> colors.onSurface
         },
         shape = RoundedCornerShape(12.dp),
@@ -6562,7 +6598,7 @@ internal fun MenuButton(
         ) {
             if (selected) {
                 Box(Modifier.padding(end = 8.dp).width(3.dp).height(18.dp)
-                    .background(if (focused) colors.onTertiaryContainer else colors.primary))
+                    .background(colors.primary))
             }
             ChannelLogo(logo, Modifier.padding(end = 8.dp))
             providerMark?.let { mark ->

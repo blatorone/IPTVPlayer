@@ -40,7 +40,8 @@ internal data class TrackedSeries(
     val watchedAt: Long = 0,
     val lastEpisode: EpisodeResume? = null,
     val nextEpisodeName: String? = null,
-    val nextAirDate: String? = null
+    val nextAirDate: String? = null,
+    val watchedEpisodes: Set<String> = emptySet()
 )
 
 internal fun seriesEpisodeKey(season: PortalSeason, episode: PortalTitle): String {
@@ -139,6 +140,7 @@ internal fun encodeSeriesActivity(entries: List<TrackedSeries>): String = JSONAr
             put("viewed", series.viewed)
             put("known", JSONArray(series.known))
             put("unseen", JSONArray(series.unseen))
+            put("watchedEpisodes", JSONArray(series.watchedEpisodes))
             put("checkedAt", series.checkedAt)
             put("usedTmdb", series.usedTmdb)
             put("episodeProvider", series.episodeProvider)
@@ -170,6 +172,7 @@ internal fun decodeSeriesActivity(data: String?): List<TrackedSeries> = runCatch
             viewed = entry.optBoolean("viewed"),
             known = entry.optJSONArray("known").readStrings(),
             unseen = entry.optJSONArray("unseen").readStrings(),
+            watchedEpisodes = entry.optJSONArray("watchedEpisodes").readStrings(),
             checkedAt = entry.optLong("checkedAt"),
             usedTmdb = entry.optBoolean("usedTmdb"),
             episodeProvider = entry.optString("episodeProvider").ifBlank { null },

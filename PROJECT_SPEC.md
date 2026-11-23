@@ -9,13 +9,13 @@ Ein nutzerkonfigurierbarer IPTV-Player für Android-Telefone und -Tablets sowie 
 ## Quellen und Bibliothek
 
 - Der Schnellstart kann die letzte Live-Auswahl aus einer kleinen verschlüsselten Momentaufnahme öffnen, während die Bibliothek wiederhergestellt wird. Ein fehlendes oder unpassendes Abbild verwendet den normalen Startpfad.
-- Der gespeicherte Quellen- und Katalogstand bleibt nach dem Start sichtbar und bedienbar, während alle gespeicherten Portale aktualisiert werden. Neue oder korrigierte Daten werden nach erfolgreicher Übernahme ergänzt; ein fehlgeschlagener Refresh lässt den letzten lokalen Stand bestehen.
+- Der gespeicherte Quellen- und Katalogstand bleibt nach dem Start sichtbar und bedienbar. Die Portalaktualisierung beim Start ist unabhängig von der EPG-Aktualisierung schaltbar und läuft im Hintergrund. Neue Daten werden übernommen, vorhandene Einträge bleiben erhalten; ein fehlgeschlagener Refresh lässt den letzten lokalen Stand bestehen.
 - Große Film- und Serienkataloge werden asynchron gruppiert, damit das Anzeigen der gespeicherten Startansicht nicht auf die Katalogberechnung wartet.
 - Die Quellenübersicht zeigt ein lokal gespeichertes Ablaufdatum aus dem Geräteprofil oder den Kontoinformationen des Portals. Weitere Formatvarianten werden nur für angemeldete Portale geprüft.
 
 - Die Quellenliste zeigt das Ablaufdatum eines Stalker-Portals an, sofern das Portal es im Geräteprofil bereitstellt. Das Datum wird beim Hinzufügen und Aktualisieren der Quelle eingelesen.
 
-- Der Portalstatus (erreichbar, nicht erreichbar oder ungeprüft) wird lokal gespeichert. Portale können manuell deaktiviert werden; standardmäßig deaktiviert die App eine beim Handshake nicht erreichbare Quelle automatisch. Deaktivierte Quellen bleiben gespeichert, werden aber aus Suche, Zusammenführung, Metadatenabgleich und Wiedergabe ausgeschlossen. Eine Aktivierung stellt die Quelle wieder her und stößt eine Aktualisierung an.
+- Der Portalstatus (erreichbar, nicht erreichbar oder ungeprüft) wird lokal gespeichert. Portale können manuell deaktiviert werden; standardmäßig deaktiviert die App eine beim Handshake nicht erreichbare Quelle automatisch. Automatisch deaktivierte Quellen werden bei später erfolgreicher Prüfung wieder aktiviert; manuell deaktivierte Quellen bleiben aus. Deaktivierte Quellen bleiben gespeichert, werden aber aus Suche, Zusammenführung, Metadatenabgleich und Wiedergabe ausgeschlossen.
 - Nach Portalaktualisierungen zeigt eine kurze Meldung die erfolgreichen und nicht erreichbaren Quellen an. Die Quellenverwaltung zeigt ihren Status und bietet Aktivieren/Deaktivieren sowie eine Einstellung für die automatische Deaktivierung.
 - Diagnoseberichte lassen sich als einzelne Datei exportieren, ohne zuvor einen Ordner auswählen zu müssen.
 

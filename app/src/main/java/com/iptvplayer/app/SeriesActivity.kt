@@ -97,7 +97,7 @@ internal fun recoverEpisodeResume(entry: TrackedSeries, positions: Map<String, *
     val prefixes = listOfNotNull(identity?.let { "SERIES:catalogue:$it:" }) + entry.refs.map {
         "SERIES:${it.sourceId}:${it.portalTitleId}:"
     }
-    val activePosition = positions.mapNotNull { (key, value) ->
+    val activePositions = positions.mapNotNull { (key, value) ->
         if (value !is Long || value <= 0) return@mapNotNull null
         if (positions["completed:$key"] == true) return@mapNotNull null
         val prefix = prefixes.firstOrNull(key::startsWith) ?: return@mapNotNull null
@@ -107,7 +107,16 @@ internal fun recoverEpisodeResume(entry: TrackedSeries, positions: Map<String, *
         val episode = position.last().toIntOrNull() ?: return@mapNotNull null
         val updated = positions["progress_updated:$key"] as? Long ?: 0L
         updated to EpisodeResume("$season:$episode", season, episode.toString(), null, key)
-    }.maxByOrNull { it.first }?.second
+    }
+    val distinctEpisodes = activePositions.distinctBy { it.second.episodeKey }
+    val activePosition = when (distinctEpisodes.size) {
+        0 -> null
+        1 -> activePositions.maxByOrNull { it.first }?.second
+        else -> {
+            val ordered = distinctEpisodes.sortedByDescending { it.first }
+            ordered.first().takeIf { it.first > ordered[1].first }?.second
+        }
+    }
     return activePosition ?: entry.lastEpisode
 }
 

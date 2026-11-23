@@ -1104,7 +1104,7 @@ private fun PlayerHome(
                     }
                 }
                 for ((index, media) in library.watchlist.withIndex()) {
-                    val entries = localMatches(media)
+                    val entries = localMatches(media, searchPortalIfMissing = true)
                     matched++
                     val title = entries.firstOrNull()?.value ?: media.asTitle()
                     val key = entries.firstOrNull()?.let { importedTitleKey(media.section, title) } ?: traktLibraryKey(media)
@@ -1383,6 +1383,7 @@ private fun PlayerHome(
         mutableStateOf(emptyMap())
     }
     var liveGroupsLoading by remember { mutableStateOf(false) }
+    var liveGroupsReady by remember { mutableStateOf(false) }
     LaunchedEffect(sourcesForBrowsing, combine, mergePortalChannels) {
         // Large portals can contain thousands of channels. Grouping and normalizing
         // them on Compose's main dispatcher made cold start and remote navigation
@@ -1405,6 +1406,7 @@ private fun PlayerHome(
             }
         } finally {
             liveGroupsLoading = false
+            liveGroupsReady = true
         }
     }
     val liveVariants = remember(liveGroups) {
@@ -3130,8 +3132,10 @@ private fun PlayerHome(
         }
     }
 
-    LaunchedEffect(restoring, refreshPortalsAtStartup) {
-        if (restoring || startupPortalRefreshStarted || !refreshPortalsAtStartup || savedSources.isEmpty()) return@LaunchedEffect
+    LaunchedEffect(restoring, refreshPortalsAtStartup, liveGroupsReady) {
+        if (restoring || !liveGroupsReady || startupPortalRefreshStarted ||
+            !refreshPortalsAtStartup || savedSources.isEmpty()
+        ) return@LaunchedEffect
         startupPortalRefreshStarted = true
         val sources = savedSources.filter { it.enabled || it.autoDisabled }
         var completed = 0
@@ -3395,6 +3399,7 @@ private fun PlayerHome(
 
     val inGuide = selected == Destination.LIVE
     var guidePanel by remember { mutableStateOf(GuidePanel.GRID) }
+    var topNavigationHasFocus by remember { mutableStateOf(false) }
     var fullscreenGuidePanel by remember { mutableStateOf(GuidePanel.GRID) }
     var fullscreenOverlayContent by remember { mutableStateOf(GuidePanel.CHANNELS) }
     var playbackControlsVisible by remember { mutableStateOf(false) }
@@ -3415,6 +3420,9 @@ private fun PlayerHome(
     )
     val guidePanelFocus = remember { FocusRequester() }
     val guideChannelFocus = remember { FocusRequester() }
+    val destinationFocusRequesters = remember {
+        mainDestinations.associateWith { FocusRequester() }
+    }
     fun openMainMenu() {
         if (selected == Destination.MOVIES || selected == Destination.SERIES) {
             catalogueReturnTitle = null
@@ -3442,6 +3450,12 @@ private fun PlayerHome(
         restoreLiveFocus = true
     }
     fun navigateGuide(input: GuideInput) {
+        if (input in setOf(GuideInput.REMOTE_LEFT, GuideInput.SWIPE_LEFT) &&
+            guidePanel == GuidePanel.CATEGORIES
+        ) {
+            destinationFocusRequesters.getValue(Destination.LIVE).requestFocus()
+            return
+        }
         guidePanel = guidePanel.afterProgrammeGuide(input)
     }
     fun showFullscreenPanel(panel: GuidePanel) {
@@ -4597,9 +4611,6 @@ private fun PlayerHome(
                 ) { it.id }
             }.orEmpty()
             val recentCategoryKey = "last_vod_category_${vodSectionForScreen?.name}"
-            val destinationFocusRequesters = remember {
-                mainDestinations.associateWith { FocusRequester() }
-            }
             fun destinationFocusRequester(item: Destination): FocusRequester = when {
                 item == lastFocused && !inGuide && destination != Destination.SEARCH &&
                     destination != Destination.SETTINGS && destination != Destination.SOURCES &&
@@ -4673,7 +4684,8 @@ private fun PlayerHome(
                 Row(
                     Modifier.fillMaxWidth()
                         .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp))
-                        .focusGroup().padding(horizontal = 10.dp, vertical = 6.dp),
+                        .focusGroup().onFocusChanged { topNavigationHasFocus = it.hasFocus }
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -5776,7 +5788,7 @@ private fun PlayerHome(
             if (inGuide) {
                 Column(
                     Modifier.fillMaxSize().guideNavigationInput(interceptRemote = { input ->
-                        !input.vertical && (guidePanel != GuidePanel.GRID || controlBindings[input]?.let {
+                        !topNavigationHasFocus && !input.vertical && (guidePanel != GuidePanel.GRID || controlBindings[input]?.let {
                             it != ControlAction.DEFAULT && it != ControlAction.CHANNELS
                         } == true)
                     }) {

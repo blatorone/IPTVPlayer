@@ -1,5 +1,11 @@
 # Änderungen
 
+## 1.0.46
+
+- Trakt-Merkliste sucht fehlende Film- und Serientitel zusätzlich in den gespeicherten Portalen, damit verfügbare Titel übernommen werden, auch wenn sie im lokalen Katalogcache fehlen.
+- Die Live-Navigation lässt rechts/links in der oberen Leiste wieder zwischen Bereichen wechseln. Links aus der Senderkategorie führt zur oberen Navigation statt in ein zweites Seitenmenü.
+- Beim Start werden gespeicherte Sender und Kategorien vor dem automatischen Portalrefresh aufbereitet und zuerst bedienbar gemacht.
+
 ## 1.0.45
 
 - Trakt prüft vor dem großen Abruf, ob Bibliotheksdaten geändert wurden; unveränderte Daten werden aus dem lokalen Stand übernommen. Folgenfortschritt kommt gebündelt statt mit einer Zusatzanfrage je Serie.

@@ -114,7 +114,7 @@ Im Programmführer erscheint während aktiver Live-Wiedergabe eine fokussierbare
 ## Trakt-Konto
 
 - Nutzer können Trakt in den Einstellungen über den offiziellen Gerätecode-Ablauf verbinden. Die App enthält ihre öffentliche Trakt Client ID; Nutzer müssen keine Entwickler-ID eingeben. Die App zeigt Bestätigungscode und einen lokal erzeugten QR-Code, der auch `auth.trakt.tv`-Aktivierungslinks mit Gerätecode unterstützt.
-- Zugriffstoken und rotierendes Erneuerungstoken werden verschlüsselt und außerhalb der Android-Backups gespeichert. Beim Verknüpfen und bei manueller Synchronisierung werden Trakt-Merkliste, Filmverlauf, gesehene Serienfolgen und pausierte Wiedergabestände geladen. Vorhandene Portalquellen werden anhand stabiler IDs und Titel zugeordnet; Trakt-Einträge ohne Streamquelle bleiben als nicht abspielbare Einträge im Verlauf oder in der Merkliste sichtbar.
+- Zugriffstoken und rotierendes Erneuerungstoken werden verschlüsselt und außerhalb der Android-Backups gespeichert. Beim Verknüpfen und bei manueller Synchronisierung werden Trakt-Merkliste, Filmverlauf, gesehene Serienfolgen und pausierte Wiedergabestände geladen. Vorhandene Portalquellen werden anhand stabiler IDs und Titel zugeordnet; falls ein Titel im lokalen Katalog fehlt, wird er in den Portalen gesucht. Nur gefundene Portalinhalte sind abspielbar.
 - Filme und Folgen melden Start, Pause und Stopp an Trakt. Beim Stoppen wird die bestätigte Wiedergabeaktion angezeigt. Wiedergabestände werden zwischen Geräten über Trakt abgeglichen; lokale neuere Stände haben Vorrang vor älteren Importen.
 - Die App weist darauf hin, dass StreamWatch Trakt verwendet, aber nicht von Trakt unterstützt oder zertifiziert wird.
 

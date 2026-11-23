@@ -486,8 +486,18 @@ private fun PlayerHome(
     var guideAppearance by remember(preferences) { mutableStateOf(readGuideAppearance(preferences)) }
     var useXmlTv by remember(preferences) { mutableStateOf(preferences?.getBoolean("xmltv_enabled", false) ?: false) }
     var epgAtStartup by remember(preferences) { mutableStateOf(preferences?.getBoolean("epg_at_startup", true) ?: true) }
+    val portalRefreshAtStartupDefault = remember(preferences) {
+        val settings = preferences
+        if (settings != null && settings.getInt("portal_refresh_startup_migration", 0) < 49) {
+            settings.edit()
+                .putBoolean("refresh_portals_at_startup", false)
+                .putInt("portal_refresh_startup_migration", 49)
+                .apply()
+            false
+        } else settings?.getBoolean("refresh_portals_at_startup", false) ?: false
+    }
     var refreshPortalsAtStartup by remember(preferences) {
-        mutableStateOf(preferences?.getBoolean("refresh_portals_at_startup", true) ?: true)
+        mutableStateOf(portalRefreshAtStartupDefault)
     }
     var playLastChannelAtStartup by remember(preferences) {
         mutableStateOf(preferences?.getBoolean("play_last_channel_at_startup", true) ?: true)
@@ -790,6 +800,7 @@ private fun PlayerHome(
     var initialPortalPromptDismissed by rememberSaveable { mutableStateOf(false) }
     var restoring by remember { mutableStateOf(storage != null) }
     var startupPortalRefresh by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var startupPortalCheck by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var startupPortalRefreshStarted by remember { mutableStateOf(false) }
     var autoDisableUnavailablePortals by remember(preferences) {
         mutableStateOf(preferences?.getBoolean("auto_disable_unavailable_portals", true) ?: true)
@@ -3133,17 +3144,26 @@ private fun PlayerHome(
     }
 
     LaunchedEffect(restoring, refreshPortalsAtStartup, liveGroupsReady) {
-        if (restoring || !liveGroupsReady || startupPortalRefreshStarted ||
-            !refreshPortalsAtStartup || savedSources.isEmpty()
-        ) return@LaunchedEffect
+        if (restoring || !liveGroupsReady || startupPortalRefreshStarted || savedSources.isEmpty()) return@LaunchedEffect
         startupPortalRefreshStarted = true
         val sources = savedSources.filter { it.enabled || it.autoDisabled }
-        var completed = 0
         val unavailable = mutableListOf<String>()
         try {
             for ((index, source) in sources.withIndex()) {
-                startupPortalRefresh = (index + 1) to sources.size
-                if (refreshPortal(source.address, source.mac, activate = false)) completed++
+                if (refreshPortalsAtStartup) {
+                    startupPortalRefresh = (index + 1) to sources.size
+                    refreshPortal(source.address, source.mac, activate = false)
+                } else {
+                    startupPortalCheck = (index + 1) to sources.size
+                    try {
+                        sessionFor(source).openSession()
+                        updatePortalStatus(source.identity, reachable = true)
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (_: Exception) {
+                        updatePortalStatus(source.identity, reachable = false)
+                    }
+                }
                 if (savedSources.firstOrNull { it.identity == source.identity }?.reachable == false) {
                     unavailable += runCatching { java.net.URI(source.address).host }.getOrNull().orEmpty()
                         .ifBlank { "Portal" }
@@ -3153,9 +3173,15 @@ private fun PlayerHome(
                 val reachableCount = sources.count { source ->
                     savedSources.firstOrNull { it.identity == source.identity }?.reachable == true
                 }
-                portalRefreshNotice = if (unavailable.isEmpty()) {
-                    context.getString(R.string.portals_refresh_success, reachableCount)
-                } else context.getString(R.string.portals_refresh_with_unavailable, reachableCount, unavailable.joinToString(", "))
+                if (refreshPortalsAtStartup) {
+                    portalRefreshNotice = if (unavailable.isEmpty()) {
+                        context.getString(R.string.portals_refresh_success, reachableCount)
+                    } else context.getString(R.string.portals_refresh_with_unavailable, reachableCount, unavailable.joinToString(", "))
+                } else if (unavailable.isNotEmpty()) {
+                    portalRefreshNotice = context.getString(
+                        R.string.portals_refresh_with_unavailable, reachableCount, unavailable.joinToString(", ")
+                    )
+                }
             }
         } catch (error: CancellationException) {
             throw error
@@ -3163,6 +3189,7 @@ private fun PlayerHome(
             AppDiagnostics.record(context, "startup_portal_refresh_failed:${error.javaClass.simpleName}")
             portalRefreshNotice = context.getString(R.string.portals_refresh_failed)
         } finally {
+            startupPortalCheck = null
             startupPortalRefresh = null
         }
     }
@@ -4765,13 +4792,17 @@ private fun PlayerHome(
                         ?.takeIf(String::isNotBlank) ?: "Portal"
                     stringResource(R.string.portal_refresh_progress, number, total, host)
                 }
-                if (restoring || connecting || liveGroupsLoading || traktBusy || portalRefreshText != null ||
+                val portalCheckText = startupPortalCheck?.let { (number, total) ->
+                    stringResource(R.string.portal_check_progress, number, total)
+                }
+                if (restoring || connecting || liveGroupsLoading || traktBusy || portalRefreshText != null || portalCheckText != null ||
                     importStatuses.values.any { it == ImportStatus.Loading || it is ImportStatus.Progress }
                 ) {
                     LinearProgressIndicator(Modifier.fillMaxWidth())
                     if (restoring) Text(stringResource(R.string.startup_loading))
                     if (liveGroupsLoading) Text(stringResource(R.string.live_groups_loading))
                     portalRefreshText?.let { Text(it) }
+                    portalCheckText?.let { Text(it) }
                     batchProgress?.let { (number, total) -> Text("Portal-Import: $number / $total") }
                     if (traktBusy) traktStatus?.let { Text(it) }
                     importStatuses.forEach { (section, status) ->
@@ -5871,7 +5902,7 @@ private fun PlayerHome(
                             } else seriesActivityView = SeriesActivityView.HISTORY
                         }
                     }
-                    if (restoring || connecting || liveGroupsLoading || traktBusy || startupPortalRefresh != null ||
+                    if (restoring || connecting || liveGroupsLoading || traktBusy || startupPortalRefresh != null || startupPortalCheck != null ||
                         cataloguePlaybackView == VodLiveView.CORNER && playing != null
                     ) header()
                     content()

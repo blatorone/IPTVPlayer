@@ -9,7 +9,7 @@ Ein nutzerkonfigurierbarer IPTV-Player für Android-Telefone und -Tablets sowie 
 ## Quellen und Bibliothek
 
 - Der Schnellstart kann die letzte Live-Auswahl aus einer kleinen verschlüsselten Momentaufnahme öffnen, während die Bibliothek wiederhergestellt wird. Ein fehlendes oder unpassendes Abbild verwendet den normalen Startpfad.
-- Der gespeicherte Quellen- und Katalogstand bleibt nach dem Start sichtbar und bedienbar. Die Portalaktualisierung beim Start ist unabhängig von der EPG-Aktualisierung schaltbar und läuft im Hintergrund. Neue Daten werden übernommen, vorhandene Einträge bleiben erhalten; ein fehlgeschlagener Refresh lässt den letzten lokalen Stand bestehen.
+- Der gespeicherte Quellen- und Katalogstand bleibt nach dem Start sofort sichtbar und bedienbar. Standardmäßig prüft ein Hintergrund-Handshake nur die Portal-Erreichbarkeit; vollständige Portalkataloge werden nicht bei jedem App-Start geladen. Vollständige Portalaktualisierung und EPG-Aktualisierung sind getrennt einstellbar. Neue Daten werden bei einem Katalogabruf übernommen, vorhandene Einträge bleiben erhalten; ein fehlgeschlagener Refresh lässt den letzten lokalen Stand bestehen.
 - Große Film- und Serienkataloge werden asynchron gruppiert, damit das Anzeigen der gespeicherten Startansicht nicht auf die Katalogberechnung wartet.
 - Die Senderansicht bleibt während des Gruppierens aufrufbar; Portal-, Sendergruppen- und Trakt-Abgleiche zeigen einen sichtbaren Fortschritt. Der gespeicherte Senderstand wird dabei weiter angezeigt.
 - Die Quellenübersicht zeigt ein lokal gespeichertes Ablaufdatum aus dem Geräteprofil oder den Kontoinformationen des Portals. Weitere Formatvarianten werden nur für angemeldete Portale geprüft.

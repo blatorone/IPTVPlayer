@@ -1,5 +1,10 @@
 # Änderungen
 
+## 1.0.48
+
+- Gespeicherte Sender und Kategorien bleiben beim Start die sofort nutzbare Quelle. Standardmäßig prüft der Start nur den Portalzugang; vollständige Kataloge werden nicht bei jedem App-Start neu geladen.
+- Vollständige Portalaktualisierung beim Start bleibt optional. EPG-Aktualisierung ist davon getrennt.
+
 ## 1.0.47
 
 - Portal-Eingabe bietet zusätzliche MAC-Präfixe sowie ein benutzerdefiniertes Präfix per Textfeld und Hex-Zeichen-Auswahl. Gespeicherte Portale und manuelle HTTP-/HTTPS-Adressen haben getrennte Eingabemodi.

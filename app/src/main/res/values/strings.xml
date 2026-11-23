@@ -325,7 +325,7 @@
     <string name="epg_add_source">Quelle hinzufügen</string>
     <string name="epg_remove_source">Entfernen</string>
     <string name="epg_refresh_at_start">Beim App-Start aktualisieren</string>
-    <string name="portal_refresh_at_start">Portale beim App-Start im Hintergrund aktualisieren</string>
+    <string name="portal_refresh_at_start">Portalkataloge beim App-Start im Hintergrund aktualisieren</string>
     <string name="epg_refresh_off">Automatische Aktualisierung aus</string>
     <string name="epg_refresh_hours">Automatisch alle %1$d Std.</string>
     <string name="epg_schedule_hours">Programm für %1$d Std. im Voraus</string>
@@ -397,6 +397,7 @@
     <string name="trakt_uploading_watchlist">Übertrage Merkliste: %1$d / %2$d</string>
     <string name="live_groups_loading">Sender und Kategorien werden vorbereitet …</string>
     <string name="portal_refresh_progress">Portal wird aktualisiert: %1$d / %2$d · %3$s</string>
+    <string name="portal_check_progress">Prüfe Portalzugang: %1$d / %2$d</string>
     <string name="trakt_sync_failed">Die Trakt-Synchronisierung ist fehlgeschlagen.</string>
     <string name="trakt_resume_progress">Fortsetzen bei %1$d%% (Trakt)</string>
     <string name="trakt_playback_saved">Wiedergabestand wurde an Trakt übertragen.</string>

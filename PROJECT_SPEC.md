@@ -23,6 +23,9 @@ Ein nutzerkonfigurierbarer IPTV-Player für Android-Telefone und -Tablets sowie 
 
 ## Live, EPG und Navigation
 
+- Die Live-Oberfläche orientiert sich an den bereitgestellten StreamWatch-Referenzen: Kategorien links, Senderliste daneben sowie Vorschau und Programminformationen rechts; der Programmführer ergänzt die horizontale Zeitleiste darunter. Eine gemeinsame dunkle Petrolpalette und gleichartige Fokus-/Hover-Zustände halten Schaltflächen in Navigation, Senderlisten und Programmzeitleiste konsistent. Der Fokus nutzt Türkis, laufende Sendungen einen warmen Akzent.
+- Der sichtbare Trakt-Verlauf zeigt höchstens die zehn neuesten Filme beziehungsweise Serien, die einer gespeicherten Portalquelle zugeordnet werden können. Bei der Zuordnung wird dieselbe portalbasierte Suche und Identitätsprüfung wie bei der Suche verwendet.
+
 - Die Programmbeschreibung bleibt an Sender und Zeit der markierten Sendung gebunden. Das Kontextmenü einer Kategorie erlaubt das Verschieben oder Ein- und Ausblenden. Die Reihenfolge wird getrennt für Live-TV, Filme und Serien gespeichert. Das Hauptmenü kann Symbole, Text oder beides anzeigen.
 
 - Die Vollbild-Senderliste zeigt laufende Sendung und Fortschritt pro Sender. Auf breiten Geräten kann daneben der Tagesplan mit der Beschreibung der ausgewählten Sendung erscheinen. Listenbreite, Deckkraft, Schließzeit und Verhalten beim Senderwechsel sind einstellbar.

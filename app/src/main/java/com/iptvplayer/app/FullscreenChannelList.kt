@@ -1,6 +1,7 @@
 package com.iptvplayer.app
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -127,7 +128,12 @@ internal fun FullscreenChannelList(
                         playing === channel -> colors.secondaryContainer
                         else -> colors.surfaceContainerLow
                     },
-                    shape = MaterialTheme.shapes.small,
+                    shape = MaterialTheme.shapes.medium,
+                    border = when {
+                        focused -> BorderStroke(2.dp, colors.primary)
+                        playing === channel -> BorderStroke(1.dp, colors.secondary)
+                        else -> null
+                    },
                     modifier = focus.fillMaxWidth()
                         .onFocusChanged {
                             if (it.isFocused && !focused) {

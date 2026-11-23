@@ -258,13 +258,27 @@ private val mainDestinations = Destination.entries.filter {
 private const val EXIT_CONFIRMATION_MS = 3_000L
 
 private val playerColors = darkColorScheme(
-    primary = Color(0xFF8BB8FF),
-    surface = Color(0xFF0E121B),
-    surfaceContainer = Color(0xFF171E2B),
-    secondaryContainer = Color(0xFF253650),
-    onSecondaryContainer = Color(0xFFD7E7FF),
-    tertiaryContainer = Color(0xFFB1CFFF),
-    onTertiaryContainer = Color(0xFF12243D)
+    primary = Color(0xFF2DD4BF),
+    onPrimary = Color(0xFF062E2A),
+    primaryContainer = Color(0xFF124C46),
+    onPrimaryContainer = Color(0xFFCCFBF1),
+    secondary = Color(0xFFF4AB38),
+    onSecondary = Color(0xFF271A08),
+    secondaryContainer = Color(0xFF3C2B15),
+    onSecondaryContainer = Color(0xFFFFE4B5),
+    tertiary = Color(0xFF42C8B7),
+    surface = Color(0xFF09171B),
+    surfaceContainerLowest = Color(0xFF071216),
+    surfaceContainerLow = Color(0xFF0D1C20),
+    surfaceContainer = Color(0xFF122328),
+    surfaceContainerHigh = Color(0xFF192D32),
+    surfaceContainerHighest = Color(0xFF223B40),
+    onSurface = Color(0xFFF0F7F7),
+    onSurfaceVariant = Color(0xFFA9C0C1),
+    outline = Color(0xFF648184),
+    outlineVariant = Color(0xFF344F52),
+    tertiaryContainer = Color(0xFF28B8A8),
+    onTertiaryContainer = Color(0xFF042B29)
 )
 
 private data class PlaybackSelection(
@@ -813,19 +827,53 @@ private fun PlayerHome(
                     remote
                 }
                 val localMatchCache = mutableMapOf<String, List<SourceItem<PortalTitle>>>()
-                suspend fun localMatches(media: TraktMedia): List<SourceItem<PortalTitle>> {
+                val portalSearchLimiter = Semaphore(3)
+                suspend fun localMatches(
+                    media: TraktMedia,
+                    searchPortalIfMissing: Boolean = false
+                ): List<SourceItem<PortalTitle>> {
                     val cacheKey = "${media.section}:${media.imdbId}:${media.tmdbId}:${normalizedLabel(media.name)}:${media.year}"
-                    localMatchCache[cacheKey]?.let { return it }
-                    val matches = withContext(Dispatchers.Default) {
-                        val expected = media.asTitle()
+                    val cached = localMatchCache[cacheKey]
+                    if (cached != null && (cached.isNotEmpty() || !searchPortalIfMissing)) return cached
+                    val expected = media.asTitle()
+                    var matches = cached ?: withContext(Dispatchers.Default) {
                         savedSources.flatMap { source ->
-                            source.catalogs[media.section]?.titles.orEmpty().mapNotNull { title ->
-                                equivalentCatalogueTitle(
-                                    expected, listOf(title), requireVerifiedIdentity = false
-                                )?.let { SourceItem(source, it) }
-                            }
-                        }.distinctBy { "${it.source.identity}:${it.value.id ?: it.value.name}" }
+                            val titles = source.catalogs[media.section]?.titles.orEmpty()
+                            equivalentCatalogueTitle(
+                                expected,
+                                titles,
+                                requireVerifiedIdentity = media.section == PortalSection.SERIES
+                            )?.let { listOf(SourceItem(source, it)) }.orEmpty()
+                        }
                     }
+                    if (matches.isEmpty() && searchPortalIfMissing) {
+                        for (source in savedSources) {
+                            try {
+                                val portal = if (source.identity == storedSource?.identity) {
+                                    liveSession?.first ?: secondarySessions.getOrPut(source.identity) {
+                                        StalkerPortal(source.address, source.mac)
+                                    }
+                                } else secondarySessions.getOrPut(source.identity) {
+                                    StalkerPortal(source.address, source.mac)
+                                }
+                                val found = searchPortal(
+                                    source, portal, media.section,
+                                    displayVodTitle(expected), countries, portalSearchLimiter
+                                ).titles
+                                val candidate = equivalentCatalogueTitle(
+                                    expected,
+                                    found.filter { it.source.identity == source.identity }.map { it.value },
+                                    requireVerifiedIdentity = media.section == PortalSection.SERIES
+                                )
+                                if (candidate != null) matches = matches + SourceItem(source, candidate)
+                            } catch (error: CancellationException) {
+                                throw error
+                            } catch (_: Exception) {
+                                // Ein nicht erreichbares Portal darf die übrigen Treffer nicht verwerfen.
+                            }
+                        }
+                    }
+                    matches = matches.distinctBy { "${it.source.identity}:${it.value.id ?: it.value.name}" }
                     localMatchCache[cacheKey] = matches
                     return matches
                 }
@@ -871,7 +919,7 @@ private fun PlayerHome(
                     reportImportProgress("Importiere Merkliste", index, library.watchlist.size)
                 }
                 for ((index, media) in library.watched.withIndex()) {
-                    val entries = localMatches(media)
+                    val entries = localMatches(media, searchPortalIfMissing = true)
                     matched++
                     val title = entries.firstOrNull()?.value ?: media.asTitle()
                     if (media.section == PortalSection.MOVIES) {
@@ -899,7 +947,7 @@ private fun PlayerHome(
                 for ((index, media) in sortedWatchedEpisodes.withIndex()) {
                     val seasonNumber = media.seasonNumber ?: continue
                     val episodeNumber = media.episodeNumber ?: continue
-                    val entries = localMatches(media)
+                    val entries = localMatches(media, searchPortalIfMissing = true)
                     val title = entries.firstOrNull()?.value ?: media.asTitle()
                     val trackedKey = if (entries.isNotEmpty()) importedSeriesKey(title) else traktLibraryKey(media)
                     val old = updatedSeries[trackedKey]
@@ -981,7 +1029,7 @@ private fun PlayerHome(
                 }
                 watchlist = updatedWatchlist
                 movieBookmarks = updatedMovieBookmarks.values.toList()
-                movieHistory = updatedMovieHistory.values.toList()
+                movieHistory = updatedMovieHistory.values.sortedByDescending { it.watchedAt }.take(10)
                 seriesActivity = updatedSeries.values.toList()
                 progressPreferences?.edit()?.also { editor ->
                     completedEpisodes.forEach { key ->
@@ -2080,6 +2128,18 @@ private fun PlayerHome(
         ).titles
         if (sameSource && title.id != null) candidates.firstOrNull { it.id == title.id }?.let { return it }
         return equivalentCatalogueTitle(title, candidates, requireVerifiedIdentity = section == PortalSection.SERIES)
+    }
+
+    fun hasPortalReference(
+        section: PortalSection, reference: PortalTitle, refs: List<SeriesPortalRef>
+    ): Boolean = refs.any { ref ->
+        if (ref.portalTitleId.isBlank()) return@any false
+        val source = savedSources.firstOrNull { it.identity == ref.sourceId } ?: return@any false
+        val cached = source.catalogs[section]?.titles?.firstOrNull { it.id == ref.portalTitleId }
+        if (cached == null) true else equivalentCatalogueTitle(
+            reference,
+            listOf(cached), requireVerifiedIdentity = section == PortalSection.SERIES
+        ) != null
     }
 
     val historyArtworkRequests = remember { Semaphore(3) }
@@ -4723,8 +4783,16 @@ private fun PlayerHome(
                             } else titleOverview()
                         } else if (section == PortalSection.SERIES && seriesActivityView != null) {
                             val showHistory = seriesActivityView == SeriesActivityView.HISTORY
-                            val entries = if (showHistory) seriesActivity.filter { it.viewed }.sortedByDescending { it.watchedAt }
-                                else seriesActivity.filter { it.saved }.sortedBy { it.name }
+                            val entries = seriesActivity.filter { entry ->
+                                (if (showHistory) entry.viewed else entry.saved) && hasPortalReference(
+                                    PortalSection.SERIES,
+                                    PortalTitle(entry.name, year = entry.year, imdbId = entry.imdb, tmdbId = entry.tmdb),
+                                    entry.refs
+                                )
+                            }.let { matched ->
+                                if (showHistory) matched.sortedByDescending { it.watchedAt }.take(10)
+                                else matched.sortedBy { it.name }
+                            }
                             MenuButton(stringResource(R.string.back_to_categories), Modifier) { seriesActivityView = null }
                             Text(stringResource(if (showHistory) R.string.series_history else R.string.watchlist))
                             if (entries.isEmpty()) Text(stringResource(R.string.no_tracked_series))
@@ -4769,7 +4837,13 @@ private fun PlayerHome(
                             }
                         } else if (section == PortalSection.MOVIES && movieWatchlistOpen) {
                             Text(stringResource(R.string.watchlist), style = MaterialTheme.typography.titleMedium)
-                            val entries = movieBookmarks.filter { it.progressKey in watchlist }
+                            val entries = movieBookmarks.filter { entry ->
+                                entry.progressKey in watchlist && hasPortalReference(
+                                    PortalSection.MOVIES,
+                                    PortalTitle(entry.name, year = entry.year, imdbId = entry.imdb, tmdbId = entry.tmdb),
+                                    entry.refs
+                                )
+                            }
                             val legacy = (catalogs[section]?.titles.orEmpty() + groupCatalog?.titles.orEmpty())
                                 .distinctBy { titleKey(section, it) }
                                 .filter { title ->
@@ -4797,9 +4871,16 @@ private fun PlayerHome(
                         } else if (section == PortalSection.MOVIES && movieHistoryOpen) {
                             MenuButton(stringResource(R.string.back_to_categories), Modifier) { movieHistoryOpen = false }
                             Text(stringResource(R.string.movie_history))
-                            if (movieHistory.isEmpty()) Text(stringResource(R.string.no_watched_movies))
+                            val entries = movieHistory.filter { entry ->
+                                hasPortalReference(
+                                    PortalSection.MOVIES,
+                                    PortalTitle(entry.name, year = entry.year, imdbId = entry.imdb, tmdbId = entry.tmdb),
+                                    entry.refs
+                                )
+                            }.sortedByDescending { it.watchedAt }.take(10)
+                            if (entries.isEmpty()) Text(stringResource(R.string.no_watched_movies))
                             LazyColumn(Modifier.weight(1f)) {
-                                items(movieHistory, key = { it.progressKey }) { entry ->
+                                items(entries, key = { it.progressKey }) { entry ->
                                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                         HistoryArtwork(
                                             section,
@@ -5833,7 +5914,7 @@ internal fun MenuButton(
             highlighted -> colors.onTertiaryContainer
             else -> colors.onSurface
         },
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(12.dp),
         border = when {
             enabled && highlighted -> BorderStroke(2.dp, colors.primary)
             enabled && selected -> BorderStroke(2.dp, colors.primary)
@@ -5841,7 +5922,7 @@ internal fun MenuButton(
         }
     ) {
         Row(
-            modifier = Modifier.heightIn(min = 44.dp).padding(horizontal = 10.dp, vertical = 4.dp),
+            modifier = Modifier.heightIn(min = 48.dp).padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (selected) {
@@ -5889,8 +5970,10 @@ internal fun TextButton(
     MaterialTextButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier.hoverable(interactions, enabled).onFocusChanged { focused = it.isFocused },
+        modifier = Modifier.heightIn(min = 48.dp).hoverable(interactions, enabled).onFocusChanged { focused = it.isFocused },
         interactionSource = interactions,
+        shape = RoundedCornerShape(12.dp),
+        border = if (highlighted) BorderStroke(2.dp, colors.primary) else null,
         colors = ButtonDefaults.textButtonColors(
             containerColor = if (highlighted) colors.tertiaryContainer else Color.Transparent,
             contentColor = if (highlighted) colors.onTertiaryContainer else colors.primary

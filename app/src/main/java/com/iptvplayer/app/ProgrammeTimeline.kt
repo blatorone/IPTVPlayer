@@ -1,7 +1,10 @@
 package com.iptvplayer.app
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -411,7 +414,7 @@ private fun TimelineRow(
         if (now in start until end) {
             Box(
                 Modifier.offset(x = width * ((now - start).toFloat() / GUIDE_WINDOW))
-                    .width(1.dp).fillMaxHeight().background(colors.primary)
+                    .width(2.dp).fillMaxHeight().background(colors.secondary)
             )
         }
     }
@@ -430,10 +433,12 @@ private fun ProgrammeCell(
     var focused by remember { mutableStateOf(false) }
     val colors = MaterialTheme.colorScheme
     Box(
-        modifier.padding(end = 2.dp)
+        modifier.padding(end = 3.dp)
+            .clip(RoundedCornerShape(9.dp))
             .background(if (focused) colors.tertiaryContainer else if (current) {
                 colors.secondaryContainer
             } else colors.surface)
+            .then(if (focused) Modifier.border(2.dp, colors.primary, RoundedCornerShape(9.dp)) else Modifier)
             .onFocusChanged {
                 if (it.isFocused && !focused) onFocus()
                 focused = it.isFocused

@@ -131,11 +131,14 @@ internal class TraktApi(private val clientId: String) {
     ): TraktLibrary = withContext(Dispatchers.IO) {
         val watchlist = loadItems("/sync/watchlist/movies", PortalSection.MOVIES, accessToken, onProgress) +
             loadItems("/sync/watchlist/shows", PortalSection.SERIES, accessToken, onProgress)
-        val watchedMovies = loadItems("/sync/watched/movies", PortalSection.MOVIES, accessToken, onProgress)
+        val watchedMovies = loadItems(
+            "/sync/watched/movies", PortalSection.MOVIES, accessToken, onProgress, maxItems = 10
+        )
         val (watchedShows, aggregatedEpisodes) = loadWatchedShows(accessToken, onProgress)
         val watchedEpisodes = aggregatedEpisodes.ifEmpty {
-            // Older API responses may omit seasons; retain a compatibility path.
-            loadItems("/sync/history/episodes", PortalSection.SERIES, accessToken, onProgress)
+            // Keep compatibility with responses without season data, but only
+            // inspect the newest 100 events and at most ten distinct shows.
+            loadRecentEpisodeHistory(accessToken, onProgress)
         }
         val watched = watchedMovies + watchedShows
         val playback = loadPlaybackProgress(accessToken, onProgress)
@@ -241,13 +244,15 @@ internal class TraktApi(private val clientId: String) {
         path: String,
         section: PortalSection,
         token: String,
-        onProgress: suspend (String) -> Unit
+        onProgress: suspend (String) -> Unit,
+        maxItems: Int? = null
     ): List<TraktMedia> {
         val result = mutableListOf<TraktMedia>()
         var page = 1
         var pageCount: Int? = null
         do {
-            val response = request("$path?page=$page&limit=100", "GET", token = token)
+            val limit = maxItems?.coerceIn(1, 100) ?: 100
+            val response = request("$path?page=$page&limit=$limit", "GET", token = token)
             val array = response.jsonArray()
             pageCount = response.pageCount ?: pageCount
             val label = when (path) {
@@ -278,7 +283,8 @@ internal class TraktApi(private val clientId: String) {
             }
             page++
             if (page > 1_000) error("Trakt hat ungewöhnlich viele Ergebnisse geliefert; der Import wurde begrenzt.")
-        } while (pageCount?.let { page <= it } ?: (array.length() == 100))
+        } while ((pageCount?.let { page <= it } ?: (array.length() == 100)) &&
+            (maxItems == null || result.size < maxItems))
         return result
     }
 
@@ -290,13 +296,10 @@ internal class TraktApi(private val clientId: String) {
     ): Pair<List<TraktMedia>, List<TraktMedia>> {
         val shows = mutableListOf<TraktMedia>()
         val episodes = mutableListOf<TraktMedia>()
-        var page = 1
-        var pageCount: Int? = null
-        do {
-            val response = request("/sync/watched/shows?page=$page&limit=100", "GET", token = token)
+        run {
+            val response = request("/sync/watched/shows?page=1&limit=10", "GET", token = token)
             val rows = response.jsonArray()
-            pageCount = response.pageCount ?: pageCount
-            onProgress("Lade gesehene Serienfolgen: Seite $page${pageCount?.let { " von $it" } ?: ""}")
+            onProgress("Lade die zehn zuletzt gesehenen Serien")
             for (index in 0 until rows.length()) {
                 val row = rows.optJSONObject(index) ?: continue
                 val show = row.optJSONObject("show") ?: continue
@@ -328,10 +331,39 @@ internal class TraktApi(private val clientId: String) {
                     }
                 }
             }
-            page++
-            if (page > 1_000) error("Trakt hat ungewöhnlich viele gesehene Serien geliefert; der Import wurde begrenzt.")
-        } while (pageCount?.let { page <= it } ?: (rows.length() == 100))
+        }
         return shows to episodes
+    }
+
+    private suspend fun loadRecentEpisodeHistory(
+        token: String,
+        onProgress: suspend (String) -> Unit
+    ): List<TraktMedia> {
+        val rows = request("/sync/history/episodes?page=1&limit=100", "GET", token = token).jsonArray()
+        onProgress("Prüfe die letzten Trakt-Folgen")
+        val result = mutableListOf<TraktMedia>()
+        val recentShows = linkedSetOf<String>()
+        for (index in 0 until rows.length()) {
+            val row = rows.optJSONObject(index) ?: continue
+            val show = row.optJSONObject("show") ?: continue
+            val ids = show.optJSONObject("ids") ?: JSONObject()
+            val name = show.optString("title").ifBlank { show.optString("name") }
+            if (name.isBlank()) continue
+            val imdb = ids.optString("imdb").takeIf { it.startsWith("tt") }
+            val tmdb = ids.optLong("tmdb", 0).takeIf { it > 0 }?.toString()
+            val trakt = ids.optLong("trakt", 0).takeIf { it > 0 }
+            val identity = trakt?.let { "trakt:$it" } ?: imdb ?: tmdb ?: normalizedLabel(name)
+            if (identity !in recentShows && recentShows.size >= 10) continue
+            recentShows += identity
+            val episode = row.optJSONObject("episode") ?: continue
+            val season = episode.optInt("season", -1).takeIf { it >= 0 } ?: continue
+            val number = episode.optInt("number", -1).takeIf { it > 0 } ?: continue
+            result += TraktMedia(
+                PortalSection.SERIES, name, show.optInt("year").takeIf { it > 0 },
+                imdb, tmdb, trakt, row.optString("watched_at").toInstantMillis(), season, number
+            )
+        }
+        return result
     }
 
     private suspend fun request(

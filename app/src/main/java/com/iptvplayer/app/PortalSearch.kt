@@ -40,7 +40,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 
 private val searchedSections = listOf(PortalSection.MOVIES, PortalSection.SERIES)
-private data class PortalResults(
+internal data class PortalResults(
     val titles: List<SourceItem<PortalTitle>>,
     val total: Int?,
     val incomplete: Boolean
@@ -199,7 +199,7 @@ internal fun ColumnScope.PortalSearch(
     }
 }
 
-private suspend fun searchPortal(
+internal suspend fun searchPortal(
     source: SavedPortal,
     portal: StalkerPortal,
     section: PortalSection,

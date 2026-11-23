@@ -2,6 +2,11 @@
 
 ## Unveröffentlicht
 
+## 1.0.31
+
+- Die Referenzansichten für Live-TV und Programmführer werden mit einer gemeinsamen dunklen Petrolpalette, einheitlichen Fokus-/Hover-Rahmen und konsistenten abgerundeten Schaltflächen angenähert. Der Fokus bleibt türkis; laufendes Programm und Live-Zeitmarke verwenden einen warmen Akzent.
+- Trakt-Verläufe für Filme und Serien werden auf die zehn zuletzt gesehenen Titel begrenzt. Nicht zu Portalquellen passende Einträge erscheinen nicht im Verlauf; fehlende Treffer werden beim Synchronisieren mit derselben Portal-Suche wie in der Suche aufgelöst.
+
 ## 1.0.30
 
 - Beim Trakt-Abgleich werden umfangreiche lokale Titelzuordnungen auf einem Hintergrund-Dispatcher berechnet. Dadurch bleibt die Oberfläche während des Imports reaktionsfähig und der Fortschrittsstatus kann weiter aktualisiert werden.

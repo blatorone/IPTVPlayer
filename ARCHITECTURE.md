@@ -45,6 +45,8 @@ Portal-EPG verwendet einen begrenzten, verschlüsselten Dateicache außerhalb vo
 
 Der verschlüsselte Portal-Snapshot enthält Portalquellen, Sender, Genres und gespeicherte Film-/Serienkataloge. Beim Start wird der Snapshot als Quelle für die Oberfläche wiederhergestellt. Ein automatischer Portalrefresh beginnt erst nach der Sendergruppen-Berechnung, sodass die sichtbare Liste aus dem lokalen Stand bedienbar ist, während das Netzupdate im Hintergrund weiterläuft.
 
+Beim Hinzufügen einer Quelle wird ihre Anmeldung vor dem Katalogabruf als Snapshot gesichert. Erfolgreich geladene Portalbereiche schreiben anschließend jeweils einen neuen Snapshot, damit ein abgebrochener Import die neue Quelle und bereits fertige Bereiche erhält.
+
 Die automatische Episodenerkennung bevorzugt Portalmarken. Für geeignete direkte Videos liest sie auf dem Gerät verkleinerte Einzelbilder der aktiven Variante. Bei HLS erfasst sie Intro-Stichproben aus der laufenden Vollbildwiedergabe und verwendet einen aus zwei Episoden gelernten Abschnitt bei weiteren Folgen nach Prüfung seines Anfangs. Die Vergleichswerte bleiben in der aktuellen App-Sitzung. Die Abspannanalyse direkter Videos sucht mehrere Stichproben mit heller Schrift auf dunklem Hintergrund ohne anschließende längere Bildsequenz. Bei fehlenden Abspannmarken oder Treffern bleibt der nächste Folgenstart am Dateiende. Manuelle Marken benötigen keine Videoanalyse.
 
 Die optionale TMDB-Verbindung nutzt einen separat verschlüsselten Lesezugang im lokalen Verzeichnis ohne Backup. Ausgewählte Kataloge und VOD-Metadaten stammen aus der offiziellen API. Der Abgleich verwendet nur öffentliche Metadaten wie Titel, Jahr und externe IDs. Portalzugangsdaten und Wiedergabelinks bleiben in den IPTV-Adaptern.

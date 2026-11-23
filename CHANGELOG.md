@@ -1,5 +1,11 @@
 # Änderungen
 
+## 1.0.50
+
+- Neue Portalquellen werden direkt nach erfolgreicher Anmeldung gespeichert; fertig geladene Live-, Film- und Serienbereiche werden einzeln nachgesichert.
+- Quellenverwaltung bietet eine Mehrfachauswahl zum Aktualisieren sowie eine eigene Aktualisieren-Schaltfläche pro Portal.
+- Fehler beim Wiederherstellen der gespeicherten Portale werden mit ihrer technischen Fehlerklasse intern diagnostiziert, ohne Zugangsdaten oder Portalinhalte zu protokollieren.
+
 ## 1.0.49
 
 - Portalaktualisierungen vergleichen gespeicherte Sender, Kategorien und Kataloge mit der Antwort. Unveränderte Daten lösen keine erneute Speicherung oder Sendergruppierung aus; geänderte Inhalte werden übernommen.

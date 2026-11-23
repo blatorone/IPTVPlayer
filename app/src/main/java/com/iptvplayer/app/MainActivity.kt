@@ -633,6 +633,8 @@ private fun PlayerHome(
     var connecting by remember { mutableStateOf(false) }
     var batchProgress by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var batchSummary by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var sourceRefreshDialogOpen by remember { mutableStateOf(false) }
+    var selectedRefreshSources by remember { mutableStateOf<Set<String>>(emptySet()) }
     var playbackJob by remember { mutableStateOf<Job?>(null) }
     var sourceError by remember { mutableStateOf<Int?>(null) }
     var importStatuses by remember { mutableStateOf(emptyMap<PortalSection, ImportStatus>()) }
@@ -2090,7 +2092,8 @@ private fun PlayerHome(
             }
         } catch (error: CancellationException) {
             throw error
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            AppDiagnostics.record(context, "portal_library_restore_failed:${error.javaClass.simpleName}")
             storageError = R.string.portal_restore_failed
         } finally {
             restoring = false
@@ -2954,6 +2957,22 @@ private fun PlayerHome(
             var refreshedChannels = previous?.channels.orEmpty()
             var refreshedGenres = previous?.genres.orEmpty()
             var refreshedCatalogs = previous?.catalogs.orEmpty()
+            val keepEnabled = activate || previous?.enabled != false || previous?.autoDisabled == true
+            val initialSnapshot = SavedPortal(
+                enteredAddress, enteredMac, refreshedChannels, refreshedGenres, refreshedCatalogs,
+                previous?.epgChannelIds.orEmpty(), previous?.subscriptionExpiry,
+                enabled = keepEnabled, reachable = true, autoDisabled = false
+            )
+            // Persist the source as soon as its portal session is verified. A process exit
+            // during a slow catalogue load must not make a newly added source disappear.
+            save(initialSnapshot, activate = false)
+            suspend fun persistProgress() {
+                save(SavedPortal(
+                    enteredAddress, enteredMac, refreshedChannels, refreshedGenres, refreshedCatalogs,
+                    previous?.epgChannelIds.orEmpty(), previous?.subscriptionExpiry,
+                    enabled = keepEnabled, reachable = true, autoDisabled = false
+                ), activate = false)
+            }
             importStatuses = PortalSection.entries.associateWith { ImportStatus.Loading }
             coroutineScope {
                 for (section in PortalSection.entries) launch {
@@ -3021,6 +3040,9 @@ private fun PlayerHome(
                         }
                     }
                     importStatuses = importStatuses + (section to status)
+                    if (status is ImportStatus.Count || status is ImportStatus.Loaded || status is ImportStatus.Partial) {
+                        persistProgress()
+                    }
                 }
             }
             val changed = importStatuses.values.any {
@@ -3035,7 +3057,7 @@ private fun PlayerHome(
                 refreshedCatalogs,
                 savedSources.firstOrNull { it.identity == previous?.identity }?.epgChannelIds.orEmpty(),
                 previous?.subscriptionExpiry ?: source.loadSubscriptionExpiry(token),
-                enabled = activate || previous?.enabled != false || previous?.autoDisabled == true,
+                enabled = keepEnabled,
                 reachable = true,
                 autoDisabled = false
             )
@@ -3158,9 +3180,13 @@ private fun PlayerHome(
         }
     }
 
-    fun refreshAllSources() {
-        val sources = savedSources.filter { it.enabled || it.autoDisabled }
-        if (connecting || startupPortalRefresh != null || sources.isEmpty()) return
+    fun openSourceRefreshDialog() {
+        selectedRefreshSources = savedSources.map { it.identity }.toSet()
+        sourceRefreshDialogOpen = true
+    }
+
+    fun refreshSources(sources: List<SavedPortal>) {
+        if (connecting || startupPortalRefresh != null || startupPortalCheck != null || sources.isEmpty()) return
         connecting = true
         batchSummary = null
         scope.launch {
@@ -3186,7 +3212,7 @@ private fun PlayerHome(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                AppDiagnostics.record(context, "portal_batch_refresh_failed:${error.javaClass.simpleName}")
+            AppDiagnostics.record(context, "portal_batch_refresh_failed:${error.javaClass.simpleName}")
                 portalRefreshNotice = context.getString(R.string.portals_refresh_failed)
             } finally {
                 batchProgress = null
@@ -4465,6 +4491,57 @@ private fun PlayerHome(
             }
         )
     }
+    if (sourceRefreshDialogOpen) {
+        AlertDialog(
+            onDismissRequest = { sourceRefreshDialogOpen = false },
+            title = { Text(stringResource(R.string.refresh_sources)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(stringResource(R.string.select_sources_to_refresh))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        MenuButton(stringResource(R.string.select_all_sources), Modifier.weight(1f)) {
+                            selectedRefreshSources = savedSources.map { it.identity }.toSet()
+                        }
+                        MenuButton(stringResource(R.string.clear_source_selection), Modifier.weight(1f)) {
+                            selectedRefreshSources = emptySet()
+                        }
+                    }
+                    LazyColumn(Modifier.heightIn(max = 320.dp)) {
+                        items(savedSources, key = { it.identity }) { source ->
+                            val selectedForRefresh = source.identity in selectedRefreshSources
+                            val host = runCatching { java.net.URI(source.address).host }.getOrNull()
+                                .orEmpty().ifBlank { source.address }
+                            MenuButton(
+                                (if (selectedForRefresh) "✓  " else "○  ") + host,
+                                Modifier.fillMaxWidth(),
+                                selected = selectedForRefresh
+                            ) {
+                                selectedRefreshSources = if (selectedForRefresh) {
+                                    selectedRefreshSources - source.identity
+                                } else selectedRefreshSources + source.identity
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                MenuButton(
+                    stringResource(R.string.refresh_sources),
+                    Modifier,
+                    enabled = selectedRefreshSources.isNotEmpty() && !connecting
+                ) {
+                    val sources = savedSources.filter { it.identity in selectedRefreshSources }
+                    sourceRefreshDialogOpen = false
+                    refreshSources(sources)
+                }
+            },
+            dismissButton = {
+                MenuButton(stringResource(android.R.string.cancel), Modifier) {
+                    sourceRefreshDialogOpen = false
+                }
+            }
+        )
+    }
     if (choosingCountries) {
         CountryDialog(
             knownCountries, countries,
@@ -5161,11 +5238,11 @@ private fun PlayerHome(
                             }
                         )
                         MenuButton(
-                            stringResource(R.string.refresh_all_sources),
+                            stringResource(R.string.refresh_sources),
                             Modifier.fillMaxWidth(),
-                            enabled = savedSources.any { it.enabled || it.autoDisabled } &&
-                                !connecting && !restoring && startupPortalRefresh == null,
-                            onClick = ::refreshAllSources
+                            enabled = savedSources.isNotEmpty() && !connecting && !restoring &&
+                                startupPortalRefresh == null && startupPortalCheck == null,
+                            onClick = ::openSourceRefreshDialog
                         )
                         MenuButton(
                             stringResource(R.string.merge_sources), Modifier,
@@ -5231,6 +5308,12 @@ private fun PlayerHome(
                                     style = MaterialTheme.typography.labelSmall
                                 )
                             }
+                            MenuButton(
+                                stringResource(R.string.refresh_single_source),
+                                Modifier.fillMaxWidth(),
+                                enabled = !connecting && !restoring &&
+                                    startupPortalRefresh == null && startupPortalCheck == null
+                            ) { refreshSources(listOf(source)) }
                             MenuButton(
                                 stringResource(if (source.enabled) R.string.disable_portal else R.string.enable_portal),
                                 Modifier,

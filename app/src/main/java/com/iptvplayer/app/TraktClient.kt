@@ -148,6 +148,10 @@ internal class TraktApi(private val clientId: String) {
             ?.takeIf(String::isNotBlank) ?: "Trakt"
     }
 
+    /** Timestamp map used by Trakt clients to avoid downloading unchanged library sections. */
+    suspend fun loadLastActivities(accessToken: String): String =
+        request("/sync/last_activities", "GET", token = accessToken).body
+
     /** Returns aired episode keys and the closest future episode Trakt currently knows. */
     suspend fun episodeFeed(title: PortalTitle, accessToken: String): TraktEpisodeFeed? {
         val show = findShow(title, accessToken) ?: return null
@@ -240,13 +244,12 @@ internal class TraktApi(private val clientId: String) {
         val watchedMovies = loadItems(
             "/sync/watched/movies", PortalSection.MOVIES, accessToken, onProgress, maxItems = 10
         )
-        val (watchedShows, aggregatedEpisodes) = loadWatchedShows(accessToken, onProgress)
+        val (watchedShows, aggregatedEpisodes, seriesProgress) = loadWatchedShows(accessToken, onProgress)
         val watchedEpisodes = aggregatedEpisodes.ifEmpty {
             // Keep compatibility with responses without season data, but only
             // inspect the newest 100 events and at most ten distinct shows.
             loadRecentEpisodeHistory(accessToken, onProgress)
         }
-        val seriesProgress = loadSeriesProgress(watchedShows, accessToken, onProgress)
         val watched = watchedMovies + watchedShows
         val playback = loadPlaybackProgress(accessToken, onProgress)
         TraktLibrary(
@@ -401,13 +404,14 @@ internal class TraktApi(private val clientId: String) {
     private suspend fun loadWatchedShows(
         token: String,
         onProgress: suspend (String) -> Unit
-    ): Pair<List<TraktMedia>, List<TraktMedia>> {
+    ): Triple<List<TraktMedia>, List<TraktMedia>, List<TraktSeriesProgress>> {
         val shows = mutableListOf<TraktMedia>()
         val episodes = mutableListOf<TraktMedia>()
+        val progress = mutableListOf<TraktSeriesProgress>()
         var page = 1
         var pageCount: Int? = null
         do {
-            val response = request("/sync/watched/shows?page=$page&limit=100", "GET", token = token)
+            val response = request("/sync/watched/shows?page=$page&limit=100&extended=progress", "GET", token = token)
             val rows = response.jsonArray()
             pageCount = response.pageCount ?: pageCount
             onProgress("Lade gesehene Serien: Seite $page${pageCount?.let { " von $it" } ?: ""}")
@@ -421,11 +425,13 @@ internal class TraktApi(private val clientId: String) {
                 val tmdb = ids.optLong("tmdb", 0).takeIf { it > 0 }?.toString()
                 val trakt = ids.optLong("trakt", 0).takeIf { it > 0 }
                 val watchedAt = row.optString("last_watched_at").toInstantMillis()
-                shows += TraktMedia(
+                val showMedia = TraktMedia(
                     PortalSection.SERIES, name, show.optInt("year").takeIf { it > 0 },
                     imdb, tmdb, trakt, watchedAt
                 )
+                shows += showMedia
                 val seasons = row.optJSONArray("seasons") ?: show.optJSONArray("seasons") ?: continue
+                var completedEpisodes = 0
                 for (seasonIndex in 0 until seasons.length()) {
                     val season = seasons.optJSONObject(seasonIndex) ?: continue
                     val seasonNumber = season.optInt("number", -1).takeIf { it >= 0 } ?: continue
@@ -433,19 +439,25 @@ internal class TraktApi(private val clientId: String) {
                     for (episodeIndex in 0 until seasonEpisodes.length()) {
                         val episode = seasonEpisodes.optJSONObject(episodeIndex) ?: continue
                         val episodeNumber = episode.optInt("number", -1).takeIf { it > 0 } ?: continue
+                        val plays = episode.optInt("plays", 0)
+                        val episodeWatchedAt = episode.optString("last_watched_at").toInstantMillis()
+                        if (plays <= 0 && episodeWatchedAt == null) continue
+                        completedEpisodes++
                         episodes += TraktMedia(
                             PortalSection.SERIES, name, show.optInt("year").takeIf { it > 0 },
                             imdb, tmdb, trakt,
-                            episode.optString("last_watched_at").toInstantMillis() ?: watchedAt,
+                            episodeWatchedAt ?: watchedAt,
                             seasonNumber, episodeNumber
                         )
                     }
                 }
+                val aired = show.optInt("aired_episodes", 0).coerceAtLeast(completedEpisodes)
+                if (aired > 0) progress += TraktSeriesProgress(showMedia, completedEpisodes, aired)
             }
             page++
             if (page > 1_000) error("Trakt hat ungewöhnlich viele Serien geliefert; der Import wurde begrenzt.")
         } while (pageCount?.let { page <= it } ?: (rows.length() == 100))
-        return shows to episodes
+        return Triple(shows, episodes, progress)
     }
 
     private suspend fun loadSeriesProgress(

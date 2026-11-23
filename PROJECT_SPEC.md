@@ -11,6 +11,7 @@ Ein nutzerkonfigurierbarer IPTV-Player für Android-Telefone und -Tablets sowie 
 - Der Schnellstart kann die letzte Live-Auswahl aus einer kleinen verschlüsselten Momentaufnahme öffnen, während die Bibliothek wiederhergestellt wird. Ein fehlendes oder unpassendes Abbild verwendet den normalen Startpfad.
 - Der gespeicherte Quellen- und Katalogstand bleibt nach dem Start sichtbar und bedienbar. Die Portalaktualisierung beim Start ist unabhängig von der EPG-Aktualisierung schaltbar und läuft im Hintergrund. Neue Daten werden übernommen, vorhandene Einträge bleiben erhalten; ein fehlgeschlagener Refresh lässt den letzten lokalen Stand bestehen.
 - Große Film- und Serienkataloge werden asynchron gruppiert, damit das Anzeigen der gespeicherten Startansicht nicht auf die Katalogberechnung wartet.
+- Die Senderansicht bleibt während des Gruppierens aufrufbar; Portal-, Sendergruppen- und Trakt-Abgleiche zeigen einen sichtbaren Fortschritt. Der gespeicherte Senderstand wird dabei weiter angezeigt.
 - Die Quellenübersicht zeigt ein lokal gespeichertes Ablaufdatum aus dem Geräteprofil oder den Kontoinformationen des Portals. Weitere Formatvarianten werden nur für angemeldete Portale geprüft.
 
 - Die Quellenliste zeigt das Ablaufdatum eines Stalker-Portals an, sofern das Portal es im Geräteprofil bereitstellt. Das Datum wird beim Hinzufügen und Aktualisieren der Quelle eingelesen.
@@ -33,6 +34,7 @@ Ein nutzerkonfigurierbarer IPTV-Player für Android-Telefone und -Tablets sowie 
 - Die Hauptnavigation sitzt in Live-TV, Filmen, Serien, Suche und Einstellungen oben. Einstellungen zeigen ihre Bereiche direkt darunter. Film- und Serienseiten verwenden denselben dunklen Streaming-Stil; der Live-Bereich behält das EPG-Raster.
 
 - Die App verwendet in allen Bereichen eine gemeinsame Streaming-Oberfläche mit tiefschwarzen Flächen, weißer Schrift und rotem Fokusakzent. Kategorien, Senderlisten, Poster, Einstellungen und Dialoge teilen dieselben Schaltflächen- und Fokuszustände. Live-TV behält seine IPTV-Programmführung mit Zeitleiste; laufende Sendungen können zusätzlich einen warmen Akzent nutzen.
+- Der primäre Akzent ist in den Darstellungseinstellungen zwischen Rot, Blau, Grün, Violett und Orange wählbar. Titel und Kurzbeschreibung im Player-Overlay bleiben hell, Staffel- und Folgenangaben verwenden den gewählten Akzent.
 - Der sichtbare Trakt-Verlauf zeigt höchstens die zehn neuesten Filme beziehungsweise Serien, die einer gespeicherten Portalquelle zugeordnet werden können. Bei der Zuordnung wird dieselbe portalbasierte Suche und Identitätsprüfung wie bei der Suche verwendet.
 - Serien erhalten eine eigene Ansicht „Weiter schauen“ für gesehene, noch nicht abgeschlossene Serien. Trakt-Episodenstände werden paginiert importiert; der Trakt-Serienfortschritt unterscheidet abgeschlossene von noch laufenden Serien. Abgeschlossene Titel zeigen keinen Fortsetzen-Button.
 

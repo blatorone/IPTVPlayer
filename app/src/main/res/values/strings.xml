@@ -281,6 +281,12 @@
     <string name="playback_source_badge">Quelle: %1$s</string>
     <string name="series_history">Serienverlauf</string>
     <string name="continue_watching">Weiter schauen</string>
+    <string name="accent_color_setting">Akzentfarbe: %1$s</string>
+    <string name="accent_red">Rot</string>
+    <string name="accent_blue">Blau</string>
+    <string name="accent_green">Grün</string>
+    <string name="accent_purple">Violett</string>
+    <string name="accent_orange">Orange</string>
     <string name="movie_history">Filmverlauf</string>
     <string name="no_watched_movies">Hier sind noch keine angesehenen Filme gespeichert.</string>
     <string name="resume_playback">Fortsetzen</string>
@@ -386,6 +392,11 @@
     <string name="trakt_connect_failed">Die Trakt-Verbindung ist fehlgeschlagen.</string>
     <string name="trakt_disconnect_failed">Die gespeicherte Trakt-Anmeldung konnte nicht entfernt werden.</string>
     <string name="trakt_sync_complete">Trakt-Synchronisierung abgeschlossen: %1$d Titel gefunden.</string>
+    <string name="trakt_cache_current">Trakt ist aktuell – gespeicherter Stand wird verwendet.</string>
+    <string name="trakt_checking_changes">Prüfe, ob neue Trakt-Daten vorliegen …</string>
+    <string name="trakt_uploading_watchlist">Übertrage Merkliste: %1$d / %2$d</string>
+    <string name="live_groups_loading">Sender und Kategorien werden vorbereitet …</string>
+    <string name="portal_refresh_progress">Portal wird aktualisiert: %1$d / %2$d · %3$s</string>
     <string name="trakt_sync_failed">Die Trakt-Synchronisierung ist fehlgeschlagen.</string>
     <string name="trakt_resume_progress">Fortsetzen bei %1$d%% (Trakt)</string>
     <string name="trakt_playback_saved">Wiedergabestand wurde an Trakt übertragen.</string>

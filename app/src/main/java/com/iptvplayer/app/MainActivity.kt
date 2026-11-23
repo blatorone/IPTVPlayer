@@ -193,10 +193,24 @@ class MainActivity : ComponentActivity() {
         player = ExoPlayer.Builder(this).build()
         enableEdgeToEdge()
         setContent {
-            MaterialTheme(colorScheme = playerColors) {
+            var accentChoice by remember {
+                mutableStateOf(
+                    AccentChoice.entries.firstOrNull {
+                        it.name == getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE)
+                            .getString("accent_color", null)
+                    } ?: AccentChoice.RED
+                )
+            }
+            MaterialTheme(colorScheme = playerColors(accentChoice)) {
                 PlayerHome(
                     player = player,
                     storage = storage,
+                    accentChoice = accentChoice,
+                    onAccentChoiceChange = { choice ->
+                        accentChoice = choice
+                        getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE)
+                            .edit().putString("accent_color", choice.name).apply()
+                    },
                     registerLongBack = { longBackAction = it },
                     registerScreenBack = { screenBackAction = it },
                     registerPlaybackInput = { playbackInputAction = it },
@@ -280,21 +294,29 @@ private enum class VodLiveView(val label: Int) {
     HIDDEN(R.string.vod_live_hidden)
 }
 
+private enum class AccentChoice(val label: Int, val color: Color, val container: Color) {
+    RED(R.string.accent_red, Color(0xFFE50914), Color(0xFF9E0B12)),
+    BLUE(R.string.accent_blue, Color(0xFF1689D4), Color(0xFF0B5A8A)),
+    GREEN(R.string.accent_green, Color(0xFF2EAD68), Color(0xFF17663C)),
+    PURPLE(R.string.accent_purple, Color(0xFF9B59D0), Color(0xFF63338A)),
+    ORANGE(R.string.accent_orange, Color(0xFFFF8A24), Color(0xFF8C4A0D))
+}
+
 private val mainDestinations = Destination.entries.filter {
     it != Destination.SOURCES && it != Destination.CATEGORIES
 }
 private const val EXIT_CONFIRMATION_MS = 3_000L
 
-private val playerColors = darkColorScheme(
-    primary = Color(0xFFE50914),
+private fun playerColors(accent: AccentChoice) = darkColorScheme(
+    primary = accent.color,
     onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFF351114),
+    primaryContainer = accent.container,
     onPrimaryContainer = Color(0xFFFFDADB),
     secondary = Color(0xFFF5C451),
     onSecondary = Color(0xFF241900),
     secondaryContainer = Color(0xFF302818),
     onSecondaryContainer = Color(0xFFFFEFC4),
-    tertiary = Color(0xFFE50914),
+    tertiary = accent.color,
     surface = Color(0xFF080808),
     surfaceContainerLowest = Color(0xFF050505),
     surfaceContainerLow = Color(0xFF0D0D0D),
@@ -305,7 +327,7 @@ private val playerColors = darkColorScheme(
     onSurfaceVariant = Color(0xFFB3B3B3),
     outline = Color(0xFF646464),
     outlineVariant = Color(0xFF383838),
-    tertiaryContainer = Color(0xFFE50914),
+    tertiaryContainer = accent.container,
     onTertiaryContainer = Color(0xFFFFFFFF)
 )
 
@@ -382,6 +404,8 @@ private fun EpisodeTimingAdjustment(
 private fun PlayerHome(
     player: ExoPlayer? = null,
     storage: PortalStorage? = null,
+    accentChoice: AccentChoice = AccentChoice.RED,
+    onAccentChoiceChange: (AccentChoice) -> Unit = {},
     registerLongBack: (((() -> Boolean)?) -> Unit) = {},
     registerScreenBack: ((((Boolean) -> Boolean)?) -> Unit) = {},
     registerPlaybackInput: (((() -> Unit)?) -> Unit) = {},
@@ -912,7 +936,7 @@ private fun PlayerHome(
     fun syncTrakt() {
         if (traktBusy) return
         traktBusy = true
-        traktStatus = null
+        traktStatus = context.getString(R.string.trakt_checking_changes)
         fun importedTitleKey(section: PortalSection, title: PortalTitle): String =
             "${catalogSession?.first?.sourceLabel.orEmpty()}:${section.name}:${title.id ?: title.name}"
         fun importedSeriesKey(title: PortalTitle): String =
@@ -931,17 +955,40 @@ private fun PlayerHome(
                         }
                     }
                 }.distinctBy { "${it.section}:${it.imdbId ?: it.tmdbId ?: normalizedLabel(it.name)}" }
+                var pendingActivities: String? = null
                 val library = withTraktSession { api, session ->
+                    val activityKey = "trakt_last_activities:${session.username.lowercase()}"
+                    val dirtyKey = "trakt_watchlist_dirty:${session.username.lowercase()}"
+                    val activities = api.loadLastActivities(session.accessToken)
+                    val cachedActivities = preferences?.getString(activityKey, null)
+                    val watchlistDirty = preferences?.getBoolean(dirtyKey, true) ?: true
+                    if (cachedActivities == activities && !watchlistDirty) {
+                        withContext(Dispatchers.Main) {
+                            traktStatus = context.getString(R.string.trakt_cache_current)
+                        }
+                        return@withTraktSession null
+                    }
+                    withContext(Dispatchers.Main) {
+                        traktStatus = context.getString(R.string.trakt_checking_changes)
+                    }
                     val remote = api.loadLibrary(session.accessToken) { progress ->
                         withContext(Dispatchers.Main) { traktStatus = progress }
                     }
-                    localSaved.forEach { item ->
-                        if (item.imdbId != null || item.tmdbId != null) {
-                            api.setWatchlistItem(session.accessToken, item, saved = true)
+                    if (watchlistDirty) {
+                        localSaved.forEachIndexed { index, item ->
+                            if (item.imdbId != null || item.tmdbId != null) {
+                                withContext(Dispatchers.Main) {
+                                    traktStatus = context.getString(
+                                        R.string.trakt_uploading_watchlist, index + 1, localSaved.size
+                                    )
+                                }
+                                api.setWatchlistItem(session.accessToken, item, saved = true)
+                            }
                         }
                     }
+                    pendingActivities = activities
                     remote
-                }
+                } ?: return@launch
                 val localMatchCache = mutableMapOf<String, List<SourceItem<PortalTitle>>>()
                 val portalSearchLimiter = Semaphore(3)
                 suspend fun localMatches(
@@ -1242,6 +1289,14 @@ private fun PlayerHome(
                     }
                 }?.apply()
                 preferences?.edit()?.putStringSet("watchlist", watchlist)?.apply()
+                pendingActivities?.let { activities ->
+                    traktSession?.username?.lowercase()?.let { username ->
+                        preferences?.edit()
+                            ?.putString("trakt_last_activities:$username", activities)
+                            ?.putBoolean("trakt_watchlist_dirty:$username", false)
+                            ?.apply()
+                    }
+                }
                 progressPreferences?.edit()
                     ?.putString("movie_bookmarks", encodeMovieHistory(movieBookmarks))
                     ?.putString("movie_history", encodeMovieHistory(movieHistory))
@@ -1327,23 +1382,29 @@ private fun PlayerHome(
     var liveGroups: Map<StalkerChannel, LiveChannelGroup> by remember {
         mutableStateOf(emptyMap())
     }
+    var liveGroupsLoading by remember { mutableStateOf(false) }
     LaunchedEffect(sourcesForBrowsing, combine, mergePortalChannels) {
         // Large portals can contain thousands of channels. Grouping and normalizing
         // them on Compose's main dispatcher made cold start and remote navigation
         // feel frozen even though the source data had already been restored locally.
-        val groups = withContext(Dispatchers.Default) {
-            buildLiveChannelGroups(sourcesForBrowsing, combine, mergePortalChannels)
-        }
-        val originals = groups.map { it.variants.first().item.value }.toSet()
-        displayChannels.keys.retainAll(originals)
-        liveGroups = groups.associateBy { group ->
-            val original = group.variants.first().item.value
-            if (!combine && !mergePortalChannels) original else displayChannels.getOrPut(original) {
-                StalkerChannel(
-                    group.description.name, original.command, original.genreId, original.genreName,
-                    original.id, original.logo, original.direct, original.epgIdentity, original.number
-                )
+        liveGroupsLoading = true
+        try {
+            val groups = withContext(Dispatchers.Default) {
+                buildLiveChannelGroups(sourcesForBrowsing, combine, mergePortalChannels)
             }
+            val originals = groups.map { it.variants.first().item.value }.toSet()
+            displayChannels.keys.retainAll(originals)
+            liveGroups = groups.associateBy { group ->
+                val original = group.variants.first().item.value
+                if (!combine && !mergePortalChannels) original else displayChannels.getOrPut(original) {
+                    StalkerChannel(
+                        group.description.name, original.command, original.genreId, original.genreName,
+                        original.id, original.logo, original.direct, original.epgIdentity, original.number
+                    )
+                }
+            }
+        } finally {
+            liveGroupsLoading = false
         }
     }
     val liveVariants = remember(liveGroups) {
@@ -1662,6 +1723,9 @@ private fun PlayerHome(
             val saved = !isTitleSaved(section, title)
             watchlist = if (saved) watchlist + key else watchlist - key
             preferences?.edit()?.putStringSet("watchlist", watchlist)?.apply()
+            traktSession?.username?.lowercase()?.let { username ->
+                preferences?.edit()?.putBoolean("trakt_watchlist_dirty:$username", true)?.apply()
+            }
             if (section == PortalSection.SERIES) updateTrackedSeries(title, saved = saved)
             else if (section == PortalSection.MOVIES) {
                 val others = movieBookmarks.filterNot { it.progressKey == key }
@@ -3995,15 +4059,17 @@ private fun PlayerHome(
                         Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                             verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(displayVodTitle(title), style = MaterialTheme.typography.titleLarge,
+                                color = Color.White,
                                 maxLines = 1, overflow = TextOverflow.Ellipsis)
                             if (detailLine.isNotEmpty()) Text(detailLine,
                                 color = MaterialTheme.colorScheme.primary,
                                 style = MaterialTheme.typography.titleSmall)
                             if (episodeName != null && episodeName != title.name) Text(episodeName,
+                                color = Color.White,
                                 style = MaterialTheme.typography.bodyMedium,
                                 maxLines = 1, overflow = TextOverflow.Ellipsis)
                             description?.takeIf { it.isNotBlank() }?.let {
-                                Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                Text(it, color = Color.White.copy(alpha = 0.9f),
                                     style = MaterialTheme.typography.bodySmall,
                                     maxLines = 3, overflow = TextOverflow.Ellipsis)
                             }
@@ -4683,9 +4749,31 @@ private fun PlayerHome(
                         }
                     }
                 }
-                if (restoring || connecting) {
+                val portalRefreshText = startupPortalRefresh?.let { (number, total) ->
+                    val source = savedSources.filter { it.enabled || it.autoDisabled }.getOrNull(number - 1)
+                    val host = source?.address?.let { runCatching { java.net.URI(it).host }.getOrNull() }
+                        ?.takeIf(String::isNotBlank) ?: "Portal"
+                    stringResource(R.string.portal_refresh_progress, number, total, host)
+                }
+                if (restoring || connecting || liveGroupsLoading || traktBusy || portalRefreshText != null ||
+                    importStatuses.values.any { it == ImportStatus.Loading || it is ImportStatus.Progress }
+                ) {
                     LinearProgressIndicator(Modifier.fillMaxWidth())
                     if (restoring) Text(stringResource(R.string.startup_loading))
+                    if (liveGroupsLoading) Text(stringResource(R.string.live_groups_loading))
+                    portalRefreshText?.let { Text(it) }
+                    batchProgress?.let { (number, total) -> Text("Portal-Import: $number / $total") }
+                    if (traktBusy) traktStatus?.let { Text(it) }
+                    importStatuses.forEach { (section, status) ->
+                        when (status) {
+                            ImportStatus.Loading -> Text(stringResource(section.label) + " wird geladen …")
+                            is ImportStatus.Progress -> Text(
+                                "${stringResource(section.label)}: ${status.loaded}" +
+                                    (status.total?.let { " / $it" } ?: "")
+                            )
+                            else -> Unit
+                        }
+                    }
                 }
             }
             val content: @Composable ColumnScope.() -> Unit = {
@@ -4815,6 +4903,14 @@ private fun PlayerHome(
                                     MenuButton(stringResource(R.string.epg_settings), Modifier) { epgSettingsOpen = true }
                                 SettingsSection.APPEARANCE -> {
                                     MenuButton(
+                                stringResource(R.string.accent_color_setting, stringResource(accentChoice.label)),
+                                Modifier
+                            ) {
+                                onAccentChoiceChange(
+                                    AccentChoice.entries[(accentChoice.ordinal + 1) % AccentChoice.entries.size]
+                                )
+                            }
+                            MenuButton(
                                         stringResource(R.string.menu_style_setting, stringResource(mainMenuStyle.label)),
                                         Modifier
                                     ) {
@@ -5726,8 +5822,7 @@ private fun PlayerHome(
                         }
                         if (section == PortalSection.SERIES) MenuButton(
                             stringResource(R.string.continue_watching), Modifier,
-                            selected = seriesActivityView == SeriesActivityView.CONTINUE,
-                            count = seriesActivity.count { it.viewed && it.isComplete != true }.takeIf { it > 0 }
+                            selected = seriesActivityView == SeriesActivityView.CONTINUE
                         ) {
                             closeSeries()
                             details = null
@@ -5765,7 +5860,7 @@ private fun PlayerHome(
                             } else seriesActivityView = SeriesActivityView.HISTORY
                         }
                     }
-                    if (restoring || connecting ||
+                    if (restoring || connecting || liveGroupsLoading || traktBusy || startupPortalRefresh != null ||
                         cataloguePlaybackView == VodLiveView.CORNER && playing != null
                     ) header()
                     content()
@@ -7013,7 +7108,7 @@ internal fun TextButton(
 @Preview(name = "Handy im Querformat", widthDp = 852, heightDp = 393)
 @Composable
 private fun PlayerHomePreview() {
-    MaterialTheme(colorScheme = playerColors) {
+    MaterialTheme(colorScheme = playerColors(AccentChoice.RED)) {
         PlayerHome()
     }
 }

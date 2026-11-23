@@ -1,5 +1,13 @@
 # Änderungen
 
+## 1.0.45
+
+- Trakt prüft vor dem großen Abruf, ob Bibliotheksdaten geändert wurden; unveränderte Daten werden aus dem lokalen Stand übernommen. Folgenfortschritt kommt gebündelt statt mit einer Zusatzanfrage je Serie.
+- Trakt-Merkliste wird mit lokalen Film- und Serienquellen abgeglichen; lokale Änderungen markieren die Merkliste für den nächsten Abgleich.
+- Portal-, Sendergruppen- und Trakt-Abgleich zeigen ihren Fortschritt in der App.
+- Kategorie „Weiter schauen“ zeigt ihren Namen ohne die Zahl der Titel.
+- Titel und Beschreibung im Film-/Serien-Player sind heller lesbar. Die Akzentfarbe lässt sich in den Darstellungseinstellungen aus Rot, Blau, Grün, Violett und Orange wählen.
+
 ## 1.0.44
 
 - Rechts öffnet Programmdetails nur noch im Live-Vollbild. Im normalen Programmführer bleibt Rechts bei der Zeitleisten- und Listenbedienung.

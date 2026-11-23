@@ -3399,7 +3399,6 @@ private fun PlayerHome(
 
     val inGuide = selected == Destination.LIVE
     var guidePanel by remember { mutableStateOf(GuidePanel.GRID) }
-    var topNavigationHasFocus by remember { mutableStateOf(false) }
     var fullscreenGuidePanel by remember { mutableStateOf(GuidePanel.GRID) }
     var fullscreenOverlayContent by remember { mutableStateOf(GuidePanel.CHANNELS) }
     var playbackControlsVisible by remember { mutableStateOf(false) }
@@ -4684,8 +4683,7 @@ private fun PlayerHome(
                 Row(
                     Modifier.fillMaxWidth()
                         .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp))
-                        .focusGroup().onFocusChanged { topNavigationHasFocus = it.hasFocus }
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                        .focusGroup().padding(horizontal = 10.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -4695,7 +4693,7 @@ private fun PlayerHome(
                         color = MaterialTheme.colorScheme.primary
                     )
                     Row(
-                        Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                        Modifier.weight(1f).focusGroup().horizontalScroll(rememberScrollState()),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
@@ -5060,11 +5058,13 @@ private fun PlayerHome(
                                 }
                             }
                         )
-                        Button(
-                            enabled = savedSources.isNotEmpty() && !connecting && !restoring &&
-                                startupPortalRefresh == null,
+                        MenuButton(
+                            stringResource(R.string.refresh_all_sources),
+                            Modifier.fillMaxWidth(),
+                            enabled = savedSources.any { it.enabled || it.autoDisabled } &&
+                                !connecting && !restoring && startupPortalRefresh == null,
                             onClick = ::refreshAllSources
-                        ) { Text(stringResource(R.string.refresh_all_sources)) }
+                        )
                         MenuButton(
                             stringResource(R.string.merge_sources), Modifier,
                             selected = mergeSources
@@ -5786,19 +5786,18 @@ private fun PlayerHome(
                 }
             }
             if (inGuide) {
-                Column(
-                    Modifier.fillMaxSize().guideNavigationInput(interceptRemote = { input ->
-                        !topNavigationHasFocus && !input.vertical && (guidePanel != GuidePanel.GRID || controlBindings[input]?.let {
-                            it != ControlAction.DEFAULT && it != ControlAction.CHANNELS
-                        } == true)
-                    }) {
-                        if (!runMappedControl(it)) navigateGuide(it)
-                    },
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
+                Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     topNavigation()
                     header()
-                    content()
+                    Column(
+                        Modifier.weight(1f).fillMaxWidth().guideNavigationInput(interceptRemote = { input ->
+                            !input.vertical && (guidePanel != GuidePanel.GRID || controlBindings[input]?.let {
+                                it != ControlAction.DEFAULT && it != ControlAction.CHANNELS
+                            } == true)
+                        }) {
+                            if (!runMappedControl(it)) navigateGuide(it)
+                        }
+                    ) { content() }
                 }
             } else if (vodSectionForScreen != null) {
                 val section = vodSectionForScreen
@@ -5942,12 +5941,14 @@ private fun PortalEditor(
     onSubmit: () -> Unit
 ) {
     var addressMode by remember { mutableStateOf(portalAddressMode(address)) }
+    var selectedSavedSource by remember { mutableStateOf<SavedPortal?>(null) }
     val initialMacHex = remember {
         runCatching { normalizePortalMac(mac).filter(Char::isLetterOrDigit) }
             .getOrDefault("001A79000000")
     }
     var prefix by remember { mutableStateOf(initialMacHex.take(6)) }
     var customPrefixDigits by remember { mutableStateOf(initialMacHex.take(6).toList()) }
+    var customPrefixInput by remember { mutableStateOf(initialMacHex.take(6)) }
     var customPrefix by remember { mutableStateOf(initialMacHex.take(6) !in portalMacPrefixes) }
     var deviceDigits by remember { mutableStateOf(initialMacHex.drop(6).take(6).padEnd(6, '0').toList()) }
     var prefixMenu by remember { mutableStateOf(false) }
@@ -5970,15 +5971,24 @@ private fun PortalEditor(
             .getOrDefault("001A79000000")
         prefix = hex.take(6)
         customPrefixDigits = hex.take(6).toList()
+        customPrefixInput = hex.take(6)
         customPrefix = prefix !in portalMacPrefixes
         deviceDigits = hex.drop(6).take(6).toList()
         onMacChange(hex.chunked(2).joinToString(":"))
     }
 
     fun chooseAddressMode(next: PortalAddressMode) {
+        selectedSavedSource = null
+        if (next == PortalAddressMode.SAVED) {
+            addressMode = next
+            onAddressChange("")
+            onMacChange("")
+            return
+        }
         val host = portalAddressHost(address, addressMode)
         addressMode = next
         onAddressChange(if (next == PortalAddressMode.CUSTOM || host.isBlank()) "" else portalComposeAddress(next, host))
+        if (customPrefix) customPrefixInput = customPrefixDigits.joinToString("")
     }
 
     Dialog(
@@ -6005,48 +6015,51 @@ private fun PortalEditor(
                         style = MaterialTheme.typography.titleLarge
                     )
                     Text(stringResource(R.string.stalker_hint))
-                    if (existingSources.isNotEmpty()) Box {
-                        MenuButton(stringResource(R.string.portal_pick_saved), Modifier.fillMaxWidth()) {
-                            savedPortalMenu = true
-                        }
-                        DropdownMenu(savedPortalMenu, onDismissRequest = { savedPortalMenu = false }) {
-                            existingSources.forEachIndexed { index, source ->
-                                val host = runCatching { java.net.URI(source.address).host }.getOrNull()
-                                    .orEmpty().ifBlank { "Portal ${index + 1}" }
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.saved_portal_label, index + 1, host)) },
-                                    onClick = {
-                                        onSelectExisting(source)
-                                        addressMode = portalAddressMode(source.address)
-                                        setMac(source.mac)
-                                        savedPortalMenu = false
-                                    }
-                                )
-                            }
-                        }
-                    }
                     Box {
                         MenuButton(
-                            stringResource(when (addressMode) {
-                                PortalAddressMode.HTTP -> R.string.portal_address_http
-                                PortalAddressMode.HTTPS -> R.string.portal_address_https
-                                PortalAddressMode.CUSTOM -> R.string.portal_address_manual
-                            }), Modifier.fillMaxWidth()
+                            stringResource(addressMode.label), Modifier.fillMaxWidth()
                         ) { addressModeMenu = true }
                         DropdownMenu(addressModeMenu, onDismissRequest = { addressModeMenu = false }) {
-                            PortalAddressMode.entries.forEach { mode ->
+                            PortalAddressMode.entries.filter {
+                                it != PortalAddressMode.SAVED || existingSources.isNotEmpty()
+                            }.forEach { mode ->
                                 DropdownMenuItem(
-                                    text = { Text(stringResource(when (mode) {
-                                        PortalAddressMode.HTTP -> R.string.portal_address_http
-                                        PortalAddressMode.HTTPS -> R.string.portal_address_https
-                                        PortalAddressMode.CUSTOM -> R.string.portal_address_manual
-                                    })) },
+                                    text = { Text(stringResource(mode.label)) },
                                     onClick = { chooseAddressMode(mode); addressModeMenu = false }
                                 )
                             }
                         }
                     }
-                    if (addressMode == PortalAddressMode.CUSTOM) {
+                    if (addressMode == PortalAddressMode.SAVED) {
+                        Box {
+                            MenuButton(
+                                selectedSavedSource?.let { selected ->
+                                    val index = existingSources.indexOfFirst { it.identity == selected.identity }
+                                    val host = runCatching { java.net.URI(selected.address).host }.getOrNull()
+                                        .orEmpty().ifBlank { "Portal ${index + 1}" }
+                                    stringResource(R.string.saved_portal_label, index + 1, host)
+                                } ?: stringResource(R.string.portal_pick_saved),
+                                Modifier.fillMaxWidth(),
+                                onClick = { savedPortalMenu = true }
+                            )
+                            DropdownMenu(savedPortalMenu, onDismissRequest = { savedPortalMenu = false }) {
+                                existingSources.forEachIndexed { index, source ->
+                                    val host = runCatching { java.net.URI(source.address).host }.getOrNull()
+                                        .orEmpty().ifBlank { "Portal ${index + 1}" }
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.saved_portal_label, index + 1, host)) },
+                                        onClick = {
+                                            selectedSavedSource = source
+                                            addressMode = PortalAddressMode.SAVED
+                                            onSelectExisting(source)
+                                            setMac(source.mac)
+                                            savedPortalMenu = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    } else if (addressMode == PortalAddressMode.CUSTOM) {
                         OutlinedTextField(
                             value = address,
                             onValueChange = onAddressChange,
@@ -6069,58 +6082,83 @@ private fun PortalEditor(
                             Text("/c")
                         }
                     }
-                    Text(stringResource(R.string.portal_mac_prefix))
-                    Box {
-                        MenuButton(
-                            if (customPrefix) stringResource(R.string.portal_mac_prefix_custom)
-                            else "${prefix.chunked(2).joinToString(":")}: ",
-                            Modifier.fillMaxWidth()
-                        ) { prefixMenu = true }
-                        DropdownMenu(prefixMenu, onDismissRequest = { prefixMenu = false }) {
-                            portalMacPrefixes.forEach { value ->
+                    if (addressMode != PortalAddressMode.SAVED) {
+                        Text(stringResource(R.string.portal_mac_prefix))
+                        Box {
+                            MenuButton(
+                                if (customPrefix) stringResource(R.string.portal_mac_prefix_custom)
+                                else "${prefix.chunked(2).joinToString(":")}: ",
+                                Modifier.fillMaxWidth()
+                            ) { prefixMenu = true }
+                            DropdownMenu(prefixMenu, onDismissRequest = { prefixMenu = false }) {
+                                portalMacPrefixes.forEach { value ->
+                                    DropdownMenuItem(
+                                        text = { Text("${value.chunked(2).joinToString(":")}: ") },
+                                        onClick = {
+                                            prefix = value
+                                            customPrefix = false
+                                            publishMac()
+                                            prefixMenu = false
+                                        }
+                                    )
+                                }
                                 DropdownMenuItem(
-                                    text = { Text("${value.chunked(2).joinToString(":")}: ") },
+                                    text = { Text(stringResource(R.string.portal_mac_prefix_custom)) },
                                     onClick = {
-                                        prefix = value
-                                        customPrefix = false
+                                        customPrefix = true
+                                        customPrefixInput = customPrefixDigits.joinToString("")
                                         publishMac()
                                         prefixMenu = false
                                     }
                                 )
                             }
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.portal_mac_prefix_custom)) },
-                                onClick = {
-                                    customPrefix = true
-                                    publishMac()
-                                    prefixMenu = false
-                                }
-                            )
                         }
-                    }
-                    if (customPrefix) {
-                        Text(stringResource(R.string.portal_mac_custom_prefix_digits))
-                        MacDigitRow(customPrefixDigits) { index, value ->
-                            customPrefixDigits = customPrefixDigits.toMutableList().also { it[index] = value }
+                        if (customPrefix) {
+                            Text(stringResource(R.string.portal_mac_custom_prefix_digits))
+                            OutlinedTextField(
+                                value = customPrefixInput,
+                                onValueChange = { raw ->
+                                    val clean = raw.uppercase(java.util.Locale.ROOT)
+                                        .filter { it in "0123456789ABCDEF" }.take(6)
+                                    customPrefixInput = clean
+                                    customPrefixDigits = clean.padEnd(6, '0').toList()
+                                    if (clean.length == 6) publishMac()
+                                },
+                                label = { Text(stringResource(R.string.portal_mac_prefix_custom)) },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Ascii,
+                                    capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Characters
+                                )
+                            )
+                            MacDigitRow(customPrefixDigits) { index, value ->
+                                customPrefixDigits = customPrefixDigits.toMutableList().also { it[index] = value }
+                                customPrefixInput = customPrefixDigits.joinToString("")
+                                publishMac()
+                            }
+                        }
+                        Text(stringResource(R.string.portal_mac_device_digits))
+                        MacDigitRow(deviceDigits) { index, value ->
+                            deviceDigits = deviceDigits.toMutableList().also { it[index] = value }
                             publishMac()
                         }
-                    } else {
-                        Text("${prefix.chunked(2).joinToString(":")}: ")
-                    }
-                    Text(stringResource(R.string.portal_mac_device_digits))
-                    MacDigitRow(deviceDigits) { index, value ->
-                        deviceDigits = deviceDigits.toMutableList().also { it[index] = value }
-                        publishMac()
                     }
                     Text(stringResource(R.string.portal_mac_preview, mac), style = MaterialTheme.typography.bodySmall)
-                    Button(
-                        enabled = (addressMode == PortalAddressMode.CUSTOM && address.isNotBlank() ||
-                            addressMode != PortalAddressMode.CUSTOM && portalAddressHost(address, addressMode).isNotBlank()) &&
-                            runCatching { normalizePortalMac(mac) }.isSuccess,
-                        onClick = onSubmit
-                    ) {
-                        Text(stringResource(R.string.connect_portal))
+                    val addressReady = when (addressMode) {
+                        PortalAddressMode.SAVED -> selectedSavedSource != null
+                        PortalAddressMode.CUSTOM -> address.isNotBlank()
+                        else -> portalAddressHost(address, addressMode).isNotBlank()
                     }
+                    val macReady = addressMode == PortalAddressMode.SAVED ||
+                        (!customPrefix || customPrefixInput.length == 6) &&
+                        runCatching { normalizePortalMac(mac) }.isSuccess
+                    MenuButton(
+                        stringResource(R.string.connect_portal),
+                        Modifier.fillMaxWidth(),
+                        enabled = addressReady && macReady,
+                        onClick = onSubmit
+                    )
                     MenuButton(stringResource(android.R.string.cancel), Modifier, onClick = onDismiss)
                 }
             }
@@ -6128,11 +6166,17 @@ private fun PortalEditor(
     }
 }
 
-private enum class PortalAddressMode(val prefix: String) {
-    HTTP("http://"), HTTPS("https://"), CUSTOM("")
+private enum class PortalAddressMode(val prefix: String, val label: Int) {
+    HTTP("http://", R.string.portal_address_http),
+    HTTPS("https://", R.string.portal_address_https),
+    CUSTOM("", R.string.portal_address_manual),
+    SAVED("", R.string.portal_address_saved)
 }
 
-private val portalMacPrefixes = listOf("001A79", "001B79", "001C79", "002A01", "002A79")
+private val portalMacPrefixes = listOf(
+    "001A78", "001A79", "001B78", "001B79", "001C78", "001C79",
+    "002A01", "002A78", "002A79"
+)
 
 private fun portalAddressMode(address: String): PortalAddressMode = when {
     address.isBlank() -> PortalAddressMode.HTTP
@@ -6151,7 +6195,10 @@ private fun portalAddressHost(address: String, mode: PortalAddressMode): String 
 }
 
 private fun portalComposeAddress(mode: PortalAddressMode, host: String): String {
-    val normalized = host.trim().removePrefix("/").trimEnd('/')
+    var normalized = host.trim()
+    if (normalized.startsWith("https://", ignoreCase = true)) normalized = normalized.drop(8)
+    else if (normalized.startsWith("http://", ignoreCase = true)) normalized = normalized.drop(7)
+    normalized = normalized.removePrefix("/").trimEnd('/')
         .let { if (it.endsWith("/c", ignoreCase = true)) it.dropLast(2).trimEnd('/') else it }
     return if (normalized.isBlank()) "" else "${mode.prefix}$normalized/c"
 }

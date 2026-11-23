@@ -1,5 +1,11 @@
 # Änderungen
 
+## 1.0.47
+
+- Portal-Eingabe bietet zusätzliche MAC-Präfixe sowie ein benutzerdefiniertes Präfix per Textfeld und Hex-Zeichen-Auswahl. Gespeicherte Portale und manuelle HTTP-/HTTPS-Adressen haben getrennte Eingabemodi.
+- „Portal laden“ und „Alle Quellen aktualisieren“ verwenden die einheitlichen Fokus-, Hover- und Deaktivierungszustände.
+- Die Links-/Rechts-Navigation der oberen Live-TV-Leiste wird nicht mehr von der Tastenbehandlung des Programmführers abgefangen.
+
 ## 1.0.46
 
 - Trakt-Merkliste sucht fehlende Film- und Serientitel zusätzlich in den gespeicherten Portalen, damit verfügbare Titel übernommen werden, auch wenn sie im lokalen Katalogcache fehlen.

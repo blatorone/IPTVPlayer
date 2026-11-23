@@ -416,6 +416,7 @@
     <string name="portal_address_https">HTTPS-Portaladresse</string>
     <string name="portal_address_manual">VollstÃ¤ndige Adresse manuell eingeben</string>
     <string name="portal_address_host">Serveradresse</string>
+    <string name="portal_address_saved">Gespeichertes Portal auswählen</string>
     <string name="portal_mac_prefix">MAC-Adressbereich</string>
     <string name="portal_mac_prefix_custom">Benutzerdefinierter Bereich</string>
     <string name="portal_mac_custom_prefix_digits">Erste sechs Hex-Zeichen</string>

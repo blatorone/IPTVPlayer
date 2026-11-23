@@ -1,5 +1,10 @@
 # Änderungen
 
+## 1.0.34
+
+- Die Wiederherstellung und Zusammenführung großer Live-Senderlisten läuft im Hintergrund, damit Start und Fernbedienungsbedienung währenddessen reaktionsfähig bleiben.
+- Der Schnellstart nutzt gespeicherte Senderdaten unabhängig von der Quellenwiederherstellung. Direkte Stream-URLs benötigen dabei keinen zusätzlichen Portal-Handshake.
+
 ## 1.0.33
 
 - Die Wiederherstellung des Serienfortschritts wählt bei mehreren alten Speicherständen nur dann eine Folge aus, wenn deren Zeitstempel eindeutig ist. Ohne eindeutigen Stand wird kein falscher Fortsetzungsplatz geraten.

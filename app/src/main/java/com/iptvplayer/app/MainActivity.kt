@@ -1156,11 +1156,19 @@ private fun PlayerHome(
     val uncategorized = stringResource(R.string.uncategorized_channels)
     val categoryNames = LiveCategory.entries.associateWith { stringResource(it.label) }
     val displayChannels = remember(combine, mergePortalChannels) { mutableMapOf<StalkerChannel, StalkerChannel>() }
-    val liveGroups = remember(sourcesForBrowsing, combine, mergePortalChannels) {
-        val groups = buildLiveChannelGroups(sourcesForBrowsing, combine, mergePortalChannels)
+    var liveGroups: Map<StalkerChannel, LiveChannelGroup> by remember {
+        mutableStateOf(emptyMap())
+    }
+    LaunchedEffect(sourcesForBrowsing, combine, mergePortalChannels) {
+        // Large portals can contain thousands of channels. Grouping and normalizing
+        // them on Compose's main dispatcher made cold start and remote navigation
+        // feel frozen even though the source data had already been restored locally.
+        val groups = withContext(Dispatchers.Default) {
+            buildLiveChannelGroups(sourcesForBrowsing, combine, mergePortalChannels)
+        }
         val originals = groups.map { it.variants.first().item.value }.toSet()
         displayChannels.keys.retainAll(originals)
-        groups.associateBy { group ->
+        liveGroups = groups.associateBy { group ->
             val original = group.variants.first().item.value
             if (!combine && !mergePortalChannels) original else displayChannels.getOrPut(original) {
                 StalkerChannel(
@@ -2051,7 +2059,11 @@ private fun PlayerHome(
             cached.streams.map { saved ->
                 val portal = StalkerPortal(saved.address, saved.mac)
                 val stream = StalkerChannel(cached.name, saved.command, null, null, id = saved.id, direct = saved.direct)
-                PlaybackVariant(portal.sourceLabel) { portal.resolve(stream, portal.openSession()) }
+                PlaybackVariant(portal.sourceLabel) {
+                    // Direct URLs are already complete in the encrypted startup
+                    // snapshot; avoid a needless portal handshake before playback.
+                    portal.resolve(stream, if (saved.direct) "" else portal.openSession())
+                }
             },
             liveRestoreKey = cached.key
         )

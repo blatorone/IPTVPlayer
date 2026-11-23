@@ -430,6 +430,12 @@ private fun PlayerHome(
     val preferences = remember(context, preview) {
         if (preview) null else context.getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE)
     }
+    val isTelevision = remember(context) {
+        context.packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK)
+    }
+    var showSettingsBackButton by remember(preferences, isTelevision) {
+        mutableStateOf(preferences?.getBoolean("show_settings_back_button", !isTelevision) ?: !isTelevision)
+    }
     var vodLiveView by remember(preferences) {
         val saved = preferences?.getString("vod_live_view", null)
         mutableStateOf(VodLiveView.entries.firstOrNull { it.name == saved } ?: VodLiveView.BACKGROUND)
@@ -488,13 +494,13 @@ private fun PlayerHome(
     var epgAtStartup by remember(preferences) { mutableStateOf(preferences?.getBoolean("epg_at_startup", true) ?: true) }
     val portalRefreshAtStartupDefault = remember(preferences) {
         val settings = preferences
-        if (settings != null && settings.getInt("portal_refresh_startup_migration", 0) < 49) {
+        if (settings != null && settings.getInt("portal_refresh_startup_migration", 0) < 51) {
             settings.edit()
-                .putBoolean("refresh_portals_at_startup", false)
-                .putInt("portal_refresh_startup_migration", 49)
+                .putBoolean("refresh_portals_at_startup", true)
+                .putInt("portal_refresh_startup_migration", 51)
                 .apply()
-            false
-        } else settings?.getBoolean("refresh_portals_at_startup", false) ?: false
+            true
+        } else settings?.getBoolean("refresh_portals_at_startup", true) ?: true
     }
     var refreshPortalsAtStartup by remember(preferences) {
         mutableStateOf(portalRefreshAtStartupDefault)
@@ -688,7 +694,7 @@ private fun PlayerHome(
     val seriesDetailScroll = rememberLazyListState()
     var catalogueReturnTitle by remember { mutableStateOf<PortalTitle?>(null) }
     var focusFirstTitle by remember { mutableStateOf(false) }
-    var focusSeriesPrimary by remember { mutableStateOf(false) }
+    var focusTitlePrimary by remember { mutableStateOf(false) }
     var episodeVariants by remember { mutableStateOf(emptyMap<PortalTitle, List<SourceItem<PortalTitle>>>()) }
     var episodeError by remember { mutableStateOf(false) }
     var resumeEpisodeMissing by remember { mutableStateOf(false) }
@@ -2120,6 +2126,24 @@ private fun PlayerHome(
         }
     }
 
+    suspend fun persistPortalSnapshot(source: SavedPortal) {
+        val index = savedSources.indexOfFirst { it.identity == source.identity }
+        val persistedSources = if (index < 0) savedSources + source else {
+            savedSources.toMutableList().apply { this[index] = source }
+        }
+        val activeId = storedSource?.identity
+            ?: persistedSources.firstOrNull { it.enabled }?.identity
+            ?: source.identity
+        try {
+            storage?.write(SavedPortals(persistedSources, activeId))
+            storageError = null
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            storageError = R.string.portal_save_failed
+        }
+    }
+
     suspend fun updatePortalStatus(identity: String, reachable: Boolean? = null, enabled: Boolean? = null) {
         val current = savedSources.firstOrNull { source ->
             runCatching { source.identity == identity }.getOrDefault(false)
@@ -2645,8 +2669,8 @@ private fun PlayerHome(
             )
         ) return
         closeSeries()
-        focusSeriesPrimary = section == PortalSection.SERIES
-        if (focusSeriesPrimary) seriesDetailScroll.requestScrollToItem(0)
+        focusTitlePrimary = true
+        if (section == PortalSection.SERIES) seriesDetailScroll.requestScrollToItem(0)
         details = section to title
         if (section == PortalSection.SERIES && isTitleSaved(section, title) && trackedSeries(title) == null) {
             updateTrackedSeries(title, saved = true)
@@ -2965,13 +2989,13 @@ private fun PlayerHome(
             )
             // Persist the source as soon as its portal session is verified. A process exit
             // during a slow catalogue load must not make a newly added source disappear.
-            save(initialSnapshot, activate = false)
+            persistPortalSnapshot(initialSnapshot)
             suspend fun persistProgress() {
-                save(SavedPortal(
+                persistPortalSnapshot(SavedPortal(
                     enteredAddress, enteredMac, refreshedChannels, refreshedGenres, refreshedCatalogs,
                     previous?.epgChannelIds.orEmpty(), previous?.subscriptionExpiry,
                     enabled = keepEnabled, reachable = true, autoDisabled = false
-                ), activate = false)
+                ))
             }
             importStatuses = PortalSection.entries.associateWith { ImportStatus.Loading }
             coroutineScope {
@@ -3076,6 +3100,14 @@ private fun PlayerHome(
                 } && previous.genres == snapshot.genres && previous.catalogs == snapshot.catalogs &&
                 previous.subscriptionExpiry == snapshot.subscriptionExpiry
             if (unchanged) {
+                val old = requireNotNull(previous)
+                val unchangedSnapshot = SavedPortal(
+                    old.address, old.mac, old.channels, old.genres, old.catalogs,
+                    old.epgChannelIds, old.subscriptionExpiry,
+                    enabled = activate || old.enabled || old.autoDisabled,
+                    reachable = true,
+                    autoDisabled = false
+                )
                 if (activate || sameSource) {
                     if (!sameSource) {
                         closeSeries()
@@ -3093,11 +3125,11 @@ private fun PlayerHome(
                     catalogSession = source to token
                     catalogLoading = emptySet()
                     catalogErrors = emptySet()
-                    channels = snapshot.channels
-                    genres = snapshot.genres
-                    catalogs = snapshot.catalogs
-                    epgChannelIds = snapshot.epgChannelIds
-                    save(snapshot, activate)
+                    channels = unchangedSnapshot.channels
+                    genres = unchangedSnapshot.genres
+                    catalogs = unchangedSnapshot.catalogs
+                    epgChannelIds = unchangedSnapshot.epgChannelIds
+                    save(unchangedSnapshot, activate)
                 } else {
                     updatePortalStatus(sourceIdentity, reachable = true)
                 }
@@ -3181,18 +3213,21 @@ private fun PlayerHome(
     }
 
     fun openSourceRefreshDialog() {
-        selectedRefreshSources = savedSources.map { it.identity }.toSet()
+        selectedRefreshSources = emptySet()
         sourceRefreshDialogOpen = true
     }
 
     fun refreshSources(sources: List<SavedPortal>) {
-        if (connecting || startupPortalRefresh != null || startupPortalCheck != null || sources.isEmpty()) return
+        if (connecting || sources.isEmpty()) return
         connecting = true
         batchSummary = null
         scope.launch {
             var completed = 0
             val unavailable = mutableListOf<String>()
             try {
+                // Let the initial background check finish first. The UI stays usable and
+                // the manual request is queued instead of silently discarded.
+                while (startupPortalRefresh != null || startupPortalCheck != null) delay(200)
                 for ((index, source) in sources.withIndex()) {
                     batchProgress = (index + 1) to sources.size
                     if (refreshPortal(source.address, source.mac, activate = false)) completed++
@@ -4214,6 +4249,42 @@ private fun PlayerHome(
                     }
                 }
             }
+            if (playbackControlsVisible && live) {
+                val channel = playing
+                val nowSeconds = System.currentTimeMillis() / 1_000L
+                val programme = channel?.let(::effectiveProgrammes).orEmpty().firstOrNull { item ->
+                    val from = item.startSeconds ?: return@firstOrNull false
+                    from <= nowSeconds && (item.endSeconds == null || nowSeconds < item.endSeconds)
+                } ?: channel?.let(::effectiveProgrammes).orEmpty().firstOrNull()
+                if (channel != null) Surface(
+                    modifier = Modifier.align(Alignment.TopStart).padding(20.dp).fillMaxWidth(0.46f),
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color.Black.copy(alpha = 0.82f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                ) {
+                    Column(
+                        Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(channel.name, style = MaterialTheme.typography.titleLarge, color = Color.White,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        programme?.let { item ->
+                            Text(item.title, style = MaterialTheme.typography.titleSmall, color = Color.White,
+                                maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            listOfNotNull(item.startSeconds, item.endSeconds).takeIf { it.isNotEmpty() }?.let { times ->
+                                Text(times.joinToString(" – ", transform = ::guideTime),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    style = MaterialTheme.typography.labelMedium)
+                            }
+                            germanDescription(item.description)?.takeIf(String::isNotBlank)?.let { description ->
+                                Text(description, color = Color.White.copy(alpha = 0.9f),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 3, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
+                    }
+                }
+            }
             if (controlBindings[GuideInput.TAP] == ControlAction.PLAY_PAUSE &&
                 fullscreenGuidePanel == GuidePanel.GRID && !playbackControlsVisible
             ) {
@@ -4494,7 +4565,7 @@ private fun PlayerHome(
     if (sourceRefreshDialogOpen) {
         AlertDialog(
             onDismissRequest = { sourceRefreshDialogOpen = false },
-            title = { Text(stringResource(R.string.refresh_sources)) },
+            title = { Text(stringResource(R.string.select_sources_to_refresh_title)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(stringResource(R.string.select_sources_to_refresh))
@@ -4526,7 +4597,7 @@ private fun PlayerHome(
             },
             confirmButton = {
                 MenuButton(
-                    stringResource(R.string.refresh_sources),
+                    stringResource(R.string.refresh_selected_sources),
                     Modifier,
                     enabled = selectedRefreshSources.isNotEmpty() && !connecting
                 ) {
@@ -4895,9 +4966,7 @@ private fun PlayerHome(
                                     pendingVodCategory = item.takeIf {
                                         it == Destination.MOVIES || it == Destination.SERIES
                                     }
-                                    if (item == Destination.SETTINGS && settingsSection == null) {
-                                        settingsSection = lastSettingsSection
-                                    }
+                                    if (item == Destination.SETTINGS) settingsSection = null
                                     selected = item
                                 }
                             )
@@ -5043,7 +5112,7 @@ private fun PlayerHome(
                                             )
                                             SettingsHeading(section.label)
                                         }
-                                        MenuButton(
+                                        if (showSettingsBackButton) MenuButton(
                                             stringResource(R.string.navigation_back),
                                             Modifier.focusRequester(initialFocus)
                                         ) { settingsSection = null }
@@ -5051,6 +5120,15 @@ private fun PlayerHome(
                                     androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                                     when (section) {
                                 SettingsSection.GENERAL -> {
+                                    MenuButton(
+                                        stringResource(R.string.show_touch_back_button), Modifier,
+                                        selected = showSettingsBackButton
+                                    ) {
+                                        showSettingsBackButton = !showSettingsBackButton
+                                        preferences?.edit()?.putBoolean(
+                                            "show_settings_back_button", showSettingsBackButton
+                                        )?.apply()
+                                    }
                                     MenuButton(
                                         stringResource(R.string.start_last_channel),
                                         Modifier,
@@ -5238,10 +5316,15 @@ private fun PlayerHome(
                             }
                         )
                         MenuButton(
+                            stringResource(R.string.refresh_all_sources),
+                            Modifier.fillMaxWidth(),
+                            enabled = savedSources.isNotEmpty() && !connecting && !restoring,
+                            onClick = { refreshSources(savedSources) }
+                        )
+                        MenuButton(
                             stringResource(R.string.refresh_sources),
                             Modifier.fillMaxWidth(),
-                            enabled = savedSources.isNotEmpty() && !connecting && !restoring &&
-                                startupPortalRefresh == null && startupPortalCheck == null,
+                            enabled = savedSources.isNotEmpty() && !connecting && !restoring,
                             onClick = ::openSourceRefreshDialog
                         )
                         MenuButton(
@@ -5308,12 +5391,6 @@ private fun PlayerHome(
                                     style = MaterialTheme.typography.labelSmall
                                 )
                             }
-                            MenuButton(
-                                stringResource(R.string.refresh_single_source),
-                                Modifier.fillMaxWidth(),
-                                enabled = !connecting && !restoring &&
-                                    startupPortalRefresh == null && startupPortalCheck == null
-                            ) { refreshSources(listOf(source)) }
                             MenuButton(
                                 stringResource(if (source.enabled) R.string.disable_portal else R.string.enable_portal),
                                 Modifier,
@@ -5714,8 +5791,8 @@ private fun PlayerHome(
                                     if (season.number == null || number.isNullOrBlank()) stringResource(R.string.play_first_episode)
                                     else stringResource(R.string.play_numbered_episode, season.number, number)
                                 },
-                                focusPrimary = focusSeriesPrimary && section == PortalSection.SERIES,
-                                onPrimaryFocused = { focusSeriesPrimary = false },
+                                focusPrimary = focusTitlePrimary,
+                                onPrimaryFocused = { focusTitlePrimary = false },
                                 compact = compactMedia,
                                 onBack = ::navigateBack,
                                 onPlay = { selectTitle(section, title) },
@@ -6098,8 +6175,8 @@ private fun PlayerHome(
                         contentScroll.scrollTo(0)
                         withFrameNanos { }
                         if (settingsSection == null) {
-                            settingsFocusRequesters[lastSettingsSection]?.requestFocus() ?: initialFocus.requestFocus()
-                        } else initialFocus.requestFocus()
+                            settingsFocusRequesters[SettingsSection.entries.first()]?.requestFocus() ?: initialFocus.requestFocus()
+                        } else settingsFocusRequesters[settingsSection]?.requestFocus() ?: initialFocus.requestFocus()
                     } else initialFocus.requestFocus()
                 }
             }

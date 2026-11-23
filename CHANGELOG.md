@@ -1,5 +1,13 @@
 # Änderungen
 
+## 1.0.51
+
+- Quellenverwaltung trennt „Alle Quellen aktualisieren“ von einer Mehrfachauswahl einzelner Quellen; einzelne Portalzeilen haben keine eigenen Aktualisieren-Schaltflächen mehr. Manuelle Aktualisierungen werden während einer Startprüfung eingereiht statt verworfen.
+- Gespeicherte Portale werden sofort angezeigt und können während der Hintergrundprüfung weiter bedient werden. Der optionale vollständige Startabgleich läuft im Hintergrund; unveränderte Kataloge lösen keine erneute Gruppierung aus.
+- Der Programmführer verbindet Rechts vom fokussierten Sender explizit mit dem aktuellen EPG-Zeitstrahl. Im Wiedergabemenü erscheint auch bei Live-TV Sender, laufender Sendung, Uhrzeit und Kurzbeschreibung.
+- Einstellungen öffnen die Rubrikenliste mit Fokus auf der ersten Rubrik. Auf TV-Geräten ist die sichtbare Zurück-Schaltfläche standardmäßig ausgeblendet und kann in den Einstellungen zugeschaltet werden; die Zurück-Taste navigiert weiterhin schrittweise.
+- Film- und Seriendetails setzen den Fokus auf die primäre Wiedergabeaktion: Fortsetzen, Film starten oder erste Folge starten.
+
 ## 1.0.50
 
 - Neue Portalquellen werden direkt nach erfolgreicher Anmeldung gespeichert; fertig geladene Live-, Film- und Serienbereiche werden einzeln nachgesichert.

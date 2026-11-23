@@ -389,6 +389,7 @@ internal fun TitleDetails(
             val leftEdge = Modifier.onHorizontalRemote(allowRight = false) { onBack() }
             val primaryFocus = remember { FocusRequester() }
             val primaryAction = onResume ?: firstEpisodeAction
+                ?: onPlay.takeIf { section == PortalSection.MOVIES }
             LaunchedEffect(focusPrimary, primaryAction != null) {
                 if (focusPrimary && primaryAction != null) {
                     withFrameNanos { }
@@ -397,12 +398,16 @@ internal fun TitleDetails(
             }
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (primaryAction != null) MenuButton(
-                    if (onResume != null) stringResource(R.string.resume_playback) else firstEpisodeLabel.orEmpty(),
+                    when {
+                        onResume != null -> stringResource(R.string.resume_playback)
+                        firstEpisodeAction != null -> firstEpisodeLabel.orEmpty()
+                        else -> stringResource(R.string.play_movie)
+                    },
                     leftEdge.focusRequester(primaryFocus),
                     onClick = primaryAction
                 )
-                if (section == PortalSection.MOVIES) {
-                    MenuButton(stringResource(R.string.play_movie), if (onResume == null) leftEdge else Modifier, onClick = onPlay)
+                if (section == PortalSection.MOVIES && onResume != null) {
+                    MenuButton(stringResource(R.string.play_movie), Modifier, onClick = onPlay)
                 }
                 val favoriteModifier = if (section == PortalSection.SERIES && primaryAction == null) leftEdge else Modifier
                 MenuButton(stringResource(R.string.favorites), favoriteModifier, selected = favorite, onClick = onFavorite)

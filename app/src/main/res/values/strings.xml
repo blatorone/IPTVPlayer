@@ -224,11 +224,13 @@
     <string name="saved_portal_label">Portal %1$d · %2$s</string>
     <string name="active_portal_label">Portal %1$d · %2$s · aktiv</string>
     <string name="refresh_all_sources">Alle Quellen aktualisieren</string>
-    <string name="refresh_sources">Quellen aktualisieren</string>
-    <string name="refresh_single_source">Diese Quelle aktualisieren</string>
+    <string name="refresh_sources">Einzelne Quellen aktualisieren</string>
+    <string name="select_sources_to_refresh_title">Quellen auswählen</string>
+    <string name="refresh_selected_sources">Auswahl aktualisieren</string>
     <string name="select_sources_to_refresh">Wähle eine oder mehrere Quellen aus.</string>
     <string name="select_all_sources">Alle auswählen</string>
     <string name="clear_source_selection">Auswahl leeren</string>
+    <string name="show_touch_back_button">Zurück-Schaltfläche auf dem Bildschirm anzeigen</string>
     <string name="refresh_all_progress">Aktualisiere Quelle %1$d von %2$d …</string>
     <string name="refresh_all_summary">Quellen vollständig aktualisiert: %1$d · mit Fehlern oder unvollständig: %2$d</string>
     <string name="merge_sources">Quellen zusammenführen</string>

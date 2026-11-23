@@ -27,6 +27,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -183,6 +184,13 @@ internal fun ProgrammeTimeline(
             val schedule = programmes(channel)
             val channelFocus = remember { FocusRequester() }
             val timelineFocus = remember { FocusRequester() }
+            var focusTimelineRequest by remember { mutableIntStateOf(0) }
+            LaunchedEffect(focusTimelineRequest) {
+                if (focusTimelineRequest > 0) {
+                    withFrameNanos { }
+                    timelineFocus.requestFocus()
+                }
+            }
             val entryFocus = if (index == scroll.firstVisibleItemIndex) Modifier.focusRequester(channelColumnFocus) else Modifier
             val restoreFocus = if (active && index == playingIndex) {
                 LaunchedEffect(channel) {
@@ -195,9 +203,12 @@ internal fun ProgrammeTimeline(
                 GuideChannelCell(
                     channel, channel.number ?: index + 1L,
                     Modifier.weight(1.25f).then(entryFocus).then(restoreFocus).focusRequester(channelFocus)
-                        .focusProperties { canFocus = active }
+                        .focusProperties {
+                            canFocus = active
+                            right = timelineFocus
+                        }
                         .onHorizontalRemote { right ->
-                            if (right) timelineFocus.requestFocus() else onChannelLeft()
+                            if (right) focusTimelineRequest++ else onChannelLeft()
                         },
                     channel === highlighted, channel === playing,
                     rowHeight = rowHeight,

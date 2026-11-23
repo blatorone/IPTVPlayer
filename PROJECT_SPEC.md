@@ -9,10 +9,10 @@ Ein nutzerkonfigurierbarer IPTV-Player für Android-Telefone und -Tablets sowie 
 ## Quellen und Bibliothek
 
 - Der Schnellstart kann die letzte Live-Auswahl aus einer kleinen verschlüsselten Momentaufnahme öffnen, während die Bibliothek wiederhergestellt wird. Ein fehlendes oder unpassendes Abbild verwendet den normalen Startpfad.
-- Der gespeicherte Quellen- und Katalogstand bleibt nach dem Start sofort sichtbar und bedienbar. Standardmäßig prüft ein Hintergrund-Handshake nur die Portal-Erreichbarkeit; vollständige Portalkataloge werden nicht bei jedem App-Start geladen. Vollständige Portalaktualisierung und EPG-Aktualisierung sind getrennt einstellbar. Neue Daten werden bei einem Katalogabruf übernommen, vorhandene Einträge bleiben erhalten; ein fehlgeschlagener Refresh lässt den letzten lokalen Stand bestehen.
+- Der gespeicherte Quellen- und Katalogstand bleibt nach dem Start sofort sichtbar und bedienbar. Eine aktivierte vollständige Portalaktualisierung vergleicht Kataloge im Hintergrund; EPG-Aktualisierung ist getrennt einstellbar. Neue Daten werden übernommen, vorhandene Einträge bleiben erhalten; ein fehlgeschlagener Refresh lässt den letzten lokalen Stand bestehen.
 - Bei einem Katalogabgleich werden lokale und geladene Sender, Genres und Titel verglichen. Unveränderte Inhalte behalten ihren gespeicherten Stand; geänderte Inhalte werden aktualisiert und neue Inhalte ergänzt.
 - Eine neu bestätigte Portalquelle wird vor dem vollständigen Katalogimport gespeichert. Jeder fertig geladene Bereich wird nachgesichert, sodass ein unterbrochener Import bereits vorhandene Portalinformationen nicht verwirft.
-- Die Quellenverwaltung kann eine oder mehrere Quellen gezielt aktualisieren und bietet zusätzlich eine Aktualisierungsaktion für jede einzelne Quelle.
+- Die Quellenverwaltung bietet getrennte Aktionen für die Aktualisierung aller Quellen und für eine Mehrfachauswahl einzelner Quellen. Während einer laufenden Startprüfung bleibt die Bedienoberfläche verfügbar; manuelle Aktualisierungen werden anschließend ausgeführt.
 - Beim Rückweg aus dem Live-Vollbild bleibt der Guide in der Kategorie des laufenden Senders und stellt dessen Eintrag samt Fokus wieder her.
 - Große Film- und Serienkataloge werden asynchron gruppiert, damit das Anzeigen der gespeicherten Startansicht nicht auf die Katalogberechnung wartet.
 - Die Senderansicht bleibt während des Gruppierens aufrufbar; Portal-, Sendergruppen- und Trakt-Abgleiche zeigen einen sichtbaren Fortschritt. Der gespeicherte Senderstand wird dabei weiter angezeigt.
@@ -37,6 +37,8 @@ Ein nutzerkonfigurierbarer IPTV-Player für Android-Telefone und -Tablets sowie 
 ## Live, EPG und Navigation
 
 - Die Hauptnavigation sitzt in Live-TV, Filmen, Serien, Suche und Einstellungen oben. Einstellungen zeigen ihre Bereiche direkt darunter. Film- und Serienseiten verwenden denselben dunklen Streaming-Stil; der Live-Bereich behält das EPG-Raster.
+- Rechts vom fokussierten Sender im Programmführer führt die Fernbedienung in die EPG-Zeitleiste; von dort lassen sich Sendungen und spätere Zeitfenster auswählen. Beim Öffnen des Wiedergabemenüs zeigt Live-TV Sender, laufende Sendung und EPG-Beschreibung.
+- Film- und Seriendetails fokussieren bei Fernbedienungsnavigation die primäre Aktion (Fortsetzen, Film abspielen oder erste Folge starten). Die Rubrikenliste der Einstellungen beginnt beim Öffnen mit Fokus auf der ersten Rubrik. Eine sichtbare Zurück-Schaltfläche ist für Touch-Geräte einstellbar und auf TV-Geräten standardmäßig ausgeblendet; System-Zurück navigiert immer eine Ebene zurück.
 
 - Die App verwendet in allen Bereichen eine gemeinsame Streaming-Oberfläche mit tiefschwarzen Flächen, weißer Schrift und rotem Fokusakzent. Kategorien, Senderlisten, Poster, Einstellungen und Dialoge teilen dieselben Schaltflächen- und Fokuszustände. Live-TV behält seine IPTV-Programmführung mit Zeitleiste; laufende Sendungen können zusätzlich einen warmen Akzent nutzen.
 - Der primäre Akzent ist in den Darstellungseinstellungen zwischen Rot, Blau, Grün, Violett und Orange wählbar. Titel und Kurzbeschreibung im Player-Overlay bleiben hell, Staffel- und Folgenangaben verwenden den gewählten Akzent.

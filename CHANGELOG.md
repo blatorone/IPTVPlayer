@@ -1,5 +1,10 @@
 # Änderungen
 
+## 1.0.38
+
+- Verlauf und Merkliste zeigen Titel in größeren Poster-Karten mit einheitlichem Hintergrund, passend zur Streaming-Startseite.
+- Serien-Fortsetzen bleibt im Verlauf auch bei Trakt-Einträgen ohne lokalen Prozentwert sichtbar.
+
 ## 1.0.37
 
 - Streaming-Anbieter-Kategorien lassen sich in den Darstellungseinstellungen als Marken-Symbol, Symbol mit Namen oder nur als Name anzeigen.

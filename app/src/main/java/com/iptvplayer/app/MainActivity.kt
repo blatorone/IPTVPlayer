@@ -2342,7 +2342,7 @@ private fun PlayerHome(
                 }
             }
         }
-        Poster(artwork ?: title, Modifier.width(52.dp).padding(end = 6.dp))
+        Poster(artwork ?: title, Modifier.width(104.dp).padding(end = 10.dp))
     }
 
     fun titleSelection(
@@ -5145,7 +5145,12 @@ private fun PlayerHome(
                                     // Die Detailseite berechnet dann aus der letzten gesehenen Folge
                                     // die nächste nicht abgeschlossene Folge.
                                     val resume = resumeFor(entry)
-                                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Row(
+                                        Modifier.fillMaxWidth().background(
+                                            MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp)
+                                        ).padding(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
                                         HistoryArtwork(
                                             section,
                                             PortalTitle(entry.name, year = entry.year, imdbId = entry.imdb, tmdbId = entry.tmdb),
@@ -5188,7 +5193,12 @@ private fun PlayerHome(
                             if (entries.isEmpty() && legacy.isEmpty()) Text(stringResource(R.string.no_movie_bookmarks))
                             LazyColumn(Modifier.weight(1f)) {
                                 items(entries, key = { it.progressKey }) { entry ->
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Row(
+                                        Modifier.fillMaxWidth().background(
+                                            MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp)
+                                        ).padding(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
                                         HistoryArtwork(
                                             section, PortalTitle(entry.name, year = entry.year, imdbId = entry.imdb, tmdbId = entry.tmdb),
                                             entry.refs
@@ -5198,7 +5208,7 @@ private fun PlayerHome(
                                 }
                                 items(legacy) { title ->
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Poster(title, Modifier.width(52.dp))
+                                        Poster(title, Modifier.width(104.dp).padding(end = 10.dp))
                                         MenuButton(displayVodTitle(title), Modifier.weight(1f)) { showTitle(section, title) }
                                     }
                                 }
@@ -5216,7 +5226,12 @@ private fun PlayerHome(
                             if (entries.isEmpty()) Text(stringResource(R.string.no_watched_movies))
                             LazyColumn(Modifier.weight(1f)) {
                                 items(entries, key = { it.progressKey }) { entry ->
-                                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Row(
+                                        Modifier.fillMaxWidth().background(
+                                            MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp)
+                                        ).padding(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
                                         HistoryArtwork(
                                             section,
                                             PortalTitle(entry.name, year = entry.year, imdbId = entry.imdb, tmdbId = entry.tmdb),

@@ -2,16 +2,17 @@ package com.iptvplayer.app
 
 import android.content.Context
 import android.net.Uri
-import android.provider.DocumentsContract
 import android.os.Build
+import android.provider.DocumentsContract
 import java.io.File
+import java.io.FileOutputStream
 import java.time.Instant
-import java.util.Locale
 
-/** Small, local-only diagnostics store. It deliberately excludes exception messages,
- * request URLs, portal data, and user content from exported reports. */
+/** Local diagnostics. No URLs, credentials, exception messages, or user content are recorded. */
 internal object AppDiagnostics {
     private const val MAX_FILE_BYTES = 512 * 1024L
+    private const val SETTINGS = "diagnostics_settings"
+    private const val TREE_KEY = "tree_uri"
     private val lock = Any()
     @Volatile private var installed = false
 
@@ -22,7 +23,10 @@ internal object AppDiagnostics {
             val app = context.applicationContext
             val previous = Thread.getDefaultUncaughtExceptionHandler()
             Thread.setDefaultUncaughtExceptionHandler { thread, error ->
+                // This path deliberately avoids the event-log lock: the crashing thread may have
+                // died while another thread held it. Flush the internal copy before SAF export.
                 runCatching { writeCrash(app, thread, error) }
+                runCatching { exportCrashToSelectedFolder(app) }
                 if (previous != null) previous.uncaughtException(thread, error)
                 else {
                     android.os.Process.killProcess(android.os.Process.myPid())
@@ -51,21 +55,30 @@ internal object AppDiagnostics {
         return target
     }
 
-    fun exportToDocument(context: Context, target: Uri) {
-        writeReport(context, target)
+    fun exportToDocument(context: Context, target: Uri) = writeReport(context, target)
+
+    private fun exportCrashToSelectedFolder(context: Context) {
+        val value = context.getSharedPreferences(SETTINGS, Context.MODE_PRIVATE)
+            .getString(TREE_KEY, null) ?: return
+        val tree = Uri.parse(value)
+        val permission = context.contentResolver.persistedUriPermissions
+            .firstOrNull { it.uri == tree && it.isWritePermission } ?: return
+        @Suppress("UNUSED_VARIABLE") val retainedPermission = permission
+        export(context, tree)
     }
 
     private fun writeReport(context: Context, target: Uri) {
-        val resolver = context.contentResolver
         val events = File(context.filesDir, "streamwatch-events.log")
         val crash = File(context.filesDir, "streamwatch-crash.log")
-        resolver.openOutputStream(target, "w")?.bufferedWriter(Charsets.UTF_8)?.use { writer ->
+        val crashEvent = File(context.filesDir, "streamwatch-crash-event.log")
+        context.contentResolver.openOutputStream(target, "w")?.bufferedWriter(Charsets.UTF_8)?.use { writer ->
             writer.appendLine("StreamWatch Diagnosebericht")
             writer.appendLine("Zeitpunkt: ${Instant.now()}")
             writer.appendLine("Android: ${Build.VERSION.SDK_INT} (${Build.VERSION.RELEASE})")
             writer.appendLine("Gerät: ${Build.MANUFACTURER} ${Build.MODEL}")
             writer.appendLine("\n--- Ereignisse ---")
             if (events.exists()) writer.append(events.readText(Charsets.UTF_8))
+            if (crashEvent.exists()) writer.append(crashEvent.readText(Charsets.UTF_8))
             writer.appendLine("\n--- Letzter Absturz ---")
             if (crash.exists()) writer.append(crash.readText(Charsets.UTF_8))
             else writer.appendLine("Kein Absturzbericht vorhanden.")
@@ -74,7 +87,9 @@ internal object AppDiagnostics {
 
     private fun writeCrash(context: Context, thread: Thread, error: Throwable) {
         val appInfo = runCatching {
-            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+            if (Build.VERSION.SDK_INT >= 33) context.packageManager.getPackageInfo(
+                context.packageName, android.content.pm.PackageManager.PackageInfoFlags.of(0)
+            ).versionName else @Suppress("DEPRECATION") context.packageManager.getPackageInfo(context.packageName, 0).versionName
         }.getOrNull().orEmpty()
         val report = buildString {
             appendLine("Zeitpunkt: ${Instant.now()}")
@@ -88,15 +103,17 @@ internal object AppDiagnostics {
                 appendLine("\nFehlerklasse: ${cause.javaClass.name.take(200)}")
                 cause.stackTrace.take(100).forEach { frame ->
                     append("  at ").append(frame.className.take(220)).append('.')
-                        .append(frame.methodName.take(120)).append("(")
+                        .append(frame.methodName.take(120)).append('(')
                         .append(frame.fileName?.take(160) ?: "Unknown Source")
                         .append(':').append(frame.lineNumber).appendLine(")")
                 }
                 cause = cause.cause
             }
-        }
-        replace(File(context.filesDir, "streamwatch-crash.log"), report)
-        record(context, "uncaught_exception:${error.javaClass.simpleName.lowercase(Locale.ROOT)}")
+        }.takeLast(MAX_FILE_BYTES.toInt())
+        writeDurably(File(context.filesDir, "streamwatch-crash.log"), report)
+        // Use a separate lock-free append for the crash event for the same deadlock reason.
+        writeDurably(File(context.filesDir, "streamwatch-crash-event.log"),
+            "${Instant.now()} uncaught_exception:${error.javaClass.simpleName.take(80)}\n", append = true)
     }
 
     private fun append(file: File, text: String) = synchronized(lock) {
@@ -110,7 +127,13 @@ internal object AppDiagnostics {
         }
     }
 
-    private fun replace(file: File, text: String) = synchronized(lock) {
-        runCatching { file.writeText(text.takeLast(MAX_FILE_BYTES.toInt()), Charsets.UTF_8) }
+    private fun writeDurably(file: File, text: String, append: Boolean = false) {
+        runCatching {
+            FileOutputStream(file, append).use { stream ->
+                stream.write(text.toByteArray(Charsets.UTF_8))
+                stream.flush()
+                stream.fd.sync()
+            }
+        }
     }
 }

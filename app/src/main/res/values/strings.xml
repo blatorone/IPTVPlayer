@@ -280,6 +280,7 @@
     <string name="all_years">Alle Jahre</string>
     <string name="playback_source_badge">Quelle: %1$s</string>
     <string name="series_history">Serienverlauf</string>
+    <string name="continue_watching">Weiter schauen</string>
     <string name="movie_history">Filmverlauf</string>
     <string name="no_watched_movies">Hier sind noch keine angesehenen Filme gespeichert.</string>
     <string name="resume_playback">Fortsetzen</string>
@@ -391,9 +392,9 @@
     <string name="trakt_title_watched">Bei Trakt als gesehen eingetragen.</string>
     <string name="trakt_playback_sync_failed">Wiedergabestand konnte nicht an Trakt übertragen werden.</string>
     <string name="trakt_source_missing">Bei Trakt gespeichert, aber in den vorhandenen Portalen nicht verfügbar.</string>
-    <string name="diagnostics_description">StreamWatch protokolliert Start- und Ladefehler und speichert Absturzberichte lokal. Portaladressen, Zugangsdaten und Fehlermeldungstexte werden nicht exportiert.</string>
-    <string name="diagnostics_folder_missing">Noch kein Speicherordner ausgewählt.</string>
-    <string name="diagnostics_folder_selected">Diagnoseordner ist gespeichert.</string>
+    <string name="diagnostics_description">Absturzberichte werden sofort intern gesichert und bei ausgewähltem Ordner zusätzlich automatisch dorthin kopiert. Portaladressen, Zugangsdaten und Portalinhalte werden nicht exportiert.</string>
+    <string name="diagnostics_folder_missing">Bitte wähle einen zugänglichen Ordner wie Downloads oder Dokumente.</string>
+    <string name="diagnostics_folder_selected">Der automatische Export in diesen Ordner ist eingerichtet.</string>
     <string name="diagnostics_folder_open_failed">Die Ordnerauswahl ist auf diesem Gerät nicht verfügbar.</string>
     <string name="diagnostics_choose_folder">Speicherordner auswählen</string>
     <string name="diagnostics_export">Diagnosebericht jetzt exportieren</string>

@@ -1,5 +1,13 @@
 # Änderungen
 
+## 1.0.43
+
+- Live-TV und Einstellungen verwenden durchgehend die gemeinsame dunkle Kartenoptik, eine einheitliche Hauptnavigation und den roten Fokusakzent; das EPG-Zeitraster bleibt erhalten.
+- Quellen zeigen TV-, Film- und Serienzahlen pro Portal sowie zusammengeführte Gesamtzahlen ohne doppelte Sender und Titel.
+- Trakt lädt gesehene Serien vollständig paginiert, synchronisiert Episodenstände und erkennt den Abschlussstatus pro Serie.
+- Neue Serienansicht „Weiter schauen“; abgeschlossene Serien und Filme erhalten keinen Fortsetzen-Button.
+- Lokale Anbietersymbole für Prime Video, Disney+ und Peacock ergänzt.
+
 ## 1.0.42
 
 - Gemeinsames dunkles Streaming-Design mit rotem Fokusakzent in Live-TV, Filmen, Serien, Einstellungen und Dialogen eingeführt; die Programmzeitleiste bleibt erhalten.

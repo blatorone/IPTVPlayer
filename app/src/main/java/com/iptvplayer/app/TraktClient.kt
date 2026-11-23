@@ -10,6 +10,10 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -63,8 +67,17 @@ internal data class TraktLibrary(
     val watchlist: List<TraktMedia>,
     val watched: List<TraktMedia>,
     val playback: List<TraktMedia> = emptyList(),
-    val watchedEpisodes: List<TraktMedia> = emptyList()
+    val watchedEpisodes: List<TraktMedia> = emptyList(),
+    val seriesProgress: List<TraktSeriesProgress> = emptyList()
 )
+
+internal data class TraktSeriesProgress(
+    val show: TraktMedia,
+    val completedEpisodes: Int,
+    val airedEpisodes: Int
+) {
+    val isComplete: Boolean get() = airedEpisodes > 0 && completedEpisodes >= airedEpisodes
+}
 
 internal data class TraktUpcomingEpisode(val name: String?, val season: Int?, val number: Int?, val airDate: String?)
 internal data class TraktEpisodeFeed(val airedKeys: Set<String>, val upcoming: TraktUpcomingEpisode?)
@@ -233,12 +246,14 @@ internal class TraktApi(private val clientId: String) {
             // inspect the newest 100 events and at most ten distinct shows.
             loadRecentEpisodeHistory(accessToken, onProgress)
         }
+        val seriesProgress = loadSeriesProgress(watchedShows, accessToken, onProgress)
         val watched = watchedMovies + watchedShows
         val playback = loadPlaybackProgress(accessToken, onProgress)
         TraktLibrary(
             watchlist.distinctBy(::mediaIdentity), watched.distinctBy(::mediaIdentity),
             playback.distinctBy { "${mediaIdentity(it)}:${it.seasonNumber}:${it.episodeNumber}" },
-            watchedEpisodes.distinctBy { "${mediaIdentity(it)}:${it.seasonNumber}:${it.episodeNumber}:${it.watchedAtMillis}" }
+            watchedEpisodes.distinctBy { "${mediaIdentity(it)}:${it.seasonNumber}:${it.episodeNumber}:${it.watchedAtMillis}" },
+            seriesProgress
         )
     }
 
@@ -389,10 +404,13 @@ internal class TraktApi(private val clientId: String) {
     ): Pair<List<TraktMedia>, List<TraktMedia>> {
         val shows = mutableListOf<TraktMedia>()
         val episodes = mutableListOf<TraktMedia>()
-        run {
-            val response = request("/sync/watched/shows?page=1&limit=10", "GET", token = token)
+        var page = 1
+        var pageCount: Int? = null
+        do {
+            val response = request("/sync/watched/shows?page=$page&limit=100", "GET", token = token)
             val rows = response.jsonArray()
-            onProgress("Lade die zehn zuletzt gesehenen Serien")
+            pageCount = response.pageCount ?: pageCount
+            onProgress("Lade gesehene Serien: Seite $page${pageCount?.let { " von $it" } ?: ""}")
             for (index in 0 until rows.length()) {
                 val row = rows.optJSONObject(index) ?: continue
                 val show = row.optJSONObject("show") ?: continue
@@ -424,8 +442,39 @@ internal class TraktApi(private val clientId: String) {
                     }
                 }
             }
-        }
+            page++
+            if (page > 1_000) error("Trakt hat ungewöhnlich viele Serien geliefert; der Import wurde begrenzt.")
+        } while (pageCount?.let { page <= it } ?: (rows.length() == 100))
         return shows to episodes
+    }
+
+    private suspend fun loadSeriesProgress(
+        shows: List<TraktMedia>, token: String, onProgress: suspend (String) -> Unit
+    ): List<TraktSeriesProgress> = coroutineScope {
+        val limiter = kotlinx.coroutines.sync.Semaphore(4)
+        val unique = shows.distinctBy(::mediaIdentity).filter { it.traktId != null || it.imdbId != null || it.tmdbId != null }
+        val completed = java.util.concurrent.atomic.AtomicInteger()
+        unique.map { show ->
+            async {
+                limiter.withPermit {
+                    val id = show.traktId?.toString() ?: show.imdbId ?: show.tmdbId?.let { "tmdb:$it" }
+                    val result = runCatching {
+                        val response = request(
+                            "/shows/${URLEncoder.encode(id, "UTF-8")}/progress/watched?hidden=false&specials=false",
+                            "GET", token = token
+                        ).jsonObject()
+                        TraktSeriesProgress(
+                            show,
+                            response.optInt("completed", -1).takeIf { it >= 0 } ?: return@runCatching null,
+                            response.optInt("aired", -1).takeIf { it >= 0 } ?: return@runCatching null
+                        )
+                    }.getOrNull()
+                    val done = completed.incrementAndGet()
+                    if (done % 10 == 0 || done == unique.size) onProgress("Prüfe Serienfortschritt: $done / ${unique.size}")
+                    result
+                }
+            }
+        }.awaitAll().filterNotNull()
     }
 
     private suspend fun loadRecentEpisodeHistory(

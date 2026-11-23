@@ -189,7 +189,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        AppDiagnostics.install(applicationContext)
         Log.setLogLevel(Log.LOG_LEVEL_OFF)
         player = ExoPlayer.Builder(this).build()
         enableEdgeToEdge()
@@ -253,13 +252,25 @@ private enum class ProviderCategoryStyle(val label: Int) {
 
 private fun providerCategoryMark(name: String): String? = when (serviceCategory(name)) {
     VodCategory.NETFLIX -> "N"
-    VodCategory.PRIME -> "prime"
+    VodCategory.PRIME -> "prime video"
     VodCategory.APPLE -> "tv+"
-    VodCategory.DISNEY -> "D+"
+    VodCategory.DISNEY -> "Disney+"
     VodCategory.MAX -> "MAX"
     VodCategory.PARAMOUNT -> "P+"
     VodCategory.SKY -> "sky"
-    VodCategory.PEACOCK -> "●"
+    VodCategory.PEACOCK -> "peacock"
+    else -> null
+}
+
+private fun providerCategoryIcon(name: String): Int? = when (serviceCategory(name)) {
+    VodCategory.NETFLIX -> R.drawable.provider_netflix
+    VodCategory.PRIME -> R.drawable.provider_prime_video
+    VodCategory.APPLE -> R.drawable.provider_appletv
+    VodCategory.DISNEY -> R.drawable.provider_disney_plus
+    VodCategory.MAX -> R.drawable.provider_max
+    VodCategory.PARAMOUNT -> R.drawable.provider_paramountplus
+    VodCategory.SKY -> R.drawable.provider_sky
+    VodCategory.PEACOCK -> R.drawable.provider_peacock
     else -> null
 }
 
@@ -326,7 +337,8 @@ private data class PlaybackAttempt(
     val liveRestoreKey: String? = null
 )
 
-private enum class SeriesActivityView { HISTORY, WATCHLIST }
+private enum class SeriesActivityView { CONTINUE, HISTORY, WATCHLIST }
+private data class PortalContentCounts(val tv: Int, val movies: Int, val series: Int)
 private enum class SettingsSection(val label: Int) {
     GENERAL(R.string.settings_general),
     SOURCES(R.string.settings_library),
@@ -649,6 +661,33 @@ private fun PlayerHome(
     var mac by remember { mutableStateOf("") }
     var storedSource by remember { mutableStateOf<SavedPortal?>(null) }
     var savedSources by remember { mutableStateOf(emptyList<SavedPortal>()) }
+    var sourceContentCounts by remember { mutableStateOf<Map<String, PortalContentCounts>>(emptyMap()) }
+    var combinedContentCounts by remember { mutableStateOf(PortalContentCounts(0, 0, 0)) }
+    LaunchedEffect(savedSources) {
+        val snapshot = savedSources
+        val counts = withContext(Dispatchers.Default) {
+            val perSource = snapshot.associate { source ->
+                val live = buildLiveChannelGroups(listOf(source), combine = false, mergeWithinSource = true).size
+                fun uniqueCount(section: PortalSection): Int = source.catalogs[section]?.titles.orEmpty()
+                    .distinctBy { title ->
+                        val year = vodReleaseYear(title)
+                        "${normalizedLabel(displayVodTitle(title))}:${year ?: "?"}"
+                    }.size
+                source.identity to PortalContentCounts(live, uniqueCount(PortalSection.MOVIES), uniqueCount(PortalSection.SERIES))
+            }
+            val enabled = snapshot.filter { it.enabled }
+            fun mergedCount(section: PortalSection): Int = mergeCatalogueTitles(
+                enabled.flatMap { source -> source.catalogs[section]?.titles.orEmpty().map { SourceItem(source, it) } },
+                requireVerifiedIdentity = false
+            ).size
+            perSource to PortalContentCounts(
+                buildLiveChannelGroups(enabled, combine = true, mergeWithinSource = true).size,
+                mergedCount(PortalSection.MOVIES), mergedCount(PortalSection.SERIES)
+            )
+        }
+        sourceContentCounts = counts.first
+        combinedContentCounts = counts.second
+    }
     var portalTransferStatus by remember { mutableStateOf<String?>(null) }
     var diagnosticsTree by remember(context) {
         mutableStateOf(context.getSharedPreferences("diagnostics_settings", Context.MODE_PRIVATE)
@@ -959,6 +998,53 @@ private fun PlayerHome(
                 }
                 var matched = 0
                 val updatedSeries = seriesActivity.associateByTo(linkedMapOf()) { it.key }
+                fun mergeSeriesRecords(records: List<TrackedSeries>): TrackedSeries? {
+                    val first = records.firstOrNull() ?: return null
+                    val watchedEpisodes = records.flatMapTo(linkedSetOf()) { it.watchedEpisodes }
+                    return first.copy(
+                        refs = records.flatMap { it.refs }.distinct(),
+                        saved = records.any { it.saved },
+                        viewed = records.any { it.viewed },
+                        known = records.flatMapTo(linkedSetOf()) { it.known },
+                        unseen = records.flatMapTo(linkedSetOf()) { it.unseen } - watchedEpisodes,
+                        checkedAt = records.maxOf { it.checkedAt },
+                        usedTmdb = records.any { it.usedTmdb },
+                        episodeProvider = records.maxByOrNull { it.checkedAt }?.episodeProvider,
+                        watchedAt = records.maxOf { it.watchedAt },
+                        lastEpisode = records.maxByOrNull { it.watchedAt }?.lastEpisode,
+                        nextEpisodeName = records.firstNotNullOfOrNull { it.nextEpisodeName },
+                        nextAirDate = records.firstNotNullOfOrNull { it.nextAirDate },
+                        watchedEpisodes = watchedEpisodes,
+                        isComplete = records.mapNotNull { it.isComplete }.takeIf { it.isNotEmpty() }?.all { it }
+                    )
+                }
+                fun trackedRecordsFor(media: TraktMedia, title: PortalTitle): List<TrackedSeries> {
+                    val imdb = title.imdbId ?: media.imdbId
+                    val tmdb = title.tmdbId?.toLongOrNull()?.toString() ?: media.tmdbId
+                    val name = normalizedLabel(displayVodTitle(title))
+                    val year = title.year ?: media.year
+                    return updatedSeries.values.filter { item ->
+                        val conflicts = imdb != null && item.imdb != null && imdb != item.imdb ||
+                            tmdb != null && item.tmdb != null && tmdb != item.tmdb
+                        if (conflicts) return@filter false
+                        val sameId = imdb != null && imdb == item.imdb || tmdb != null && tmdb == item.tmdb
+                        val sameName = normalizedLabel(item.name) == name &&
+                            (year != null && item.year == year || year == null && item.year == null)
+                        sameId || sameName
+                    }
+                }
+                fun absorbSeries(media: TraktMedia, title: PortalTitle, canonicalKey: String): TrackedSeries? {
+                    val matches = trackedRecordsFor(media, title)
+                    val merged = mergeSeriesRecords(matches) ?: return null
+                    matches.forEach { updatedSeries.remove(it.key) }
+                    return merged.copy(
+                        key = canonicalKey,
+                        name = displayVodTitle(title),
+                        year = title.year ?: media.year ?: merged.year,
+                        imdb = title.imdbId ?: media.imdbId ?: merged.imdb,
+                        tmdb = title.tmdbId ?: media.tmdbId ?: merged.tmdb
+                    )
+                }
                 val completedEpisodes = linkedSetOf<String>()
                 val updatedWatchlist = watchlist.toMutableSet()
                 val updatedMovieBookmarks = movieBookmarks.associateByTo(linkedMapOf()) { it.progressKey }
@@ -986,7 +1072,7 @@ private fun PlayerHome(
                         updatedMovieBookmarks[key] = bookmark
                     } else {
                         val keyForSeries = if (entries.isNotEmpty()) importedSeriesKey(title) else traktLibraryKey(media)
-                        val existing = updatedSeries[keyForSeries]
+                        val existing = absorbSeries(media, title, keyForSeries)
                         val refs = entries.mapNotNull { item ->
                             item.value.id?.let { SeriesPortalRef(item.source.identity, it) }
                         }.distinct()
@@ -1013,7 +1099,7 @@ private fun PlayerHome(
                         updatedMovieHistory[key] = watched
                     } else {
                         val key = if (entries.isNotEmpty()) importedSeriesKey(title) else traktLibraryKey(media)
-                        val existing = updatedSeries[key]
+                        val existing = absorbSeries(media, title, key)
                         val refs = entries.mapNotNull { it.value.id?.let { id -> SeriesPortalRef(it.source.identity, id) } }.distinct()
                         val tracked = (existing ?: TrackedSeries(
                             key, displayVodTitle(title), refs, title.year ?: media.year,
@@ -1030,7 +1116,7 @@ private fun PlayerHome(
                     val entries = localMatches(media, searchPortalIfMissing = true)
                     val title = entries.firstOrNull()?.value ?: media.asTitle()
                     val trackedKey = if (entries.isNotEmpty()) importedSeriesKey(title) else traktLibraryKey(media)
-                    val old = updatedSeries[trackedKey]
+                    val old = absorbSeries(media, title, trackedKey)
                     val refs = entries.mapNotNull { item ->
                         item.value.id?.let { SeriesPortalRef(item.source.identity, it) }
                     }.distinct()
@@ -1061,7 +1147,9 @@ private fun PlayerHome(
                     )).copy(
                         refs = (old?.refs.orEmpty() + refs).distinct(), viewed = true,
                         watchedAt = maxOf(old?.watchedAt ?: 0L, watchedAt), lastEpisode = lastEpisode,
-                        watchedEpisodes = (old?.watchedEpisodes.orEmpty() + "$seasonNumber:$episodeNumber")
+                        known = old?.known.orEmpty() + "$seasonNumber:$episodeNumber",
+                        unseen = old?.unseen.orEmpty() - "$seasonNumber:$episodeNumber",
+                        watchedEpisodes = old?.watchedEpisodes.orEmpty() + "$seasonNumber:$episodeNumber"
                     )
                     updatedSeries[trackedKey] = tracked
                     matched++
@@ -1105,7 +1193,7 @@ private fun PlayerHome(
                             (media.watchedAtMillis ?: 0L) >= localUpdated
                         ) importedProgress[key] = percent
                         val trackedKey = if (match != null) importedSeriesKey(title) else traktLibraryKey(media)
-                        val old = updatedSeries[trackedKey]
+                        val old = absorbSeries(media, title, trackedKey)
                         val tracked = (old ?: TrackedSeries(
                             trackedKey, displayVodTitle(title), refs, title.year ?: media.year,
                             title.imdbId ?: media.imdbId, title.tmdbId ?: media.tmdbId
@@ -1117,6 +1205,26 @@ private fun PlayerHome(
                     }
                     matched++
                     reportImportProgress("Importiere Wiedergabestände", index, library.playback.size)
+                }
+                for ((index, progress) in library.seriesProgress.withIndex()) {
+                    val media = progress.show
+                    val entries = localMatches(media)
+                    val title = entries.firstOrNull()?.value ?: media.asTitle()
+                    val key = entries.firstOrNull()?.let { importedSeriesKey(title) } ?: traktLibraryKey(media)
+                    val old = absorbSeries(media, title, key)
+                    val refs = entries.mapNotNull { item ->
+                        item.value.id?.let { SeriesPortalRef(item.source.identity, it) }
+                    }.distinct()
+                    updatedSeries[key] = (old ?: TrackedSeries(
+                        key, displayVodTitle(title), refs, title.year ?: media.year,
+                        title.imdbId ?: media.imdbId, title.tmdbId ?: media.tmdbId
+                    )).copy(
+                        refs = (old?.refs.orEmpty() + refs).distinct(),
+                        viewed = true,
+                        watchedAt = maxOf(old?.watchedAt ?: 0L, media.watchedAtMillis ?: 0L),
+                        isComplete = progress.isComplete
+                    )
+                    reportImportProgress("Prüfe Serienfortschritt", index, library.seriesProgress.size)
                 }
                 watchlist = updatedWatchlist
                 movieBookmarks = updatedMovieBookmarks.values.toList()
@@ -1392,8 +1500,52 @@ private fun PlayerHome(
 
     fun seriesKey(title: PortalTitle): String =
         titleIdentity(title) ?: titleKey(PortalSection.SERIES, title)
-    fun trackedSeries(title: PortalTitle): TrackedSeries? =
-        seriesActivity.firstOrNull { it.key == seriesKey(title) }
+    fun trackedSeries(title: PortalTitle): TrackedSeries? {
+        val titleImdb = title.imdbId?.takeIf { it.startsWith("tt") }
+        val titleTmdb = title.tmdbId?.toLongOrNull()?.takeIf { it > 0 }?.toString()
+        val normalizedTitle = normalizedLabel(displayVodTitle(title))
+        val compatible = seriesActivity.filter { entry ->
+            val conflictingIds = titleImdb != null && entry.imdb != null && titleImdb != entry.imdb ||
+                titleTmdb != null && entry.tmdb != null && titleTmdb != entry.tmdb
+            if (conflictingIds) return@filter false
+            val sameId = titleImdb != null && entry.imdb == titleImdb ||
+                titleTmdb != null && entry.tmdb == titleTmdb
+            val sameNameAndYear = normalizedLabel(entry.name) == normalizedTitle &&
+                (title.year == null || entry.year == null || title.year == entry.year)
+            sameId || sameNameAndYear
+        }
+        val exact = compatible.filter { it.key == seriesKey(title) }
+        val identified = compatible.filter { entry ->
+            titleImdb != null && entry.imdb == titleImdb || titleTmdb != null && entry.tmdb == titleTmdb
+        }
+        val named = compatible.filter { entry ->
+            normalizedLabel(entry.name) == normalizedTitle &&
+                (title.year != null && entry.year == title.year || title.year == null && entry.year == null)
+        }
+        val matches = when {
+            exact.isNotEmpty() -> (exact + identified).distinctBy { it.key }
+            identified.isNotEmpty() -> identified
+            else -> {
+                if (named.size != 1 || named.mapNotNull { it.imdb }.distinct().size > 1 ||
+                    named.mapNotNull { it.tmdb }.distinct().size > 1
+                ) return null
+                named
+            }
+        }
+        val first = matches.firstOrNull() ?: return null
+        if (matches.size == 1) return first
+        val watched = matches.flatMapTo(linkedSetOf()) { it.watchedEpisodes }
+        return first.copy(
+            refs = matches.flatMap { it.refs }.distinct(),
+            saved = matches.any { it.saved },
+            viewed = matches.any { it.viewed },
+            known = matches.flatMapTo(linkedSetOf()) { it.known },
+            unseen = matches.flatMapTo(linkedSetOf()) { it.unseen } - watched,
+            watchedAt = matches.maxOf { it.watchedAt },
+            lastEpisode = matches.maxByOrNull { it.watchedAt }?.lastEpisode,
+            watchedEpisodes = watched
+        )
+    }
     fun isTitleSaved(section: PortalSection, title: PortalTitle): Boolean =
         titleKey(section, title) in watchlist ||
             (section == PortalSection.SERIES && trackedSeries(title)?.saved == true)
@@ -1423,6 +1575,8 @@ private fun PlayerHome(
                 initial.known + watchedEpisode.episodeKey
             } else initial.known,
             unseen = if (watchedEpisode == null) initial.unseen else initial.unseen - watchedEpisode.episodeKey,
+            watchedEpisodes = if (watchedEpisode == null) initial.watchedEpisodes
+                else initial.watchedEpisodes + watchedEpisode.episodeKey,
             watchedAt = if (watchedEpisode == null) initial.watchedAt else System.currentTimeMillis(),
             lastEpisode = watchedEpisode ?: initial.lastEpisode
         )
@@ -2158,34 +2312,46 @@ private fun PlayerHome(
     }
 
     var cachedStartupAttempt by remember { mutableStateOf(false) }
-    LaunchedEffect(storage) {
-        if (storage == null || !playLastChannelAtStartup || selected != Destination.LIVE) return@LaunchedEffect
+    var startupSnapshotChecked by remember { mutableStateOf(storage == null) }
+    LaunchedEffect(storage, restoring, playLastChannelAtStartup, selected) {
+        if (restoring || startupSnapshotChecked) return@LaunchedEffect
+        if (storage == null || !playLastChannelAtStartup || selected != Destination.LIVE) {
+            startupSnapshotChecked = true
+            return@LaunchedEffect
+        }
         val cached = try {
             storage.readStartupChannel()
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
             null
-        } ?: return@LaunchedEffect
-        if (selected != Destination.LIVE || playbackSelection != null ||
-            cached.scope != startupChannelScope() || cached.key != preferences?.getString("last_live_channel", null)
-        ) return@LaunchedEffect
-        val channel = StalkerChannel(cached.name, "", null, null)
-        programmeChannel = channel
-        cachedStartupAttempt = true
-        startPlayback(
-            channel, PlaybackSelection(cached.selectionSource, PortalSection.LIVE, cached.selectionId),
-            cached.streams.map { saved ->
-                val portal = StalkerPortal(saved.address, saved.mac)
-                val stream = StalkerChannel(cached.name, saved.command, null, null, id = saved.id, direct = saved.direct)
-                PlaybackVariant(portal.sourceLabel) {
-                    // Direct URLs are already complete in the encrypted startup
-                    // snapshot; avoid a needless portal handshake before playback.
-                    portal.resolve(stream, if (saved.direct) "" else portal.openSession())
-                }
-            },
-            liveRestoreKey = cached.key
-        )
+        }
+        val lastLiveKey = preferences?.getString("last_live_channel", null)
+        if (cached != null && selected == Destination.LIVE && playbackSelection == null &&
+            cached.scope == startupChannelScope() && cached.key == lastLiveKey
+        ) {
+            val enabledSources = savedSources.filter { it.enabled }.map { it.identity }.toSet()
+            val validStreams = cached.streams.filter { stream ->
+                SavedPortal(stream.address, stream.mac, emptyList(), emptyMap(), emptyMap()).identity in enabledSources
+            }
+            if (validStreams.isNotEmpty()) {
+                val channel = StalkerChannel(cached.name, "", null, null)
+                programmeChannel = channel
+                cachedStartupAttempt = true
+                startPlayback(
+                    channel, PlaybackSelection(cached.selectionSource, PortalSection.LIVE, cached.selectionId),
+                    validStreams.map { saved ->
+                        val portal = StalkerPortal(saved.address, saved.mac)
+                        val stream = StalkerChannel(cached.name, saved.command, null, null, id = saved.id, direct = saved.direct)
+                        PlaybackVariant(portal.sourceLabel) {
+                            portal.resolve(stream, if (saved.direct) "" else portal.openSession())
+                        }
+                    },
+                    liveRestoreKey = cached.key
+                )
+            }
+        }
+        startupSnapshotChecked = true
     }
 
     LaunchedEffect(restoring, playing, playbackAttempt, liveGroups) {
@@ -2217,8 +2383,8 @@ private fun PlayerHome(
             category = inferred ?: lastLiveCategory?.takeIf { it in available } ?: available.firstOrNull()
         }
     }
-    LaunchedEffect(restoring, liveCategories, playbackError) {
-        if (restoring || restoredLastLiveChannel) return@LaunchedEffect
+    LaunchedEffect(restoring, startupSnapshotChecked, liveCategories, playbackError, playLastChannelAtStartup) {
+        if (restoring || !startupSnapshotChecked || liveCategories.isEmpty() || restoredLastLiveChannel) return@LaunchedEffect
         val retryFromCatalogue = cachedStartupAttempt && playbackError != null
         if (cachedStartupAttempt && !retryFromCatalogue && playbackSelection != null) return@LaunchedEffect
         restoredLastLiveChannel = true
@@ -4437,6 +4603,57 @@ private fun PlayerHome(
                     )
                 }
             }
+            val topNavigation: @Composable () -> Unit = {
+                Row(
+                    Modifier.fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp))
+                        .focusGroup().padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        stringResource(R.string.app_name),
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Row(
+                        Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        mainDestinations.forEachIndexed { index, item ->
+                            val previous = mainDestinations.getOrNull(index - 1) ?: item
+                            val next = mainDestinations.getOrNull(index + 1) ?: item
+                            MenuButton(
+                                stringResource(item.label),
+                                Modifier.focusRequester(destinationFocusRequesters.getValue(item))
+                                    .focusProperties {
+                                        left = destinationFocusRequesters.getValue(previous)
+                                        right = destinationFocusRequesters.getValue(next)
+                                    },
+                                leadingIcon = item.icon.takeUnless { mainMenuStyle == MainMenuStyle.TEXT },
+                                iconOnly = mainMenuStyle == MainMenuStyle.ICONS,
+                                selected = item == (destination ?: Destination.LIVE) ||
+                                    item == Destination.SETTINGS && destination in setOf(
+                                        Destination.SOURCES, Destination.CATEGORIES
+                                    ),
+                                onClick = {
+                                    lastFocused = item
+                                    guidePanel = GuidePanel.GRID
+                                    if (item == Destination.LIVE) restoreGuideEntryFocus()
+                                    pendingVodCategory = item.takeIf {
+                                        it == Destination.MOVIES || it == Destination.SERIES
+                                    }
+                                    if (item == Destination.SETTINGS && settingsSection == null) {
+                                        settingsSection = lastSettingsSection
+                                    }
+                                    selected = item
+                                }
+                            )
+                        }
+                    }
+                }
+            }
             val header: @Composable () -> Unit = {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (vodSectionForScreen != null) Box(Modifier.weight(1f))
@@ -4476,6 +4693,7 @@ private fun PlayerHome(
                     null -> LiveOverview(
                         player = player,
                         groups = liveCategories,
+                        loading = liveGroups.isEmpty() && sourcesForBrowsing.any { it.channels.isNotEmpty() },
                         visibleGroups = liveCategories.keys.filter {
                             visibleCategory(PortalSection.LIVE, it, it)
                         }.sortedBy { categoryNames.values.indexOf(it) },
@@ -4526,11 +4744,35 @@ private fun PlayerHome(
                                 }
                             }
                         } else {
-                            MenuButton(stringResource(R.string.navigation_back), Modifier.focusRequester(initialFocus)) {
-                                settingsSection = null
-                            }
-                            SettingsHeading(section.label)
-                            when (section) {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                color = MaterialTheme.colorScheme.surfaceContainer,
+                                shape = RoundedCornerShape(18.dp)
+                            ) {
+                                Column(
+                                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(
+                                            Modifier.padding(end = 12.dp).width(4.dp).height(34.dp)
+                                                .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(4.dp))
+                                        )
+                                        Column(Modifier.weight(1f)) {
+                                            Text(
+                                                "EINSTELLUNGEN",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                            SettingsHeading(section.label)
+                                        }
+                                        MenuButton(
+                                            stringResource(R.string.navigation_back),
+                                            Modifier.focusRequester(initialFocus)
+                                        ) { settingsSection = null }
+                                    }
+                                    androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                    when (section) {
                                 SettingsSection.GENERAL -> {
                                     MenuButton(
                                         stringResource(R.string.start_last_channel),
@@ -4664,6 +4906,8 @@ private fun PlayerHome(
                                     onSync = ::syncTrakt,
                                     onDisconnect = ::disconnectTrakt
                                 )
+                                    }
+                                }
                             }
                         }
                     }
@@ -4747,7 +4991,8 @@ private fun PlayerHome(
                                 false -> R.string.portal_status_unreachable
                                 null -> R.string.portal_status_unknown
                             }))
-                            MenuButton(
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                MenuButton(
                                 listOf(
                                     stringResource(
                                         if (!mergeSources && isActive) R.string.active_portal_label else R.string.saved_portal_label,
@@ -4759,7 +5004,7 @@ private fun PlayerHome(
                                         ))
                                     } ?: stringResource(R.string.portal_expiry_unknown)
                                 ).joinToString(" · "),
-                                Modifier.fillMaxWidth(),
+                                Modifier.weight(1f),
                                 selected = !mergeSources && isActive,
                                 onClick = {
                                     if (mergeSources && !connecting) {
@@ -4768,7 +5013,14 @@ private fun PlayerHome(
                                         editing = true
                                     } else switchSource(source)
                                 }
-                            )
+                                )
+                                val counts = sourceContentCounts[source.identity] ?: PortalContentCounts(0, 0, 0)
+                                Text(
+                                    "TV ${counts.tv}  ·  Filme ${counts.movies}  ·  Serien ${counts.series}",
+                                    Modifier.padding(start = 10.dp),
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
                             MenuButton(
                                 stringResource(if (source.enabled) R.string.disable_portal else R.string.enable_portal),
                                 Modifier,
@@ -4787,6 +5039,11 @@ private fun PlayerHome(
                                 }
                             }
                         }
+                        Text(
+                            "Zusammengeführt (Duplikate entfernt): TV ${combinedContentCounts.tv}  ·  Filme ${combinedContentCounts.movies}  ·  Serien ${combinedContentCounts.series}",
+                            Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                            style = MaterialTheme.typography.titleSmall
+                        )
                         storedSource?.takeUnless { mergeSources }?.let { saved ->
                             MenuButton(stringResource(R.string.edit_portal), Modifier) {
                                 if (!connecting) {
@@ -5066,7 +5323,7 @@ private fun PlayerHome(
                             val trackedEntry = if (section == PortalSection.SERIES) {
                                 trackedSeries(title) ?: seriesActivity.firstOrNull { entry -> entry.refs.any { it in refs } }
                             } else null
-                            val seriesResume = if (section == PortalSection.SERIES) {
+                            val seriesResume = if (section == PortalSection.SERIES && trackedEntry?.isComplete != true) {
                                 val savedResume = trackedEntry?.let(::resumeFor)
                                 val savedEpisode = savedResume?.let { resumeEpisode(seasons.orEmpty(), it) }
                                 if (savedResume == null || savedEpisode == null) null
@@ -5218,18 +5475,28 @@ private fun PlayerHome(
                             } else titleOverview()
                         } else if (section == PortalSection.SERIES && seriesActivityView != null) {
                             val showHistory = seriesActivityView == SeriesActivityView.HISTORY
+                            val showContinue = seriesActivityView == SeriesActivityView.CONTINUE
                             val entries = seriesActivity.filter { entry ->
-                                (if (showHistory) entry.viewed else entry.saved) && hasPortalReference(
+                                (when {
+                                    showHistory -> entry.viewed
+                                    showContinue -> entry.viewed && entry.isComplete != true
+                                    else -> entry.saved
+                                }) && hasPortalReference(
                                     PortalSection.SERIES,
                                     PortalTitle(entry.name, year = entry.year, imdbId = entry.imdb, tmdbId = entry.tmdb),
                                     entry.refs
                                 )
                             }.let { matched ->
-                                if (showHistory) matched.sortedByDescending { it.watchedAt }.take(10)
-                                else matched.sortedBy { it.name }
+                                if (showHistory || showContinue) matched.sortedByDescending { it.watchedAt }.let {
+                                    if (showHistory) it.take(10) else it
+                                } else matched.sortedBy { it.name }
                             }
                             MenuButton(stringResource(R.string.back_to_categories), Modifier) { seriesActivityView = null }
-                            Text(stringResource(if (showHistory) R.string.series_history else R.string.watchlist))
+                            Text(stringResource(when {
+                                showHistory -> R.string.series_history
+                                showContinue -> R.string.continue_watching
+                                else -> R.string.watchlist
+                            }))
                             if (entries.isEmpty()) Text(stringResource(R.string.no_tracked_series))
                             LazyColumn(Modifier.weight(1f)) {
                                 items(entries, key = { it.key }) { entry ->
@@ -5239,6 +5506,8 @@ private fun PlayerHome(
                                     // Die Detailseite berechnet dann aus der letzten gesehenen Folge
                                     // die nächste nicht abgeschlossene Folge.
                                     val resume = resumeFor(entry)
+                                    val canContinue = entry.isComplete != true && resume != null &&
+                                        (entry.isComplete == false || progressPreferences?.getBoolean("completed:${resume.progressKey}", false) != true)
                                     Row(
                                         Modifier.fillMaxWidth().background(
                                             MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp)
@@ -5252,7 +5521,7 @@ private fun PlayerHome(
                                         )
                                         Column(Modifier.weight(1f)) {
                                             MenuButton(label, Modifier.fillMaxWidth()) { openTrackedSeries(entry) }
-                                            resume?.let { episode ->
+                                            resume?.takeIf { canContinue }?.let { episode ->
                                                 val position = progressPreferences?.getLong(episode.progressKey, 0L) ?: 0L
                                                 Text(
                                                     episodeResumeLabel(episode, position),
@@ -5261,7 +5530,7 @@ private fun PlayerHome(
                                                 )
                                             }
                                         }
-                                        resume?.let {
+                                        resume?.takeIf { canContinue }?.let {
                                             MenuButton(stringResource(R.string.resume_playback), Modifier) {
                                                 openTrackedSeries(entry)
                                             }
@@ -5331,18 +5600,20 @@ private fun PlayerHome(
                                             PortalTitle(entry.name, year = entry.year, imdbId = entry.imdb, tmdbId = entry.tmdb),
                                             entry.refs
                                         )
+                                        val position = progressPreferences?.getLong(entry.progressKey, 0L) ?: 0L
+                                        val incomplete = progressPreferences?.getBoolean("completed:${entry.progressKey}", false) != true &&
+                                            position > 0L && (progressPreferences?.getFloat("trakt_percent:${entry.progressKey}", 0f) ?: 0f) < 90f
                                         Column(Modifier.weight(1f)) {
                                             MenuButton(entry.name, Modifier.fillMaxWidth()) {
                                                 openWatchedMovie(entry, resume = false)
                                             }
-                                            val position = progressPreferences?.getLong(entry.progressKey, 0L) ?: 0L
-                                            if (position > 0) Text(
+                                            if (incomplete) Text(
                                                 stringResource(R.string.saved_playback_position, playbackTime(position)),
                                                 Modifier.padding(start = 10.dp, bottom = 6.dp),
                                                 style = MaterialTheme.typography.bodySmall
                                             )
                                         }
-                                        MenuButton(stringResource(R.string.resume_playback), Modifier) {
+                                        if (incomplete) MenuButton(stringResource(R.string.resume_playback), Modifier) {
                                             openWatchedMovie(entry, resume = true)
                                         }
                                     }
@@ -5417,53 +5688,14 @@ private fun PlayerHome(
                     },
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
+                    topNavigation()
                     header()
                     content()
                 }
             } else if (vodSectionForScreen != null) {
                 val section = vodSectionForScreen
                 Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(
-                        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface, RoundedCornerShape(14.dp))
-                            .focusGroup().padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            stringResource(R.string.app_name),
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Row(
-                            Modifier.weight(1f).horizontalScroll(rememberScrollState()),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            mainDestinations.forEach { item ->
-                                val index = mainDestinations.indexOf(item)
-                                val previous = mainDestinations.getOrNull(index - 1) ?: item
-                                val next = mainDestinations.getOrNull(index + 1) ?: item
-                                MenuButton(
-                                    stringResource(item.label),
-                                    Modifier.focusRequester(destinationFocusRequester(item)).focusProperties {
-                                        left = destinationFocusRequester(previous)
-                                        right = destinationFocusRequester(next)
-                                    },
-                                    leadingIcon = item.icon.takeUnless { mainMenuStyle == MainMenuStyle.TEXT },
-                                    selected = item == destination,
-                                    onClick = {
-                                        lastFocused = item
-                                        guidePanel = GuidePanel.GRID
-                                        if (item == Destination.LIVE) restoreGuideEntryFocus()
-                                        pendingVodCategory = item.takeIf {
-                                            it == Destination.MOVIES || it == Destination.SERIES
-                                        }
-                                        selected = item
-                                    }
-                                )
-                            }
-                        }
-                    }
+                    topNavigation()
                     Row(
                         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                         verticalAlignment = Alignment.CenterVertically,
@@ -5474,6 +5706,9 @@ private fun PlayerHome(
                                     group.name,
                                     Modifier,
                                     providerMark = providerCategoryMark(group.name).takeIf {
+                                        providerCategoryStyle != ProviderCategoryStyle.LABELS && providerCategoryIcon(group.name) == null
+                                    },
+                                    providerIcon = providerCategoryIcon(group.name).takeIf {
                                         providerCategoryStyle != ProviderCategoryStyle.LABELS
                                     },
                                     providerMarkOnly = providerCategoryStyle == ProviderCategoryStyle.SYMBOLS,
@@ -5488,6 +5723,15 @@ private fun PlayerHome(
                             Modifier
                         ) {
                             categoryMenu = section to null
+                        }
+                        if (section == PortalSection.SERIES) MenuButton(
+                            stringResource(R.string.continue_watching), Modifier,
+                            selected = seriesActivityView == SeriesActivityView.CONTINUE,
+                            count = seriesActivity.count { it.viewed && it.isComplete != true }.takeIf { it > 0 }
+                        ) {
+                            closeSeries()
+                            details = null
+                            seriesActivityView = SeriesActivityView.CONTINUE
                         }
                         MenuButton(
                             stringResource(R.string.watchlist), Modifier,
@@ -5526,31 +5770,33 @@ private fun PlayerHome(
                     ) header()
                     content()
                 }
-            } else if (maxWidth >= 560.dp) {
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Column(
-                        Modifier.weight(0.9f)
-                            .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(12.dp))
-                            .verticalScroll(menuScroll)
-                            .padding(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(3.dp)
-                    ) {
-                        menu()
-                    }
-                    Column(Modifier.weight(3.6f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        if (destination != Destination.SEARCH || restoring || connecting) header()
-                        Column(
-                            Modifier.weight(1f).then(if (destination == Destination.SEARCH) Modifier else Modifier.verticalScroll(contentScroll)),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) { content() }
-                    }
-                }
             } else {
-                Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Column(Modifier.heightIn(max = 110.dp).verticalScroll(menuScroll)) { menu() }
-                    header()
+                Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    topNavigation()
+                    if (destination == Destination.SETTINGS) {
+                        Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = RoundedCornerShape(14.dp)) {
+                            Row(
+                                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 6.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                SettingsSection.entries.forEach { item ->
+                                    MenuButton(
+                                        stringResource(item.label), Modifier,
+                                        selected = settingsSection == item
+                                    ) {
+                                        lastSettingsSection = item
+                                        settingsSection = item
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (destination != Destination.SEARCH) header()
                     Column(
-                        Modifier.weight(1f).then(if (destination == Destination.SEARCH) Modifier else Modifier.verticalScroll(contentScroll)),
+                        Modifier.weight(1f).then(
+                            if (destination == Destination.SEARCH) Modifier else Modifier.verticalScroll(contentScroll)
+                        ),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) { content() }
                 }
@@ -5865,6 +6111,7 @@ private fun PortalImportStatus(statuses: Map<PortalSection, ImportStatus>) {
 private fun LiveOverview(
     player: ExoPlayer?,
     groups: Map<String, List<StalkerChannel>>,
+    loading: Boolean,
     visibleGroups: List<String>,
     hiddenGroups: Set<String>,
     onManageGroups: (String?) -> Unit,
@@ -5919,12 +6166,30 @@ private fun LiveOverview(
         }
     }
     val channels: @Composable () -> Unit = {
-        Text(
-            category ?: stringResource(R.string.channel_categories),
-            style = MaterialTheme.typography.titleMedium
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.padding(end = 9.dp).width(3.dp).height(22.dp)
+                    .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(4.dp))
+            )
+            Column {
+                Text(
+                    category ?: stringResource(R.string.channel_categories),
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Text(
+                    if (visibleChannels == null) "KATEGORIEN" else "SENDER",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
         if (groups.isEmpty()) {
-            Text(stringResource(R.string.no_channels), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (loading) {
+                LinearProgressIndicator(Modifier.fillMaxWidth())
+                Text(stringResource(R.string.startup_loading), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                Text(stringResource(R.string.no_channels), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         } else if (visibleChannels == null) {
             MenuButton(stringResource(R.string.manage_categories), Modifier.fillMaxWidth()) {
                 onManageGroups(null)
@@ -5959,27 +6224,55 @@ private fun LiveOverview(
         }
     }
     val preview: @Composable (Modifier) -> Unit = { modifier ->
-        Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            PlaybackFeedback(starting, playbackError)
-            PlayerFrame(player, active = playing != null, showEmpty = starting == null, onStop = onStop)
-            if (programmeChannel != null) {
-                ProgrammeDetails(programmeChannel, programmes?.take(2))
-                if (variants.isNotEmpty()) {
-                    Text(stringResource(R.string.live_stream_variants), style = MaterialTheme.typography.titleSmall)
-                    variants.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
-                }
-                if (programmeChannel !== playing && programmeChannel !== starting) {
-                    MenuButton(
-                        stringResource(R.string.play_selected_channel), Modifier,
-                        onClick = { onSelect(programmeChannel) }
+        Surface(
+            modifier = modifier,
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            shape = RoundedCornerShape(18.dp)
+        ) {
+            Column(
+                Modifier.fillMaxWidth().padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier.padding(end = 9.dp).size(8.dp)
+                            .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(50))
                     )
-                }
-                if (programmeChannel.id != null) {
-                    MenuButton(
-                        stringResource(if (epgPinned) R.string.epg_unpin else R.string.epg_pin),
-                        Modifier,
-                        onClick = { onToggleEpg(programmeChannel) }
+                    Text(
+                        if (playing != null) "JETZT LIVE" else "LIVE-TV",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary
                     )
+                    playing?.let { channel ->
+                        Text(
+                            "  ·  ${channel.name}",
+                            style = MaterialTheme.typography.titleSmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                PlaybackFeedback(starting, playbackError)
+                PlayerFrame(player, active = playing != null, showEmpty = starting == null, onStop = onStop)
+                if (programmeChannel != null) {
+                    ProgrammeDetails(programmeChannel, programmes?.take(2))
+                    if (variants.isNotEmpty()) {
+                        Text(stringResource(R.string.live_stream_variants), style = MaterialTheme.typography.titleSmall)
+                        variants.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
+                    }
+                    if (programmeChannel !== playing && programmeChannel !== starting) {
+                        MenuButton(
+                            stringResource(R.string.play_selected_channel), Modifier,
+                            onClick = { onSelect(programmeChannel) }
+                        )
+                    }
+                    if (programmeChannel.id != null) {
+                        MenuButton(
+                            stringResource(if (epgPinned) R.string.epg_unpin else R.string.epg_pin),
+                            Modifier,
+                            onClick = { onToggleEpg(programmeChannel) }
+                        )
+                    }
                 }
             }
         }
@@ -6588,6 +6881,7 @@ internal fun MenuButton(
     hiddenIndicator: Boolean = false,
     leadingIcon: Int? = null,
     providerMark: String? = null,
+    providerIcon: Int? = null,
     providerMarkOnly: Boolean = false,
     iconOnly: Boolean = false,
     enabled: Boolean = true,
@@ -6633,11 +6927,18 @@ internal fun MenuButton(
                     .background(colors.primary))
             }
             ChannelLogo(logo, Modifier.padding(end = 8.dp))
+            providerIcon?.let { icon ->
+                Icon(
+                    painterResource(icon), contentDescription = null,
+                    modifier = Modifier.padding(end = if (providerMarkOnly) 0.dp else 8.dp).size(24.dp),
+                    tint = Color.Unspecified
+                )
+            }
             providerMark?.let { mark ->
                 Surface(
                     color = when (mark) {
                         "N" -> Color(0xFFE50914)
-                        "prime" -> Color(0xFF1689D4)
+                        "prime video" -> Color(0xFF1689D4)
                         "tv+" -> Color(0xFF30343B)
                         "D+" -> Color(0xFF132A75)
                         "MAX" -> Color(0xFF4A248A)

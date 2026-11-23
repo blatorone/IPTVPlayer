@@ -14,6 +14,7 @@ Ein nutzerkonfigurierbarer IPTV-Player für Android-Telefone und -Tablets sowie 
 - Die Quellenübersicht zeigt ein lokal gespeichertes Ablaufdatum aus dem Geräteprofil oder den Kontoinformationen des Portals. Weitere Formatvarianten werden nur für angemeldete Portale geprüft.
 
 - Die Quellenliste zeigt das Ablaufdatum eines Stalker-Portals an, sofern das Portal es im Geräteprofil bereitstellt. Das Datum wird beim Hinzufügen und Aktualisieren der Quelle eingelesen.
+- Die Quellenliste zeigt für jedes gespeicherte Portal die lokal gefundenen, innerhalb des Portals entdoppelten TV-, Film- und Serienzahlen. Eine zusätzliche Gesamtzeile zählt gemeinsame Sender und Titel jeweils nur einmal.
 
 - Der Portalstatus (erreichbar, nicht erreichbar oder ungeprüft) wird lokal gespeichert. Portale können manuell deaktiviert werden; standardmäßig deaktiviert die App eine beim Handshake nicht erreichbare Quelle automatisch. Automatisch deaktivierte Quellen werden bei später erfolgreicher Prüfung wieder aktiviert; manuell deaktivierte Quellen bleiben aus. Deaktivierte Quellen bleiben gespeichert, werden aber aus Suche, Zusammenführung, Metadatenabgleich und Wiedergabe ausgeschlossen.
 - Nach Portalaktualisierungen zeigt eine kurze Meldung die erfolgreichen und nicht erreichbaren Quellen an. Die Quellenverwaltung zeigt ihren Status und bietet Aktivieren/Deaktivieren sowie eine Einstellung für die automatische Deaktivierung.
@@ -29,8 +30,11 @@ Ein nutzerkonfigurierbarer IPTV-Player für Android-Telefone und -Tablets sowie 
 
 ## Live, EPG und Navigation
 
+- Die Hauptnavigation sitzt in Live-TV, Filmen, Serien, Suche und Einstellungen oben. Einstellungen zeigen ihre Bereiche direkt darunter. Film- und Serienseiten verwenden denselben dunklen Streaming-Stil; der Live-Bereich behält das EPG-Raster.
+
 - Die App verwendet in allen Bereichen eine gemeinsame Streaming-Oberfläche mit tiefschwarzen Flächen, weißer Schrift und rotem Fokusakzent. Kategorien, Senderlisten, Poster, Einstellungen und Dialoge teilen dieselben Schaltflächen- und Fokuszustände. Live-TV behält seine IPTV-Programmführung mit Zeitleiste; laufende Sendungen können zusätzlich einen warmen Akzent nutzen.
 - Der sichtbare Trakt-Verlauf zeigt höchstens die zehn neuesten Filme beziehungsweise Serien, die einer gespeicherten Portalquelle zugeordnet werden können. Bei der Zuordnung wird dieselbe portalbasierte Suche und Identitätsprüfung wie bei der Suche verwendet.
+- Serien erhalten eine eigene Ansicht „Weiter schauen“ für gesehene, noch nicht abgeschlossene Serien. Trakt-Episodenstände werden paginiert importiert; der Trakt-Serienfortschritt unterscheidet abgeschlossene von noch laufenden Serien. Abgeschlossene Titel zeigen keinen Fortsetzen-Button.
 
 - Im Vollbild startet die Fernbedienungsbedienung auf Play/Pause. Im Live-TV sind nur Play/Pause und Stopp sichtbar; Stopp ist per D-Pad erreichbar. Bei Filmen und Serien bewegen Links/Rechts die Wiedergabeposition in Zehn-Sekunden-Schritten, auch wenn die Steuerleiste ausgeblendet ist.
 

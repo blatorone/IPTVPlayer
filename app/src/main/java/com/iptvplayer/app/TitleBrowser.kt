@@ -211,10 +211,11 @@ internal fun TitleDetails(
     title: PortalTitle,
     section: PortalSection,
     metadataRating: Double?,
-    fromTmdb: Boolean,
+    metadataProvider: String?,
     favorite: Boolean,
     saved: Boolean,
     newEpisodes: Int,
+    upcomingEpisode: String?,
     resumeLabel: String?,
     onResume: (() -> Unit)?,
     firstEpisodeAction: (() -> Unit)?,
@@ -235,17 +236,16 @@ internal fun TitleDetails(
                 maxLines = if (compact) 1 else 2, overflow = TextOverflow.Ellipsis
             )
             vodReleaseYear(title)?.let { Text(stringResource(R.string.title_year, it)) }
-            if (fromTmdb) {
-                Text(
-                    metadataRating?.let { stringResource(R.string.tmdb_rating, it) }
-                        ?: stringResource(R.string.tmdb_details_source),
-                    color = MaterialTheme.colorScheme.primary
-                )
+            if (metadataProvider != null) {
+                Text(metadataRating?.let { stringResource(R.string.metadata_rating, metadataProvider, it) }
+                    ?: stringResource(R.string.metadata_details_source, metadataProvider),
+                    color = MaterialTheme.colorScheme.primary)
             }
             if (newEpisodes > 0) Text(
                 stringResource(R.string.new_episode_count, newEpisodes),
                 color = MaterialTheme.colorScheme.primary
             )
+            upcomingEpisode?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
             title.addedAt?.let {
                 val date = DateTimeFormatter.ofPattern("dd.MM.yyyy").withZone(ZoneId.systemDefault())
                     .format(Instant.ofEpochSecond(it))

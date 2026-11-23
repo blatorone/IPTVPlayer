@@ -5,6 +5,7 @@ import java.net.URI
 import java.net.URL
 import java.net.URLEncoder
 import java.time.Instant
+import java.time.LocalDate
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -63,6 +64,15 @@ internal data class TraktLibrary(
     val watched: List<TraktMedia>,
     val playback: List<TraktMedia> = emptyList(),
     val watchedEpisodes: List<TraktMedia> = emptyList()
+)
+
+internal data class TraktUpcomingEpisode(val name: String?, val season: Int?, val number: Int?, val airDate: String?)
+internal data class TraktEpisodeFeed(val airedKeys: Set<String>, val upcoming: TraktUpcomingEpisode?)
+internal data class TraktTitleMetadata(
+    val title: String,
+    val year: Int?,
+    val overview: String?,
+    val rating: Double?
 )
 
 internal class TraktApi(private val clientId: String) {
@@ -124,6 +134,89 @@ internal class TraktApi(private val clientId: String) {
         return response.optJSONObject("user")?.optString("username")
             ?.takeIf(String::isNotBlank) ?: "Trakt"
     }
+
+    /** Returns aired episode keys and the closest future episode Trakt currently knows. */
+    suspend fun episodeFeed(title: PortalTitle, accessToken: String): TraktEpisodeFeed? {
+        val show = findShow(title, accessToken) ?: return null
+        val traktId = show.optJSONObject("ids")?.optLong("trakt", 0)?.takeIf { it > 0 } ?: return null
+        val seasons = request("/shows/$traktId/seasons?extended=episodes", "GET", token = accessToken)
+            .body.arrayObjects()
+        val today = LocalDate.now(java.time.ZoneId.systemDefault())
+        val aired = linkedSetOf<String>()
+        val upcoming = mutableListOf<Pair<LocalDate, TraktUpcomingEpisode>>()
+        for (season in seasons) {
+            val seasonNumber = season.optInt("number", -1).takeIf { it >= 0 } ?: continue
+            val episodes = season.optJSONArray("episodes") ?: continue
+            for (index in 0 until episodes.length()) {
+                val episode = episodes.optJSONObject(index) ?: continue
+                val number = episode.optInt("number", -1).takeIf { it > 0 } ?: continue
+                val rawDate = episode.optString("first_aired").takeIf(String::isNotBlank) ?: continue
+                val date = runCatching { Instant.parse(rawDate).atZone(java.time.ZoneId.systemDefault()).toLocalDate() }
+                    .getOrNull() ?: continue
+                if (!date.isAfter(today)) aired += "$seasonNumber:$number"
+                else upcoming += date to TraktUpcomingEpisode(
+                    episode.optString("title").takeIf(String::isNotBlank), seasonNumber, number, date.toString()
+                )
+            }
+        }
+        return TraktEpisodeFeed(aired, upcoming.minByOrNull { it.first }?.second)
+    }
+
+    suspend fun lookupTitleMetadata(
+        section: PortalSection,
+        title: PortalTitle,
+        accessToken: String
+    ): TraktTitleMetadata? {
+        val kind = if (section == PortalSection.MOVIES) "movie" else "show"
+        val externalId = title.imdbId?.takeIf { it.matches(Regex("tt[0-9]+")) }
+            ?: title.tmdbId?.toLongOrNull()?.takeIf { it > 0 }?.let { "tmdb:$it" }
+        val path = if (externalId != null) {
+            "/search/${URLEncoder.encode(externalId, "UTF-8")}?type=$kind&extended=full"
+        } else {
+            val query = URLEncoder.encode(displayVodTitle(title), "UTF-8")
+            "/search/$kind?query=$query&extended=full"
+        }
+        val candidates = request(path, "GET", token = accessToken).body.arrayObjects().mapNotNull { result ->
+            result.optJSONObject(kind)
+        }
+        val expected = normalizedLabel(displayVodTitle(title))
+        val match = candidates.filter { item ->
+            val name = normalizedLabel(item.optString("title"))
+            val year = item.optInt("year", 0).takeIf { it > 0 }
+            (externalId != null || name == expected) &&
+                (title.year == null || year == null || kotlin.math.abs(title.year - year) <= 1)
+        }.distinctBy { it.optJSONObject("ids")?.optLong("trakt", 0) }.singleOrNull() ?: return null
+        return TraktTitleMetadata(
+            match.optString("title").takeIf(String::isNotBlank) ?: title.name,
+            match.optInt("year", 0).takeIf { it > 0 },
+            match.optString("overview").takeIf(String::isNotBlank),
+            match.optDouble("rating").takeIf { it.isFinite() && it > 0 }
+        )
+    }
+
+    private suspend fun findShow(title: PortalTitle, accessToken: String): JSONObject? {
+        val idPath = title.imdbId?.takeIf { it.matches(Regex("tt[0-9]+")) }
+            ?: title.tmdbId?.toLongOrNull()?.takeIf { it > 0 }?.let { "tmdb:$it" }
+        val candidates = if (idPath != null) {
+            request("/search/${URLEncoder.encode(idPath, "UTF-8")}?type=show", "GET", token = accessToken)
+                .body.arrayObjects().mapNotNull { it.optJSONObject("show") }
+        } else {
+            val query = URLEncoder.encode(displayVodTitle(title), "UTF-8")
+            request("/search/show?query=$query", "GET", token = accessToken)
+                .body.arrayObjects().mapNotNull { it.optJSONObject("show") }
+        }
+        val expected = normalizedLabel(displayVodTitle(title))
+        return candidates.filter { row ->
+            val name = normalizedLabel(row.optString("title"))
+            val year = row.optInt("year", 0).takeIf { it > 0 }
+            (idPath != null || name == expected) && (title.year == null || year == null || year == title.year)
+        }.distinctBy { it.optJSONObject("ids")?.optLong("trakt", 0) }.singleOrNull()
+    }
+
+    private fun String.arrayObjects(): List<JSONObject> =
+        runCatching { JSONArray(this) }.getOrNull()?.let { array ->
+            List(array.length()) { array.optJSONObject(it) }.filterNotNull()
+        }.orEmpty()
 
     suspend fun loadLibrary(
         accessToken: String,

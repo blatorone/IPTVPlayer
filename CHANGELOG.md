@@ -1,6 +1,13 @@
 # Änderungen
 
-## Unveröffentlicht
+## 1.0.32
+
+- Bei verbundener Trakt-Sitzung kommen Episodenstand und bekannte nächste Ausstrahlung aus Trakt; ohne Trakt gilt TMDB, andernfalls TVmaze. Das nächste bekannte Datum erscheint in den Seriendetails.
+- Trakt-Titelbeschreibungen und Bewertungen werden auf Detailseiten verwendet; ohne eindeutigen Trakt-Treffer bleibt die Portalbeschreibung erhalten.
+- Serien-Fortsetzen berücksichtigt Trakt-Fortschritt: Nach einer abgeschlossenen Folge wird die nächste verfügbare, noch nicht abgeschlossene Folge angeboten; angefangene Folgen behalten ihren Wiedergabestand.
+- Zurück aus Serien-Details öffnet wieder den vorherigen Verlauf oder die Merkliste. Ein Folgenwechsel hält den Vollbildplayer geöffnet; nach der letzten Folge oder bei Stopp kehrt die App zur Serienansicht zurück.
+- Der automatische Trakt-Abgleich beginnt erst nach dem Anzeigen des lokalen Startzustands. Der globale Ladehinweis blockiert die Navigation nicht.
+- Die Diagnoseordner-Auswahl startet ohne wiederverwendete Provider-URI und fängt nicht verfügbare SAF-Dateiauswahl ab, statt die App zu beenden.
 
 ## 1.0.31
 

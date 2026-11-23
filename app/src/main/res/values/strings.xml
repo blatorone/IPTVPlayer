@@ -296,6 +296,8 @@
     <string name="tmdb_catalogue_source">Katalogdaten von TMDB · Wiedergabe über deine Quellen</string>
     <string name="tmdb_details_source">Titelinformationen von TMDB</string>
     <string name="tmdb_rating">TMDB-Bewertung: %1$.1f / 10</string>
+    <string name="metadata_details_source">Titelinformationen von %1$s</string>
+    <string name="metadata_rating">%1$s-Bewertung: %2$.1f / 10</string>
     <string name="tmdb_attribution">This product uses the TMDB API but is not endorsed or certified by TMDB.</string>
     <string name="justwatch_attribution">Informationen zu Streamingdiensten von JustWatch über TMDB.</string>
     <string name="episode_settings">Serienwiedergabe</string>
@@ -343,6 +345,7 @@
     <string name="skip_intro">Intro überspringen</string>
     <string name="episode_countdown">%1$s startet in %2$d Sekunden</string>
     <string name="next_episode_ready">Nächste Folge: %1$s</string>
+    <string name="next_episode_airdate">Nächste Folge %1$s · %2$s</string>
     <string name="play_next_episode">Jetzt abspielen</string>
     <string name="previous_episode">Vorherige Folge</string>
     <string name="next_episode">Nächste Folge</string>
@@ -381,6 +384,7 @@
     <string name="diagnostics_description">StreamWatch protokolliert Start- und Ladefehler und speichert Absturzberichte lokal. Portaladressen, Zugangsdaten und Fehlermeldungstexte werden nicht exportiert.</string>
     <string name="diagnostics_folder_missing">Noch kein Speicherordner ausgewählt.</string>
     <string name="diagnostics_folder_selected">Diagnoseordner ist gespeichert.</string>
+    <string name="diagnostics_folder_open_failed">Die Ordnerauswahl ist auf diesem Gerät nicht verfügbar.</string>
     <string name="diagnostics_choose_folder">Speicherordner auswählen</string>
     <string name="diagnostics_export">Diagnosebericht jetzt exportieren</string>
     <string name="diagnostics_export_complete">Diagnosebericht wurde im ausgewählten Ordner gespeichert.</string>

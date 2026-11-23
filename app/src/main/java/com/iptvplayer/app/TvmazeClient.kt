@@ -9,7 +9,35 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
+internal data class TvmazeTitleMetadata(val title: String, val year: Int?, val overview: String?, val rating: Double?)
+
 internal object TvmazeClient {
+    suspend fun lookupTitleMetadata(title: PortalTitle): TvmazeTitleMetadata? = withContext(Dispatchers.IO) {
+        val imdb = title.imdbId?.takeIf { it.matches(Regex("tt[0-9]+")) }
+        val name = displayVodTitle(title)
+        val show = if (imdb != null) {
+            request("lookup/shows?imdb=$imdb")?.let(::JSONObject)
+        } else {
+            val found = request("search/shows?q=${URLEncoder.encode(name, "UTF-8")}") ?: return@withContext null
+            val entries = JSONArray(found)
+            (0 until entries.length()).mapNotNull { index ->
+                entries.optJSONObject(index)?.optJSONObject("show")?.takeIf { row ->
+                    val year = row.optString("premiered").take(4).toIntOrNull()
+                    normalizedLabel(row.optString("name")) == normalizedLabel(name) &&
+                        (title.year == null || title.year == year)
+                }
+            }.singleOrNull()
+        } ?: return@withContext null
+        val summary = show.optString("summary").takeIf(String::isNotBlank)?.let { html ->
+            android.text.Html.fromHtml(html, android.text.Html.FROM_HTML_MODE_COMPACT).toString().trim()
+        }
+        TvmazeTitleMetadata(
+            show.optString("name").takeIf(String::isNotBlank) ?: title.name,
+            show.optString("premiered").take(4).toIntOrNull(), summary,
+            show.optJSONObject("rating")?.optDouble("average")?.takeIf { it.isFinite() && it > 0 }
+        )
+    }
+
     suspend fun airedEpisodes(title: PortalTitle): Set<String>? = withContext(Dispatchers.IO) {
         val imdb = title.imdbId?.takeIf { it.matches(Regex("tt[0-9]+")) }
         val name = displayVodTitle(title)

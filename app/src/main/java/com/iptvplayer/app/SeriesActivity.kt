@@ -38,7 +38,9 @@ internal data class TrackedSeries(
     val usedTmdb: Boolean = false,
     val episodeProvider: String? = null,
     val watchedAt: Long = 0,
-    val lastEpisode: EpisodeResume? = null
+    val lastEpisode: EpisodeResume? = null,
+    val nextEpisodeName: String? = null,
+    val nextAirDate: String? = null
 )
 
 internal fun seriesEpisodeKey(season: PortalSeason, episode: PortalTitle): String {
@@ -56,6 +58,25 @@ internal fun resumeEpisode(seasons: List<PortalSeason>, resume: EpisodeResume): 
     return null
 }
 
+internal fun nextEpisodeAfter(
+    seasons: List<PortalSeason>,
+    resume: EpisodeResume,
+    isCompleted: (PortalSeason, PortalTitle) -> Boolean
+): Pair<PortalSeason, PortalTitle>? {
+    val ordered = seasons.sortedWith(compareBy(
+        { it.number?.takeIf { number -> number >= 0 } ?: Int.MAX_VALUE },
+        { normalizedLabel(it.title.name) }
+    )).flatMap { season ->
+        season.episodes.sortedWith(compareBy(
+            { it.episode?.toIntOrNull()?.takeIf { number -> number > 0 } ?: Int.MAX_VALUE },
+            { normalizedLabel(it.name) }
+        )).map { season to it }
+    }
+    val current = ordered.indexOfFirst { (season, episode) -> seriesEpisodeKey(season, episode) == resume.episodeKey }
+    if (current < 0) return null
+    return ordered.drop(current + 1).firstOrNull { (season, episode) -> !isCompleted(season, episode) }
+}
+
 internal fun firstPlayableEpisode(seasons: List<PortalSeason>): Pair<PortalSeason, PortalTitle>? {
     val available = seasons.filter { it.episodes.isNotEmpty() }
     val season = available.firstOrNull { it.number == 1 }
@@ -68,19 +89,26 @@ internal fun firstPlayableEpisode(seasons: List<PortalSeason>): Pair<PortalSeaso
 }
 
 internal fun recoverEpisodeResume(entry: TrackedSeries, positions: Map<String, *>): EpisodeResume? {
-    entry.lastEpisode?.let { return it }
-    val prefixes = listOf("SERIES:catalogue:${entry.key}:") + entry.refs.map {
+    val identity = when {
+        entry.imdb?.startsWith("tt") == true -> "imdb:${entry.imdb}"
+        entry.tmdb?.isNotBlank() == true -> "tmdb:${entry.tmdb}"
+        else -> entry.key.takeIf { it.startsWith("imdb:") || it.startsWith("tmdb:") }
+    }
+    val prefixes = listOfNotNull(identity?.let { "SERIES:catalogue:$it:" }) + entry.refs.map {
         "SERIES:${it.sourceId}:${it.portalTitleId}:"
     }
-    return positions.mapNotNull { (key, value) ->
+    val activePosition = positions.mapNotNull { (key, value) ->
         if (value !is Long || value <= 0) return@mapNotNull null
+        if (positions["completed:$key"] == true) return@mapNotNull null
         val prefix = prefixes.firstOrNull(key::startsWith) ?: return@mapNotNull null
         val position = key.removePrefix(prefix).split(':')
         if (position.size != 2) return@mapNotNull null
         val season = position.first().toIntOrNull() ?: return@mapNotNull null
         val episode = position.last().toIntOrNull() ?: return@mapNotNull null
-        EpisodeResume("$season:$episode", season, episode.toString(), null, key)
-    }.singleOrNull()
+        val updated = positions["progress_updated:$key"] as? Long ?: 0L
+        updated to EpisodeResume("$season:$episode", season, episode.toString(), null, key)
+    }.maxByOrNull { it.first }?.second
+    return activePosition ?: entry.lastEpisode
 }
 
 internal fun TrackedSeries.observe(episodes: Set<String>, now: Long): TrackedSeries = copy(
@@ -106,6 +134,8 @@ internal fun encodeSeriesActivity(entries: List<TrackedSeries>): String = JSONAr
             put("usedTmdb", series.usedTmdb)
             put("episodeProvider", series.episodeProvider)
             put("watchedAt", series.watchedAt)
+            series.nextEpisodeName?.let { put("nextEpisodeName", it) }
+            series.nextAirDate?.let { put("nextAirDate", it) }
             series.lastEpisode?.let { episode ->
                 put("lastEpisode", JSONObject()
                     .put("key", episode.episodeKey).put("season", episode.season)
@@ -135,6 +165,8 @@ internal fun decodeSeriesActivity(data: String?): List<TrackedSeries> = runCatch
             usedTmdb = entry.optBoolean("usedTmdb"),
             episodeProvider = entry.optString("episodeProvider").ifBlank { null },
             watchedAt = entry.optLong("watchedAt"),
+            nextEpisodeName = entry.optString("nextEpisodeName").ifBlank { null },
+            nextAirDate = entry.optString("nextAirDate").ifBlank { null },
             lastEpisode = entry.optJSONObject("lastEpisode")?.let {
                 EpisodeResume(
                     it.getString("key"), it.optInt("season", -1).takeIf { value -> value >= 0 },

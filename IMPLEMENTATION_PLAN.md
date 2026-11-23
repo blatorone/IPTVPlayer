@@ -66,7 +66,7 @@ Abnahme aus `PROJECT_SPEC.md` mit Touch und TV-Fernbedienung durchführen; unter
 
 - Diagnoseereignisse und letzter Absturzbericht lassen sich lokal sichern und auf Wunsch in einen SAF-Ordner exportieren. Export ohne URLs, Zugangsdaten und Exception-Nachrichten.
 - Trakt-Import und Portalstaffelabfragen begrenzen Zustandsaktualisierungen und gleichzeitige Anfragen. Lokale Titelzuordnungen beim Trakt-Import laufen auf einem Hintergrund-Dispatcher; die Navigation bleibt waehrend des Abgleichs bedienbar. Das Verhalten auf einem realen Shield/Fire-TV-Geraet muss mit einem Diagnosebericht und realer Bibliothek geprueft werden.
-- Noch offen: die besprochene exklusive Metadatenquelle (Trakt, sonst TMDB, sonst TVmaze), kommende Folgen samt Ausstrahlungsdatum und regionale Verfuegbarkeit. Der aktuelle Build erfuellt diese Punkte noch nicht.
+- Umgesetzt: Episodenstatus, Titelbeschreibung/Bewertung und bekannte nächste Ausstrahlung verwenden Trakt, falls verbunden, sonst TMDB bei eingerichtetem Zugang, andernfalls TVmaze. Das Datum wird in Seriendetails angezeigt. Länderspezifische Ausstrahlungszeiten bleiben gesondert zu prüfen; Trakt liefert die bekannte Ausstrahlung der Serie, nicht zwingend die vom Nutzer gewählte Portalregion.
 
 ## Noch zu entscheiden
 

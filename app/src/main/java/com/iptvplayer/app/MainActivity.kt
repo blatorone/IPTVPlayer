@@ -435,7 +435,11 @@ private fun PlayerHome(
     var epgSourceWriteFailed by remember { mutableStateOf(false) }
     var epgSourceSaving by remember { mutableStateOf(false) }
     var epgSourceDraft by remember { mutableStateOf("") }
-    val activeEpisodeProvider = if (metadataClient != null) "TMDB" else "TVmaze"
+    val activeEpisodeProvider = when {
+        traktSession != null -> "Trakt"
+        metadataClient != null -> "TMDB"
+        else -> "TVmaze"
+    }
     var autoNextEpisode by remember(preferences) {
         mutableStateOf(preferences?.getBoolean("auto_next_episode", true) ?: true)
     }
@@ -620,17 +624,20 @@ private fun PlayerHome(
     }
     var diagnosticsStatus by remember { mutableStateOf<String?>(null) }
     val chooseDiagnosticsFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-        if (uri != null) runCatching {
-            context.contentResolver.takePersistableUriPermission(
-                uri,
-                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-            )
-            context.getSharedPreferences("diagnostics_settings", Context.MODE_PRIVATE)
-                .edit().putString("tree_uri", uri.toString()).apply()
-            diagnosticsTree = uri
-            AppDiagnostics.record(context, "diagnostics_folder_selected")
-        }.onSuccess { diagnosticsStatus = context.getString(R.string.diagnostics_folder_selected) }
-            .onFailure { diagnosticsStatus = context.getString(R.string.diagnostics_export_failed) }
+        if (uri != null) {
+            val permission = android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            val persisted = runCatching { context.contentResolver.takePersistableUriPermission(uri, permission) }
+            if (persisted.isSuccess) {
+                context.getSharedPreferences("diagnostics_settings", Context.MODE_PRIVATE)
+                    .edit().putString("tree_uri", uri.toString()).apply()
+                diagnosticsTree = uri
+                AppDiagnostics.record(context, "diagnostics_folder_selected")
+                diagnosticsStatus = context.getString(R.string.diagnostics_folder_selected)
+            } else {
+                diagnosticsStatus = context.getString(R.string.diagnostics_export_failed)
+            }
+        }
     }
     val exportPortals = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) runCatching {
@@ -682,14 +689,26 @@ private fun PlayerHome(
     var initialPortalPromptDismissed by rememberSaveable { mutableStateOf(false) }
     var restoring by remember { mutableStateOf(storage != null) }
     var storageError by remember { mutableStateOf<Int?>(null) }
-    val detailMetadata by produceState<TmdbTitle?>(null, metadataClient, details, mergeSources) {
+    val detailMetadata by produceState<TmdbTitle?>(null, metadataClient, details, mergeSources, traktSession?.username) {
         value = null
-        if (!mergeSources) return@produceState
+        if (!mergeSources || traktSession != null) return@produceState
         val client = metadataClient ?: return@produceState
         val entry = details ?: return@produceState
         if (entry.first == PortalSection.SERIES && titleIdentity(entry.second) == null) return@produceState
         value = try {
             client.lookup(entry.first, entry.second)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            null
+        }
+    }
+    val tvmazeDetailMetadata by produceState<TvmazeTitleMetadata?>(null, traktSession?.username, metadataClient, details) {
+        value = null
+        if (traktSession != null || metadataClient != null) return@produceState
+        val entry = details?.takeIf { it.first == PortalSection.SERIES } ?: return@produceState
+        value = try {
+            TvmazeClient.lookupTitleMetadata(entry.second)
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
@@ -733,6 +752,19 @@ private fun PlayerHome(
             traktSession = session
         }
         return action(api, session)
+    }
+
+    val traktDetailMetadata by produceState<TraktTitleMetadata?>(null, traktSession?.username, details) {
+        value = null
+        if (traktSession == null) return@produceState
+        val entry = details ?: return@produceState
+        value = try {
+            withTraktSession { api, session -> api.lookupTitleMetadata(entry.first, entry.second, session.accessToken) }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            null
+        }
     }
 
     fun connectTrakt() {
@@ -1062,6 +1094,8 @@ private fun PlayerHome(
 
     LaunchedEffect(traktSyncRequested, traktBusy, traktSession?.username, restoring) {
         if (traktSyncRequested && !traktBusy && traktSession != null && !restoring) {
+            // Let the cached guide and last channel render before remote account sync begins.
+            delay(5_000)
             traktSyncRequested = false
             syncTrakt()
         }
@@ -1323,20 +1357,36 @@ private fun PlayerHome(
         saveSeriesActivity(if (updated.saved || updated.viewed) remaining + updated else remaining)
     }
 
-    fun observeEpisodeProvider(key: String, episodes: Set<String>, provider: String) {
+    fun observeEpisodeProvider(
+        key: String,
+        episodes: Set<String>,
+        provider: String,
+        upcoming: TraktUpcomingEpisode? = null
+    ) {
         saveSeriesActivity(seriesActivity.map {
             if (it.key != key) it
             else if ((it.episodeProvider ?: if (it.usedTmdb) "tmdb" else null) == provider) {
-                it.observe(episodes, System.currentTimeMillis())
-            } else it.copy(episodeProvider = provider, known = episodes, checkedAt = System.currentTimeMillis())
+                it.observe(episodes, System.currentTimeMillis()).copy(
+                    nextEpisodeName = upcoming?.name,
+                    nextAirDate = upcoming?.airDate
+                )
+            } else it.copy(
+                episodeProvider = provider, known = episodes, checkedAt = System.currentTimeMillis(),
+                nextEpisodeName = upcoming?.name, nextAirDate = upcoming?.airDate
+            )
         })
     }
 
     val trackedSources = savedSources.map { it.identity }
     val trackedTitles = seriesActivity.map { it.key to it.refs }
-    LaunchedEffect(metadataClient, trackedSources, trackedTitles) {
+    val trackedEpisodeChecks = seriesActivity.map { it.key to it.checkedAt }
+    LaunchedEffect(metadataClient, traktSession?.username, trackedSources, trackedTitles, trackedEpisodeChecks) {
         val client = metadataClient
-        val provider = if (client != null) "tmdb" else "tvmaze"
+        val provider = when {
+            traktSession != null -> "trakt"
+            client != null -> "tmdb"
+            else -> "tvmaze"
+        }
         var scanOffset = 0
         while (trackedSources.isNotEmpty() && trackedTitles.isNotEmpty()) {
             if (canPlay()) {
@@ -1354,10 +1404,16 @@ private fun PlayerHome(
                         val title = PortalTitle(
                             tracked.name, year = tracked.year, imdbId = tracked.imdb, tmdbId = tracked.tmdb
                         )
-                        val keys = if (provider == "tmdb") client?.airedEpisodes(title)
-                            else TvmazeClient.airedEpisodes(title)
+                        val feed = if (provider == "trakt") {
+                            withTraktSession { api, session -> api.episodeFeed(title, session.accessToken) }
+                        } else null
+                        val keys = when (provider) {
+                            "trakt" -> feed?.airedKeys
+                            "tmdb" -> client?.airedEpisodes(title)
+                            else -> TvmazeClient.airedEpisodes(title)
+                        }
                         if (keys != null && seriesActivity.any { it.key == tracked.key }) {
-                            observeEpisodeProvider(tracked.key, keys, provider)
+                            observeEpisodeProvider(tracked.key, keys, provider, feed?.upcoming)
                         }
                     } catch (error: CancellationException) {
                         throw error
@@ -1914,7 +1970,10 @@ private fun PlayerHome(
         liveRestoreKey: String? = null
     ) {
         if (player == null || variants.isEmpty() || reopenPlayback(selection, openFullscreen = openFullscreenOnStart)) return
-        val remainFullscreen = fullscreen && selection.section == PortalSection.LIVE
+        val remainFullscreen = fullscreen && (
+            selection.section == PortalSection.LIVE ||
+                selection.section == PortalSection.SERIES && advancingEpisode
+            )
         stopPlayback()
         fullscreen = remainFullscreen
         playbackSelection = selection
@@ -2355,6 +2414,9 @@ private fun PlayerHome(
                     PortalSection.LIVE -> null
                 }
                 if (section == PortalSection.SERIES) {
+                    previousEpisodeAction = null
+                    nextEpisodeAction = null
+                    nextEpisodeSeconds = null
                     val series = openedSeries
                     val season = openedSeason
                     if (series != null && season != null) {
@@ -2759,8 +2821,13 @@ private fun PlayerHome(
                 if (playbackState == Player.STATE_ENDED && player?.currentMediaItem?.mediaId == attempt.mediaId) {
                     if (attempt.progressKey == null) {
                         scope.launch { failPlayback(attempt, R.string.playback_error) }
-                    } else progressPreferences?.edit()?.remove(attempt.progressKey)
-                        ?.putBoolean("completed:${attempt.progressKey}", true)?.apply()
+                    } else {
+                        progressPreferences?.edit()?.remove(attempt.progressKey)
+                            ?.putBoolean("completed:${attempt.progressKey}", true)?.apply()
+                        if (attempt.selection.section == PortalSection.SERIES && nextEpisodeAction == null) {
+                            stopPlayback()
+                        }
+                    }
                 }
             }
 
@@ -3024,13 +3091,12 @@ private fun PlayerHome(
         else if (selected == Destination.SERIES && openedSeries != null) {
             closeSeries()
             details = null
-            seriesActivityView = null
         }
         else if (details != null && selected in listOf(Destination.SERIES, Destination.MOVIES)) {
             details = null
             movieHistoryOpen = false
             movieWatchlistOpen = false
-            seriesActivityView = null
+            if (selected != Destination.SERIES) seriesActivityView = null
         }
         else if (selected == Destination.SERIES && seriesActivityView != null) seriesActivityView = null
         else if (selected == Destination.MOVIES && movieHistoryOpen) movieHistoryOpen = false
@@ -3505,7 +3571,7 @@ private fun PlayerHome(
                 onGuideInput = ::navigateFullscreen,
                 interceptGuideKey = ::interceptDirection,
                 onPreviousEpisode = { previousEpisodeAction?.invoke() },
-                onNextEpisode = { nextEpisodeAction?.invoke() },
+                onNextEpisode = { advanceEpisode(confirmed = true) },
                 hasPreviousEpisode = previousEpisodeAction != null,
                 hasNextEpisode = nextEpisodeAction != null,
                 onTouchAction = { runMappedControl(GuideInput.TAP) },
@@ -4141,10 +4207,9 @@ private fun PlayerHome(
                         }
                     }
                 }
-                if (restoring || connecting || traktBusy) {
+                if (restoring || connecting) {
                     LinearProgressIndicator(Modifier.fillMaxWidth())
                     if (restoring) Text(stringResource(R.string.startup_loading))
-                    if (traktBusy) Text(traktStatus ?: stringResource(R.string.trakt_syncing))
                 }
             }
             val content: @Composable ColumnScope.() -> Unit = {
@@ -4277,7 +4342,8 @@ private fun PlayerHome(
                                         else R.string.diagnostics_folder_selected
                                     ))
                                     MenuButton(stringResource(R.string.diagnostics_choose_folder), Modifier) {
-                                        chooseDiagnosticsFolder.launch(diagnosticsTree)
+                                        runCatching { chooseDiagnosticsFolder.launch(null) }
+                                            .onFailure { diagnosticsStatus = context.getString(R.string.diagnostics_folder_open_failed) }
                                     }
                                     MenuButton(stringResource(R.string.diagnostics_export), Modifier, enabled = diagnosticsTree != null) {
                                         diagnosticsTree?.let { tree ->
@@ -4683,14 +4749,28 @@ private fun PlayerHome(
                                 item.value.id?.takeIf(String::isNotBlank)?.let { SeriesPortalRef(item.source.identity, it) }
                             }.toSet()
                             val seriesResume = if (section == PortalSection.SERIES) {
-                                (trackedSeries(title) ?: seriesActivity.firstOrNull { entry -> entry.refs.any { it in refs } })
-                                    ?.let(::resumeFor)
-                                    ?.takeIf {
-                                        ((progressPreferences?.getLong(it.progressKey, 0L) ?: 0L) > 0 ||
-                                            (progressPreferences?.getFloat("trakt_percent:${it.progressKey}", 0f) ?: 0f) > 0f) &&
-                                            progressPreferences?.getBoolean("completed:${it.progressKey}", false) != true &&
-                                            resumeEpisode(seasons.orEmpty(), it) != null
+                                val tracked = trackedSeries(title)
+                                    ?: seriesActivity.firstOrNull { entry -> entry.refs.any { it in refs } }
+                                val savedResume = tracked?.let(::resumeFor)
+                                val savedEpisode = savedResume?.let { resumeEpisode(seasons.orEmpty(), it) }
+                                if (savedResume == null || savedEpisode == null) null
+                                else if (progressPreferences?.getBoolean("completed:${savedResume.progressKey}", false) != true) {
+                                    // An interrupted local/Trakt playback resumes at its exact episode,
+                                    // including a start at position zero.
+                                    savedResume
+                                } else {
+                                    // Trakt's watched history identifies the last completed episode.
+                                    // Continue with the next episode that is not already completed.
+                                    nextEpisodeAfter(seasons.orEmpty(), savedResume) { season, episode ->
+                                        val key = titleSelection(section, episode, season).progressKey
+                                        progressPreferences?.getBoolean("completed:$key", false) == true
+                                    }?.let { (season, episode) ->
+                                        EpisodeResume(
+                                            seriesEpisodeKey(season, episode), season.number, episode.episode,
+                                            episode.name, titleSelection(section, episode, season).progressKey
+                                        )
                                     }
+                                }
                             } else null
                             val firstEpisode = if (section == PortalSection.SERIES && seriesResume == null) {
                                 firstPlayableEpisode(seasons.orEmpty())
@@ -4710,17 +4790,48 @@ private fun PlayerHome(
                                 stringResource(R.string.trakt_resume_progress, it.toInt())
                             } ?: seriesResume?.let { episodeResumeLabel(it, resumePosition ?: 0L) }
                                 ?: resumePosition?.takeIf { it > 0 }?.let(::playbackTime)
-                            val displayTitle = (portalDetail ?: title).let { detail -> detailMetadata?.applyTo(detail) ?: detail }
+                            val baseTitle = (portalDetail ?: title).let { detail -> detailMetadata?.applyTo(detail) ?: detail }
+                            val displayTitle = traktDetailMetadata?.let { metadata ->
+                                baseTitle.copy(
+                                    name = metadata.title,
+                                    year = metadata.year ?: baseTitle.year,
+                                    description = germanDescription(metadata.overview) ?: germanDescription(baseTitle.description)
+                                )
+                            } ?: tvmazeDetailMetadata?.let { metadata ->
+                                baseTitle.copy(
+                                    name = metadata.title,
+                                    year = metadata.year ?: baseTitle.year,
+                                    description = germanDescription(metadata.overview) ?: germanDescription(baseTitle.description)
+                                )
+                            } ?: baseTitle
+                            val metadataProvider = when {
+                                traktDetailMetadata != null -> "Trakt"
+                                detailMetadata != null -> "TMDB"
+                                tvmazeDetailMetadata != null -> "TVmaze"
+                                else -> null
+                            }
                             val titleOverview: @Composable () -> Unit = {
                             TitleDetails(
                                 displayTitle, section,
-                                metadataRating = detailMetadata?.rating,
-                                fromTmdb = detailMetadata != null,
+                                metadataRating = traktDetailMetadata?.rating ?: detailMetadata?.rating ?: tvmazeDetailMetadata?.rating,
+                                metadataProvider = metadataProvider,
                                 favorite = titleKey(section, title) in favorites,
                                 saved = isTitleSaved(section, title),
                                 newEpisodes = if (section == PortalSection.SERIES) {
                                     trackedSeries(title)?.unseen?.size ?: 0
                                 } else 0,
+                                upcomingEpisode = trackedSeries(title)?.nextAirDate?.let { rawDate ->
+                                    val date = runCatching {
+                                        java.time.LocalDate.parse(rawDate).format(
+                                            java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")
+                                        )
+                                    }.getOrNull() ?: return@let null
+                                    context.getString(
+                                        R.string.next_episode_airdate,
+                                        trackedSeries(title)?.nextEpisodeName ?: "",
+                                        date
+                                    )
+                                },
                                 resumeLabel = resumeLabel,
                                 onResume = if (resumeKey != null && (section == PortalSection.MOVIES || seasons != null)) {
                                     { selectTitle(section, title, seriesResume, movieResumeKey) }

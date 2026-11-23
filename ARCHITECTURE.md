@@ -39,9 +39,15 @@ Die optionale TMDB-Verbindung nutzt einen separat verschlüsselten Lesezugang im
 
 HTTPS bevorzugen; Zertifikatsprüfungen nicht deaktivieren. Unsichere vom Nutzer konfigurierte Quellen verständlich kennzeichnen. URLs können Tokens enthalten und gelten als geheim. Backups, Fehlermeldungen, Absturzberichte und CI-Logs prüfen. QR-Zugriff ist kein Ersatz für Netzwerksicherheit. Abhängigkeiten und Rechte minimal halten. Netzwerk-, Parser-, Datenbank- und Player-Fehler getrennt behandeln; Abbrüche respektieren und Wiederholungen begrenzen.
 
+## Diagnoseexport
+
+Ein prozessweiter Uncaught-Exception-Handler sichert den letzten Absturzbericht synchron im App-internen Speicher. Der manuelle Export verwendet die vom Nutzer per Storage Access Framework ausgewaehlte Dokumentbaum-URI. Exportierte Daten sind auf Ereignisnamen, Android-/App-Version, Geraetemodell sowie Fehlerklasse und Stackframes beschraenkt; Exception-Nachrichten, URLs und Portalinhalte werden ausgelassen. Ereignisdateien werden begrenzt und rotiert.
+
 ## Trakt-Integration
 
 Trakt wird über eine feste, öffentliche StreamWatch Client ID und den OAuth-Gerätecode-Ablauf angebunden. Die App enthält kein Client Secret. QR-Codes werden lokal mit ZXing erzeugt; Gerätecode-URLs werden nur von den HTTPS-Trakt-Aktivierungsdomains akzeptiert. Der dokumentierte HTTP-400-Status beim Gerätecode-Polling bedeutet „Freigabe ausstehend“ und lässt Code sowie QR sichtbar. Drosselung, Ablauf und Ablehnung werden anhand der dokumentierten HTTP-Statuscodes behandelt. Bestätigungscodes und Tokens werden nicht protokolliert. Access- und Refresh-Token liegen in einer separaten verschlüsselten Datei außerhalb von Android-Backups. Refresh-Token-Rotation wird unmittelbar gespeichert. Nach Anmeldung und beim Wiederherstellen einer gespeicherten Trakt-Sitzung lädt die App Merkliste, Filmverlauf, Episodenhistorie und pausierte Wiedergabestände; der Synchronisieren-Knopf löst denselben Abgleich aus und ergänzt lokale Merklisteinträge in Trakt. Quelltitel werden über IDs und Titelzuordnung verbunden. Einträge ohne passende Quelle bleiben als Trakt-Metadaten sichtbar und nicht abspielbar. Filme und Episoden werden über Trakt-Scrobble-Start-, Pause- und Stopp-Ereignisse aktualisiert; pausierte Stände lassen sich auf weiteren Geräten übernehmen. Beim Import gewinnt ein neuerer lokaler Wiedergabestand gegen ältere Trakt-Daten.
+
+Der Trakt-Abgleich lädt API-Daten auf IO und führt umfangreiche Titelvergleiche auf `Dispatchers.Default` aus. Compose-Zustände und Fortschrittsmeldungen werden auf dem UI-Dispatcher aktualisiert; der laufende Abgleich sperrt die Navigation nicht.
 
 ## Live-Startkategorie
 

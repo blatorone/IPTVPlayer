@@ -85,6 +85,11 @@ Im Programmführer erscheint während aktiver Live-Wiedergabe eine fokussierbare
 - Für Intro und Abspann lässt sich getrennt zwischen automatischer Erkennung und eigenen Zeitmarken wählen. Im manuellen Modus gelten die gespeicherten Einstellungen für alle Serien. Der Introstart und das Introende beziehen sich auf den Folgenbeginn, der Abspannbeginn auf die verbleibende Laufzeit. Der Vorlauf für den Hinweis zur nächsten Folge bleibt separat einstellbar.
 - Intros werden standardmäßig erkannt und mit einer anwählbaren Überspringen-Schaltfläche angezeigt. Automatisches Überspringen ist eine separate, standardmäßig ausgeschaltete Option.
 
+## Diagnose und Absturzberichte
+
+- StreamWatch speichert knappe Diagnoseereignisse und den letzten Absturzbericht lokal. Unter **Einstellungen > Ueber** kann ein Ordner gewaehlt und ein Bericht manuell exportiert werden.
+- Diagnoseexporte duerfen keine Portaladressen, Zugangsdaten, Wiedergabelinks, Tokens oder Inhalte enthalten. Fehlertexte werden nicht exportiert; Absturzberichte enthalten nur Fehlerklassen und Stackframes.
+
 ## Trakt-Konto
 
 - Nutzer können Trakt in den Einstellungen über den offiziellen Gerätecode-Ablauf verbinden. Die App enthält ihre öffentliche Trakt Client ID; Nutzer müssen keine Entwickler-ID eingeben. Die App zeigt Bestätigungscode und einen lokal erzeugten QR-Code, der auch `auth.trakt.tv`-Aktivierungslinks mit Gerätecode unterstützt.

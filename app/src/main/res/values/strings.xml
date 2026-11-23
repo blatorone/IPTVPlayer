@@ -3,7 +3,7 @@
     <string name="about_version">Version %1$s</string>
     <string name="about_version_code">Versionscode %1$d</string>
     <string name="about_version_date">Versionsdatum %1$s</string>
-    <string name="version_date" translatable="false">22.11.2026</string>
+    <string name="version_date" translatable="false">23.11.2026</string>
     <string name="series_inactivity_check">Bei mehreren Folgen ohne Eingabe nachfragen</string>
     <string name="series_inactive_episode_limit">Nach %1$d Folgen ohne Eingabe fragen</string>
     <string name="series_still_watching">Schaust du noch?</string>
@@ -378,4 +378,11 @@
     <string name="trakt_title_watched">Bei Trakt als gesehen eingetragen.</string>
     <string name="trakt_playback_sync_failed">Wiedergabestand konnte nicht an Trakt übertragen werden.</string>
     <string name="trakt_source_missing">Bei Trakt gespeichert, aber in den vorhandenen Portalen nicht verfügbar.</string>
+    <string name="diagnostics_description">StreamWatch protokolliert Start- und Ladefehler und speichert Absturzberichte lokal. Portaladressen, Zugangsdaten und Fehlermeldungstexte werden nicht exportiert.</string>
+    <string name="diagnostics_folder_missing">Noch kein Speicherordner ausgewählt.</string>
+    <string name="diagnostics_folder_selected">Diagnoseordner ist gespeichert.</string>
+    <string name="diagnostics_choose_folder">Speicherordner auswählen</string>
+    <string name="diagnostics_export">Diagnosebericht jetzt exportieren</string>
+    <string name="diagnostics_export_complete">Diagnosebericht wurde im ausgewählten Ordner gespeichert.</string>
+    <string name="diagnostics_export_failed">Der Diagnosebericht konnte nicht gespeichert werden. Bitte wähle den Ordner erneut aus.</string>
 </resources>

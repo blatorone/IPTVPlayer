@@ -62,6 +62,12 @@ Abnahme aus `PROJECT_SPEC.md` mit Touch und TV-Fernbedienung durchführen; unter
 - Live-Kategorie wird zusammen mit dem zuletzt verwendeten Live-Sender lokal wiederhergestellt. Der Programmführer startet in der Kategorie dieses Senders.
 - Build-Prüfung: `assembleDebug` erfolgreich. OAuth mit einem echten Trakt-Konto und Bedienung auf Shield/Fire TV müssen noch auf Geräten geprüft werden.
 
+## Diagnose, Lastbegrenzung und Metadatenanbieter
+
+- Diagnoseereignisse und letzter Absturzbericht lassen sich lokal sichern und auf Wunsch in einen SAF-Ordner exportieren. Export ohne URLs, Zugangsdaten und Exception-Nachrichten.
+- Trakt-Import und Portalstaffelabfragen begrenzen Zustandsaktualisierungen und gleichzeitige Anfragen. Lokale Titelzuordnungen beim Trakt-Import laufen auf einem Hintergrund-Dispatcher; die Navigation bleibt waehrend des Abgleichs bedienbar. Das Verhalten auf einem realen Shield/Fire-TV-Geraet muss mit einem Diagnosebericht und realer Bibliothek geprueft werden.
+- Noch offen: die besprochene exklusive Metadatenquelle (Trakt, sonst TMDB, sonst TVmaze), kommende Folgen samt Ausstrahlungsdatum und regionale Verfuegbarkeit. Der aktuelle Build erfuellt diese Punkte noch nicht.
+
 ## Noch zu entscheiden
 
 Aus der Sichtung der TV-Referenz folgen weitere Funktionspakete für Aufnahmen, Anbieterarchive, Erinnerungen, Kindersicherung, Datensicherung, erweiterte Fernbedienungsbelegung und gerätespezifische Wiedergabe. Für Aufnahmen und Archiv sind getrennte Abnahmekriterien zu Speicherziel, Gerät und unterstützter Quelle erforderlich.

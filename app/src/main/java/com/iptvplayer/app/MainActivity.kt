@@ -17,6 +17,7 @@ import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.util.TypedValue
 import android.content.Context
+import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -144,6 +145,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.yield
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class MainActivity : ComponentActivity() {
@@ -186,6 +188,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        AppDiagnostics.install(applicationContext)
         Log.setLogLevel(Log.LOG_LEVEL_OFF)
         player = ExoPlayer.Builder(this).build()
         enableEdgeToEdge()
@@ -418,9 +421,7 @@ private fun PlayerHome(
     var epgSourceWriteFailed by remember { mutableStateOf(false) }
     var epgSourceSaving by remember { mutableStateOf(false) }
     var epgSourceDraft by remember { mutableStateOf("") }
-    var useTvmaze by remember(preferences) {
-        mutableStateOf(preferences?.getBoolean("use_tvmaze", false) ?: false)
-    }
+    val activeEpisodeProvider = if (metadataClient != null) "TMDB" else "TVmaze"
     var autoNextEpisode by remember(preferences) {
         mutableStateOf(preferences?.getBoolean("auto_next_episode", true) ?: true)
     }
@@ -599,6 +600,24 @@ private fun PlayerHome(
     var storedSource by remember { mutableStateOf<SavedPortal?>(null) }
     var savedSources by remember { mutableStateOf(emptyList<SavedPortal>()) }
     var portalTransferStatus by remember { mutableStateOf<String?>(null) }
+    var diagnosticsTree by remember(context) {
+        mutableStateOf(context.getSharedPreferences("diagnostics_settings", Context.MODE_PRIVATE)
+            .getString("tree_uri", null)?.let(Uri::parse))
+    }
+    var diagnosticsStatus by remember { mutableStateOf<String?>(null) }
+    val chooseDiagnosticsFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) runCatching {
+            context.contentResolver.takePersistableUriPermission(
+                uri,
+                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            )
+            context.getSharedPreferences("diagnostics_settings", Context.MODE_PRIVATE)
+                .edit().putString("tree_uri", uri.toString()).apply()
+            diagnosticsTree = uri
+            AppDiagnostics.record(context, "diagnostics_folder_selected")
+        }.onSuccess { diagnosticsStatus = context.getString(R.string.diagnostics_folder_selected) }
+            .onFailure { diagnosticsStatus = context.getString(R.string.diagnostics_export_failed) }
+    }
     val exportPortals = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) runCatching {
             context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { writer ->
@@ -783,7 +802,9 @@ private fun PlayerHome(
                     }
                 }.distinctBy { "${it.section}:${it.imdbId ?: it.tmdbId ?: normalizedLabel(it.name)}" }
                 val library = withTraktSession { api, session ->
-                    val remote = api.loadLibrary(session.accessToken)
+                    val remote = api.loadLibrary(session.accessToken) { progress ->
+                        withContext(Dispatchers.Main) { traktStatus = progress }
+                    }
                     localSaved.forEach { item ->
                         if (item.imdbId != null || item.tmdbId != null) {
                             api.setWatchlistItem(session.accessToken, item, saved = true)
@@ -791,23 +812,42 @@ private fun PlayerHome(
                     }
                     remote
                 }
-                fun localMatches(media: TraktMedia): List<SourceItem<PortalTitle>> {
-                    val expected = media.asTitle()
-                    return savedSources.flatMap { source ->
-                        source.catalogs[media.section]?.titles.orEmpty().mapNotNull { title ->
-                            equivalentCatalogueTitle(
-                                expected, listOf(title), requireVerifiedIdentity = false
-                            )?.let { SourceItem(source, it) }
-                        }
-                    }.distinctBy { "${it.source.identity}:${it.value.id ?: it.value.name}" }
+                val localMatchCache = mutableMapOf<String, List<SourceItem<PortalTitle>>>()
+                suspend fun localMatches(media: TraktMedia): List<SourceItem<PortalTitle>> {
+                    val cacheKey = "${media.section}:${media.imdbId}:${media.tmdbId}:${normalizedLabel(media.name)}:${media.year}"
+                    localMatchCache[cacheKey]?.let { return it }
+                    val matches = withContext(Dispatchers.Default) {
+                        val expected = media.asTitle()
+                        savedSources.flatMap { source ->
+                            source.catalogs[media.section]?.titles.orEmpty().mapNotNull { title ->
+                                equivalentCatalogueTitle(
+                                    expected, listOf(title), requireVerifiedIdentity = false
+                                )?.let { SourceItem(source, it) }
+                            }
+                        }.distinctBy { "${it.source.identity}:${it.value.id ?: it.value.name}" }
+                    }
+                    localMatchCache[cacheKey] = matches
+                    return matches
                 }
                 var matched = 0
-                for (media in library.watchlist) {
+                val updatedSeries = seriesActivity.associateByTo(linkedMapOf()) { it.key }
+                val completedEpisodes = linkedSetOf<String>()
+                val updatedWatchlist = watchlist.toMutableSet()
+                val updatedMovieBookmarks = movieBookmarks.associateByTo(linkedMapOf()) { it.progressKey }
+                val updatedMovieHistory = movieHistory.associateByTo(linkedMapOf()) { it.progressKey }
+                val importedProgress = linkedMapOf<String, Float>()
+                suspend fun reportImportProgress(label: String, index: Int, total: Int) {
+                    if ((index + 1) % 100 == 0 || index + 1 == total) {
+                        traktStatus = "$label: ${index + 1} / $total"
+                        yield()
+                    }
+                }
+                for ((index, media) in library.watchlist.withIndex()) {
                     val entries = localMatches(media)
                     matched++
                     val title = entries.firstOrNull()?.value ?: media.asTitle()
                     val key = entries.firstOrNull()?.let { importedTitleKey(media.section, title) } ?: traktLibraryKey(media)
-                    watchlist = watchlist + key
+                    updatedWatchlist += key
                     if (media.section == PortalSection.MOVIES) {
                         val bookmark = WatchedMovie(
                             displayVodTitle(title), title.year ?: media.year, title.imdbId ?: media.imdbId,
@@ -815,10 +855,10 @@ private fun PlayerHome(
                             entries.mapNotNull { item -> item.value.id?.let { SeriesPortalRef(item.source.identity, it) } }.distinct(),
                             key, 0L
                         )
-                        movieBookmarks = listOf(bookmark) + movieBookmarks.filterNot { it.progressKey == key }
+                        updatedMovieBookmarks[key] = bookmark
                     } else {
                         val keyForSeries = if (entries.isNotEmpty()) importedSeriesKey(title) else traktLibraryKey(media)
-                        val existing = seriesActivity.firstOrNull { it.key == keyForSeries }
+                        val existing = updatedSeries[keyForSeries]
                         val refs = entries.mapNotNull { item ->
                             item.value.id?.let { SeriesPortalRef(item.source.identity, it) }
                         }.distinct()
@@ -826,10 +866,11 @@ private fun PlayerHome(
                             keyForSeries, displayVodTitle(title), refs, title.year ?: media.year,
                             title.imdbId ?: media.imdbId, title.tmdbId ?: media.tmdbId
                         )).copy(saved = true, refs = (existing?.refs.orEmpty() + refs).distinct())
-                        seriesActivity = (seriesActivity.filterNot { it.key == keyForSeries } + tracked)
+                        updatedSeries[keyForSeries] = tracked
                     }
+                    reportImportProgress("Importiere Merkliste", index, library.watchlist.size)
                 }
-                for (media in library.watched) {
+                for ((index, media) in library.watched.withIndex()) {
                     val entries = localMatches(media)
                     matched++
                     val title = entries.firstOrNull()?.value ?: media.asTitle()
@@ -841,25 +882,27 @@ private fun PlayerHome(
                             entries.mapNotNull { it.value.id?.let { id -> SeriesPortalRef(it.source.identity, id) } }.distinct(),
                             key, media.watchedAtMillis ?: System.currentTimeMillis()
                         )
-                        movieHistory = listOf(watched) + movieHistory.filterNot { it.progressKey == key }
+                        updatedMovieHistory[key] = watched
                     } else {
                         val key = if (entries.isNotEmpty()) importedSeriesKey(title) else traktLibraryKey(media)
-                        val existing = seriesActivity.firstOrNull { it.key == key }
+                        val existing = updatedSeries[key]
                         val refs = entries.mapNotNull { it.value.id?.let { id -> SeriesPortalRef(it.source.identity, id) } }.distinct()
                         val tracked = (existing ?: TrackedSeries(
                             key, displayVodTitle(title), refs, title.year ?: media.year,
                             title.imdbId ?: media.imdbId, title.tmdbId ?: media.tmdbId
                         )).copy(viewed = true, watchedAt = media.watchedAtMillis ?: System.currentTimeMillis(), refs = (existing?.refs.orEmpty() + refs).distinct())
-                        seriesActivity = (seriesActivity.filterNot { it.key == key } + tracked)
+                        updatedSeries[key] = tracked
                     }
+                    reportImportProgress("Importiere gesehene Titel", index, library.watched.size)
                 }
-                for (media in library.watchedEpisodes.sortedBy { it.watchedAtMillis ?: 0L }) {
+                val sortedWatchedEpisodes = library.watchedEpisodes.sortedBy { it.watchedAtMillis ?: 0L }
+                for ((index, media) in sortedWatchedEpisodes.withIndex()) {
                     val seasonNumber = media.seasonNumber ?: continue
                     val episodeNumber = media.episodeNumber ?: continue
                     val entries = localMatches(media)
                     val title = entries.firstOrNull()?.value ?: media.asTitle()
                     val trackedKey = if (entries.isNotEmpty()) importedSeriesKey(title) else traktLibraryKey(media)
-                    val old = seriesActivity.firstOrNull { it.key == trackedKey }
+                    val old = updatedSeries[trackedKey]
                     val refs = entries.mapNotNull { item ->
                         item.value.id?.let { SeriesPortalRef(item.source.identity, it) }
                     }.distinct()
@@ -867,8 +910,7 @@ private fun PlayerHome(
                     if (scope != null) {
                         val seriesId = titleIdentity(title) ?: title.id ?: title.name
                         val episodeKey = "SERIES:$scope:$seriesId:$seasonNumber:$episodeNumber"
-                        progressPreferences?.edit()?.putBoolean("completed:$episodeKey", true)
-                            ?.remove(episodeKey)?.remove("trakt_percent:$episodeKey")?.apply()
+                        completedEpisodes += episodeKey
                     }
                     val watchedAt = media.watchedAtMillis ?: 0L
                     val lastEpisode = old?.lastEpisode.takeIf { old != null && old.watchedAt > watchedAt }
@@ -882,10 +924,11 @@ private fun PlayerHome(
                         refs = (old?.refs.orEmpty() + refs).distinct(), viewed = true,
                         watchedAt = maxOf(old?.watchedAt ?: 0L, watchedAt), lastEpisode = lastEpisode
                     )
-                    seriesActivity = seriesActivity.filterNot { it.key == trackedKey } + tracked
+                    updatedSeries[trackedKey] = tracked
                     matched++
+                    reportImportProgress("Markiere gesehene Folgen", index, sortedWatchedEpisodes.size)
                 }
-                for (media in library.playback) {
+                for ((index, media) in library.playback.withIndex()) {
                     val percent = media.progressPercent?.takeIf { it > 0f } ?: continue
                     val entries = localMatches(media)
                     val match = entries.firstOrNull()
@@ -901,15 +944,13 @@ private fun PlayerHome(
                         val localUpdated = progressPreferences?.getLong("progress_updated:$key", 0L) ?: 0L
                         if ((progressPreferences?.getLong(key, 0L) ?: 0L) <= 1L ||
                             (media.watchedAtMillis ?: 0L) >= localUpdated
-                        ) progressPreferences?.edit()
-                            ?.putFloat("trakt_percent:$key", percent)?.putLong(key, 1L)
-                            ?.remove("completed:$key")?.apply()
+                        ) importedProgress[key] = percent
                         val entry = WatchedMovie(
                             displayVodTitle(title), title.year ?: media.year,
                             title.imdbId ?: media.imdbId, title.tmdbId ?: media.tmdbId,
                             refs, key, media.watchedAtMillis ?: System.currentTimeMillis()
                         )
-                        movieHistory = listOf(entry) + movieHistory.filterNot { it.progressKey == key }
+                        updatedMovieHistory[key] = entry
                     } else {
                         val canonical = titleIdentity(title)
                         val scope = if (canonical != null) "catalogue" else match?.source?.identity ?: "trakt"
@@ -923,10 +964,9 @@ private fun PlayerHome(
                         val localUpdated = progressPreferences?.getLong("progress_updated:$key", 0L) ?: 0L
                         if ((progressPreferences?.getLong(key, 0L) ?: 0L) <= 1L ||
                             (media.watchedAtMillis ?: 0L) >= localUpdated
-                        ) progressPreferences?.edit()
-                            ?.putFloat("trakt_percent:$key", percent)?.putLong(key, 1L)?.apply()
+                        ) importedProgress[key] = percent
                         val trackedKey = if (match != null) importedSeriesKey(title) else traktLibraryKey(media)
-                        val old = seriesActivity.firstOrNull { it.key == trackedKey }
+                        val old = updatedSeries[trackedKey]
                         val tracked = (old ?: TrackedSeries(
                             trackedKey, displayVodTitle(title), refs, title.year ?: media.year,
                             title.imdbId ?: media.imdbId, title.tmdbId ?: media.tmdbId
@@ -934,10 +974,26 @@ private fun PlayerHome(
                             refs = (old?.refs.orEmpty() + refs).distinct(), viewed = true,
                             watchedAt = media.watchedAtMillis ?: System.currentTimeMillis(), lastEpisode = resume
                         )
-                        seriesActivity = seriesActivity.filterNot { it.key == trackedKey } + tracked
+                        updatedSeries[trackedKey] = tracked
                     }
                     matched++
+                    reportImportProgress("Importiere Wiedergabestände", index, library.playback.size)
                 }
+                watchlist = updatedWatchlist
+                movieBookmarks = updatedMovieBookmarks.values.toList()
+                movieHistory = updatedMovieHistory.values.toList()
+                seriesActivity = updatedSeries.values.toList()
+                progressPreferences?.edit()?.also { editor ->
+                    completedEpisodes.forEach { key ->
+                        editor.putBoolean("completed:$key", true).remove(key).remove("trakt_percent:$key")
+                    }
+                    importedProgress.forEach { (key, percent) ->
+                        if (key !in completedEpisodes) {
+                            editor.putFloat("trakt_percent:$key", percent).putLong(key, 1L)
+                                .remove("completed:$key")
+                        }
+                    }
+                }?.apply()
                 preferences?.edit()?.putStringSet("watchlist", watchlist)?.apply()
                 progressPreferences?.edit()
                     ?.putString("movie_bookmarks", encodeMovieHistory(movieBookmarks))
@@ -948,6 +1004,7 @@ private fun PlayerHome(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
+                AppDiagnostics.record(context, "trakt_library_sync_failed")
                 traktStatus = error.message ?: context.getString(R.string.trakt_sync_failed)
             } finally {
                 traktBusy = false
@@ -1229,22 +1286,28 @@ private fun PlayerHome(
 
     val trackedSources = savedSources.map { it.identity }
     val trackedTitles = seriesActivity.map { it.key to it.refs }
-    LaunchedEffect(metadataClient, useTvmaze, trackedSources, trackedTitles) {
+    LaunchedEffect(metadataClient, trackedSources, trackedTitles) {
         val client = metadataClient
-        if (client == null && !useTvmaze) return@LaunchedEffect
-        val provider = if (useTvmaze) "tvmaze" else "tmdb"
+        val provider = if (client != null) "tmdb" else "tvmaze"
+        var scanOffset = 0
         while (trackedSources.isNotEmpty() && trackedTitles.isNotEmpty()) {
             if (canPlay()) {
                 val now = System.currentTimeMillis()
-                for (tracked in seriesActivity.filter {
+                val due = seriesActivity.filter {
                     (it.episodeProvider ?: if (it.usedTmdb) "tmdb" else null) != provider ||
                         now - it.checkedAt >= 30 * 60 * 1000L
-                }) {
+                }
+                // A Trakt library can contain many shows. Process one per minute
+                // instead of issuing a burst of requests while the user browses.
+                val tracked = due.getOrNull(scanOffset % due.size.coerceAtLeast(1))
+                if (due.isNotEmpty()) scanOffset = (scanOffset + 1) % due.size
+                if (tracked != null) {
                     try {
                         val title = PortalTitle(
                             tracked.name, year = tracked.year, imdbId = tracked.imdb, tmdbId = tracked.tmdb
                         )
-                        val keys = if (useTvmaze) TvmazeClient.airedEpisodes(title) else client?.airedEpisodes(title)
+                        val keys = if (provider == "tmdb") client?.airedEpisodes(title)
+                            else TvmazeClient.airedEpisodes(title)
                         if (keys != null && seriesActivity.any { it.key == tracked.key }) {
                             observeEpisodeProvider(tracked.key, keys, provider)
                         }
@@ -2020,6 +2083,9 @@ private fun PlayerHome(
     }
 
     val historyArtworkRequests = remember { Semaphore(3) }
+    // Keep multi-portal season requests bounded; a catalog can contain thousands
+    // of episodes and must not open one network request per source at once.
+    val episodeCatalogRequests = remember { Semaphore(2) }
     @Composable
     fun HistoryArtwork(section: PortalSection, title: PortalTitle, refs: List<SeriesPortalRef>) {
         val artwork by produceState<PortalTitle?>(null, section, title, refs, savedSources) {
@@ -2147,10 +2213,12 @@ private fun PlayerHome(
                         owners.map { source ->
                             async {
                                 try {
-                                    val item = known[source.identity]?.value
-                                        ?: findEquivalent(source, section, title) ?: return@async emptyList()
-                                    val portal = sessionFor(source)
-                                    portal.loadSeasons(item, portal.openSession()).map { SourceItem(source, it) }
+                                    episodeCatalogRequests.withPermit {
+                                        val item = known[source.identity]?.value
+                                            ?: findEquivalent(source, section, title) ?: return@withPermit emptyList()
+                                        val portal = sessionFor(source)
+                                        portal.loadSeasons(item, portal.openSession()).map { SourceItem(source, it) }
+                                    }
                                 } catch (error: CancellationException) {
                                     throw error
                                 } catch (_: Exception) {
@@ -2183,6 +2251,7 @@ private fun PlayerHome(
                 } catch (error: CancellationException) {
                     throw error
                 } catch (_: Exception) {
+                    AppDiagnostics.record(context, "series_catalog_load_failed")
                     episodeError = true
                 }
             }
@@ -4012,9 +4081,10 @@ private fun PlayerHome(
                         }
                     }
                 }
-                if (restoring || connecting) {
+                if (restoring || connecting || traktBusy) {
                     LinearProgressIndicator(Modifier.fillMaxWidth())
                     if (restoring) Text(stringResource(R.string.startup_loading))
+                    if (traktBusy) Text(traktStatus ?: stringResource(R.string.trakt_syncing))
                 }
             }
             val content: @Composable ColumnScope.() -> Unit = {
@@ -4139,16 +4209,31 @@ private fun PlayerHome(
                                 SettingsSection.CONTROLS ->
                                     MenuButton(stringResource(R.string.control_settings), Modifier) { controlSettingsOpen = true }
                                 SettingsSection.UPDATES -> updateSettings()
-                                SettingsSection.ABOUT -> AboutSettings()
+                                SettingsSection.ABOUT -> {
+                                    AboutSettings()
+                                    Text(stringResource(R.string.diagnostics_description))
+                                    Text(stringResource(
+                                        if (diagnosticsTree == null) R.string.diagnostics_folder_missing
+                                        else R.string.diagnostics_folder_selected
+                                    ))
+                                    MenuButton(stringResource(R.string.diagnostics_choose_folder), Modifier) {
+                                        chooseDiagnosticsFolder.launch(diagnosticsTree)
+                                    }
+                                    MenuButton(stringResource(R.string.diagnostics_export), Modifier, enabled = diagnosticsTree != null) {
+                                        diagnosticsTree?.let { tree ->
+                                            runCatching { AppDiagnostics.export(context, tree) }
+                                                .onSuccess { diagnosticsStatus = context.getString(R.string.diagnostics_export_complete) }
+                                                .onFailure { diagnosticsStatus = context.getString(R.string.diagnostics_export_failed) }
+                                        }
+                                    }
+                                    diagnosticsStatus?.let { Text(it) }
+                                }
                                 SettingsSection.METADATA -> {
+                                    Text("Aktive Quelle für Folgeninfos: $activeEpisodeProvider")
                                     MenuButton(stringResource(R.string.tmdb_settings), Modifier) {
                                         metadataSettingsOpen = true
                                     }
-                                    MenuButton(stringResource(R.string.tvmaze_episode_provider), Modifier, selected = useTvmaze) {
-                                        useTvmaze = !useTvmaze
-                                        preferences?.edit()?.putBoolean("use_tvmaze", useTvmaze)?.apply()
-                                    }
-                                    if (useTvmaze) {
+                                    if (activeEpisodeProvider == "TVmaze") {
                                         MenuButton(stringResource(R.string.tvmaze_credit), Modifier) {
                                             uriHandler.openUri("https://www.tvmaze.com/")
                                         }

@@ -2,6 +2,20 @@
 
 ## Unveröffentlicht
 
+## 1.0.30
+
+- Beim Trakt-Abgleich werden umfangreiche lokale Titelzuordnungen auf einem Hintergrund-Dispatcher berechnet. Dadurch bleibt die Oberfläche während des Imports reaktionsfähig und der Fortschrittsstatus kann weiter aktualisiert werden.
+- Die Trakt-Synchronisierung blockiert die Navigation nicht mehr; Ladefortschritt und aktueller Arbeitsschritt bleiben sichtbar.
+- Die Metadateneinstellungen zeigen die aktive Quelle für Folgeninformationen an. TVmaze wird automatisch verwendet, wenn kein TMDB-Zugang eingerichtet ist.
+
+## 1.0.29
+
+- Diagnoseberichte koennen in einen vom Nutzer gewaehlten Ordner exportiert werden; Zugangsdaten, Portal-URLs und Fehlermeldungstexte werden ausgelassen.
+- Trakt-Synchronisierung zeigt den aktuellen Arbeitsschritt, bleibt waehrenddessen bedienbar und importiert Gesehen-Status aus der kompakten Serienuebersicht statt die komplette Wiedergabehistorie seitenweise abzurufen.
+- Trakt-Antworten werden einschliesslich JSON-Auswertung im Hintergrund verarbeitet; der Fortschritt wird an die Oberflaeche zurueckgemeldet.
+- Trakt-Verlauf wird gebuendelt verarbeitet, Zuordnungen pro Titel zwischengespeichert und Episodenpruefungen werden gestaffelt.
+- Gleichzeitige Portalabfragen beim Laden von Serien sind begrenzt.
+
 ## 1.0.28
 
 - Trakt-Verlauf, einzelne gesehene Folgen, Merkliste und pausierte Wiedergabestände werden beim Verknüpfen und über „Trakt-Verlauf und Merkliste synchronisieren“ abgeglichen.

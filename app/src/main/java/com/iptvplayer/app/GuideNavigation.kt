@@ -164,10 +164,9 @@ internal fun GuidePanel.afterProgrammeGuide(input: GuideInput): GuidePanel = whe
         GuidePanel.GRID -> GuidePanel.CATEGORIES
         else -> GuidePanel.MENU
     }
-    GuideInput.REMOTE_RIGHT, GuideInput.SWIPE_RIGHT -> when (this) {
-        GuidePanel.GRID, GuidePanel.DETAILS -> GuidePanel.DETAILS
-        else -> GuidePanel.GRID
-    }
+    // In the normal programme guide, right remains timeline/list navigation.
+    // Programme details are opened with right only by the fullscreen overlay.
+    GuideInput.REMOTE_RIGHT, GuideInput.SWIPE_RIGHT -> GuidePanel.GRID
     GuideInput.BACK -> GuidePanel.GRID
     else -> this
 }

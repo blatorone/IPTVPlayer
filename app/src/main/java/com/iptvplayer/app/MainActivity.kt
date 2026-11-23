@@ -3529,7 +3529,7 @@ private fun PlayerHome(
                 showFullscreenPanel(panel)
                 return true
             }
-            if (inGuide && !fullscreen && panel != GuidePanel.CHANNELS) {
+            if (inGuide && !fullscreen && panel != GuidePanel.CHANNELS && panel != GuidePanel.DETAILS) {
                 guidePanel = panel
                 return true
             }

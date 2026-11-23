@@ -50,7 +50,7 @@ Ein nutzerkonfigurierbarer IPTV-Player für Android-Telefone und -Tablets sowie 
 
 - Als EPG-Quelle ist standardmäßig der IPTV-Anbieter ausgewählt. Alternativ können mehrere XMLTV-URLs eingerichtet werden. Aktualisierung beim Start, Intervall, manuelles Aktualisieren und Vorschauzeitraum sind einstellbar. Im Live-Vollbild schließen Senderliste und Programmbeschreibung nach 15 Sekunden oder bei Berührung des Videobildes.
 
-- App-Kopfzeilen und Menürahmen bleiben beim Scrollen stehen. Sender, Suchergebnisse, Filme und Folgen scrollen in ihren jeweiligen Listen. Im Live-Vollbild öffnen horizontale Gesten oder Richtungstasten Senderliste und Programmdetails im Programmführer, während der Sender weiterläuft.
+- App-Kopfzeilen und Menürahmen bleiben beim Scrollen stehen. Sender, Suchergebnisse, Filme und Folgen scrollen in ihren jeweiligen Listen. Nur im Live-Vollbild öffnen horizontale Gesten oder Richtungstasten Senderliste und Programmdetails, während der Sender weiterläuft. Im normalen Programmführer bleibt Rechts bei der Zeitleisten- und Listenbedienung.
 
 - Nach dem App-Start ist zunächst der Programmführer geöffnet. Sobald der zuletzt erfolgreich gestartete verfügbare Live-Sender wieder läuft, öffnet die App das Vollbild. Im Programmführer startet eine Senderauswahl in der Vorschau. Ein Klick auf die Vorschau öffnet das Vollbild. Ein Senderwechsel in der Vollbild-Senderliste behält das Vollbild bei. Das Hauptmenü erscheint auf Anforderung.
 

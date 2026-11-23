@@ -1,5 +1,9 @@
 # Änderungen
 
+## 1.0.44
+
+- Rechts öffnet Programmdetails nur noch im Live-Vollbild. Im normalen Programmführer bleibt Rechts bei der Zeitleisten- und Listenbedienung.
+
 ## 1.0.43
 
 - Live-TV und Einstellungen verwenden durchgehend die gemeinsame dunkle Kartenoptik, eine einheitliche Hauptnavigation und den roten Fokusakzent; das EPG-Zeitraster bleibt erhalten.

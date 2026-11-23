@@ -29,7 +29,7 @@ Ein nutzerkonfigurierbarer IPTV-Player für Android-Telefone und -Tablets sowie 
 
 ## Live, EPG und Navigation
 
-- Die Live-Oberfläche orientiert sich an den bereitgestellten StreamWatch-Referenzen: Kategorien links, Senderliste daneben sowie Vorschau und Programminformationen rechts; der Programmführer ergänzt die horizontale Zeitleiste darunter. Eine gemeinsame dunkle Petrolpalette und gleichartige Fokus-/Hover-Zustände halten Schaltflächen in Navigation, Senderlisten und Programmzeitleiste konsistent. Der Fokus nutzt Türkis, laufende Sendungen einen warmen Akzent.
+- Die App verwendet in allen Bereichen eine gemeinsame Streaming-Oberfläche mit tiefschwarzen Flächen, weißer Schrift und rotem Fokusakzent. Kategorien, Senderlisten, Poster, Einstellungen und Dialoge teilen dieselben Schaltflächen- und Fokuszustände. Live-TV behält seine IPTV-Programmführung mit Zeitleiste; laufende Sendungen können zusätzlich einen warmen Akzent nutzen.
 - Der sichtbare Trakt-Verlauf zeigt höchstens die zehn neuesten Filme beziehungsweise Serien, die einer gespeicherten Portalquelle zugeordnet werden können. Bei der Zuordnung wird dieselbe portalbasierte Suche und Identitätsprüfung wie bei der Suche verwendet.
 
 - Im Vollbild startet die Fernbedienungsbedienung auf Play/Pause. Im Live-TV sind nur Play/Pause und Stopp sichtbar; Stopp ist per D-Pad erreichbar. Bei Filmen und Serien bewegen Links/Rechts die Wiedergabeposition in Zehn-Sekunden-Schritten, auch wenn die Steuerleiste ausgeblendet ist.
@@ -66,7 +66,7 @@ Im Programmführer erscheint während aktiver Live-Wiedergabe eine fokussierbare
 
 ## VOD
 
-- Film- und Serienkataloge verwenden eine Streaming-Startseite mit hervorgehobenem Titel, horizontalen Posterreihen für beliebte, neu hinzugefügte und serienbezogen neu verfügbare Folgen sowie einer vollständigen Titelreihe. Kategorien, Filter, Sortierung und Fernbedienungsfokus bleiben erreichbar. Für Anbieter-Kategorien ist die Anzeige von Markensymbol, Symbol mit Namen oder Name allein wählbar. Der Live-Programmbereich behält separat seine IPTV-Zeitleiste.
+- Film- und Serienkataloge verwenden eine Streaming-Startseite mit höchstens zwei beliebten Titeln im großen Bildbereich und darunter der vollständigen Posterreihe der gewählten Kategorie. Neu hinzugefügte Titel erscheinen als eigene Kategorie statt als zusätzliche Reihe unter der Kategorieansicht. Kategorien, Filter, Sortierung und Fernbedienungsfokus bleiben erreichbar. Für Anbieter-Kategorien ist die Anzeige von Markensymbol, Symbol mit Namen oder Name allein wählbar. Der Live-Programmbereich behält separat seine IPTV-Zeitleiste.
 - Poster und Senderlogos werden speicherbegrenzt lokal zwischengespeichert und nach einem Neustart wiederverwendet, damit bekannte Bilder schneller angezeigt werden.
 
 - Beim automatischen Folgenwechsel pausiert „Schaust du noch?“ nach einer einstellbaren Anzahl von Folgen ohne Eingabe. Die Abfrage ist standardmäßig nach drei Folgen aktiv. Ohne Bestätigung wird nach 30 Sekunden gestoppt.

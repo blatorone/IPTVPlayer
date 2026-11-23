@@ -275,27 +275,27 @@ private val mainDestinations = Destination.entries.filter {
 private const val EXIT_CONFIRMATION_MS = 3_000L
 
 private val playerColors = darkColorScheme(
-    primary = Color(0xFF2DD4BF),
-    onPrimary = Color(0xFF062E2A),
-    primaryContainer = Color(0xFF124C46),
-    onPrimaryContainer = Color(0xFFCCFBF1),
-    secondary = Color(0xFFF4AB38),
-    onSecondary = Color(0xFF271A08),
-    secondaryContainer = Color(0xFF3C2B15),
-    onSecondaryContainer = Color(0xFFFFE4B5),
-    tertiary = Color(0xFF42C8B7),
-    surface = Color(0xFF09171B),
-    surfaceContainerLowest = Color(0xFF071216),
-    surfaceContainerLow = Color(0xFF0D1C20),
-    surfaceContainer = Color(0xFF122328),
-    surfaceContainerHigh = Color(0xFF192D32),
-    surfaceContainerHighest = Color(0xFF223B40),
-    onSurface = Color(0xFFF0F7F7),
-    onSurfaceVariant = Color(0xFFA9C0C1),
-    outline = Color(0xFF648184),
-    outlineVariant = Color(0xFF344F52),
-    tertiaryContainer = Color(0xFF28B8A8),
-    onTertiaryContainer = Color(0xFF042B29)
+    primary = Color(0xFFE50914),
+    onPrimary = Color(0xFFFFFFFF),
+    primaryContainer = Color(0xFF351114),
+    onPrimaryContainer = Color(0xFFFFDADB),
+    secondary = Color(0xFFF5C451),
+    onSecondary = Color(0xFF241900),
+    secondaryContainer = Color(0xFF302818),
+    onSecondaryContainer = Color(0xFFFFEFC4),
+    tertiary = Color(0xFFE50914),
+    surface = Color(0xFF080808),
+    surfaceContainerLowest = Color(0xFF050505),
+    surfaceContainerLow = Color(0xFF0D0D0D),
+    surfaceContainer = Color(0xFF141414),
+    surfaceContainerHigh = Color(0xFF1E1E1E),
+    surfaceContainerHighest = Color(0xFF292929),
+    onSurface = Color(0xFFF5F5F5),
+    onSurfaceVariant = Color(0xFFB3B3B3),
+    outline = Color(0xFF646464),
+    outlineVariant = Color(0xFF383838),
+    tertiaryContainer = Color(0xFFE50914),
+    onTertiaryContainer = Color(0xFFFFFFFF)
 )
 
 private data class PlaybackSelection(
@@ -629,6 +629,7 @@ private fun PlayerHome(
     var seasons by remember { mutableStateOf<List<PortalSeason>?>(null) }
     var playbackSeasons by remember { mutableStateOf(emptyList<PortalSeason>()) }
     var playbackSeries by remember { mutableStateOf<PortalTitle?>(null) }
+    var playbackMovieTitle by remember { mutableStateOf<PortalTitle?>(null) }
     var playbackSeason by remember { mutableStateOf<PortalSeason?>(null) }
     var playbackEpisode by remember { mutableStateOf<PortalTitle?>(null) }
     var overlaySeason by remember { mutableStateOf<PortalSeason?>(null) }
@@ -1988,6 +1989,7 @@ private fun PlayerHome(
         playbackSourceBadge = null
         pendingSeriesEpisode = null
         pendingMovie = null
+        playbackMovieTitle = null
         nextEpisodeAction = null
         previousEpisodeAction = null
         nextEpisodeSeconds = null
@@ -2546,6 +2548,7 @@ private fun PlayerHome(
                     PortalSection.LIVE -> null
                 }
                 if (section == PortalSection.SERIES) {
+                    playbackMovieTitle = null
                     previousEpisodeAction = null
                     nextEpisodeAction = null
                     nextEpisodeSeconds = null
@@ -2587,6 +2590,7 @@ private fun PlayerHome(
                         }
                     }
                 } else if (section == PortalSection.MOVIES) {
+                    playbackMovieTitle = title
                     pendingMovie = WatchedMovie(
                         displayVodTitle(title), vodReleaseYear(title), title.imdbId, title.tmdbId,
                         known.map { SeriesPortalRef(it.source.identity, it.value.id.orEmpty()) }.distinct(),
@@ -3800,6 +3804,47 @@ private fun PlayerHome(
                 episodeActionVisible = episodeAction != 0 || fullscreenGuidePanel != GuidePanel.GRID || skipIntroTo != null,
                 onControlsVisible = { playbackControlsVisible = it }
             )
+            if (playbackControlsVisible && vodSection != null) {
+                val episode = playbackEpisode
+                val movie = playbackMovieTitle
+                val show = playbackSeries
+                val title = if (vodSection == PortalSection.SERIES) show else movie
+                if (title != null) {
+                    val episodeNumber = episode?.episode?.let { stringResource(R.string.episode_number, it) }
+                    val seasonNumber = playbackSeason?.let { season ->
+                        season.number?.let { stringResource(R.string.season_number, it) } ?: season.title.name
+                    }
+                    val detailLine = listOfNotNull(seasonNumber, episodeNumber).joinToString(" · ")
+                    val episodeName = episode?.name?.takeIf { it.isNotBlank() && it != show?.name }
+                    val description = if (vodSection == PortalSection.SERIES) {
+                        germanDescription(episode?.description) ?: germanDescription(show?.description)
+                    } else germanDescription(movie?.description)
+                    Surface(
+                        modifier = Modifier.align(Alignment.TopStart).padding(20.dp)
+                            .fillMaxWidth(0.46f),
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color.Black.copy(alpha = 0.82f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                    ) {
+                        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(displayVodTitle(title), style = MaterialTheme.typography.titleLarge,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            if (detailLine.isNotEmpty()) Text(detailLine,
+                                color = MaterialTheme.colorScheme.primary,
+                                style = MaterialTheme.typography.titleSmall)
+                            if (episodeName != null && episodeName != title.name) Text(episodeName,
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            description?.takeIf { it.isNotBlank() }?.let {
+                                Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 3, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
+                    }
+                }
+            }
             if (controlBindings[GuideInput.TAP] == ControlAction.PLAY_PAUSE &&
                 fullscreenGuidePanel == GuidePanel.GRID && !playbackControlsVisible
             ) {
@@ -5311,8 +5356,9 @@ private fun PlayerHome(
                                 Text(group.name, style = MaterialTheme.typography.titleSmall)
                                 if (groupUsesTmdb) Text(stringResource(R.string.tmdb_catalogue_source))
                                 guideState.SaveableStateProvider("vod-${section.name}-${group.id}") {
-                                CatalogOverview(
+                                    CatalogOverview(
                                     modifier = Modifier.weight(1f),
+                                        categoryTitle = group.name,
                                     catalog = if (uncategorizedSelected) baseCatalog else groupCatalog,
                                     loading = if (uncategorizedSelected) section in catalogLoading else groupLoading,
                                     failed = if (uncategorizedSelected) section in catalogErrors else groupError,
@@ -6076,7 +6122,7 @@ internal fun PlayerFrame(
     Box(
         modifier = (if (fullscreen) Modifier.fillMaxSize() else Modifier.fillMaxWidth().aspectRatio(16f / 9f))
             .background(
-                Brush.verticalGradient(listOf(Color(0xFF121C2C), Color(0xFF080C13))),
+                Brush.verticalGradient(listOf(Color(0xFF171717), Color(0xFF080808))),
                 RoundedCornerShape(12.dp)
             ),
         contentAlignment = Alignment.Center
@@ -6093,7 +6139,7 @@ internal fun PlayerFrame(
                             view.isFocusableInTouchMode = true
                             val focused = android.graphics.drawable.GradientDrawable().apply {
                                 shape = android.graphics.drawable.GradientDrawable.OVAL
-                                setColor(0x553B82F6)
+                                setColor(0x55E50914)
                                 setStroke((2 * resources.displayMetrics.density).toInt().coerceAtLeast(2), android.graphics.Color.WHITE)
                             }
                             val idle = android.graphics.drawable.GradientDrawable().apply {
@@ -6184,7 +6230,7 @@ internal fun PlayerFrame(
                                 (event.repeatCount == 0 && mediaKey?.invoke() == true)
                             ) return true
                             if (fullscreen && allowControls) {
-                                if (!livePlayback && event.keyCode in setOf(
+                                if (!livePlayback && !controlsVisible && event.keyCode in setOf(
                                         android.view.KeyEvent.KEYCODE_DPAD_LEFT,
                                         android.view.KeyEvent.KEYCODE_DPAD_RIGHT
                                     ) && player?.isCurrentMediaItemSeekable == true
@@ -6199,21 +6245,6 @@ internal fun PlayerFrame(
                                 }
                                 if (controlsVisible) {
                                     extendControlsTimeout()
-                                    val progress = findViewById<android.view.View>(androidx.media3.ui.R.id.exo_progress)
-                                    if (!livePlayback && player?.isCurrentMediaItemSeekable == true) {
-                                        val delta = when (event.keyCode) {
-                                            android.view.KeyEvent.KEYCODE_DPAD_LEFT -> -10_000L
-                                            android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> 10_000L
-                                            else -> 0L
-                                        }
-                                        if (delta != 0L) {
-                                            if (event.action == android.view.KeyEvent.ACTION_DOWN) {
-                                                val duration = player?.duration?.takeIf { it > 0L } ?: Long.MAX_VALUE
-                                                player?.seekTo((player.currentPosition + delta).coerceIn(0L, duration))
-                                            }
-                                            return true
-                                        }
-                                    }
                                 } else {
                                     val direction = when (event.keyCode) {
                                         android.view.KeyEvent.KEYCODE_DPAD_LEFT -> GuideInput.REMOTE_LEFT
@@ -6453,6 +6484,7 @@ private fun episodeResumeLabel(episode: EpisodeResume, position: Long): String =
 @Composable
 private fun CatalogOverview(
     modifier: Modifier,
+    categoryTitle: String,
     catalog: PortalCatalog?,
     loading: Boolean,
     failed: Boolean,
@@ -6490,7 +6522,7 @@ private fun CatalogOverview(
             Text(stringResource(R.string.catalog_count, catalog.titles.size, total))
         }
         TitleGrid(
-            catalog.titles, isFavorite, isSaved, preferPopularity, newEpisodes,
+            catalog.titles, categoryTitle, isFavorite, isSaved, preferPopularity, newEpisodes,
             returnTitle, focusFirstTitle, onTitleFocusRestored, onSelect
         )
         if (catalog.nextPage != null && !loading && canLoadMore) {

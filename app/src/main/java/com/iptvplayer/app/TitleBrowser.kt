@@ -76,6 +76,7 @@ private enum class TitleFilter(val label: Int) {
 @Composable
 internal fun ColumnScope.TitleGrid(
     titles: List<PortalTitle>,
+    categoryTitle: String,
     isFavorite: (PortalTitle) -> Boolean,
     isSaved: (PortalTitle) -> Boolean,
     preferPopularity: Boolean,
@@ -149,40 +150,45 @@ internal fun ColumnScope.TitleGrid(
     }
     val allRow = rememberLazyListState()
     val returnIndex = returnTitle?.let { target -> sorted.indexOfFirst { it == target } } ?: -1
-    val heroFocus = remember { FocusRequester() }
     val returnFocus = remember { FocusRequester() }
     LaunchedEffect(returnTitle, returnIndex, focusFirstTitle) {
         if (returnIndex >= 0) {
             if (allRow.layoutInfo.visibleItemsInfo.none { it.index == returnIndex }) allRow.scrollToItem(returnIndex)
         } else if (returnTitle != null) onTitleFocusRestored()
-        if (focusFirstTitle && sorted.isNotEmpty()) {
-            withFrameNanos { }
-            if (heroFocus.requestFocus()) onTitleFocusRestored()
-        }
     }
     BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
         val compact = maxWidth < 600.dp || maxHeight < 430.dp
         val cardWidth = if (compact) 112.dp else 150.dp
         val popular = sorted.filter { it.popularity != null }.sortedByDescending { it.popularity }
-        val hero = popular.firstOrNull() ?: sorted.firstOrNull()
+            .ifEmpty { sorted }.take(2)
         LazyColumn(
             Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(if (compact) 12.dp else 18.dp)
         ) {
-            if (hero != null) item(key = "hero-${posterShelfKey(hero)}") {
-                FeaturedTitle(
-                    title = hero,
-                    height = (maxHeight * if (compact) 0.30f else 0.36f).coerceIn(150.dp, 300.dp),
-                    modifier = Modifier.then(if (focusFirstTitle) Modifier.focusRequester(heroFocus) else Modifier),
-                    onSelect = { onSelect(hero) }
-                )
+            if (popular.isNotEmpty()) item(key = "hero-popular") {
+                LazyRow(
+                    Modifier.fillMaxWidth().height((maxHeight * if (compact) 0.30f else 0.36f).coerceIn(150.dp, 300.dp)),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    itemsIndexed(popular, key = { _, title -> "hero-${posterShelfKey(title)}" }) { index, title ->
+                        FeaturedTitle(
+                            title = title,
+                            height = (maxHeight * if (compact) 0.30f else 0.36f).coerceIn(150.dp, 300.dp),
+                            modifier = Modifier.width(maxWidth * 0.86f),
+                            onSelect = { onSelect(title) }
+                        )
+                    }
+                }
             }
             if (matches.isEmpty()) item { Text(stringResource(R.string.no_matching_titles)) }
-            if (popular.isNotEmpty()) item(key = "shelf-popular") {
+            if (sorted.isNotEmpty()) item(key = "shelf-all") {
                 TitleShelf(
-                    title = stringResource(R.string.catalog_shelf_popular),
-                    titles = popular.take(20), cardWidth = cardWidth,
-                    newEpisodes = newEpisodes, onSelect = onSelect
+                    title = categoryTitle,
+                    titles = sorted, cardWidth = cardWidth, state = allRow,
+                    focusIndex = returnIndex.takeIf { it >= 0 } ?: if (focusFirstTitle) 0 else -1,
+                    focusRequester = returnFocus,
+                    newEpisodes = newEpisodes, onFocusRestored = onTitleFocusRestored,
+                    onSelect = onSelect
                 )
             }
             val withNewEpisodes = sorted.filter { newEpisodes(it) > 0 }
@@ -191,23 +197,6 @@ internal fun ColumnScope.TitleGrid(
                     title = stringResource(R.string.catalog_shelf_new_episodes),
                     titles = withNewEpisodes, cardWidth = cardWidth,
                     newEpisodes = newEpisodes, onSelect = onSelect
-                )
-            }
-            val recentlyAdded = sorted.filter { it.addedAt != null }.sortedByDescending { it.addedAt }
-            if (recentlyAdded.isNotEmpty()) item(key = "shelf-recent") {
-                TitleShelf(
-                    title = stringResource(R.string.catalog_shelf_recent),
-                    titles = recentlyAdded.take(20), cardWidth = cardWidth,
-                    newEpisodes = newEpisodes, onSelect = onSelect
-                )
-            }
-            if (sorted.isNotEmpty()) item(key = "shelf-all") {
-                TitleShelf(
-                    title = stringResource(R.string.catalog_shelf_all),
-                    titles = sorted, cardWidth = cardWidth, state = allRow,
-                    focusIndex = returnIndex, focusRequester = returnFocus,
-                    newEpisodes = newEpisodes, onFocusRestored = onTitleFocusRestored,
-                    onSelect = onSelect
                 )
             }
         }
@@ -226,7 +215,7 @@ private fun FeaturedTitle(
     val hovered by interactions.collectIsHoveredAsState()
     Surface(
         shape = RoundedCornerShape(18.dp),
-        color = Color(0xFF111922),
+        color = MaterialTheme.colorScheme.surfaceContainer,
         border = if (focused || hovered) BorderStroke(3.dp, MaterialTheme.colorScheme.primary) else null,
         modifier = modifier.fillMaxWidth().height(height).onFocusChanged { focused = it.isFocused }
             .hoverable(interactions, enabled = true).clickable(interactionSource = interactions, indication = null) { onSelect() }

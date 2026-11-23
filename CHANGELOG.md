@@ -1,5 +1,12 @@
 # Änderungen
 
+## 1.0.42
+
+- Gemeinsames dunkles Streaming-Design mit rotem Fokusakzent in Live-TV, Filmen, Serien, Einstellungen und Dialogen eingeführt; die Programmzeitleiste bleibt erhalten.
+- Film- und Serienkategorien zeigen bis zu zwei beliebte Titel im großen Bildbereich und anschließend die Titel der gewählten Kategorie. „Neu hinzugefügt“ bleibt eine eigene Kategorie und entfällt als zusätzliche Reihe.
+- Links/Rechts spulen bei Filmen und Serien nur noch bei ausgeblendeter Steuerleiste. Bei sichtbaren Player-Controls bedienen die Tasten Fokus und Fortschrittsregler.
+- Die eingeblendete Player-Info zeigt bei Serien Staffel, Folge und Episodenbeschreibung, bei Filmen Titel und Beschreibung.
+
 ## 1.0.41
 
 - Automatische Portalaktualisierung beim Start lässt sich unabhängig von der EPG-Aktualisierung schalten. Gespeicherte Kataloge bleiben während des Hintergrundabgleichs bedienbar und werden bei fehlgeschlagenem Abruf behalten.

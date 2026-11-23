@@ -46,6 +46,8 @@ Ein nutzerkonfigurierbarer IPTV-Player für Android-Telefone und -Tablets sowie 
 - Serien erhalten eine eigene Ansicht „Weiter schauen“ für gesehene, noch nicht abgeschlossene Serien. Trakt-Episodenstände werden paginiert importiert; der Trakt-Serienfortschritt unterscheidet abgeschlossene von noch laufenden Serien. Abgeschlossene Titel zeigen keinen Fortsetzen-Button.
 
 - Im Vollbild startet die Fernbedienungsbedienung auf Play/Pause. Im Live-TV sind nur Play/Pause und Stopp sichtbar; Stopp ist per D-Pad erreichbar. Bei Filmen und Serien bewegen Links/Rechts die Wiedergabeposition in Zehn-Sekunden-Schritten, auch wenn die Steuerleiste ausgeblendet ist.
+- In der VOD-Steuerleiste sind Suchlauf, Untertitel- und Player-Einstellungen mit der Fernbedienung erreichbar. Die Untertitelauswahl bietet verfügbare Spuren und „Aus“. Beim Springen mit Links/Rechts wird die Zeitleiste eingeblendet und fokussiert; Akzentfarbe gilt einheitlich für Suchpunkt, Fortschritt und fokussierte Player-Schaltflächen.
+- Das Starten oder Fortsetzen eines Films beziehungsweise einer Folge öffnet zuverlässig die Vollbildwiedergabe. Ein noch laufender Startversuch lässt sich durch erneutes Fortsetzen wieder in den Vollbildmodus holen.
 
 - Die Programmbeschreibung bleibt an Sender und Zeit der markierten Sendung gebunden. Das Kontextmenü einer Kategorie erlaubt das Verschieben oder Ein- und Ausblenden. Die Reihenfolge wird getrennt für Live-TV, Filme und Serien gespeichert. Das Hauptmenü kann Symbole, Text oder beides anzeigen.
 

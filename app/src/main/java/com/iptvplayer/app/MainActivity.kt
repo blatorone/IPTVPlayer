@@ -92,6 +92,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
@@ -2298,7 +2299,14 @@ private fun PlayerHome(
         } else current == selection
         val activePlayer = player ?: return false
         if (!matches || playbackError != null) return false
-        if (playing == null) return starting != null
+        if (playing == null) {
+            if (starting == null) return false
+            if (openFullscreen) {
+                lastBack = 0
+                fullscreen = true
+            }
+            return true
+        }
         if (activePlayer.playbackState != Player.STATE_READY &&
             activePlayer.playbackState != Player.STATE_BUFFERING
         ) return false
@@ -2363,7 +2371,7 @@ private fun PlayerHome(
         liveRestoreKey: String? = null
     ) {
         if (player == null || variants.isEmpty() || reopenPlayback(selection, openFullscreen = openFullscreenOnStart)) return
-        val remainFullscreen = fullscreen && (
+        val remainFullscreen = openFullscreenOnStart || fullscreen && (
             selection.section == PortalSection.LIVE ||
                 selection.section == PortalSection.SERIES && advancingEpisode
             )
@@ -4173,6 +4181,10 @@ private fun PlayerHome(
         fun interceptDirection(input: GuideInput): Boolean {
             if (episodeAction != 0) return true
             if (playbackControlsVisible) return false
+            if (!live && fullscreenGuidePanel == GuidePanel.GRID &&
+                input in setOf(GuideInput.REMOTE_LEFT, GuideInput.REMOTE_RIGHT) &&
+                player?.isCurrentMediaItemSeekable == true
+            ) return false
             val custom = controlBindings[input]?.let { it != ControlAction.DEFAULT } == true
             if (input.vertical) return fullscreenGuidePanel == GuidePanel.GRID && (custom || live)
             return custom || seriesOverlay || live && (
@@ -6780,6 +6792,7 @@ internal fun PlayerFrame(
     episodeActionVisible: Boolean = false,
     onControlsVisible: ((Boolean) -> Unit)? = null
 ) {
+    val accentArgb = MaterialTheme.colorScheme.primary.toArgb()
     val buffering by produceState(
         initialValue = false,
         player, active, fullscreen
@@ -6825,6 +6838,50 @@ internal fun PlayerFrame(
     val canNextEpisode by rememberUpdatedState(hasNextEpisode)
     val captureActionKeys by rememberUpdatedState(actionPromptActive)
     val confirmEpisodeAction by rememberUpdatedState(onEpisodeActionConfirm)
+    fun enableRemoteFocus(view: android.view.View) {
+        view.isFocusable = true
+        view.isFocusableInTouchMode = true
+        val focused = android.graphics.drawable.GradientDrawable().apply {
+            shape = android.graphics.drawable.GradientDrawable.OVAL
+            setColor(android.graphics.Color.argb(
+                85,
+                android.graphics.Color.red(accentArgb),
+                android.graphics.Color.green(accentArgb),
+                android.graphics.Color.blue(accentArgb)
+            ))
+            setStroke((2 * view.resources.displayMetrics.density).toInt().coerceAtLeast(2), accentArgb)
+        }
+        val idle = android.graphics.drawable.GradientDrawable().apply {
+            shape = android.graphics.drawable.GradientDrawable.OVAL
+            setColor(android.graphics.Color.TRANSPARENT)
+        }
+        view.foreground = android.graphics.drawable.StateListDrawable().apply {
+            addState(intArrayOf(android.R.attr.state_focused), focused)
+            addState(intArrayOf(), idle)
+        }
+        view.nextFocusUpId = view.id
+        view.nextFocusDownId = view.id
+    }
+    fun configureBottomFocus(view: PlayerView) {
+        val progress = view.findViewById<android.view.View>(androidx.media3.ui.R.id.exo_progress) ?: return
+        val bottomButtons = listOf(
+            androidx.media3.ui.R.id.exo_subtitle,
+            androidx.media3.ui.R.id.exo_settings,
+            androidx.media3.ui.R.id.exo_fullscreen,
+            androidx.media3.ui.R.id.exo_overflow_show
+        ).mapNotNull { view.findViewById<android.view.View>(it) }
+            .filter { it.visibility == android.view.View.VISIBLE && it.isEnabled }
+        if (bottomButtons.isEmpty()) {
+            progress.nextFocusDownId = progress.id
+            return
+        }
+        progress.nextFocusDownId = bottomButtons.first().id
+        bottomButtons.forEachIndexed { index, button ->
+            button.nextFocusUpId = progress.id
+            button.nextFocusLeftId = bottomButtons.getOrNull(index - 1)?.id ?: button.id
+            button.nextFocusRightId = bottomButtons.getOrNull(index + 1)?.id ?: button.id
+        }
+    }
     var shownControlsRequest by remember { mutableIntStateOf(controlsRequest) }
     var previousDismissRequest by remember { mutableIntStateOf(controlsDismissRequest) }
     var previousEpisodeAction by remember { mutableStateOf(episodeActionVisible) }
@@ -6842,26 +6899,6 @@ internal fun PlayerFrame(
                     object : PlayerView(context) {
                         private var controlsVisible = false
                         private val hideControls = Runnable { hideController() }
-
-                        fun enableRemoteFocus(view: android.view.View) {
-                            view.isFocusable = true
-                            view.isFocusableInTouchMode = true
-                            val focused = android.graphics.drawable.GradientDrawable().apply {
-                                shape = android.graphics.drawable.GradientDrawable.OVAL
-                                setColor(0x55E50914)
-                                setStroke((2 * resources.displayMetrics.density).toInt().coerceAtLeast(2), android.graphics.Color.WHITE)
-                            }
-                            val idle = android.graphics.drawable.GradientDrawable().apply {
-                                shape = android.graphics.drawable.GradientDrawable.OVAL
-                                setColor(android.graphics.Color.TRANSPARENT)
-                            }
-                            view.foreground = android.graphics.drawable.StateListDrawable().apply {
-                                addState(intArrayOf(android.R.attr.state_focused), focused)
-                                addState(intArrayOf(), idle)
-                            }
-                            view.nextFocusUpId = view.id
-                            view.nextFocusDownId = view.id
-                        }
 
                         init {
                             if (fullscreen) {
@@ -6948,7 +6985,13 @@ internal fun PlayerFrame(
                                     if (event.action == android.view.KeyEvent.ACTION_DOWN) {
                                         val duration = player?.duration?.takeIf { it > 0L } ?: Long.MAX_VALUE
                                         player?.seekTo((player.currentPosition + delta).coerceIn(0L, duration))
-                                        if (!controlsVisible) showController()
+                                        if (!controlsVisible) {
+                                            showController()
+                                            post {
+                                                findViewById<android.view.View>(androidx.media3.ui.R.id.exo_progress)
+                                                    ?.requestFocus()
+                                            }
+                                        }
                                     }
                                     return true
                                 }
@@ -7064,12 +7107,22 @@ internal fun PlayerFrame(
                             (progress as? DefaultTimeBar)?.let { timeBar ->
                                 progress.setOnFocusChangeListener { _, focused ->
                                     timeBar.setScrubberColor(
-                                        if (focused) android.graphics.Color.rgb(59, 130, 246)
+                                        if (focused) accentArgb
                                         else android.graphics.Color.WHITE
                                     )
+                                    timeBar.setPlayedColor(accentArgb)
                                 }
                             }
                         }
+                        listOf(
+                            androidx.media3.ui.R.id.exo_subtitle,
+                            androidx.media3.ui.R.id.exo_settings,
+                            androidx.media3.ui.R.id.exo_fullscreen,
+                            androidx.media3.ui.R.id.exo_overflow_show
+                        ).forEach { id ->
+                            findViewById<android.view.View>(id)?.let(::enableRemoteFocus)
+                        }
+                        configureBottomFocus(this)
                         this.player = player
                         if (fullscreen) post { if (allowControls) requestFocus() }
                     }
@@ -7113,8 +7166,20 @@ internal fun PlayerFrame(
                     }
                     view.findViewById<android.view.View>(androidx.media3.ui.R.id.exo_progress)?.let { progress ->
                         progress.nextFocusUpId = pause?.id ?: progress.id
-                        progress.nextFocusDownId = progress.id
+                        (progress as? DefaultTimeBar)?.let { timeBar ->
+                            timeBar.setPlayedColor(accentArgb)
+                            timeBar.setScrubberColor(
+                                if (progress.isFocused) accentArgb else android.graphics.Color.WHITE
+                            )
+                        }
                     }
+                    listOf(
+                        androidx.media3.ui.R.id.exo_subtitle,
+                        androidx.media3.ui.R.id.exo_settings,
+                        androidx.media3.ui.R.id.exo_fullscreen,
+                        androidx.media3.ui.R.id.exo_overflow_show
+                    ).forEach { id -> view.findViewById<android.view.View>(id)?.let(::enableRemoteFocus) }
+                    configureBottomFocus(view)
                     view.useController = openFullscreen == null && controlsAllowed
                     if (previousEpisodeAction != episodeActionVisible) {
                         previousEpisodeAction = episodeActionVisible

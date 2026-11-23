@@ -1,5 +1,11 @@
 # Änderungen
 
+## 1.0.52
+
+- Media3-Steuerleiste verknüpft Zeitstrahl, Untertitel- und Einstellungsaktionen mit expliziten D-Pad-Fokuswegen. Der Untertitelknopf öffnet die verfügbare Spurauswahl einschließlich „Aus“.
+- Vor- und Zurückspringen bei Filmen und Serien zeigt den Player-Zeitstrahl und fokussiert den Suchlauf. Suchpunkt, Fortschrittsleiste und Fernbedienungsfokus verwenden die gewählte Akzentfarbe.
+- Der Start einer Wiedergabe öffnet den Vollbildplayer unmittelbar. Ein bereits laufender Startversuch kann über „Fortsetzen“ wieder in den Vollbildmodus geholt werden, statt den Aufruf ohne sichtbare Aktion zu beenden.
+
 ## 1.0.51
 
 - Quellenverwaltung trennt „Alle Quellen aktualisieren“ von einer Mehrfachauswahl einzelner Quellen; einzelne Portalzeilen haben keine eigenen Aktualisieren-Schaltflächen mehr. Manuelle Aktualisierungen werden während einer Startprüfung eingereiht statt verworfen.

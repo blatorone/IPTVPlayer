@@ -416,6 +416,7 @@
     <string name="enable_portal">Portal aktivieren und aktualisieren</string>
     <string name="portals_refresh_success">Portalaktualisierung abgeschlossen. %1$d Quelle(n) erreichbar.</string>
     <string name="portals_refresh_with_unavailable">Portalaktualisierung abgeschlossen. %1$d erreichbar; nicht erreichbar: %2$s</string>
+    <string name="portals_refresh_failed">Portalaktualisierung konnte nicht abgeschlossen werden. Die gespeicherten Inhalte bleiben verfügbar.</string>
     <string name="no_enabled_portals">Alle Portale sind deaktiviert. Aktiviere mindestens eine Quelle für die Aktualisierung.</string>
     <string name="diagnostics_save_file">Diagnosebericht als Datei speichern</string>
 </resources>

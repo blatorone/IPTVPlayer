@@ -7,6 +7,7 @@ Die vorhandene Projektstruktur hat Vorrang, sofern sie diese Ziele trägt. Fachl
 ## Komponenten
 
 - **Präsentation:** Compose-Oberflächen für Quellen, Live, EPG, VOD, Einstellungen und QR-Verwaltung; gemeinsame Zustandsmodelle, adaptive Layouts und explizites Fokusmanagement für TV.
+- **Artwork-Cache:** Poster und Senderlogos werden asynchron geladen, im begrenzten Bitmap-Speicher-Cache und zusätzlich mit begrenzter Größe und Lebensdauer im App-Cache gehalten. Cache-Dateinamen enthalten nur einen Hash der Bildadresse; Bildadressen werden nicht protokolliert.
 - **Import:** M3U-Parser, Xtream-Adapter, Stalker-Adapter und XMLTV-Parser hinter getrennten Schnittstellen; Eingaben validieren, große Dateien stromorientiert und begrenzt verarbeiten. Import in temporären Zustand, anschließend transaktional übernehmen; eine fehlgeschlagene Aktualisierung zerstört keine letzte gültige Bibliothek. Der Stalker-Adapter verwaltet die Portalsitzung, ermittelt verfügbare Katalogfunktionen und führt Portal-Einträge in das gemeinsame Katalogmodell über.
 - **Katalog:** Normalisierung, Quellenzuordnung, Kategorien und Länderfilter. Stabile interne IDs und Herkunfts-IDs getrennt halten. Manuelle Verknüpfungen vor automatischen Regeln berücksichtigen; nicht sicher identifizierbare Einträge getrennt lassen.
 - **EPG:** XMLTV-Kanäle und Programme getrennt speichern; Zuordnung per expliziter Zuordnung oder passender `tvg-id`, Zeitstempel als absolute Zeitpunkte speichern, lokal darstellen. Doppelte und fehlende Programme behandeln, alte Daten kontrolliert bereinigen.

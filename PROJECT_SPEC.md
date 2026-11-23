@@ -67,6 +67,7 @@ Im Programmführer erscheint während aktiver Live-Wiedergabe eine fokussierbare
 ## VOD
 
 - Film- und Serienkataloge verwenden eine Streaming-Startseite mit hervorgehobenem Titel, horizontalen Posterreihen für beliebte, neu hinzugefügte und serienbezogen neu verfügbare Folgen sowie einer vollständigen Titelreihe. Kategorien, Filter, Sortierung und Fernbedienungsfokus bleiben erreichbar. Für Anbieter-Kategorien ist die Anzeige von Markensymbol, Symbol mit Namen oder Name allein wählbar. Der Live-Programmbereich behält separat seine IPTV-Zeitleiste.
+- Poster und Senderlogos werden speicherbegrenzt lokal zwischengespeichert und nach einem Neustart wiederverwendet, damit bekannte Bilder schneller angezeigt werden.
 
 - Beim automatischen Folgenwechsel pausiert „Schaust du noch?“ nach einer einstellbaren Anzahl von Folgen ohne Eingabe. Die Abfrage ist standardmäßig nach drei Folgen aktiv. Ohne Bestätigung wird nach 30 Sekunden gestoppt.
 

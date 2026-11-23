@@ -2860,6 +2860,11 @@ private fun PlayerHome(
                     context.getString(R.string.portals_refresh_success, reachableCount)
                 } else context.getString(R.string.portals_refresh_with_unavailable, reachableCount, unavailable.joinToString(", "))
                 if (completed > 0 && automaticCountries) askForCountries = true
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                AppDiagnostics.record(context, "portal_batch_refresh_failed:${error.javaClass.simpleName}")
+                portalRefreshNotice = context.getString(R.string.portals_refresh_failed)
             } finally {
                 batchProgress = null
                 connecting = false
@@ -2890,6 +2895,11 @@ private fun PlayerHome(
                     context.getString(R.string.portals_refresh_success, reachableCount)
                 } else context.getString(R.string.portals_refresh_with_unavailable, reachableCount, unavailable.joinToString(", "))
             }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            AppDiagnostics.record(context, "startup_portal_refresh_failed:${error.javaClass.simpleName}")
+            portalRefreshNotice = context.getString(R.string.portals_refresh_failed)
         } finally {
             startupPortalRefresh = null
         }

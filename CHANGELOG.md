@@ -1,5 +1,10 @@
 # Änderungen
 
+## 1.0.40
+
+- Poster und Senderlogos werden in einem begrenzten Cache auf dem Gerät abgelegt und nach einem App-Neustart wiederverwendet. Der Cache wird nach 30 Tagen erneuert und auf 48 MB begrenzt; der Bitmap-RAM-Cache ist auf 12 MB begrenzt.
+- Unerwartete Fehler während manueller oder automatischer Portalaktualisierungen beenden den Aktualisierungsvorgang mit einer verständlichen Meldung; bereits gespeicherte Inhalte bleiben erhalten.
+
 ## 1.0.39
 
 - Auswahlmarkierungen zeigen weiterhin den Seitenstrich; der Rahmen erscheint nur am aktuell fokussierten Element.

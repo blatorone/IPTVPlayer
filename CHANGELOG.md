@@ -1,5 +1,10 @@
 # Änderungen
 
+## 1.0.71
+
+- Trakt episode summaries now fill missing German TMDB or portal descriptions.
+- TMDB still images take priority over generic portal episode posters.
+
 ## 1.0.70
 
 - Intro skipping no longer seeks backwards when image matching finishes late.

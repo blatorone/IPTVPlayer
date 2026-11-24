@@ -191,6 +191,27 @@ internal class TraktApi(private val clientId: String) {
         return TraktEpisodeFeed(aired, upcoming.minByOrNull { it.first }?.second)
     }
 
+    /** Localized episode summaries keyed by season and episode number. */
+    suspend fun episodeDescriptions(title: PortalTitle, accessToken: String): Map<Pair<Int, Int>, String> {
+        val show = findShow(title, accessToken) ?: return emptyMap()
+        val traktId = show.optJSONObject("ids")?.optLong("trakt", 0)?.takeIf { it > 0 }
+            ?: return emptyMap()
+        val seasons = request("/shows/$traktId/seasons?extended=episodes", "GET", token = accessToken)
+            .body.arrayObjects()
+        return buildMap {
+            for (season in seasons) {
+                val seasonNumber = season.optInt("number", -1).takeIf { it >= 0 } ?: continue
+                val episodes = season.optJSONArray("episodes") ?: continue
+                for (index in 0 until episodes.length()) {
+                    val episode = episodes.optJSONObject(index) ?: continue
+                    val number = episode.optInt("number", -1).takeIf { it > 0 } ?: continue
+                    val overview = germanDescription(episode.optString("overview")) ?: continue
+                    put(seasonNumber to number, overview)
+                }
+            }
+        }
+    }
+
     suspend fun lookupTitleMetadata(
         section: PortalSection,
         title: PortalTitle,

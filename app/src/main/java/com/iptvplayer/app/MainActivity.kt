@@ -3138,8 +3138,25 @@ private fun PlayerHome(
             if (value?.poster != null && !value?.description.isNullOrBlank()) break
         }
     }
-    val episodeMetadata by produceState(emptyMap<Pair<Int, Int>, TmdbEpisodeDetails>(), detailMetadata, seasons, metadataClient) {
+    val episodeMetadata by produceState(
+        emptyMap<Pair<Int, Int>, TmdbEpisodeDetails>(), detailMetadata, seasons, metadataClient,
+        details, traktSession?.username
+    ) {
         value = emptyMap()
+        val seriesTitle = details?.takeIf { it.first == PortalSection.SERIES }?.second
+            ?: return@produceState
+        if (traktSession != null) {
+            val summaries = try {
+                withTraktSession { api, session ->
+                    api.episodeDescriptions(seriesTitle, session.accessToken)
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                emptyMap()
+            }
+            value = summaries.mapValues { (_, description) -> TmdbEpisodeDetails(description, null) }
+        }
         val client = metadataClient ?: return@produceState
         val series = detailMetadata?.takeIf { details?.first == PortalSection.SERIES } ?: return@produceState
         // Fetch TMDB stills and localized overviews even when the portal supplied
@@ -3159,7 +3176,9 @@ private fun PlayerHome(
                     }
                 }.flatMap { it.await().entries }
             }
-            value = value + loaded.map { it.key to it.value }
+            value = value + loaded.map { (key, episode) ->
+                key to episode.copy(description = germanDescription(episode.description) ?: value[key]?.description)
+            }
         }
     }
 

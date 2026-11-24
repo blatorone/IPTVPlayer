@@ -160,7 +160,10 @@ private fun comparisonName(description: ChannelDescription): String? =
         ?.let { "station:${description.country}:$it" }
 
 internal fun buildLiveChannelGroups(
-    sources: List<SavedPortal>, combine: Boolean, mergeWithinSource: Boolean = true
+    sources: List<SavedPortal>,
+    combine: Boolean,
+    mergeWithinSource: Boolean = true,
+    countries: Set<String> = emptySet()
 ): List<LiveChannelGroup> {
     val variants = sources.flatMap { source ->
         val channels = if (!combine && !mergeWithinSource) source.channels
@@ -170,7 +173,11 @@ internal fun buildLiveChannelGroups(
             LiveStreamVariant(SourceItem(source, channel), describeChannel(channel, category))
         }
     }
-    if (!combine && !mergeWithinSource) return variants.map { LiveChannelGroup(listOf(it)) }
+    if (!combine && !mergeWithinSource) return variants
+        .asSequence()
+        .filter { countries.isEmpty() || it.description.country in countries }
+        .map { LiveChannelGroup(listOf(it)) }
+        .toList()
     val known = variants.filter { it.description.country != UNKNOWN_COUNTRY }
         .groupBy({ it.description.normalizedName }, { it.description.country })
         .mapValues { (_, countries) -> countries.distinct().singleOrNull() }
@@ -179,7 +186,10 @@ internal fun buildLiveChannelGroups(
         val inferred = if (description.country == UNKNOWN_COUNTRY) known[description.normalizedName] else null
         if (inferred == null) item else item.copy(description = description.copy(country = inferred))
     }
-    val parent = IntArray(normalized.size) { it }
+    val selected = if (countries.isEmpty()) normalized else
+        normalized.filter { it.description.country in countries }
+    if (selected.isEmpty()) return emptyList()
+    val parent = IntArray(selected.size) { it }
     fun root(index: Int): Int {
         var next = index
         while (parent[next] != next) {
@@ -189,7 +199,7 @@ internal fun buildLiveChannelGroups(
         return next
     }
     val knownKeys = mutableMapOf<String, Int>()
-    normalized.forEachIndexed { index, item ->
+    selected.forEachIndexed { index, item ->
         val description = item.description
         val name = comparisonName(description)
         val epg = channelIdentity(item.item.value)?.let {
@@ -204,7 +214,7 @@ internal fun buildLiveChannelGroups(
             parent[maxOf(priorRoot, itemRoot)] = minOf(priorRoot, itemRoot)
         }
     }
-    val groups = normalized.indices.groupBy({ root(it) }, { normalized[it] })
+    val groups = selected.indices.groupBy({ root(it) }, { selected[it] })
     return groups.values.map { entries ->
         LiveChannelGroup(entries.distinctBy { it.item.source.identity to it.item.value.command })
     }

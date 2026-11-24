@@ -1411,14 +1411,14 @@ private fun PlayerHome(
     }
     var liveGroupsLoading by remember { mutableStateOf(false) }
     var liveGroupsReady by remember { mutableStateOf(false) }
-    LaunchedEffect(sourcesForBrowsing, combine, mergePortalChannels) {
+    LaunchedEffect(sourcesForBrowsing, combine, mergePortalChannels, countries) {
         // Large portals can contain thousands of channels. Grouping and normalizing
         // them on Compose's main dispatcher made cold start and remote navigation
         // feel frozen even though the source data had already been restored locally.
         liveGroupsLoading = true
         try {
             val groups = withContext(Dispatchers.Default) {
-                buildLiveChannelGroups(sourcesForBrowsing, combine, mergePortalChannels)
+                buildLiveChannelGroups(sourcesForBrowsing, combine, mergePortalChannels, countries)
             }
             val originals = groups.map { it.variants.first().item.value }.toSet()
             displayChannels.keys.retainAll(originals)
@@ -1554,8 +1554,15 @@ private fun PlayerHome(
             else entries.first().value
         }
 
-    val knownCountries = remember(liveGroups, vodGroups) {
-        (liveGroups.values.map { it.description.country } +
+    val knownLiveCountries = remember(sourcesForBrowsing) {
+        sourcesForBrowsing.flatMap { source ->
+            source.channels.map { channel ->
+                categoryCountry(channel.name, channel.genreName ?: source.genres[channel.genreId])
+            }
+        }.toSet()
+    }
+    val knownCountries = remember(knownLiveCountries, vodGroups) {
+        (knownLiveCountries +
             vodGroups.values.flatMap { groups ->
                 groups.filterKeys { id ->
                     VodCategory.entries.none { it.id == id && it in listOf(VodCategory.ALL, VodCategory.THIS_YEAR) }
@@ -2971,6 +2978,24 @@ private fun PlayerHome(
         } else showTitle(PortalSection.MOVIES, title)
     }
 
+    fun portalRefreshKey(identity: String) = "portal_full_refresh_at_$identity"
+
+    fun markPortalFullRefresh(identity: String) {
+        preferences?.edit()?.putLong(portalRefreshKey(identity), System.currentTimeMillis())?.apply()
+    }
+
+    fun portalFullRefreshDue(source: SavedPortal): Boolean {
+        val key = portalRefreshKey(source.identity)
+        var lastRefresh = preferences?.getLong(key, 0L) ?: 0L
+        if (lastRefresh == 0L && (source.channels.isNotEmpty() || source.catalogs.isNotEmpty())) {
+            // Existing installs did not persist a refresh timestamp. Treat their saved
+            // catalogue as a fresh snapshot once so upgrading does not trigger a cold scan.
+            markPortalFullRefresh(source.identity)
+            lastRefresh = System.currentTimeMillis()
+        }
+        return lastRefresh == 0L || System.currentTimeMillis() - lastRefresh >= 6 * 60 * 60 * 1_000L
+    }
+
     suspend fun refreshPortal(enteredAddress: String, enteredMac: String, activate: Boolean): Boolean {
         AppDiagnostics.record(context, "portal_refresh_started")
         sourceError = null
@@ -3142,7 +3167,9 @@ private fun PlayerHome(
                     updatePortalStatus(sourceIdentity, reachable = true)
                 }
                 AppDiagnostics.record(context, "portal_refresh_unchanged")
-                return importStatuses.values.all { it is ImportStatus.Count || it is ImportStatus.Loaded }
+                val complete = importStatuses.values.all { it is ImportStatus.Count || it is ImportStatus.Loaded }
+                if (complete) markPortalFullRefresh(sourceIdentity)
+                return complete
             }
             if (activate || sameSource) {
                 if (!sameSource) {
@@ -3171,8 +3198,10 @@ private fun PlayerHome(
             }
             save(snapshot, activate)
             AppDiagnostics.record(context, "portal_refresh_completed")
-            return importStatuses.values.all { it is ImportStatus.Count || it is ImportStatus.Loaded } &&
+            val complete = importStatuses.values.all { it is ImportStatus.Count || it is ImportStatus.Loaded } &&
                 storageError == null
+            if (complete) markPortalFullRefresh(sourceIdentity)
+            return complete
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
@@ -3269,11 +3298,25 @@ private fun PlayerHome(
         startupPortalRefreshStarted = true
         val sources = savedSources.filter { it.enabled || it.autoDisabled }
         val unavailable = mutableListOf<String>()
+        var fullRefreshPerformed = false
         try {
             for ((index, source) in sources.withIndex()) {
                 if (refreshPortalsAtStartup) {
-                    startupPortalRefresh = (index + 1) to sources.size
-                    refreshPortal(source.address, source.mac, activate = false)
+                    if (portalFullRefreshDue(source)) {
+                        fullRefreshPerformed = true
+                        startupPortalRefresh = (index + 1) to sources.size
+                        refreshPortal(source.address, source.mac, activate = false)
+                    } else {
+                        startupPortalCheck = (index + 1) to sources.size
+                        try {
+                            sessionFor(source).openSession()
+                            updatePortalStatus(source.identity, reachable = true)
+                        } catch (error: CancellationException) {
+                            throw error
+                        } catch (_: Exception) {
+                            updatePortalStatus(source.identity, reachable = false)
+                        }
+                    }
                 } else {
                     startupPortalCheck = (index + 1) to sources.size
                     try {
@@ -3289,12 +3332,14 @@ private fun PlayerHome(
                     unavailable += runCatching { java.net.URI(source.address).host }.getOrNull().orEmpty()
                         .ifBlank { "Portal" }
                 }
+                startupPortalRefresh = null
+                startupPortalCheck = null
             }
             if (sources.isNotEmpty()) {
                 val reachableCount = sources.count { source ->
                     savedSources.firstOrNull { it.identity == source.identity }?.reachable == true
                 }
-                if (refreshPortalsAtStartup) {
+                if (fullRefreshPerformed) {
                     portalRefreshNotice = if (unavailable.isEmpty()) {
                         context.getString(R.string.portals_refresh_success, reachableCount)
                     } else context.getString(R.string.portals_refresh_with_unavailable, reachableCount, unavailable.joinToString(", "))

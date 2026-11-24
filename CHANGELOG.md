@@ -1,5 +1,11 @@
 # Änderungen
 
+## 1.0.53
+
+- Automatische vollständige Portalabgleiche beim Start werden pro Quelle auf höchstens einen Abruf in sechs Stunden begrenzt. Dazwischen bleibt der Katalogcache direkt nutzbar und es wird nur der Portalzugang geprüft; eine manuelle Aktualisierung bleibt sofort möglich.
+- Die Live-TV-Gruppierung verarbeitet nach der Ländererkennung nur die ausgewählten Länder. Verfügbare Länder werden weiterhin aus dem vollständigen lokalen Quellbestand ermittelt.
+- Die Quellen- und Architekturhinweise erklären, dass Stalker-Portale Länder üblicherweise nicht als Serverfilter unterstützen; der Länderfilter spart daher lokale Gruppierungsarbeit, nicht den Download einer vollständigen Senderantwort.
+
 ## 1.0.52
 
 - Media3-Steuerleiste verknüpft Zeitstrahl, Untertitel- und Einstellungsaktionen mit expliziten D-Pad-Fokuswegen. Der Untertitelknopf öffnet die verfügbare Spurauswahl einschließlich „Aus“.

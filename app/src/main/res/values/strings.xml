@@ -332,7 +332,7 @@
     <string name="epg_add_source">Quelle hinzufügen</string>
     <string name="epg_remove_source">Entfernen</string>
     <string name="epg_refresh_at_start">Beim App-Start aktualisieren</string>
-    <string name="portal_refresh_at_start">Portalkataloge beim App-Start im Hintergrund aktualisieren</string>
+    <string name="portal_refresh_at_start">Portalkataloge beim Start prüfen (vollständig höchstens alle 6 Stunden)</string>
     <string name="epg_refresh_off">Automatische Aktualisierung aus</string>
     <string name="epg_refresh_hours">Automatisch alle %1$d Std.</string>
     <string name="epg_schedule_hours">Programm für %1$d Std. im Voraus</string>

@@ -196,8 +196,10 @@ internal class TraktApi(private val clientId: String) {
         val show = findShow(title, accessToken) ?: return emptyMap()
         val traktId = show.optJSONObject("ids")?.optLong("trakt", 0)?.takeIf { it > 0 }
             ?: return emptyMap()
-        val seasons = request("/shows/$traktId/seasons?extended=episodes", "GET", token = accessToken)
-            .body.arrayObjects()
+        // Trakt returns English summaries; translated ones are only included on request.
+        val seasons = request(
+            "/shows/$traktId/seasons?extended=episodes&translations=${descriptionLanguage()}", "GET", token = accessToken
+        ).body.arrayObjects()
         return buildMap {
             for (season in seasons) {
                 val seasonNumber = season.optInt("number", -1).takeIf { it >= 0 } ?: continue
@@ -205,11 +207,27 @@ internal class TraktApi(private val clientId: String) {
                 for (index in 0 until episodes.length()) {
                     val episode = episodes.optJSONObject(index) ?: continue
                     val number = episode.optInt("number", -1).takeIf { it > 0 } ?: continue
-                    val overview = germanDescription(episode.optString("overview")) ?: continue
+                    val overview = translatedOverview(episode.optJSONArray("translations"))
+                        ?: germanDescription(episode.optString("overview")) ?: continue
                     put(seasonNumber to number, overview)
                 }
             }
         }
+    }
+
+    private fun descriptionLanguage(): String =
+        java.util.Locale.getDefault().language.takeIf { it.matches(Regex("[a-z]{2}")) } ?: "de"
+
+    /** Picks the translated overview for the device language, preferring that language's home country. */
+    private fun translatedOverview(translations: JSONArray?): String? {
+        val language = descriptionLanguage()
+        val candidates = translations?.let { array -> List(array.length()) { array.optJSONObject(it) } }
+            .orEmpty().filterNotNull().filter { it.optString("language") == language }
+        return candidates.sortedByDescending { it.optString("country").equals(language, ignoreCase = true) }
+            .firstNotNullOfOrNull { candidate ->
+                candidate.optString("overview").trim().takeIf { it.isNotEmpty() && it != "null" }
+                    ?.let(::germanDescription)
+            }
     }
 
     suspend fun lookupTitleMetadata(
@@ -236,10 +254,25 @@ internal class TraktApi(private val clientId: String) {
             (externalId != null || name == expected) &&
                 (title.year == null || year == null || kotlin.math.abs(title.year - year) <= 1)
         }.distinctBy { it.optJSONObject("ids")?.optLong("trakt", 0) }.singleOrNull() ?: return null
+        val original = match.optString("overview").takeIf(String::isNotBlank)
+        // Search results carry the English summary; the translation is a separate request.
+        val translated = if (descriptionLanguage() == "en") null else {
+            match.optJSONObject("ids")?.optLong("trakt", 0)?.takeIf { it > 0 }?.let { traktId ->
+                try {
+                    translatedOverview(runCatching {
+                        JSONArray(request("/${kind}s/$traktId/translations/${descriptionLanguage()}", "GET", token = accessToken).body)
+                    }.getOrNull())
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Exception) {
+                    null
+                }
+            }
+        }
         return TraktTitleMetadata(
             match.optString("title").takeIf(String::isNotBlank) ?: title.name,
             match.optInt("year", 0).takeIf { it > 0 },
-            match.optString("overview").takeIf(String::isNotBlank),
+            translated ?: original,
             match.optDouble("rating").takeIf { it.isFinite() && it > 0 }
         )
     }

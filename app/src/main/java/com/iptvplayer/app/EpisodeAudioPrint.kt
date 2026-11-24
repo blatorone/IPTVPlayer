@@ -455,11 +455,11 @@ internal fun findRepeatedAudioOpening(current: List<AudioPrint>, previous: List<
                 }
                 SecondState.MISMATCH -> if (first != null) {
                     mismatches++
-                    if (++trailing >= 3) close(completed = true)
+                    if (++trailing >= OPENING_END_SECONDS) close(completed = true)
                 }
             }
         }
-        close(completed = trailing >= 2)
+        close(completed = trailing >= OPENING_END_SECONDS)
     }
     return best
 }
@@ -481,3 +481,6 @@ internal fun confirmKnownAudioOpening(
     }
     return null
 }
+
+/** Consecutive differing seconds after which shared theme music is considered over. */
+internal const val OPENING_END_SECONDS = 4

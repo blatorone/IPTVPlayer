@@ -4,7 +4,12 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -102,14 +107,26 @@ internal fun Modifier.guideNavigationInput(
 internal fun Modifier.onHorizontalRemote(
     allowRight: Boolean = true,
     onDirection: (right: Boolean) -> Unit
-): Modifier =
+): Modifier = composed {
+    // Only a press that started on this element triggers it. When focus moves here on
+    // key down (for example Left from a neighbouring season button), the matching key
+    // up must not immediately run this element's action as well.
+    var pressed by remember { mutableStateOf<Key?>(null) }
+    val action by rememberUpdatedState(onDirection)
     onPreviewKeyEvent { event ->
         val right = event.key == Key.DirectionRight
         if (event.key != Key.DirectionLeft && !(right && allowRight)) false else {
-            if (event.type == KeyEventType.KeyUp) onDirection(right)
+            when (event.type) {
+                KeyEventType.KeyDown -> pressed = event.key
+                KeyEventType.KeyUp -> {
+                    if (pressed == event.key) action(right)
+                    pressed = null
+                }
+            }
             true
         }
     }
+}
 
 internal fun guideChannelCategory(
     selected: String?,

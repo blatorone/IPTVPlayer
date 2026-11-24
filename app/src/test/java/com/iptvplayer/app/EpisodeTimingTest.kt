@@ -41,11 +41,40 @@ class EpisodeTimingTest {
             if (index == 7) null else EpisodeFrame(3_400L + index * 1_000, difference xor 0x3L, false, average)
         }
         val lead = randomFrames(random, listOf(400L, 1_400L, 2_400L))
-        val tail = randomFrames(random, (23_400L until 28_400L step 1_000L).toList())
+        val tail = randomFrames(random, (23_400L until 31_400L step 1_000L).toList())
         assertEquals(3_400L until 22_900L,
             findRepeatedOpening(lead + currentIntro + tail, previous, HLS_INTRO_FRAME_INTERVAL_MS))
         // Without differing footage after the match its end is still unknown.
         assertNull(findRepeatedOpening(lead + currentIntro, previous, HLS_INTRO_FRAME_INTERVAL_MS))
+    }
+
+    @Test
+    fun fastCutsInsideAnOpeningDoNotEndItEarly() {
+        val random = java.util.Random(17)
+        val shared = List(60) { random.nextLong() to random.nextLong() }
+        val previous = randomFrames(random, (0L until 10_000L step 1_000L).toList()) +
+            shared.mapIndexed { index, (difference, average) ->
+                EpisodeFrame(10_000L + index * 1_000, difference, false, average)
+            } +
+            randomFrames(random, (70_000L until 90_000L step 1_000L).toList())
+        // Three samples in the middle land on different frames of a rapid cut sequence.
+        val opening = shared.mapIndexed { index, (difference, average) ->
+            if (index in 20..22) EpisodeFrame(5_000L + index * 1_000, random.nextLong(), false, random.nextLong())
+            else EpisodeFrame(5_000L + index * 1_000, difference, false, average)
+        }
+        val episodeStart = randomFrames(random, (0L until 5_000L step 1_000L).toList())
+        val episodeAfter = randomFrames(random, (65_000L until 80_000L step 1_000L).toList())
+        // While only the first part has been played, nothing is reported yet.
+        assertNull(findRepeatedOpening(episodeStart + opening.take(24), previous, HLS_INTRO_FRAME_INTERVAL_MS))
+        assertEquals(5_000L until 64_500L,
+            findRepeatedOpening(episodeStart + opening + episodeAfter, previous, HLS_INTRO_FRAME_INTERVAL_MS))
+    }
+
+    @Test
+    fun combinesImageAndAudioOpenings() {
+        assertEquals(5_000L..95_000L, mergeOpeningRanges(5_000L..40_000L, 6_000L..95_000L))
+        assertEquals(6_000L..95_000L, mergeOpeningRanges(null, 6_000L..95_000L))
+        assertEquals(1_000L..90_000L, mergeOpeningRanges(200_000L..215_000L, 1_000L..90_000L))
     }
 
     @Test

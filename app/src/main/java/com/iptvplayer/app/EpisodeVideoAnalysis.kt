@@ -376,11 +376,25 @@ internal fun findRepeatedOpening(
                 if (firstMismatchAfter == null) firstMismatchAfter = frame
                 mismatches++
                 trailingMismatches++
-                if (trailingMismatches >= 3) close(completed = true)
+                if (trailingMismatches >= OPENING_END_MISMATCHES) close(completed = true)
             }
         }
-        // Two differing frames after the run are enough to know where it ended.
-        close(completed = trailingMismatches >= 2)
+        // The end is only certain after several differing frames; fast cuts inside an opening
+        // briefly differ and must not end it early.
+        close(completed = trailingMismatches >= OPENING_END_MISMATCHES)
     }
     return best
+}
+
+/** Consecutive differing 1 s samples after which a repeated opening is considered over. */
+internal const val OPENING_END_MISMATCHES = 6
+
+/** Combines the image and audio results; overlapping ranges describe the same opening. */
+internal fun mergeOpeningRanges(video: LongRange?, audio: LongRange?): LongRange? = when {
+    video == null -> audio
+    audio == null -> video
+    video.first <= audio.last && audio.first <= video.last ->
+        minOf(video.first, audio.first)..maxOf(video.last, audio.last)
+    audio.last - audio.first > video.last - video.first -> audio
+    else -> video
 }

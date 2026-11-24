@@ -1,5 +1,12 @@
 # Änderungen
 
+## 1.0.73
+
+- Die Intro-Erkennung beendet ein Intro erst nach mehreren abweichenden Sekunden, damit schnelle Schnitte es nicht vorzeitig abschließen. Bild- und Tonergebnisse werden zusammengeführt. Ein zu kurz gelerntes Intro wird beim nächsten Folgenvergleich automatisch verlängert.
+- Bei zusammengeführten Portalen gilt die Länderauswahl jetzt auch für Film- und Seriengenres sowie für die Fassungen eines Titels. Fassungen aus Kategorien anderer Länder, etwa mit englischem Ton oder niederländischen Untertiteln, werden nicht mehr gewählt.
+- In den Seriendetails ist Staffel 1 wieder mit Links erreichbar, ohne dass sich die Detailansicht schließt. Dasselbe gilt für die erste Aktion der Detailansicht und die Programmzeitleiste.
+- Serien-, Film- und Folgenbeschreibungen verwenden bei verbundenem Trakt-Konto die deutsche Trakt-Übersetzung.
+
 ## 1.0.72
 
 - Die Intro-Erkennung vergleicht zusätzlich die Titelmusik. Ein Audio-Fingerabdruck erkennt das Intro auch bei wechselnden Bildern, eingeblendetem Text oder fehlender Bildaufnahme.

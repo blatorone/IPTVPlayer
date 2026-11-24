@@ -1595,6 +1595,12 @@ private fun PlayerHome(
             listOf(PortalSection.MOVIES, PortalSection.SERIES).associateWith { section ->
             val entries = sourcesForBrowsing.flatMap { source ->
                 source.catalogs[section]?.availableGroups(fallbackGroup).orEmpty().map { SourceItem(source, it) }
+            }.filter { item ->
+                // The country selection applies to films and series as well. Merged genres
+                // must not take in provider categories marked for other countries
+                // (for example "NL | Serien"); unmarked categories stay available.
+                !combine || countries.isEmpty() ||
+                    categoryCountry(item.value.name, item.value.country).let { it == UNKNOWN_COUNTRY || it in countries }
             }
             if (combine) {
                 val groups = entries.groupBy { vodCategory(it.value).id }.toMutableMap()
@@ -2713,18 +2719,38 @@ private fun PlayerHome(
         scope.launch { save(source) }
     }
 
+    fun vodVariantCountry(section: PortalSection, item: SourceItem<PortalTitle>): String {
+        val group = item.value.categoryId?.let { id ->
+            item.source.catalogs[section]?.groups?.firstOrNull { it.id == id }
+        }
+        return categoryCountry(group?.name ?: item.value.categoryName.orEmpty(), group?.country)
+    }
+
+    /**
+     * Drops variants from provider categories of countries outside the selection (for
+     * example an English or Dutch series version) and orders the rest by country priority.
+     */
+    fun countryVariants(section: PortalSection, variants: List<SourceItem<PortalTitle>>): List<SourceItem<PortalTitle>> {
+        if (!combine || countries.isEmpty()) return variants
+        return variants.map { it to vodVariantCountry(section, it) }
+            .filter { (_, country) -> country == UNKNOWN_COUNTRY || country in countries }
+            .sortedBy { (_, country) -> countries.indexOf(country).takeIf { it >= 0 } ?: countries.size }
+            .map { it.first }
+    }
+
     fun titleEntries(section: PortalSection, title: PortalTitle): List<SourceItem<PortalTitle>> {
         val known = searchedVariants[title] ?: groupVariants[title]
-        if (known != null) return known
+        if (known != null) return countryVariants(section, known).ifEmpty { known.take(1) }
         val source = storedSource ?: return emptyList()
         if (!combine) return listOf(SourceItem(source, title))
-        return listOf(SourceItem(source, title)) + sourcesForBrowsing
+        val entries = listOf(SourceItem(source, title)) + sourcesForBrowsing
             .filter { it.identity != source.identity }.mapNotNull { other ->
                 equivalentCatalogueTitle(
                     title, other.catalogs[section]?.titles.orEmpty(), requireVerifiedIdentity = section == PortalSection.SERIES
                 )
                     ?.let { SourceItem(other, it) }
             }
+        return countryVariants(section, entries).ifEmpty { entries.take(1) }
     }
 
     suspend fun findEquivalent(
@@ -2940,7 +2966,10 @@ private fun PlayerHome(
                     ?.let { SourceItem(source, it) }
             }
         } else emptyList()
-        val variants = (linkedVariants + discoveredVariants).distinctBy { "${it.source.identity}:${it.value.id}" }
+        val allVariants = (linkedVariants + discoveredVariants).distinctBy { "${it.source.identity}:${it.value.id}" }
+        // Prefer versions from the selected countries; a history entry may also link to
+        // a foreign-language category of the same portal.
+        val variants = countryVariants(PortalSection.SERIES, allVariants).ifEmpty { allVariants }
         val primary = variants.firstOrNull {
             equivalentCatalogueTitle(reference, listOf(it.value), requireVerifiedIdentity = true) != null
         } ?: variants.firstOrNull() ?: run {
@@ -3219,7 +3248,8 @@ private fun PlayerHome(
                     ?.let { SourceItem(source, it) }
             }
         } else emptyList()
-        val variants = (linkedVariants + discoveredVariants).distinctBy { "${it.source.identity}:${it.value.id}" }
+        val allVariants = (linkedVariants + discoveredVariants).distinctBy { "${it.source.identity}:${it.value.id}" }
+        val variants = countryVariants(PortalSection.MOVIES, allVariants).ifEmpty { allVariants }
         val title = variants.firstOrNull()?.value ?: run {
             traktPlaybackNotice = context.getString(R.string.trakt_source_missing)
             return
@@ -4327,32 +4357,45 @@ private fun PlayerHome(
             updates.collect { analysis ->
                 if (active.currentMediaItem != item) return@collect
                 if (seriesKey != null && (analysis.opening.isNotEmpty() || analysis.audio.isNotEmpty())) {
-                    if (timing.introEndMs == null) {
-                        // A learned opening is confirmed early so the skip is offered while it runs;
-                        // a first comparison with another episode is only certain after its end.
-                        val (intro, fromComparison) = withContext(Dispatchers.Default) {
-                            val known = learned?.let { confirmKnownOpening(analysis.opening, it.frames, it.range, stepMs) }
+                    // A learned opening is confirmed early so the skip is offered while it runs.
+                    // The comparison with another episode keeps running until the scan ends: an
+                    // opening with fast cuts can first look shorter than it is, so every longer
+                    // overlapping result extends the range and corrects the learned opening.
+                    val currentIntro = timing.introStartMs?.let { start -> timing.introEndMs?.let { start until it } }
+                    val (known, compared) = withContext(Dispatchers.Default) {
+                        val known = if (currentIntro != null) null else
+                            learned?.let { confirmKnownOpening(analysis.opening, it.frames, it.range, stepMs) }
                                 ?: learnedAudio?.let { (range, prints) -> confirmKnownAudioOpening(analysis.audio, prints, range) }
-                            if (known != null) known to false
-                            else (previous?.let { findRepeatedOpening(analysis.opening, it.second, stepMs) }
-                                ?: previousAudio?.let { findRepeatedAudioOpening(analysis.audio, it.second) }) to true
+                        known to mergeOpeningRanges(
+                            previous?.let { findRepeatedOpening(analysis.opening, it.second, stepMs) },
+                            previousAudio?.let { findRepeatedAudioOpening(analysis.audio, it.second) }
+                        )
+                    }
+                    if (active.currentMediaItem != item) return@collect
+                    val base = currentIntro ?: known
+                    val extended = compared?.let { found ->
+                        when {
+                            base == null -> found
+                            found.first <= base.last && base.first <= found.last && found.last > base.last ->
+                                minOf(base.first, found.first)..found.last
+                            else -> null
                         }
-                        if (active.currentMediaItem != item) return@collect
-                        if (intro != null) {
-                            timing = timing.copy(introStartMs = intro.first, introEndMs = intro.last + 1)
-                            if (fromComparison && store != null) {
-                                val frames = analysis.opening.filter { it.timeMs in intro }
-                                val prints = analysis.audio.filter { it.timeMs in intro.first..minOf(intro.last, intro.first + 30_000L) }
-                                withContext(Dispatchers.IO) {
-                                    if (frames.size >= 4) store.write(
-                                        seriesKey, IntroFingerprintStore.VIDEO_LEARNED,
-                                        LearnedOpening(intro, frames).encode().encodeToByteArray()
-                                    )
-                                    if (prints.count(AudioPrint::loud) >= 40) store.write(
-                                        seriesKey, IntroFingerprintStore.AUDIO_LEARNED, encodeLearnedAudio(intro, prints)
-                                    )
-                                }
-                            }
+                    }
+                    val intro = extended ?: base
+                    if (intro != null && intro != currentIntro) {
+                        timing = timing.copy(introStartMs = intro.first, introEndMs = intro.last + 1)
+                    }
+                    if (extended != null && store != null) {
+                        val frames = analysis.opening.filter { it.timeMs in extended }
+                        val prints = analysis.audio.filter { it.timeMs in extended.first..minOf(extended.last, extended.first + 30_000L) }
+                        withContext(Dispatchers.IO) {
+                            if (frames.size >= 4) store.write(
+                                seriesKey, IntroFingerprintStore.VIDEO_LEARNED,
+                                LearnedOpening(extended, frames).encode().encodeToByteArray()
+                            )
+                            if (prints.count(AudioPrint::loud) >= 40) store.write(
+                                seriesKey, IntroFingerprintStore.AUDIO_LEARNED, encodeLearnedAudio(extended, prints)
+                            )
                         }
                     }
                     // Keep this episode as reference for the next one, but do not replace a

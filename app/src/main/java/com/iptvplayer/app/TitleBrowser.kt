@@ -359,6 +359,8 @@ internal fun TitleDetails(
     compact: Boolean,
     onBack: () -> Unit,
     onPlay: () -> Unit,
+    watchProgress: EpisodeCardProgress?,
+    onWatchStatus: (() -> Unit)?,
     onFavorite: () -> Unit,
     onWatch: () -> Unit
 ) {
@@ -412,7 +414,9 @@ internal fun TitleDetails(
                 val favoriteModifier = if (section == PortalSection.SERIES && primaryAction == null) leftEdge else Modifier
                 MenuButton(stringResource(R.string.favorites), favoriteModifier, selected = favorite, onClick = onFavorite)
                 MenuButton(stringResource(R.string.watchlist), Modifier, selected = saved, onClick = onWatch)
+                onWatchStatus?.let { MenuButton(stringResource(R.string.watched_status), Modifier, onClick = it) }
             }
+            watchProgress?.let { WatchProgress(it) }
             Text(
                 germanDescription(title.description) ?: stringResource(R.string.no_german_description),
                 style = if (compact) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium,
@@ -426,6 +430,21 @@ internal fun TitleDetails(
 internal data class EpisodeCardProgress(val completed: Boolean, val position: Long, val duration: Long)
 
 @Composable
+private fun WatchProgress(progress: EpisodeCardProgress) {
+    Text(stringResource(when {
+        progress.completed -> R.string.episode_watched
+        progress.position > 0 -> R.string.episode_in_progress
+        else -> R.string.episode_unwatched
+    }), style = MaterialTheme.typography.labelSmall)
+    if (progress.completed || progress.duration > 0) {
+        LinearProgressIndicator(
+            progress = { if (progress.completed) 1f else (progress.position.toFloat() / progress.duration).coerceIn(0f, 1f) },
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
+}
+
+@Composable
 internal fun SeriesSeasons(
     modifier: Modifier,
     scroll: LazyListState,
@@ -435,6 +454,8 @@ internal fun SeriesSeasons(
     failed: Boolean,
     unseen: Set<String>,
     onSeason: (PortalSeason) -> Unit,
+    onSeasonWatchStatus: (PortalSeason) -> Unit,
+    onEpisodeWatchStatus: (PortalSeason, PortalTitle) -> Unit,
     episodeProgress: (PortalSeason, PortalTitle) -> EpisodeCardProgress,
     metadata: Map<Pair<Int, Int>, TmdbEpisodeDetails>,
     onEpisode: (PortalSeason, PortalTitle) -> Unit,
@@ -468,7 +489,14 @@ internal fun SeriesSeasons(
             }
         }
         for (season in selected?.let(::listOf) ?: seasons.orEmpty()) {
-            item { Text(seasonLabel(season, series), style = MaterialTheme.typography.titleMedium) }
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(seasonLabel(season, series), style = MaterialTheme.typography.titleMedium)
+                    if (season.episodes.isNotEmpty()) {
+                        MenuButton(stringResource(R.string.season_watched_status), Modifier) { onSeasonWatchStatus(season) }
+                    }
+                }
+            }
             items(season.episodes) { episode ->
                 val label = episode.episode?.let { number ->
                     if (episode.name == season.title.name || episode.name == series.name) {
@@ -492,24 +520,16 @@ internal fun SeriesSeasons(
                         val entry = if (seriesEpisodeKey(season, episode) in unseen) {
                             stringResource(R.string.new_episode_entry, label)
                         } else label
-                        MenuButton(entry, leftEdge.fillMaxWidth()) { onEpisode(season, episode) }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            MenuButton(entry, leftEdge.weight(1f)) { onEpisode(season, episode) }
+                            MenuButton(stringResource(R.string.watched_status), Modifier) { onEpisodeWatchStatus(season, episode) }
+                        }
                         val description = germanDescription(episode.description) ?: details?.description
                         Text(
                             description ?: stringResource(R.string.no_german_episode_description),
                             style = MaterialTheme.typography.bodySmall, maxLines = 3, overflow = TextOverflow.Ellipsis
                         )
-                        Text(stringResource(when {
-                            progress.completed -> R.string.episode_watched
-                            progress.position > 0 -> R.string.episode_in_progress
-                            else -> R.string.episode_unwatched
-                        }), style = MaterialTheme.typography.labelSmall)
-                        if (progress.completed || progress.duration > 0) {
-                            LinearProgressIndicator(
-                                progress = {
-                                    if (progress.completed) 1f else (progress.position.toFloat() / progress.duration).coerceIn(0f, 1f)
-                                }, modifier = Modifier.fillMaxWidth()
-                            )
-                        }
+                        WatchProgress(progress)
                     }
                 }
             }

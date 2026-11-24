@@ -342,6 +342,10 @@
     <string name="epg_refresh_failed">EPG-Aktualisierung oder Speicherung fehlgeschlagen.</string>
     <string name="no_movie_bookmarks">Keine Filme auf der Merkliste.</string>
     <string name="episode_watched">Gesehen</string>
+    <string name="watched_status">Gesehen-Status</string>
+    <string name="season_watched_status">Staffelstatus</string>
+    <string name="mark_watched">Als gesehen markieren</string>
+    <string name="mark_unwatched">Als ungesehen markieren</string>
     <string name="episode_in_progress">Angefangen</string>
     <string name="episode_unwatched">Ungesehen</string>
     <string name="no_german_description">Keine deutsche Beschreibung verfügbar.</string>

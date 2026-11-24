@@ -1230,7 +1230,7 @@ private fun PlayerHome(
                     val cachedRecords = trackedRecordsFor(media, media.asTitle())
                     val cachedSeries = mergeSeriesRecords(cachedRecords)
                     val entries = if (cachedSeries == null) {
-                        localMatches(media, searchPortalIfMissing = true)
+                        localMatches(media)
                     } else emptyList()
                     val title = entries.firstOrNull()?.value ?: cachedSeries?.let { record ->
                         PortalTitle(record.name, year = record.year, imdbId = record.imdb, tmdbId = record.tmdb)
@@ -1389,10 +1389,12 @@ private fun PlayerHome(
                 }
                 progressPreferences?.edit()?.also { editor ->
                     completedEpisodes.forEach { key ->
-                        editor.putBoolean("completed:$key", true).remove(key).remove("trakt_percent:$key")
+                        if (progressPreferences?.contains("manual_watched:$key") != true) {
+                            editor.putBoolean("completed:$key", true).remove(key).remove("trakt_percent:$key")
+                        }
                     }
                     importedProgress.forEach { (key, percent) ->
-                        if (key !in completedEpisodes) {
+                        if (key !in completedEpisodes && progressPreferences?.contains("manual_watched:$key") != true) {
                             editor.putFloat("trakt_percent:$key", percent).putLong(key, 1L)
                                 .remove("completed:$key")
                         }
@@ -1767,7 +1769,8 @@ private fun PlayerHome(
             watchedEpisodes = if (watchedEpisode == null) initial.watchedEpisodes
                 else initial.watchedEpisodes + watchedEpisode.episodeKey,
             watchedAt = if (watchedEpisode == null) initial.watchedAt else System.currentTimeMillis(),
-            lastEpisode = watchedEpisode ?: initial.lastEpisode
+            lastEpisode = watchedEpisode ?: initial.lastEpisode,
+            isComplete = if (watchedEpisode == null) initial.isComplete else false
         )
         val remaining = seriesActivity.filterNot { it.key == key }
         saveSeriesActivity(if (updated.saved || updated.viewed) remaining + updated else remaining)
@@ -2316,10 +2319,7 @@ private fun PlayerHome(
         ) return
         val position = activePlayer.currentPosition
         if (position >= 0 && (!onFailure || position > 0)) {
-            progressPreferences?.edit()?.putLong(key, position)
-                ?.putLong("progress_updated:$key", System.currentTimeMillis())?.apply {
-                if (activePlayer.duration > 0) putLong("duration:$key", activePlayer.duration)
-            }?.apply()
+            progressPreferences?.saveInterruptedPlayback(key, position, activePlayer.duration)
         }
     }
 
@@ -2774,6 +2774,82 @@ private fun PlayerHome(
         } else canonical ?: title.id ?: title.name
         return PlaybackSelection(
             if (canonical != null) "catalogue" else source, section, id, title.episode, seriesId
+        )
+    }
+
+    var watchStatusAction by remember { mutableStateOf<((Boolean) -> Unit)?>(null) }
+    fun isPlaybackCompleted(key: String, fallback: Boolean = false): Boolean {
+        val prefs = progressPreferences ?: return fallback
+        return prefs.isPlaybackCompleted(key, fallback)
+    }
+    fun setWatched(section: PortalSection, title: PortalTitle, episodes: List<Pair<PortalSeason, PortalTitle>>, watched: Boolean) {
+        val prefs = progressPreferences ?: return
+        val keys = if (section == PortalSection.MOVIES) {
+            setOf(titleSelection(section, title).progressKey) + movieHistory.filter { movie ->
+                movie.refs.any { ref -> titleEntries(section, title).any { it.source.identity == ref.sourceId && it.value.id == ref.portalTitleId } }
+            }.map { it.progressKey }
+        } else episodes.mapTo(linkedSetOf()) { (season, episode) -> titleSelection(section, episode, season).progressKey }
+        val previous = if (section == PortalSection.SERIES) trackedSeries(title) else null
+        val editor = prefs.edit()
+        (keys + listOfNotNull(previous?.lastEpisode?.progressKey?.takeIf {
+            episodes.any { (season, episode) -> seriesEpisodeKey(season, episode) == previous.lastEpisode?.episodeKey }
+        })).forEach { key ->
+            editor.putBoolean("manual_watched:$key", watched).putBoolean("completed:$key", watched)
+                .remove(key).remove("trakt_percent:$key").putLong("progress_updated:$key", System.currentTimeMillis())
+        }
+        editor.apply()
+        if (section == PortalSection.MOVIES) {
+            val remaining = movieHistory.filterNot { it.progressKey in keys }
+            val added = if (watched) listOf(WatchedMovie(
+                displayVodTitle(title), vodReleaseYear(title), title.imdbId, title.tmdbId,
+                titleEntries(section, title).mapNotNull { item -> item.value.id?.let { SeriesPortalRef(item.source.identity, it) } },
+                titleSelection(section, title).progressKey, System.currentTimeMillis()
+            )) else emptyList()
+            movieHistory = (added + remaining).take(10)
+            prefs.edit().putString("movie_history", encodeMovieHistory(movieHistory)).apply()
+        } else if (episodes.isNotEmpty()) {
+            val episodeKeys = episodes.mapTo(linkedSetOf()) { (season, episode) -> seriesEpisodeKey(season, episode) }
+            val last = episodes.last()
+            val lastResume = EpisodeResume(
+                seriesEpisodeKey(last.first, last.second), last.first.number, last.second.episode,
+                last.second.name, titleSelection(section, last.second, last.first).progressKey
+            )
+            if (watched && previous == null) updateTrackedSeries(title, watchedEpisode = lastResume)
+            val record = previous ?: trackedSeries(title)
+            if (record != null) {
+                val completed = if (watched) record.watchedEpisodes + episodeKeys else record.watchedEpisodes - episodeKeys
+                val allEpisodes = seasons.orEmpty().flatMap { season -> season.episodes.map { seriesEpisodeKey(season, it) } }.toSet()
+                val lastEpisode = if (watched) lastResume else record.lastEpisode?.takeUnless { it.episodeKey in episodeKeys }
+                saveSeriesActivity(seriesActivity.map {
+                    if (it.key != record.key) it else it.copy(
+                        viewed = watched || completed.isNotEmpty() || lastEpisode != null,
+                        localViewed = watched || it.localViewed && (completed.isNotEmpty() || lastEpisode != null),
+                        hiddenFromHistory = it.hiddenFromHistory && !watched,
+                        watchedEpisodes = completed,
+                        unseen = it.unseen - completed,
+                        watchedAt = if (watched) System.currentTimeMillis() else it.watchedAt,
+                        lastEpisode = lastEpisode,
+                        isComplete = allEpisodes.isNotEmpty() && allEpisodes.all { it in completed }
+                    )
+                })
+            }
+        }
+    }
+
+    watchStatusAction?.let { update ->
+        AlertDialog(
+            onDismissRequest = { watchStatusAction = null },
+            title = { Text(stringResource(R.string.watched_status)) },
+            confirmButton = {
+                MaterialTextButton(onClick = { update(true); watchStatusAction = null }) {
+                    Text(stringResource(R.string.mark_watched))
+                }
+            },
+            dismissButton = {
+                MaterialTextButton(onClick = { update(false); watchStatusAction = null }) {
+                    Text(stringResource(R.string.mark_unwatched))
+                }
+            }
         )
     }
 
@@ -5929,11 +6005,12 @@ private fun PlayerHome(
                             val trackedEntry = if (section == PortalSection.SERIES) {
                                 trackedSeries(title) ?: seriesActivity.firstOrNull { entry -> entry.refs.any { it in refs } }
                             } else null
+                            val trackedResume = trackedEntry?.let(::resumeFor)
                             val seriesResume = if (section == PortalSection.SERIES && trackedEntry?.isComplete != true) {
-                                val savedResume = trackedEntry?.let(::resumeFor)
+                                val savedResume = trackedResume
                                 val savedEpisode = savedResume?.let { resumeEpisode(seasons.orEmpty(), it) }
                                 if (savedResume == null || savedEpisode == null) null
-                                else if (progressPreferences?.getBoolean("completed:${savedResume.progressKey}", false) != true) {
+                                else if (!isPlaybackCompleted(savedResume.progressKey, savedResume.episodeKey in trackedEntry?.watchedEpisodes.orEmpty())) {
                                     // An interrupted local/Trakt playback resumes at its exact episode,
                                     // including a start at position zero.
                                     savedResume
@@ -5942,8 +6019,7 @@ private fun PlayerHome(
                                     // Continue with the next episode that is not already completed.
                                     nextEpisodeAfter(seasons.orEmpty(), savedResume) { season, episode ->
                                         val key = titleSelection(section, episode, season).progressKey
-                                        progressPreferences?.getBoolean("completed:$key", false) == true ||
-                                            seriesEpisodeKey(season, episode) in trackedEntry?.watchedEpisodes.orEmpty()
+                                        isPlaybackCompleted(key, seriesEpisodeKey(season, episode) in trackedEntry?.watchedEpisodes.orEmpty())
                                     }?.let { (season, episode) ->
                                         EpisodeResume(
                                             seriesEpisodeKey(season, episode), season.number, episode.episode,
@@ -5962,6 +6038,12 @@ private fun PlayerHome(
                                     .firstOrNull { (progressPreferences?.getLong(it, 0L) ?: 0L) > 0L }
                             } else null
                             val resumeKey = seriesResume?.progressKey ?: movieResumeKey
+                            val movieProgress = if (section == PortalSection.MOVIES) {
+                                val key = movieResumeKey ?: titleSelection(section, title).progressKey
+                                val position = progressPreferences?.getLong(key, 0L) ?: 0L
+                                val duration = progressPreferences?.getLong("duration:$key", 0L) ?: 0L
+                                EpisodeCardProgress(isPlaybackCompleted(key), position, duration)
+                            } else null
                             val resumePosition = resumeKey?.let { progressPreferences?.getLong(it, 0L) ?: 0L }
                             val resumePercent = resumeKey?.let {
                                 progressPreferences?.getFloat("trakt_percent:$it", -1f)?.takeIf { value -> value > 0f }
@@ -6032,6 +6114,15 @@ private fun PlayerHome(
                                 compact = compactMedia,
                                 onBack = ::navigateBack,
                                 onPlay = { selectTitle(section, title) },
+                                watchProgress = movieProgress,
+                                onWatchStatus = if (section == PortalSection.MOVIES || seasons.orEmpty().any { it.episodes.isNotEmpty() }) {
+                                    {
+                                        val items = if (section == PortalSection.SERIES) {
+                                            seasons.orEmpty().flatMap { season -> season.episodes.map { season to it } }
+                                        } else emptyList()
+                                        watchStatusAction = { watched -> setWatched(section, title, items, watched) }
+                                    }
+                                } else null,
                                 onFavorite = { toggleSavedTitle(section, title, true) },
                                 onWatch = { toggleSavedTitle(section, title, false) }
                             )
@@ -6044,14 +6135,21 @@ private fun PlayerHome(
                                     failed = episodeError, unseen = trackedSeries(title)?.unseen.orEmpty(),
                                     metadata = episodeMetadata,
                                     onSeason = { openedSeason = it.takeUnless { season -> season == openedSeason } },
+                                    onSeasonWatchStatus = { season ->
+                                        watchStatusAction = { watched ->
+                                            setWatched(section, title, season.episodes.map { season to it }, watched)
+                                        }
+                                    },
+                                    onEpisodeWatchStatus = { season, episode ->
+                                        watchStatusAction = { watched -> setWatched(section, title, listOf(season to episode), watched) }
+                                    },
                                     episodeProgress = { season, episode ->
                                         val key = titleSelection(section, episode, season).progressKey
-                                        val savedKey = seriesResume?.takeIf { it.episodeKey == seriesEpisodeKey(season, episode) }
+                                        val savedKey = trackedResume?.takeIf { it.episodeKey == seriesEpisodeKey(season, episode) }
                                             ?.progressKey ?: key
                                         val prefs = progressPreferences
                                         val episodeKey = seriesEpisodeKey(season, episode)
-                                        val completed = prefs?.getBoolean("completed:$savedKey", false) == true ||
-                                            episodeKey in trackedEntry?.watchedEpisodes.orEmpty()
+                                        val completed = isPlaybackCompleted(savedKey, episodeKey in trackedEntry?.watchedEpisodes.orEmpty())
                                         val localPosition = prefs?.getLong(savedKey, 0L) ?: 0L
                                         val localDuration = prefs?.getLong("duration:$savedKey", 0L) ?: 0L
                                         val traktPercent = prefs?.getFloat("trakt_percent:$savedKey", 0f) ?: 0f

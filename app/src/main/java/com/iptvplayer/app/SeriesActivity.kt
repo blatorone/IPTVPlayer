@@ -1,5 +1,7 @@
 package com.iptvplayer.app
 
+import android.content.SharedPreferences
+
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -53,6 +55,20 @@ internal fun seriesEpisodeKey(season: PortalSeason, episode: PortalTitle): Strin
         ?: normalizedLabel(episode.name)
     return "$seasonKey:$episodeKey"
 }
+
+internal fun SharedPreferences.saveInterruptedPlayback(key: String, position: Long, duration: Long) {
+    edit().putLong(key, position)
+        .putLong("progress_updated:$key", System.currentTimeMillis())
+        .putBoolean("completed:$key", false)
+        .remove("manual_watched:$key")
+        .apply {
+            if (duration > 0) putLong("duration:$key", duration)
+        }.apply()
+}
+
+internal fun SharedPreferences.isPlaybackCompleted(key: String, fallback: Boolean): Boolean =
+    if (contains("manual_watched:$key")) getBoolean("manual_watched:$key", false)
+    else getBoolean("completed:$key", fallback)
 
 internal fun resumeEpisode(seasons: List<PortalSeason>, resume: EpisodeResume): Pair<PortalSeason, PortalTitle>? {
     for (season in seasons) {

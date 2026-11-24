@@ -1,5 +1,11 @@
 # Änderungen
 
+## 1.0.67
+
+- Filme, Folgen, Staffeln und Serien lassen sich lokal als gesehen oder ungesehen markieren.
+- Nach dem Unterbrechen einer Wiederholung zeigt der Fortschrittsbalken die aktuelle Wiedergabeposition.
+- Beim Trakt-Folgenimport erfolgt die Titelzuordnung anhand des gespeicherten Katalogs.
+
 ## 1.0.66
 
 - Die Bereinigung des Trakt-Serienverlaufs importiert bereits abgeglichene Daten nicht erneut und zeigt den lokalen Abgleich separat an.

@@ -106,11 +106,52 @@ internal fun mergeCatalogueTitles(
     return groups.map { indices -> indices.map(items::get) }
 }
 
+private fun matchKeys(info: TitleFingerprint): List<String> = listOfNotNull(
+    info.name.takeIf { it.isNotBlank() }?.let { "name:$it" },
+    info.imdb?.let { "imdb:$it" },
+    info.tmdb?.let { "tmdb:$it" }
+)
+
+/**
+ * Lookup of catalogue titles by normalized name and external IDs. Two titles can only
+ * match on one of these keys, so the index yields exactly the titles a full scan would
+ * consider, in catalogue order, without fingerprinting the whole catalogue per lookup.
+ */
+private class CatalogueIndex(private val titles: List<PortalTitle>) {
+    private val positions = HashMap<String, MutableList<Int>>()
+
+    init {
+        titles.forEachIndexed { index, title ->
+            matchKeys(fingerprint(title)).forEach { positions.getOrPut(it) { ArrayList(1) }.add(index) }
+        }
+    }
+
+    fun candidates(expected: TitleFingerprint): List<PortalTitle> =
+        matchKeys(expected).flatMap { positions[it].orEmpty() }.distinct().sorted().map(titles::get)
+}
+
+private val catalogueIndexes = ArrayDeque<Pair<java.lang.ref.WeakReference<List<PortalTitle>>, CatalogueIndex>>()
+
+/** Indexes are kept for the few most recently searched catalogue lists, compared by identity. */
+private fun catalogueIndex(titles: List<PortalTitle>): CatalogueIndex {
+    synchronized(catalogueIndexes) {
+        catalogueIndexes.firstOrNull { it.first.get() === titles }?.let { return it.second }
+    }
+    val index = CatalogueIndex(titles)
+    synchronized(catalogueIndexes) {
+        catalogueIndexes.removeAll { it.first.get() == null || it.first.get() === titles }
+        catalogueIndexes.addFirst(java.lang.ref.WeakReference(titles) to index)
+        while (catalogueIndexes.size > 6) catalogueIndexes.removeLast()
+    }
+    return index
+}
+
 internal fun equivalentCatalogueTitle(
     title: PortalTitle, candidates: List<PortalTitle>, requireVerifiedIdentity: Boolean = false
 ): PortalTitle? {
     val expected = fingerprint(title)
-    val matches = candidates.map { it to fingerprint(it) }
+    val relevant = if (candidates.size >= 256) catalogueIndex(candidates).candidates(expected) else candidates
+    val matches = relevant.map { it to fingerprint(it) }
         .filter { (_, candidate) -> expected.matches(candidate, !requireVerifiedIdentity) }
     if (matches.mapNotNull { it.second.year }.distinct().size > 1 ||
         matches.mapNotNull { it.second.imdb }.distinct().size > 1 ||

@@ -191,15 +191,19 @@ internal class TraktApi(private val clientId: String) {
         return TraktEpisodeFeed(aired, upcoming.minByOrNull { it.first }?.second)
     }
 
-    /** Localized episode summaries keyed by season and episode number. */
-    suspend fun episodeDescriptions(title: PortalTitle, accessToken: String): Map<Pair<Int, Int>, String> {
+    /** Localized episode summaries and screenshots keyed by season and episode number. */
+    suspend fun episodeDescriptions(title: PortalTitle, accessToken: String): Map<Pair<Int, Int>, TmdbEpisodeDetails> {
         val show = findShow(title, accessToken) ?: return emptyMap()
         val traktId = show.optJSONObject("ids")?.optLong("trakt", 0)?.takeIf { it > 0 }
             ?: return emptyMap()
         // Trakt returns English summaries; translated ones are only included on request.
-        val seasons = request(
-            "/shows/$traktId/seasons?extended=episodes&translations=${descriptionLanguage()}", "GET", token = accessToken
-        ).body.arrayObjects()
+        val path = "/shows/$traktId/seasons?translations=${descriptionLanguage()}&extended="
+        val seasons = try {
+            request(path + "episodes,images", "GET", token = accessToken).body.arrayObjects()
+        } catch (error: TraktApiException) {
+            // Images are optional; keep the summaries if this combination is refused.
+            request(path + "episodes", "GET", token = accessToken).body.arrayObjects()
+        }
         return buildMap {
             for (season in seasons) {
                 val seasonNumber = season.optInt("number", -1).takeIf { it >= 0 } ?: continue
@@ -208,11 +212,26 @@ internal class TraktApi(private val clientId: String) {
                     val episode = episodes.optJSONObject(index) ?: continue
                     val number = episode.optInt("number", -1).takeIf { it > 0 } ?: continue
                     val overview = translatedOverview(episode.optJSONArray("translations"))
-                        ?: germanDescription(episode.optString("overview")) ?: continue
-                    put(seasonNumber to number, overview)
+                        ?: germanDescription(episode.optString("overview"))
+                    val screenshot = traktImage(episode.optJSONObject("images"), "screenshot", "thumb")
+                    if (overview != null || screenshot != null) put(seasonNumber to number, TmdbEpisodeDetails(overview, screenshot))
                 }
             }
         }
+    }
+
+    /** First image of the given kinds; Trakt returns host paths without a scheme. */
+    private fun traktImage(images: JSONObject?, vararg kinds: String): String? {
+        images ?: return null
+        for (kind in kinds) {
+            val candidates = images.optJSONArray(kind) ?: continue
+            for (index in 0 until candidates.length()) {
+                val value = candidates.optString(index).trim().takeIf { it.isNotEmpty() && it != "null" } ?: continue
+                val url = if (value.startsWith("http://") || value.startsWith("https://")) value else "https://$value"
+                if (runCatching { java.net.URI(url).host }.getOrNull() != null) return url.replaceFirst("http://", "https://")
+            }
+        }
+        return null
     }
 
     private fun descriptionLanguage(): String =

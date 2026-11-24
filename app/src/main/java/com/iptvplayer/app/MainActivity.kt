@@ -1179,6 +1179,11 @@ private fun PlayerHome(
                         yield()
                     }
                 }
+                // Resolve all watchlist entries concurrently; portal searches stay limited by
+                // portalSearchLimiter, the loop below then reads the cached matches.
+                coroutineScope {
+                    library.watchlist.map { media -> async { localMatches(media, searchPortalIfMissing = true) } }.awaitAll()
+                }
                 for ((index, media) in library.watchlist.withIndex()) {
                     val entries = localMatches(media, searchPortalIfMissing = true)
                     matched++
@@ -3203,7 +3208,7 @@ private fun PlayerHome(
             } catch (_: Exception) {
                 emptyMap()
             }
-            value = summaries.mapValues { (_, description) -> TmdbEpisodeDetails(description, null) }
+            value = summaries
         }
         val client = metadataClient ?: return@produceState
         val series = detailMetadata?.takeIf { details?.first == PortalSection.SERIES } ?: return@produceState
@@ -3225,7 +3230,10 @@ private fun PlayerHome(
                 }.flatMap { it.await().entries }
             }
             value = value + loaded.map { (key, episode) ->
-                key to episode.copy(description = germanDescription(episode.description) ?: value[key]?.description)
+                key to episode.copy(
+                    description = germanDescription(episode.description) ?: value[key]?.description,
+                    picture = episode.picture ?: value[key]?.picture
+                )
             }
         }
     }

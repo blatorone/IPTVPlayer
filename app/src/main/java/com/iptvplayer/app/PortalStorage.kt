@@ -4,6 +4,12 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.AtomicFile
+import com.google.gson.stream.JsonReader
+import com.google.gson.stream.JsonWriter
+import java.io.BufferedInputStream
+import java.io.BufferedOutputStream
+import java.io.InputStreamReader
+import java.io.OutputStreamWriter
 import java.io.File
 import java.io.FileNotFoundException
 import java.security.KeyStore
@@ -12,6 +18,7 @@ import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.SecretKeySpec
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -49,11 +56,15 @@ internal data class StartupChannel(
 )
 
 internal class PortalStorage(context: Context) {
+    /** Keystore-encrypted single document of versions up to 1.0.73; read only for migration. */
     private val file = AtomicFile(File(context.noBackupFilesDir, "stalker-source.v1"))
+    private val migratedLegacyFile = File(context.noBackupFilesDir, "stalker-source.v1.migrated")
+    private val libraryFile = AtomicFile(File(context.noBackupFilesDir, "portal-library.v2"))
     private val metadataFile = AtomicFile(File(context.noBackupFilesDir, "metadata-token.v1"))
     private val traktSessionFile = AtomicFile(File(context.noBackupFilesDir, "trakt-session.v1"))
     private val epgSourcesFile = AtomicFile(File(context.noBackupFilesDir, "epg-sources.v1"))
-    private val guideCacheFile = AtomicFile(File(context.noBackupFilesDir, "portal-guide.v1"))
+    private val legacyGuideCacheFile = AtomicFile(File(context.noBackupFilesDir, "portal-guide.v1"))
+    private val guideCacheFile = AtomicFile(File(context.noBackupFilesDir, "portal-guide.v2"))
     private val startupChannelFile = AtomicFile(File(context.noBackupFilesDir, "last-live.v1"))
     private val guideCacheMutex = Mutex()
     private val startupMutex = Mutex()
@@ -63,31 +74,110 @@ internal class PortalStorage(context: Context) {
 
     suspend fun read(): SavedPortals? = mutex.withLock {
         withContext(Dispatchers.IO) {
-            val plain = readEncrypted(file) ?: return@withContext null
-            val data = JSONObject(plain)
-            val sources = data.optJSONArray("sources")
-            if (sources == null) {
-                val source = decode(data)
-                SavedPortals(listOf(source), source.identity)
-            } else {
-                SavedPortals(
-                    List(sources.length()) { decode(sources.getJSONObject(it)) },
-                    data.getString("activeId")
-                )
+            var failure: Exception? = null
+            if (libraryFile.baseFile.exists()) {
+                try {
+                    val library = readEnvelope(libraryFile, ::readPortalLibrary)
+                    // The current format was read successfully; the migrated copy is no longer needed.
+                    migratedLegacyFile.delete()
+                    file.delete()
+                    return@withContext library
+                } catch (error: Exception) {
+                    failure = error
+                }
             }
+            // Earlier versions stored one Keystore-encrypted JSON document. It is converted
+            // once and kept as a copy until the converted library has been read again.
+            val legacy = when {
+                file.baseFile.exists() -> file
+                migratedLegacyFile.exists() -> AtomicFile(migratedLegacyFile)
+                else -> failure?.let { throw it } ?: return@withContext null
+            }
+            val library = decodeLegacyLibrary(readEncrypted(legacy) ?: return@withContext null)
+            val converted = try {
+                writeLibrary(library)
+                true
+            } catch (error: Exception) {
+                // Keep using the earlier file; conversion is retried on the next start.
+                false
+            }
+            if (converted && legacy === file) {
+                migratedLegacyFile.delete()
+                if (!file.baseFile.renameTo(migratedLegacyFile)) file.delete()
+            }
+            library
+        }
+    }
+
+    private fun decodeLegacyLibrary(plain: String): SavedPortals {
+        val data = JSONObject(plain)
+        val sources = data.optJSONArray("sources")
+        return if (sources == null) {
+            val source = decode(data)
+            SavedPortals(listOf(source), source.identity)
+        } else {
+            SavedPortals(
+                List(sources.length()) { decode(sources.getJSONObject(it)) },
+                data.getString("activeId")
+            )
         }
     }
 
     suspend fun write(library: SavedPortals) = mutex.withLock {
-        withContext(Dispatchers.IO) {
-            val data = JSONObject().apply {
-                put("activeId", library.activeId)
-                put("sources", JSONArray().apply {
-                    for (source in library.sources) put(encode(source))
-                })
-            }
-            writeEncrypted(file, data.toString())
+        withContext(Dispatchers.IO) { writeLibrary(library) }
+    }
+
+    private fun writeLibrary(library: SavedPortals) = writeEnvelope(libraryFile) { writer ->
+        JsonWriter(writer).use { json ->
+            writePortalLibrary(json, library)
+            json.flush()
         }
+    }
+
+    private fun <T> readEnvelope(target: AtomicFile, read: (JsonReader) -> T): T =
+        EnvelopeInputStream(BufferedInputStream(target.openRead(), 64 * 1024), ::unwrapDataKey).use { input ->
+            JsonReader(InputStreamReader(input, Charsets.UTF_8)).use(read)
+        }
+
+    private fun readEnvelopeText(target: AtomicFile): String =
+        EnvelopeInputStream(BufferedInputStream(target.openRead(), 64 * 1024), ::unwrapDataKey).use { input ->
+            input.readBytes().decodeToString()
+        }
+
+    /** Writes [target] atomically; [write] receives a writer whose closing finishes the envelope. */
+    private fun writeEnvelope(target: AtomicFile, write: (java.io.Writer) -> Unit) {
+        val dataKey = newEnvelopeDataKey()
+        val output = target.startWrite()
+        try {
+            val buffered = BufferedOutputStream(output, 64 * 1024)
+            val envelope = EnvelopeOutputStream(buffered, dataKey, wrapDataKey(dataKey))
+            // The writer chain must not close the file stream before finishWrite.
+            val shield = object : java.io.FilterOutputStream(envelope) {
+                override fun write(b: ByteArray, off: Int, len: Int) = out.write(b, off, len)
+                override fun close() = flush()
+            }
+            write(OutputStreamWriter(shield, Charsets.UTF_8))
+            envelope.close()
+            buffered.flush()
+            target.finishWrite(output)
+        } catch (error: Exception) {
+            target.failWrite(output)
+            throw error
+        }
+    }
+
+    private fun wrapDataKey(dataKey: SecretKey): ByteArray {
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, key(create = true))
+        check(cipher.iv.size == 12)
+        return cipher.iv + cipher.doFinal(dataKey.encoded)
+    }
+
+    private fun unwrapDataKey(wrapped: ByteArray): SecretKey {
+        require(wrapped.size > 12)
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.DECRYPT_MODE, key(create = false), GCMParameterSpec(128, wrapped, 0, 12))
+        return SecretKeySpec(cipher.doFinal(wrapped, 12, wrapped.size - 12), "AES")
     }
 
     suspend fun readMetadataToken(): String? = mutex.withLock {
@@ -174,7 +264,10 @@ internal class PortalStorage(context: Context) {
 
     suspend fun readGuideCache(): Map<String, CachedProgramme> = guideCacheMutex.withLock {
         withContext(Dispatchers.IO) {
-            val data = JSONObject(readEncrypted(guideCacheFile) ?: "{}")
+            val text = if (guideCacheFile.baseFile.exists()) {
+                runCatching { readEnvelopeText(guideCacheFile) }.getOrNull()
+            } else readEncrypted(legacyGuideCacheFile)
+            val data = JSONObject(text ?: "{}")
             data.keys().asSequence().associateWith { key ->
                 val entry = data.getJSONObject(key)
                 val shows = entry.getJSONArray("shows")
@@ -210,7 +303,9 @@ internal class PortalStorage(context: Context) {
                     })
                 })
             }
-            writeEncrypted(guideCacheFile, data.toString())
+            val text = data.toString()
+            writeEnvelope(guideCacheFile) { writer -> writer.use { it.write(text) } }
+            legacyGuideCacheFile.delete()
         }
     }
 
@@ -258,64 +353,6 @@ internal class PortalStorage(context: Context) {
                     .build()
             )
         }.generateKey()
-    }
-
-    private fun encode(source: SavedPortal): JSONObject = JSONObject().apply {
-        put("address", source.address)
-        put("mac", source.mac)
-        put("genres", JSONObject(source.genres))
-        put("epgChannelIds", JSONArray(source.epgChannelIds))
-        put("subscriptionExpiry", source.subscriptionExpiry?.toString())
-        put("enabled", source.enabled)
-        put("autoDisabled", source.autoDisabled)
-        source.reachable?.let { put("reachable", it) }
-        put("channels", JSONArray().apply {
-            for (channel in source.channels) {
-                put(JSONObject().apply {
-                    put("name", channel.name)
-                    put("command", channel.command)
-                    put("genreId", channel.genreId)
-                    put("genreName", channel.genreName)
-                    put("id", channel.id)
-                    put("logo", channel.logo)
-                    put("direct", channel.direct)
-                    put("epgIdentity", channel.epgIdentity)
-                    put("number", channel.number)
-                })
-            }
-        })
-        put("catalogs", JSONObject().apply {
-            for ((section, catalog) in source.catalogs) {
-                put(section.name, JSONObject().apply {
-                    put("titles", JSONArray().apply {
-                        for (title in catalog.titles) put(JSONObject().apply {
-                            put("name", title.name)
-                            put("id", title.id)
-                            put("command", title.command)
-                            put("categoryId", title.categoryId)
-                            put("categoryName", title.categoryName)
-                            put("poster", title.poster)
-                            put("year", title.year)
-                            put("addedAt", title.addedAt)
-                            put("description", title.description)
-                            put("imdbId", title.imdbId)
-                            put("tmdbId", title.tmdbId)
-                            put("popularity", title.popularity)
-                            put("service", title.service)
-                        })
-                    })
-                    put("total", catalog.total)
-                    put("nextPage", catalog.nextPage)
-                    put("groups", JSONArray().apply {
-                        for (group in catalog.groups) put(JSONObject().apply {
-                            put("id", group.id)
-                            put("name", group.name)
-                            put("country", group.country)
-                        })
-                    })
-                })
-            }
-        })
     }
 
     private fun decode(data: JSONObject): SavedPortal {

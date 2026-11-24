@@ -1,5 +1,12 @@
 # Änderungen
 
+## 1.0.74
+
+- Schnellerer Start mit deutlich weniger Speicher: Die gespeicherte Portalbibliothek wird blockweise ver- und entschlüsselt und als Datenstrom gelesen, statt als Ganzes über den Android-Keystore und als vollständiges JSON-Dokument im Speicher. Das verringert Abstürze auf Geräten mit wenig Arbeitsspeicher wie dem Fire TV Stick.
+- Die vorhandene Bibliothek wird beim ersten Start automatisch übernommen; die bisherige Datei bleibt bis zum nächsten erfolgreichen Start als Sicherung erhalten. Der Programm-Cache verwendet dasselbe Format.
+- Der Trakt-Abgleich und die Titelzuordnung durchsuchen große Kataloge über einen Index statt Titel für Titel. Merklisteneinträge werden parallel in den Portalen gesucht.
+- Bei verbundenem Trakt-Konto zeigen Folgen auch Trakt-Folgenbilder, wenn TMDB keines liefert.
+
 ## 1.0.73
 
 - Die Intro-Erkennung beendet ein Intro erst nach mehreren abweichenden Sekunden, damit schnelle Schnitte es nicht vorzeitig abschließen. Bild- und Tonergebnisse werden zusammengeführt. Ein zu kurz gelerntes Intro wird beim nächsten Folgenvergleich automatisch verlängert.

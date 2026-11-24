@@ -7412,7 +7412,7 @@ internal fun PlayerFrame(
                         }
                         findViewById<android.view.View>(androidx.media3.ui.R.id.exo_subtitle)?.visibility =
                             android.view.View.GONE
-                        findViewById<LinearLayout>(androidx.media3.ui.R.id.exo_bottom_bar)?.let { bar ->
+                        (findViewById<android.view.View>(androidx.media3.ui.R.id.exo_basic_controls) as? LinearLayout)?.let { bar ->
                             if (bar.findViewWithTag<android.view.View>("player_subtitles_action") == null) {
                                 val cc = ImageButton(context).apply {
                                     id = android.view.View.generateViewId()

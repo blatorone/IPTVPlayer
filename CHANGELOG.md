@@ -1,5 +1,9 @@
 # Änderungen
 
+## 1.0.63
+
+- Behebt einen Absturz beim Öffnen des Players, indem die Untertitel-Schaltfläche in der Media3-Buttonleiste neben den Einstellungen eingefügt wird.
+
 ## 1.0.62
 
 - Trakt prüft nach dem ersten Abgleich nur geänderte Bereiche. Neue gesehene Episoden werden seit dem gespeicherten Verlaufscursor importiert; Wiedergabestände werden nur bei geänderter Aktivität neu geladen.

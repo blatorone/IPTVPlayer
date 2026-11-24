@@ -1,47 +1,129 @@
 package com.iptvplayer.app
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class EpisodeTimingTest {
+    private fun randomFrames(random: java.util.Random, times: List<Long>) =
+        times.map { EpisodeFrame(it, random.nextLong(), false, random.nextLong()) }
+
     @Test
-    fun confirmsLearnedIntroBeforeItsEndAndAdjustsForLeadIn() {
-        val reference = List(7) { index ->
-            EpisodeFrame(15_000L + index * 3_000, 255L shl (index * 8), false)
+    fun confirmsLearnedIntroEarlyDespiteDroppedAndNoisyFrames() {
+        val random = java.util.Random(7)
+        val intro = 10_000L until 50_000L
+        val reference = randomFrames(random, (10_000L until 50_000L step 1_000L).toList())
+        val leadIn = randomFrames(random, (0L until 25_000L step 1_000L).toList())
+        val played = reference.take(9).mapIndexedNotNull { index, frame ->
+            when (index) {
+                3 -> null // dropped sample
+                5 -> EpisodeFrame(frame.timeMs + 15_300, random.nextLong(), false, random.nextLong())
+                else -> frame.copy(timeMs = frame.timeMs + 15_300)
+            }
         }
-        val current = reference.take(6).map { it.copy(timeMs = it.timeMs + 6_000) }
-        assertEquals(21_000L until 39_000L, confirmKnownOpening(current, reference, 15_000L until 33_000L))
-        assertNull(confirmKnownOpening(current.dropLast(1), reference, 15_000L until 33_000L))
-        assertNull(confirmKnownOpening(current.map { it.copy(fingerprint = 0, averageFingerprint = 0) }, reference, 15_000L until 33_000L))
+        assertEquals(25_000L until 65_000L, confirmKnownOpening(leadIn + played, reference, intro))
+        assertNull(confirmKnownOpening(leadIn + played.take(3), reference, intro))
+        assertNull(confirmKnownOpening(randomFrames(random, (0L until 60_000L step 1_000L).toList()), reference, intro))
     }
 
     @Test
-    fun findsAnOpeningSharedByTwoEpisodesWithDifferentLeadIn() {
-        val shared = List(7) { index -> (index + 1L) * -7046029254386353131L }
-        fun frames(values: List<Long>) = values.mapIndexed { index, hash ->
-            EpisodeFrame(index * 3_000L, hash, false)
+    fun findsSharedOpeningAcrossGapsAndSamplingPhase() {
+        val random = java.util.Random(11)
+        val shared = List(20) { random.nextLong() to random.nextLong() }
+        val previous = randomFrames(random, (0L until 5_000L step 1_000L).toList()) +
+            shared.mapIndexed { index, (difference, average) ->
+                EpisodeFrame(5_000L + index * 1_000, difference, false, average)
+            } +
+            randomFrames(random, (25_000L until 35_000L step 1_000L).toList())
+        val currentIntro = shared.mapIndexedNotNull { index, (difference, average) ->
+            if (index == 7) null else EpisodeFrame(3_400L + index * 1_000, difference xor 0x3L, false, average)
         }
-        val current = frames(listOf(-1L) + shared + listOf(-1L))
-        val previous = frames(listOf(0L, 0L) + shared + listOf(0L))
-        assertEquals(3_000L until 21_000L, findRepeatedOpening(current, previous))
-        assertNull(findRepeatedOpening(frames(List(12) { 0L }), frames(List(12) { 0L })))
+        val lead = randomFrames(random, listOf(400L, 1_400L, 2_400L))
+        val tail = randomFrames(random, (23_400L until 28_400L step 1_000L).toList())
+        assertEquals(3_400L until 22_900L,
+            findRepeatedOpening(lead + currentIntro + tail, previous, HLS_INTRO_FRAME_INTERVAL_MS))
+        // Without differing footage after the match its end is still unknown.
+        assertNull(findRepeatedOpening(lead + currentIntro, previous, HLS_INTRO_FRAME_INTERVAL_MS))
     }
 
     @Test
-    fun matchesOneSecondOpeningsAcrossCompressionNoise() {
-        val shared = List(22) { index -> (index + 1L) * -7046029254386353131L }
-        fun episode(values: List<Pair<Long, Long>>) = values.mapIndexed { index, (difference, average) ->
-            EpisodeFrame(index * HLS_INTRO_FRAME_INTERVAL_MS, difference, false, average)
-        }
-        val previous = episode(listOf(0L to 0L, 0L to 0L, 0L to 0L) +
-            shared.map { it to it } + listOf(0L to 0L))
-        val currentIntro = shared.map { value -> (value xor 0x7fffL) to (value xor 0xfL) }
-        val current = episode(listOf(-1L to -1L, -1L to -1L) + currentIntro +
-            listOf(Long.MAX_VALUE to Long.MAX_VALUE))
+    fun ignoresFlatAndStaticPictures() {
+        val black = List(30) { EpisodeFrame(it * 1_000L, 0L, false, 0L, detail = false) }
+        assertNull(findRepeatedOpening(black, black, HLS_INTRO_FRAME_INTERVAL_MS))
+        val random = java.util.Random(13)
+        val still = List(30) { EpisodeFrame(it * 1_000L, 0x1234_5678_9abcL, false, 0x0f0f_0f0fL) }
+        val other = still + randomFrames(random, (30_000L until 36_000L step 1_000L).toList())
+        assertNull(findRepeatedOpening(other, still + randomFrames(random, (30_000L until 36_000L step 1_000L).toList()),
+            HLS_INTRO_FRAME_INTERVAL_MS))
+    }
 
-        assertEquals(2_000L until 23_000L,
-            findRepeatedOpening(current, previous, HLS_INTRO_FRAME_INTERVAL_MS))
+    private fun audio(random: java.util.Random, fromMs: Long, toMs: Long) =
+        (fromMs until toMs step 47L).map { AudioPrint(it, random.nextInt(), true) }
+
+    private fun noisy(random: java.util.Random, prints: List<AudioPrint>, shiftMs: Long) =
+        prints.mapIndexed { index, print ->
+            var bits = print.bits
+            repeat(if (index % 2 == 0) 1 else 4) { bits = bits xor (1 shl random.nextInt(32)) }
+            AudioPrint(print.timeMs + shiftMs, bits, true)
+        }
+
+    @Test
+    fun findsSharedThemeMusicInAudio() {
+        val random = java.util.Random(3)
+        val theme = audio(random, 10_000, 40_000)
+        val previous = audio(random, 0, 10_000) + theme + audio(random, 40_000, 60_000)
+        val current = audio(random, 0, 4_000) + noisy(random, theme, -5_993) + audio(random, 34_100, 50_000)
+        val range = requireNotNull(findRepeatedAudioOpening(current, previous))
+        assertTrue(range.first in 3_000L..5_000L)
+        assertTrue(range.last in 32_500L..34_500L)
+        assertNull(findRepeatedAudioOpening(audio(random, 0, 60_000), previous))
+        val silent = previous.map { it.copy(loud = false) }
+        assertNull(findRepeatedAudioOpening(silent, silent))
+    }
+
+    @Test
+    fun confirmsLearnedThemeMusicEarly() {
+        val random = java.util.Random(5)
+        val theme = audio(random, 10_000, 40_000)
+        val intro = 10_000L until 40_000L
+        val learned = theme.filter { it.timeMs < 30_000 }
+        val current = audio(random, 0, 8_000) + noisy(random, theme.filter { it.timeMs < 18_000 }, -2_000)
+        val range = requireNotNull(confirmKnownAudioOpening(current, learned, intro))
+        assertTrue(kotlin.math.abs(range.first - 8_000L) <= 40)
+        assertNull(confirmKnownAudioOpening(audio(random, 0, 30_000), learned, intro))
+        assertNull(confirmKnownAudioOpening(current.take(200), learned, intro))
+    }
+
+    @Test
+    fun audioCachesRoundTrip() {
+        val prints = listOf(AudioPrint(0, 5, true), AudioPrint(47, -1, false))
+        assertEquals("episode" to prints, decodeAudioReference(encodeAudioReference("episode", prints)))
+        assertEquals((1_000L..9_000L) to prints, decodeLearnedAudio(encodeLearnedAudio(1_000L..9_000L, prints)))
+        assertNull(decodeLearnedAudio(byteArrayOf(1, 2)))
+    }
+
+    @Test
+    fun blockFingerprintsSeparateDetailFromFlatFrames() {
+        val width = 144
+        val height = 80
+        val flat = IntArray(width * height) { 0xff101010.toInt() }
+        assertFalse(episodeFrame(0, flat, width, height).detail)
+        val pattern = IntArray(width * height) { index ->
+            val x = index % width
+            val y = index / width
+            if ((x / 16 + y / 10) % 2 == 0) 0xffe0e0e0.toInt() else 0xff202020.toInt()
+        }
+        val noisy = IntArray(pattern.size) { index ->
+            val noise = (index * 7_919 % 23) - 11
+            val channel = ((pattern[index] and 255) + noise).coerceIn(0, 255)
+            (0xff shl 24) or (channel shl 16) or (channel shl 8) or channel
+        }
+        val first = episodeFrame(0, pattern, width, height)
+        val second = episodeFrame(0, noisy, width, height)
+        assertTrue(first.detail)
+        assertTrue(java.lang.Long.bitCount(first.fingerprint xor second.fingerprint) <= 4)
     }
 
     @Test

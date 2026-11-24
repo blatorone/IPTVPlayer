@@ -196,7 +196,15 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Log.setLogLevel(Log.LOG_LEVEL_OFF)
-        player = ExoPlayer.Builder(this).build().also { activePlayer ->
+        // The audio sink is wrapped so that series openings can also be recognised by their theme music.
+        val renderers = object : androidx.media3.exoplayer.DefaultRenderersFactory(this) {
+            override fun buildAudioSink(
+                context: Context, enableFloatOutput: Boolean, enableAudioOutputPlaybackParams: Boolean
+            ): androidx.media3.exoplayer.audio.AudioSink? =
+                super.buildAudioSink(context, enableFloatOutput, enableAudioOutputPlaybackParams)
+                    ?.let(::EpisodeAudioTapSink)
+        }
+        player = ExoPlayer.Builder(this, renderers).build().also { activePlayer ->
             activePlayer.trackSelectionParameters = activePlayer.trackSelectionParameters
                 .buildUpon()
                 .setPreferredAudioLanguage(java.util.Locale.getDefault().language)
@@ -567,6 +575,17 @@ private fun PlayerHome(
         mutableStateOf(preferences?.getInt("credits_before_end_seconds", 60) ?: 60)
     }
     val seriesOpenings = remember { mutableMapOf<Pair<String, String>, Pair<String, List<EpisodeFrame>>>() }
+    val seriesOpeningAudio = remember { mutableMapOf<Pair<String, String>, Pair<String, List<AudioPrint>>>() }
+    val introStore = remember(context, preview) { if (preview) null else IntroFingerprintStore.create(context) }
+    LaunchedEffect(progressPreferences) {
+        // Opening fingerprints of earlier versions used another hash and grew without limit;
+        // they are rebuilt automatically in the bounded fingerprint store.
+        val preferences = progressPreferences ?: return@LaunchedEffect
+        withContext(Dispatchers.IO) {
+            val obsolete = preferences.all.keys.filter { it.startsWith("opening:") || it.startsWith("opening-samples:") }
+            if (obsolete.isNotEmpty()) preferences.edit().apply { obsolete.forEach(::remove) }.apply()
+        }
+    }
     var fullscreenVideoSurface by remember { mutableStateOf<SurfaceView?>(null) }
     var playbackVideoSurface by remember { mutableStateOf<SurfaceView?>(null) }
     var detectedTiming by remember { mutableStateOf<Pair<String, EpisodeTiming>?>(null) }
@@ -4208,125 +4227,181 @@ private fun PlayerHome(
             .digest(attempt.mediaId.encodeToByteArray())
             .joinToString("") { "%02x".format(it) }
         val savedCreditsMarker = progressPreferences?.getLong(markerKey, 0L)?.takeIf { it > 0L }
-        val scanOpening = !manualIntro && seriesKey != null && active.currentPosition < 180_000
+        val scanOpening = !manualIntro && seriesKey != null && active.currentPosition < OPENING_SCAN_LIMIT_MS
         val scanCredits = !manualCredits && savedCreditsMarker == null &&
             nextEpisodeAction != null && portal.nextAt(duration) == duration
         var timing = EpisodeTiming(creditsStartMs = savedCreditsMarker)
         detectedTiming = attempt.mediaId to timing
         if (!scanOpening && !scanCredits) return@LaunchedEffect
         val uri = item.localConfiguration?.uri ?: return@LaunchedEffect
-        val hls = item.localConfiguration?.mimeType == MimeTypes.APPLICATION_M3U8 ||
-            uri.lastPathSegment.orEmpty().endsWith(".m3u8", ignoreCase = true)
-        val referenceKey = seriesKey?.let { (source, key) ->
-            val identity = "$source\n$key"
-            "opening-samples:" + java.security.MessageDigest.getInstance("SHA-256")
-                .digest(identity.encodeToByteArray())
-                .joinToString("") { "%02x".format(it) }
-        }
-        val previous = seriesOpenings[seriesKey]?.takeIf { it.first != selection.id }
-            ?: referenceKey?.let { key ->
-                decodeOpeningReference(progressPreferences?.getString(key, null))
-                    ?.takeIf { it.mediaId != selection.id }
-                    ?.let { it.mediaId to it.frames }
-            }
-        val learnedKey = seriesKey?.let { (source, key) ->
-            val identity = "$source\n$key\n$hls"
-            "opening:" + java.security.MessageDigest.getInstance("SHA-256").digest(identity.encodeToByteArray())
-                .joinToString("") { "%02x".format(it) }
-        }
-        val learned = learnedKey?.let { decodeLearnedOpening(progressPreferences?.getString(it, null)) }
         val sampleFromSurface = uri.scheme in setOf("http", "https")
-        val updates = if (sampleFromSurface) flow {
-            val opening = mutableListOf<EpisodeFrame>()
-            val credits = mutableListOf<EpisodeFrame>()
-            var openingComplete = !scanOpening
-            var creditsComplete = !scanCredits
-            var lastOpeningBucket = -HLS_INTRO_FRAME_INTERVAL_MS
-            var lastCreditsBucket = -5_000L
-            while (active.currentMediaItem == item && (!openingComplete || !creditsComplete)) {
-                val position = active.currentPosition
-                val inOpening = !openingComplete && position < 180_000L
-                if (!openingComplete && position >= 180_000L) openingComplete = true
-                // Scan the closing eight minutes so longer credit rolls and
-                // post-credit scenes are not automatically reduced to a 15s fallback.
-                val inCredits = !creditsComplete && active.duration - position <= 480_000L
-                val surface = fullscreenVideoSurface ?: playbackVideoSurface
-                if (surface != null && active.isPlaying) {
-                    if (inOpening) {
-                        val bucket = position / HLS_INTRO_FRAME_INTERVAL_MS * HLS_INTRO_FRAME_INTERVAL_MS
-                        if (bucket > lastOpeningBucket) {
-                            sampleEpisodeSurface(surface, bucket)?.let { frame ->
-                                opening += frame
-                                lastOpeningBucket = bucket
+        val stepMs = if (sampleFromSurface) HLS_INTRO_FRAME_INTERVAL_MS else FRAME_INTERVAL_MS
+        val store = introStore
+        // References: the opening of another episode of this series (for a first
+        // comparison) and a learned opening (to offer the skip while it is running).
+        val previous = seriesOpenings[seriesKey]?.takeIf { it.first != selection.id }
+            ?: seriesKey?.let { key ->
+                withContext(Dispatchers.IO) {
+                    decodeOpeningReference(store?.read(key, IntroFingerprintStore.VIDEO_REFERENCE)?.decodeToString())
+                }
+            }?.takeIf { it.mediaId != selection.id }?.let { it.mediaId to it.frames }
+        val previousAudio = seriesOpeningAudio[seriesKey]?.takeIf { it.first != selection.id }
+            ?: seriesKey?.let { key ->
+                withContext(Dispatchers.IO) {
+                    decodeAudioReference(store?.read(key, IntroFingerprintStore.AUDIO_REFERENCE))
+                }
+            }?.takeIf { it.first != selection.id }
+        val learned = seriesKey?.let { key ->
+            withContext(Dispatchers.IO) {
+                decodeLearnedOpening(store?.read(key, IntroFingerprintStore.VIDEO_LEARNED)?.decodeToString())
+            }
+        }
+        val learnedAudio = seriesKey?.let { key ->
+            withContext(Dispatchers.IO) { decodeLearnedAudio(store?.read(key, IntroFingerprintStore.AUDIO_LEARNED)) }
+        }
+        if (active.currentMediaItem != item) return@LaunchedEffect
+        val audioToken = if (scanOpening && sampleFromSurface) EpisodeAudioTap.start() else null
+        try {
+            val updates = if (sampleFromSurface) flow {
+                val opening = mutableListOf<EpisodeFrame>()
+                val audio = mutableListOf<AudioPrint>()
+                val credits = mutableListOf<EpisodeFrame>()
+                var openingComplete = !scanOpening
+                var creditsComplete = !scanCredits
+                var lastOpeningBucket = -HLS_INTRO_FRAME_INTERVAL_MS
+                var lastCreditsBucket = -5_000L
+                var emittedFrames = 0
+                var emittedAudio = 0
+                var emittedCredits = 0
+                while (active.currentMediaItem == item && (!openingComplete || !creditsComplete)) {
+                    val position = active.currentPosition
+                    val inOpening = !openingComplete && position < OPENING_SCAN_LIMIT_MS
+                    if (!openingComplete && position >= OPENING_SCAN_LIMIT_MS) openingComplete = true
+                    if (audioToken != null) {
+                        audio += EpisodeAudioTap.drain().filter { it.timeMs in 0 until OPENING_SCAN_LIMIT_MS }
+                        if (openingComplete) EpisodeAudioTap.stop(audioToken)
+                    }
+                    // Scan the closing eight minutes so longer credit rolls and
+                    // post-credit scenes are not automatically reduced to a 15s fallback.
+                    val inCredits = !creditsComplete && active.duration - position <= 480_000L
+                    val surface = fullscreenVideoSurface ?: playbackVideoSurface
+                    if (surface != null && active.isPlaying) {
+                        if (inOpening) {
+                            val bucket = position / HLS_INTRO_FRAME_INTERVAL_MS * HLS_INTRO_FRAME_INTERVAL_MS
+                            if (bucket > lastOpeningBucket) {
+                                sampleEpisodeSurface(surface, bucket)?.let { frame ->
+                                    opening += frame
+                                    lastOpeningBucket = bucket
+                                }
+                            }
+                        }
+                        if (inCredits) {
+                            val bucket = position / 5_000L * 5_000L
+                            if (bucket > lastCreditsBucket) {
+                                sampleEpisodeSurface(surface, bucket)?.let { frame ->
+                                    credits += frame
+                                    lastCreditsBucket = bucket
+                                }
                             }
                         }
                     }
-                    if (inCredits) {
-                        val bucket = position / 5_000L * 5_000L
-                        if (bucket > lastCreditsBucket) {
-                            sampleEpisodeSurface(surface, bucket)?.let { frame ->
-                                credits += frame
-                                lastCreditsBucket = bucket
+                    // Compare only when new evidence arrived instead of on every poll.
+                    val audioReady = audio.size - emittedAudio >= 20 || openingComplete && audio.size > emittedAudio
+                    if (opening.size != emittedFrames || audioReady || credits.size != emittedCredits) {
+                        emittedFrames = opening.size
+                        emittedAudio = audio.size
+                        emittedCredits = credits.size
+                        emit(EpisodeVideoAnalysis(opening.toList(), findCreditsStart(credits), audio.toList()))
+                    }
+                    if (active.playbackState == Player.STATE_ENDED ||
+                        active.duration > 0 && position >= active.duration - 1_000L
+                    ) {
+                        openingComplete = true
+                        creditsComplete = true
+                    }
+                    delay(if (inOpening || inCredits) 150 else 500)
+                }
+            } else analyzeEpisodeVideo(uri, duration, scanOpening, scanCredits)
+            var savedFrames = 0
+            var savedAudio = 0
+            updates.collect { analysis ->
+                if (active.currentMediaItem != item) return@collect
+                if (seriesKey != null && (analysis.opening.isNotEmpty() || analysis.audio.isNotEmpty())) {
+                    if (timing.introEndMs == null) {
+                        // A learned opening is confirmed early so the skip is offered while it runs;
+                        // a first comparison with another episode is only certain after its end.
+                        val (intro, fromComparison) = withContext(Dispatchers.Default) {
+                            val known = learned?.let { confirmKnownOpening(analysis.opening, it.frames, it.range, stepMs) }
+                                ?: learnedAudio?.let { (range, prints) -> confirmKnownAudioOpening(analysis.audio, prints, range) }
+                            if (known != null) known to false
+                            else (previous?.let { findRepeatedOpening(analysis.opening, it.second, stepMs) }
+                                ?: previousAudio?.let { findRepeatedAudioOpening(analysis.audio, it.second) }) to true
+                        }
+                        if (active.currentMediaItem != item) return@collect
+                        if (intro != null) {
+                            timing = timing.copy(introStartMs = intro.first, introEndMs = intro.last + 1)
+                            if (fromComparison && store != null) {
+                                val frames = analysis.opening.filter { it.timeMs in intro }
+                                val prints = analysis.audio.filter { it.timeMs in intro.first..minOf(intro.last, intro.first + 30_000L) }
+                                withContext(Dispatchers.IO) {
+                                    if (frames.size >= 4) store.write(
+                                        seriesKey, IntroFingerprintStore.VIDEO_LEARNED,
+                                        LearnedOpening(intro, frames).encode().encodeToByteArray()
+                                    )
+                                    if (prints.count(AudioPrint::loud) >= 40) store.write(
+                                        seriesKey, IntroFingerprintStore.AUDIO_LEARNED, encodeLearnedAudio(intro, prints)
+                                    )
+                                }
                             }
                         }
                     }
-                    if (opening.isNotEmpty() || credits.isNotEmpty()) {
-                        emit(EpisodeVideoAnalysis(opening.toList(), findCreditsStart(credits)))
+                    // Keep this episode as reference for the next one, but do not replace a
+                    // longer reference with a briefly watched episode.
+                    val frameCoverage = analysis.opening.lastOrNull()?.timeMs ?: 0L
+                    val audioCoverage = analysis.audio.lastOrNull()?.timeMs ?: 0L
+                    val previousFrameCoverage = previous?.second?.lastOrNull()?.timeMs ?: 0L
+                    val previousAudioCoverage = previousAudio?.second?.lastOrNull()?.timeMs ?: 0L
+                    val finished = active.currentPosition >= OPENING_SCAN_LIMIT_MS - 5_000L ||
+                        active.playbackState == Player.STATE_ENDED
+                    if (seriesOpenings.size >= 16 && seriesKey !in seriesOpenings) {
+                        seriesOpenings.remove(seriesOpenings.keys.first())
+                    }
+                    if (seriesOpeningAudio.size >= 16 && seriesKey !in seriesOpeningAudio) {
+                        seriesOpeningAudio.remove(seriesOpeningAudio.keys.first())
+                    }
+                    val replaceFrames = analysis.opening.size >= 12 &&
+                        frameCoverage >= minOf(previousFrameCoverage, 150_000L)
+                    val replaceAudio = analysis.audio.size >= 200 &&
+                        audioCoverage >= minOf(previousAudioCoverage, 150_000L)
+                    if (replaceFrames) seriesOpenings[seriesKey] = selection.id to analysis.opening
+                    if (replaceAudio) seriesOpeningAudio[seriesKey] = selection.id to analysis.audio
+                    if (store != null) {
+                        val writeFrames = replaceFrames && (analysis.opening.size - savedFrames >= 15 ||
+                            finished && analysis.opening.size > savedFrames)
+                        val writeAudio = replaceAudio && (analysis.audio.size - savedAudio >= 600 ||
+                            finished && analysis.audio.size > savedAudio)
+                        if (writeFrames || writeAudio) withContext(Dispatchers.IO) {
+                            if (writeFrames) store.write(
+                                seriesKey, IntroFingerprintStore.VIDEO_REFERENCE,
+                                OpeningReference(selection.id, analysis.opening).encode().encodeToByteArray()
+                            )
+                            if (writeAudio) store.write(
+                                seriesKey, IntroFingerprintStore.AUDIO_REFERENCE,
+                                encodeAudioReference(selection.id, analysis.audio)
+                            )
+                        }
+                        if (writeFrames) savedFrames = analysis.opening.size
+                        if (writeAudio) savedAudio = analysis.audio.size
                     }
                 }
-                if (active.playbackState == Player.STATE_ENDED ||
-                    active.duration > 0 && position >= active.duration - 1_000L
-                ) {
-                    openingComplete = true
-                    creditsComplete = true
+                analysis.creditsStartMs?.let { marker ->
+                    timing = timing.copy(creditsStartMs = marker)
+                    progressPreferences?.edit()?.putLong(markerKey, marker)?.apply()
                 }
-                delay(if (inOpening || inCredits) 150 else 500)
+                detectedTiming = attempt.mediaId to timing
             }
-        } else analyzeEpisodeVideo(uri, duration, scanOpening, scanCredits)
-        var savedOpeningFrameCount = 0
-        updates.collect { analysis ->
-            if (active.currentMediaItem != item) return@collect
-            if (seriesKey != null && analysis.opening.isNotEmpty()) {
-                if (timing.introEndMs == null) {
-                    val intro = withContext(Dispatchers.Default) {
-                        learned?.let { confirmKnownOpening(analysis.opening, it.frames, it.range) }
-                            ?: previous?.takeIf { it.first != selection.id }?.let {
-                                if (sampleFromSurface) findRepeatedOpening(analysis.opening, it.second, HLS_INTRO_FRAME_INTERVAL_MS)
-                                else findRepeatedOpening(analysis.opening, it.second)
-                            }
-                    }
-                    if (active.currentMediaItem != item) return@collect
-                    intro?.let {
-                        timing = timing.copy(introStartMs = intro.first, introEndMs = intro.last + 1)
-                            if (learnedKey != null) {
-                                val frames = analysis.opening.filter { frame -> frame.timeMs in intro }.take(7)
-                                if (frames.size >= 4) progressPreferences?.edit()
-                                    ?.putString(learnedKey, LearnedOpening(intro, frames).encode())?.apply()
-                            }
-                    }
-                }
-                if (seriesOpenings.size >= 16 && seriesKey !in seriesOpenings) {
-                    val oldest = seriesOpenings.keys.first()
-                    seriesOpenings.remove(oldest)
-                }
-                if (previous?.first != selection.id || analysis.opening.size > previous.second.size) {
-                    seriesOpenings[seriesKey] = selection.id to analysis.opening
-                }
-                if (referenceKey != null && analysis.opening.size >= 12 &&
-                    (analysis.opening.size - savedOpeningFrameCount >= 5 ||
-                        active.currentPosition >= 175_000L || active.playbackState == Player.STATE_ENDED)
-                ) {
-                    progressPreferences?.edit()?.putString(
-                        referenceKey, OpeningReference(selection.id, analysis.opening).encode()
-                    )?.apply()
-                    savedOpeningFrameCount = analysis.opening.size
-                }
-            }
-            analysis.creditsStartMs?.let { marker ->
-                timing = timing.copy(creditsStartMs = marker)
-                progressPreferences?.edit()?.putLong(markerKey, marker)?.apply()
-            }
-            detectedTiming = attempt.mediaId to timing
+        } finally {
+            audioToken?.let(EpisodeAudioTap::stop)
         }
     }
     LaunchedEffect(

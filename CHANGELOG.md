@@ -1,5 +1,13 @@
 # Änderungen
 
+## 1.0.72
+
+- Die Intro-Erkennung vergleicht zusätzlich die Titelmusik. Ein Audio-Fingerabdruck erkennt das Intro auch bei wechselnden Bildern, eingeblendetem Text oder fehlender Bildaufnahme.
+- Der Bildvergleich toleriert fehlende Stichproben, Pufferpausen und zeitlichen Versatz zwischen Folgen. Schwarzbilder und Standbilder gelten nicht mehr als Treffer; Fingerabdrücke werden aus Flächenmittelwerten berechnet.
+- Ein gelerntes Intro wird bereits nach wenigen Sekunden bestätigt, auch wenn einzelne Bilder abweichen. Die Überspringen-Schaltfläche erscheint dadurch zuverlässig, solange das Intro läuft.
+- Intros nach einem längeren Vorspann werden bis zur fünften Minute gesucht.
+- Intro-Fingerabdrücke liegen begrenzt in einem eigenen lokalen Speicher außerhalb der Android-Sicherung. Ältere, nicht mehr kompatible Einträge werden entfernt und automatisch neu gelernt; dazu sind wieder zwei angesehene Folgen einer Serie nötig.
+
 ## 1.0.71
 
 - Trakt episode summaries now fill missing German TMDB or portal descriptions.

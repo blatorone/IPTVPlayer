@@ -117,7 +117,7 @@ Im Programmführer erscheint während aktiver Live-Wiedergabe eine fokussierbare
 - Seriendetails zeigen die Aktionen nebeneinander und darunter eine horizontal wählbare Staffelreihe über den Folgen mit verfügbaren Portalbildern, Beschreibungen und lokalem Wiedergabestatus. Die vollständige Serienbeschreibung und die Folgen sind in einem gemeinsamen vertikalen Detailbereich erreichbar.
 - Eindeutig englische Beschreibungen werden im deutschen VOD-Bereich ausgelassen. Folgenbilder und deutsche Folgenbeschreibungen können bei eingerichtetem TMDB-Zugang ergänzt werden. Ohne Folgenbild dient das Serienposter als Ersatz.
 - Für Intro und Abspann lässt sich getrennt zwischen automatischer Erkennung und eigenen Zeitmarken wählen. Im manuellen Modus gelten die gespeicherten Einstellungen für alle Serien. Der Introstart und das Introende beziehen sich auf den Folgenbeginn, der Abspannbeginn auf die verbleibende Laufzeit. Der Vorlauf für den Hinweis zur nächsten Folge bleibt separat einstellbar.
-- Intros werden standardmäßig erkannt und mit einer anwählbaren Überspringen-Schaltfläche angezeigt. Automatisches Überspringen ist eine separate, standardmäßig ausgeschaltete Option.
+- Intros werden standardmäßig anhand wiederkehrender Bilder und Titelmusik erkannt und mit einer anwählbaren Überspringen-Schaltfläche angezeigt. Nach zwei angesehenen Folgen einer Serie erscheint die Schaltfläche in weiteren Folgen bereits während des Intros. Automatisches Überspringen ist eine separate, standardmäßig ausgeschaltete Option.
 
 ## Diagnose und Absturzberichte
 

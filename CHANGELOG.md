@@ -1,5 +1,10 @@
 # Änderungen
 
+## 1.0.58
+
+- Beim Starten oder Fortsetzen von Filmen und Serien bleibt die Detailansicht sichtbar, bis Media3 die Wiedergabe tatsächlich startet. Fehler beim Laden führen nicht mehr direkt in einen leeren Vollbildschirm; automatische Folgenwechsel bleiben im Vollbild.
+- Der Vollbildplayer bietet für Filme und Serien eine fokussierbare Untertitelauswahl mit erkannter Spur und der Option „Aus“.
+
 ## 1.0.57
 
 - Wiederholte Trakt-Verläufe verwenden für bereits verknüpfte Serien den lokal gespeicherten Serien- und Portalbezug, statt beim erneuten Abgleich wieder eine Portalsuche für jede Serie auszulösen.

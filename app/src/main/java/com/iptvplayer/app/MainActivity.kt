@@ -123,9 +123,11 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import androidx.media3.common.MediaItem
+import androidx.media3.common.C
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.util.Log
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
@@ -2423,10 +2425,11 @@ private fun PlayerHome(
         liveRestoreKey: String? = null
     ) {
         if (player == null || variants.isEmpty() || reopenPlayback(selection, openFullscreen = openFullscreenOnStart)) return
-        val remainFullscreen = openFullscreenOnStart || fullscreen && (
-            selection.section == PortalSection.LIVE ||
-                selection.section == PortalSection.SERIES && advancingEpisode
-            )
+        // VOD stays on its detail page while the stream resolves and buffers.
+        // The player listener opens fullscreen only once playback actually starts.
+        // Live TV still opens immediately; automatic episode transitions stay fullscreen.
+        val remainFullscreen = selection.section == PortalSection.LIVE ||
+            fullscreen && selection.section == PortalSection.SERIES && advancingEpisode
         stopPlayback()
         fullscreen = remainFullscreen
         playbackSelection = selection
@@ -6933,6 +6936,7 @@ internal fun PlayerFrame(
     onControlsVisible: ((Boolean) -> Unit)? = null
 ) {
     val accentArgb = MaterialTheme.colorScheme.primary.toArgb()
+    var subtitleDialogOpen by remember(player) { mutableStateOf(false) }
     val buffering by produceState(
         initialValue = false,
         player, active, fullscreen
@@ -7206,6 +7210,20 @@ internal fun PlayerFrame(
                             val next = actionButton(android.R.drawable.ic_media_next, R.string.next_episode) {
                                 nextEpisode?.invoke()
                             }
+                            val subtitles = ImageButton(context).apply {
+                                id = android.view.View.generateViewId()
+                                tag = "player_subtitles_action"
+                                setImageResource(R.drawable.ic_subtitles)
+                                contentDescription = context.getString(R.string.subtitle_tracks)
+                                tooltipText = contentDescription
+                                isFocusable = true
+                                val background = TypedValue()
+                                if (context.theme.resolveAttribute(
+                                        android.R.attr.selectableItemBackgroundBorderless, background, true
+                                    )
+                                ) setBackgroundResource(background.resourceId)
+                                setOnClickListener { subtitleDialogOpen = true }
+                            }
                             val pause = row.findViewById<android.view.View>(androidx.media3.ui.R.id.exo_play_pause)
                             if (pause != null) {
                                 previous.id = android.view.View.generateViewId()
@@ -7219,6 +7237,7 @@ internal fun PlayerFrame(
                                     add(pause)
                                     if (next.visibility == android.view.View.VISIBLE) add(next)
                                     if (button.visibility == android.view.View.VISIBLE) add(button)
+                                    if (!livePlayback) add(subtitles)
                                 }
                                 controls.forEachIndexed { index, control ->
                                     enableRemoteFocus(control)
@@ -7235,6 +7254,7 @@ internal fun PlayerFrame(
                             row.addView(previous, index, LinearLayout.LayoutParams(size, size))
                             row.addView(next, row.indexOfChild(pause).coerceAtLeast(0) + 1, LinearLayout.LayoutParams(size, size))
                             row.addView(button, row.indexOfChild(next) + 1, LinearLayout.LayoutParams(size, size))
+                            row.addView(subtitles, row.childCount, LinearLayout.LayoutParams(size, size))
                             previous.tag = "previous_episode_action"
                             next.tag = "next_episode_action"
                             previous.isEnabled = canPreviousEpisode
@@ -7297,7 +7317,9 @@ internal fun PlayerFrame(
                     val stopButton = view.findViewWithTag<android.view.View>("stop_playback_action")
                     val previousButton = view.findViewWithTag<android.view.View>("previous_episode_action")
                     val nextButton = view.findViewWithTag<android.view.View>("next_episode_action")
-                    val visibleControls = listOfNotNull(previousButton, pause, nextButton, stopButton)
+                    val subtitlesButton = view.findViewWithTag<android.view.View>("player_subtitles_action")
+                    subtitlesButton?.visibility = if (livePlayback) android.view.View.GONE else android.view.View.VISIBLE
+                    val visibleControls = listOfNotNull(previousButton, pause, nextButton, stopButton, subtitlesButton)
                         .filter { it.visibility == android.view.View.VISIBLE }
                     visibleControls.forEachIndexed { index, control ->
                         control.nextFocusLeftId = visibleControls.getOrNull(index - 1)?.id ?: control.id
@@ -7341,6 +7363,66 @@ internal fun PlayerFrame(
                     }
                 }
             )
+            if (subtitleDialogOpen) {
+                val subtitleChoices = player.currentTracks.groups
+                    .filter { it.type == C.TRACK_TYPE_TEXT }
+                    .flatMap { group ->
+                        (0 until group.length).filter(group::isTrackSupported).map { index ->
+                            val format = group.getTrackFormat(index)
+                            val language = format.language?.takeUnless { it == "und" }
+                                ?.let { java.util.Locale.forLanguageTag(it).getDisplayName(java.util.Locale.GERMAN) }
+                            Triple(
+                                group,
+                                index,
+                                format.label?.takeIf(String::isNotBlank) ?: language
+                                    ?: format.id?.takeIf(String::isNotBlank) ?: "Spur ${index + 1}"
+                            )
+                        }
+                    }
+                AlertDialog(
+                    onDismissRequest = { subtitleDialogOpen = false },
+                    title = { Text(stringResource(R.string.subtitle_tracks)) },
+                    text = {
+                        Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
+                            Button(
+                                onClick = {
+                                    val parameters = player.trackSelectionParameters.buildUpon()
+                                        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                                        .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                                    player.trackSelectionParameters = parameters.build()
+                                    subtitleDialogOpen = false
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text(stringResource(R.string.subtitle_off)) }
+                            if (subtitleChoices.isEmpty()) {
+                                Text(
+                                    stringResource(R.string.subtitle_none_available),
+                                    modifier = Modifier.padding(top = 12.dp)
+                                )
+                            } else subtitleChoices.forEach { (group, index, label) ->
+                                Button(
+                                    onClick = {
+                                        val parameters = player.trackSelectionParameters.buildUpon()
+                                            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                                            .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                                            .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, listOf(index)))
+                                        player.trackSelectionParameters = parameters.build()
+                                        subtitleDialogOpen = false
+                                    },
+                                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                                ) {
+                                    Text(if (group.isTrackSelected(index)) "✓ $label" else label)
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        MaterialTextButton(onClick = { subtitleDialogOpen = false }) {
+                            Text(stringResource(R.string.close))
+                        }
+                    }
+                )
+            }
             if (fullscreen && buffering) {
                 CircularProgressIndicator(
                     modifier = Modifier.align(Alignment.Center).size(42.dp),

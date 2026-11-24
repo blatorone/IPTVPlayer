@@ -442,4 +442,8 @@
     <string name="portals_refresh_failed">Portalaktualisierung konnte nicht abgeschlossen werden. Die gespeicherten Inhalte bleiben verfügbar.</string>
     <string name="no_enabled_portals">Alle Portale sind deaktiviert. Aktiviere mindestens eine Quelle für die Aktualisierung.</string>
     <string name="diagnostics_save_file">Diagnosebericht als Datei speichern</string>
+    <string name="subtitle_tracks">Untertitel</string>
+    <string name="subtitle_off">Aus</string>
+    <string name="subtitle_none_available">Keine Untertitel f&#252;r diesen Stream verf&#252;gbar.</string>
+    <string name="close">Schlie&#223;en</string>
 </resources>

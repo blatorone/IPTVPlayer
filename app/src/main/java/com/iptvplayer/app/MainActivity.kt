@@ -1014,9 +1014,19 @@ private fun PlayerHome(
                     withContext(Dispatchers.Main) {
                         traktStatus = context.getString(R.string.trakt_checking_changes)
                     }
-                    val remote = api.loadLibrary(session.accessToken) { progress ->
-                        withContext(Dispatchers.Main) { traktStatus = progress }
-                    }
+                    val historyCursorKey = "trakt_episode_history_cursor:${session.username.lowercase()}"
+                    val oldHistoryCursor = preferences?.getString(historyCursorKey, null)
+                        ?: cachedActivities?.let { old ->
+                            runCatching { org.json.JSONObject(old).optJSONObject("episodes")?.optString("watched_at") }
+                                .getOrNull()?.takeIf(String::isNotBlank)
+                        }
+                    val remote = api.loadLibrary(
+                        session.accessToken,
+                        onProgress = { progress -> withContext(Dispatchers.Main) { traktStatus = progress } },
+                        previousActivities = cachedActivities,
+                        currentActivities = activities,
+                        episodeHistoryCursor = oldHistoryCursor
+                    )
                     if (watchlistDirty) {
                         localSaved.forEachIndexed { index, item ->
                             if (item.imdbId != null || item.tmdbId != null) {
@@ -1376,8 +1386,12 @@ private fun PlayerHome(
                 preferences?.edit()?.putStringSet("watchlist", watchlist)?.apply()
                 pendingActivities?.let { activities ->
                     traktSession?.username?.lowercase()?.let { username ->
+                        val episodeCursor = runCatching {
+                            org.json.JSONObject(activities).optJSONObject("episodes")?.optString("watched_at")
+                        }.getOrNull()?.takeIf(String::isNotBlank)
                         preferences?.edit()
                             ?.putString("trakt_last_activities:$username", activities)
+                            ?.also { editor -> episodeCursor?.let { editor.putString("trakt_episode_history_cursor:$username", it) } }
                             ?.putBoolean("trakt_watchlist_dirty:$username", false)
                             ?.apply()
                     }
@@ -4036,8 +4050,15 @@ private fun PlayerHome(
         val duration = active.duration
         val portal = attempt.variants[attempt.index].timing
         val seriesKey = selection.seriesId?.let { selection.source to it }
+        val markerKey = "credits_marker:" + java.security.MessageDigest.getInstance("SHA-256")
+            .digest(attempt.mediaId.encodeToByteArray())
+            .joinToString("") { "%02x".format(it) }
+        val savedCreditsMarker = progressPreferences?.getLong(markerKey, 0L)?.takeIf { it > 0L }
         val scanOpening = !manualIntro && seriesKey != null && active.currentPosition < 180_000
-        val scanCredits = !manualCredits && nextEpisodeAction != null && portal.nextAt(duration) == duration
+        val scanCredits = !manualCredits && savedCreditsMarker == null &&
+            nextEpisodeAction != null && portal.nextAt(duration) == duration
+        var timing = EpisodeTiming(creditsStartMs = savedCreditsMarker)
+        detectedTiming = attempt.mediaId to timing
         if (!scanOpening && !scanCredits) return@LaunchedEffect
         val uri = item.localConfiguration?.uri ?: return@LaunchedEffect
         val hls = item.localConfiguration?.mimeType == MimeTypes.APPLICATION_M3U8 ||
@@ -4060,7 +4081,6 @@ private fun PlayerHome(
                 .joinToString("") { "%02x".format(it) }
         }
         val learned = learnedKey?.let { decodeLearnedOpening(progressPreferences?.getString(it, null)) }
-        var timing = EpisodeTiming()
         val sampleFromSurface = uri.scheme in setOf("http", "https")
         val updates = if (sampleFromSurface) flow {
             val opening = mutableListOf<EpisodeFrame>()
@@ -4073,7 +4093,9 @@ private fun PlayerHome(
                 val position = active.currentPosition
                 val inOpening = !openingComplete && position < 180_000L
                 if (!openingComplete && position >= 180_000L) openingComplete = true
-                val inCredits = !creditsComplete && active.duration - position <= 240_000L
+                // Scan the closing eight minutes so longer credit rolls and
+                // post-credit scenes are not automatically reduced to a 15s fallback.
+                val inCredits = !creditsComplete && active.duration - position <= 480_000L
                 val surface = fullscreenVideoSurface ?: playbackVideoSurface
                 if (surface != null && active.isPlaying) {
                     if (inOpening) {
@@ -4146,8 +4168,9 @@ private fun PlayerHome(
                     savedOpeningFrameCount = analysis.opening.size
                 }
             }
-            analysis.creditsStartMs?.takeIf { it > active.currentPosition }?.let {
-                timing = timing.copy(creditsStartMs = it)
+            analysis.creditsStartMs?.let { marker ->
+                timing = timing.copy(creditsStartMs = marker)
+                progressPreferences?.edit()?.putLong(markerKey, marker)?.apply()
             }
             detectedTiming = attempt.mediaId to timing
         }
@@ -4169,7 +4192,10 @@ private fun PlayerHome(
                 val intro = if (manualIntro) {
                     EpisodeTiming(introStartSeconds * 1_000L, introEndSeconds * 1_000L).intro(duration)
                 } else portal.intro(duration) ?: detected?.intro(duration)
-                skipIntroTo = if (!introSkipped && intro != null && position in intro &&
+                // Frame matching completes just after the repeated opening ends;
+                // keep the skip action available briefly instead of silently missing it.
+                val introGrace = intro?.let { position > it.last && position - it.last <= 15_000L } == true
+                skipIntroTo = if (!introSkipped && intro != null && (position in intro || introGrace) &&
                     active.isCurrentMediaItemSeekable) intro.last + 1 else null
                 if (autoSkipIntro && active.isPlaying) skipIntroTo?.let {
                     active.seekTo(it)

@@ -1,5 +1,11 @@
 # Änderungen
 
+## 1.0.62
+
+- Trakt prüft nach dem ersten Abgleich nur geänderte Bereiche. Neue gesehene Episoden werden seit dem gespeicherten Verlaufscursor importiert; Wiedergabestände werden nur bei geänderter Aktivität neu geladen.
+- Outro-Marken aus der Bildanalyse werden pro Folge gespeichert. Die HLS-Prüfung umfasst bis zu acht Minuten vor Ende; stabile Abspannbilder werden auch erkannt, wenn danach ein helles Schlussbild folgt.
+- Die Intro-Schaltfläche bleibt nach einer knapp verspäteten Erkennung noch kurz verfügbar.
+
 ## 1.0.61
 
 - Die Untertitelauswahl sitzt neben den Player-Einstellungen und verwendet dieselbe Fokusumrandung wie andere Aktionen. Allgemein bleiben Untertitel standardmäßig aus; erzwungene Spuren lassen sich automatisch wählen. Pro Serie kann eine einmalige oder dauerhafte Auswahl gespeichert werden.

@@ -175,11 +175,17 @@ private fun episodeFrame(timeMs: Long, pixels: IntArray, width: Int, height: Int
 }
 
 internal fun findCreditsStart(frames: List<EpisodeFrame>): Long? {
-    // Demand consecutive text frames and reject a candidate followed by sustained picture.
-    val lastPicture = frames.zipWithNext().indexOfLast { (a, b) -> !a.creditsText && !b.creditsText }
-    return frames.drop(lastPicture + 1).windowed(3).firstOrNull { run ->
-        run.all(EpisodeFrame::creditsText) && run.last().timeMs - run.first().timeMs == 10_000L
-    }?.first()?.timeMs
+    // Credits often end with a bright logo or a short black transition. Looking
+    // only at the final frames therefore misses an otherwise stable credit roll.
+    // Require a sustained sequence to avoid treating one dark scene as the outro.
+    val candidates = frames.windowed(3).mapIndexedNotNull { index, run ->
+        if (run.all(EpisodeFrame::creditsText) && run.last().timeMs - run.first().timeMs >= 10_000L) {
+            index to run.first().timeMs
+        } else null
+    }
+    // Prefer the final sustained text segment. Permit one closing transition/logo
+    // frame after it, but reject text that is followed by ordinary episode footage.
+    return candidates.lastOrNull { (index, _) -> frames.size - (index + 3) <= 1 }?.second
 }
 
 internal fun findRepeatedOpening(

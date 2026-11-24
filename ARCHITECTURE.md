@@ -75,6 +75,8 @@ Der Trakt-Abgleich lädt API-Daten auf IO und führt umfangreiche Titelvergleich
 
 Für den Serienverlauf lädt der Trakt-Abgleich bei der ersten Bereinigung und bei geänderter Episodenaktivität die gesehenen Serien und pausierten Folgen vollständig. Serien, die in beiden Antworten fehlen, werden lokal im Verlauf und unter „Weiter schauen“ ausgeblendet, sofern seit Einführung der Herkunftsmarkierung keine eigene lokale Wiedergabe erfasst wurde. Vorhandene Fortschrittsdaten bleiben gespeichert, da frühere App-Versionen die Herkunft nicht getrennt speicherten.
 
+Ein manuell ausgelöster Trakt-Abgleich prüft die gesehenen Folgen auch bei unveränderten Aktivitätszeitstempeln. Der automatische Abgleich nutzt weiterhin den gespeicherten Aktivitätsstand. Beim Folgenimport werden die nummerierten Folgen aus der vollständigen Trakt-Antwort mit dem lokalen Bestand verglichen. Die Zuordnung verwendet den gespeicherten Portalkatalog. Manuelle Gesehen-Aktionen senden bei verknüpftem Konto eine Trakt-Verlaufsänderung für den Film beziehungsweise die ausgewählten geladenen Folgen und melden das Ergebnis.
+
 ## Live-Startkategorie
 
 Die zuletzt gewählte Live-Kategorie wird in den vorhandenen App-Einstellungen lokal gespeichert. Beim Start wird die gespeicherte Senderidentität einer Kategorie zugeordnet; der Programmführer beschränkt seine Senderspalte auf diese Kategorie. Fehlt die Zuordnung, wird die zuletzt gewählte oder erste sichtbare Kategorie verwendet.

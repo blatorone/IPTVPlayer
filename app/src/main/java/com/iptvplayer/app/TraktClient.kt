@@ -223,16 +223,19 @@ internal class TraktApi(private val clientId: String) {
         )
     }
 
-    private suspend fun findShow(title: PortalTitle, accessToken: String): JSONObject? {
+    private suspend fun findShow(title: PortalTitle, accessToken: String): JSONObject? =
+        findHistoryTitle(title, "show", accessToken)
+
+    private suspend fun findHistoryTitle(title: PortalTitle, kind: String, accessToken: String): JSONObject? {
         val idPath = title.imdbId?.takeIf { it.matches(Regex("tt[0-9]+")) }
             ?: title.tmdbId?.toLongOrNull()?.takeIf { it > 0 }?.let { "tmdb:$it" }
         val candidates = if (idPath != null) {
-            request("/search/${URLEncoder.encode(idPath, "UTF-8")}?type=show", "GET", token = accessToken)
-                .body.arrayObjects().mapNotNull { it.optJSONObject("show") }
+            request("/search/${URLEncoder.encode(idPath, "UTF-8")}?type=$kind", "GET", token = accessToken)
+                .body.arrayObjects().mapNotNull { it.optJSONObject(kind) }
         } else {
             val query = URLEncoder.encode(displayVodTitle(title), "UTF-8")
-            request("/search/show?query=$query", "GET", token = accessToken)
-                .body.arrayObjects().mapNotNull { it.optJSONObject("show") }
+            request("/search/$kind?query=$query", "GET", token = accessToken)
+                .body.arrayObjects().mapNotNull { it.optJSONObject(kind) }
         }
         val expected = normalizedLabel(displayVodTitle(title))
         return candidates.filter { row ->
@@ -240,6 +243,35 @@ internal class TraktApi(private val clientId: String) {
             val year = row.optInt("year", 0).takeIf { it > 0 }
             (idPath != null || name == expected) && (title.year == null || year == null || year == title.year)
         }.distinctBy { it.optJSONObject("ids")?.optLong("trakt", 0) }.singleOrNull()
+    }
+
+    suspend fun setHistoryStatus(
+        accessToken: String,
+        section: PortalSection,
+        title: PortalTitle,
+        episodes: Set<Pair<Int, Int>>,
+        watched: Boolean
+    ): Boolean {
+        val movie = section == PortalSection.MOVIES
+        val ids = TraktMedia(section, title.name, title.year, title.imdbId, title.tmdbId, null).ids()
+            .takeIf { it.length() > 0 } ?: findHistoryTitle(title, if (movie) "movie" else "show", accessToken)
+            ?.optJSONObject("ids") ?: return false
+        if (!movie && episodes.isEmpty()) return false
+        val item = JSONObject().put("ids", ids)
+        if (!movie) {
+            val seasons = JSONArray()
+            episodes.groupBy({ it.first }, { it.second }).forEach { (season, numbers) ->
+                val entries = JSONArray()
+                numbers.sorted().forEach { entries.put(JSONObject().put("number", it)) }
+                seasons.put(JSONObject().put("number", season).put("episodes", entries))
+            }
+            item.put("seasons", seasons)
+        }
+        val payload = JSONObject().put(if (movie) "movies" else "shows", JSONArray().put(item))
+        val endpoint = if (watched) "/sync/history" else "/sync/history/remove"
+        val result = JSONObject(request(endpoint, "POST", payload, token = accessToken).body)
+        val missing = result.optJSONObject("not_found") ?: return false
+        return missing.keys().asSequence().none { (missing.optJSONArray(it)?.length() ?: 0) > 0 }
     }
 
     private fun String.arrayObjects(): List<JSONObject> =
@@ -252,7 +284,6 @@ internal class TraktApi(private val clientId: String) {
         onProgress: suspend (String) -> Unit = {},
         previousActivities: String? = null,
         currentActivities: String? = null,
-        episodeHistoryCursor: String? = null,
         reconcileSeriesHistory: Boolean = false
     ): TraktLibrary = withContext(Dispatchers.IO) {
         val delta = activityDelta(previousActivities, currentActivities)
@@ -300,16 +331,13 @@ internal class TraktApi(private val clientId: String) {
         val watchedMovies = watchedData.first
         val watchedShowData = watchedData.second
         val (watchedShows, aggregatedEpisodes, seriesProgress) = watchedShowData
-        val changedEpisodes = if (!delta.full && delta.watchedEpisodes) {
-            loadRecentEpisodeHistory(accessToken, onProgress, episodeHistoryCursor, maxShows = Int.MAX_VALUE)
-        } else emptyList()
-        val watchedEpisodes = if (!delta.full) {
-            changedEpisodes
-        } else aggregatedEpisodes.ifEmpty {
+        val watchedEpisodes = if (delta.full || delta.watchedEpisodes || reconcileSeriesHistory) {
+            aggregatedEpisodes.ifEmpty {
             // Keep compatibility with responses without season data, but only
             // inspect the newest 100 events and at most ten distinct shows.
-            loadRecentEpisodeHistory(accessToken, onProgress)
-        }
+                if (watchedShows.isEmpty()) emptyList() else loadRecentEpisodeHistory(accessToken, onProgress)
+            }
+        } else emptyList()
         val watched = watchedMovies + if (delta.full) watchedShows else emptyList()
         val changedPlayback = playback.filter { it.section != PortalSection.SERIES || delta.full || delta.playbackEpisodes }
         TraktLibrary(
@@ -570,26 +598,12 @@ internal class TraktApi(private val clientId: String) {
 
     private suspend fun loadRecentEpisodeHistory(
         token: String,
-        onProgress: suspend (String) -> Unit,
-        startAt: String? = null,
-        maxShows: Int = 10
+        onProgress: suspend (String) -> Unit
     ): List<TraktMedia> {
-        var page = 1
-        var pageCount: Int? = null
-        var hasMore: Boolean
         val result = mutableListOf<TraktMedia>()
         val recentShows = linkedSetOf<String>()
-        do {
-        val path = buildString {
-            append("/sync/history/episodes?page=$page&limit=100")
-            startAt?.takeIf(String::isNotBlank)?.let {
-                append("&start_at=").append(URLEncoder.encode(it, "UTF-8"))
-            }
-        }
-        val response = request(path, "GET", token = token)
+        val response = request("/sync/history/episodes?page=1&limit=100", "GET", token = token)
         val rows = response.jsonArray()
-        pageCount = response.pageCount ?: pageCount
-        hasMore = rows.length() == 100
         onProgress("Prüfe die letzten Trakt-Folgen")
         for (index in 0 until rows.length()) {
             val row = rows.optJSONObject(index) ?: continue
@@ -601,7 +615,7 @@ internal class TraktApi(private val clientId: String) {
             val tmdb = ids.optLong("tmdb", 0).takeIf { it > 0 }?.toString()
             val trakt = ids.optLong("trakt", 0).takeIf { it > 0 }
             val identity = trakt?.let { "trakt:$it" } ?: imdb ?: tmdb ?: normalizedLabel(name)
-            if (identity !in recentShows && recentShows.size >= maxShows) continue
+            if (identity !in recentShows && recentShows.size >= 10) continue
             recentShows += identity
             val episode = row.optJSONObject("episode") ?: continue
             val season = episode.optInt("season", -1).takeIf { it >= 0 } ?: continue
@@ -611,8 +625,6 @@ internal class TraktApi(private val clientId: String) {
                 imdb, tmdb, trakt, row.optString("watched_at").toInstantMillis(), season, number
             )
         }
-        page++
-        } while (startAt != null && (pageCount?.let { page <= it } ?: hasMore))
         return result
     }
 

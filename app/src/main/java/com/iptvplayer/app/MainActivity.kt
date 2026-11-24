@@ -467,6 +467,7 @@ private fun PlayerHome(
     var traktSession by remember { mutableStateOf<TraktSession?>(null) }
     var traktDeviceCode by remember { mutableStateOf<TraktDeviceCode?>(null) }
     var traktBusy by remember { mutableStateOf(false) }
+    var sendingWatchStatus by remember { mutableStateOf(false) }
     var traktStatus by remember { mutableStateOf<String?>(null) }
     var traktPlaybackNotice by remember { mutableStateOf<String?>(null) }
     var portalRefreshNotice by remember { mutableStateOf<String?>(null) }
@@ -976,8 +977,8 @@ private fun PlayerHome(
         }
     }
 
-    fun syncTrakt() {
-        if (traktBusy) return
+    fun syncTrakt(forceSeriesHistory: Boolean = false) {
+        if (traktBusy || sendingWatchStatus) return
         traktBusy = true
         traktStatus = context.getString(R.string.trakt_checking_changes)
         fun importedTitleKey(section: PortalSection, title: PortalTitle): String =
@@ -1006,7 +1007,8 @@ private fun PlayerHome(
                     val cachedActivities = preferences?.getString(activityKey, null)
                     val watchlistDirty = preferences?.getBoolean(dirtyKey, true) ?: true
                     val historyReconcileKey = "trakt_series_history_reconciled:${session.username.lowercase()}"
-                    val reconcileSeriesHistory = preferences?.getBoolean(historyReconcileKey, false) != true
+                    val reconcileSeriesHistory = forceSeriesHistory ||
+                        preferences?.getBoolean(historyReconcileKey, false) != true
                     if (cachedActivities == activities && !watchlistDirty && !reconcileSeriesHistory) {
                         withContext(Dispatchers.Main) {
                             traktStatus = context.getString(R.string.trakt_cache_current)
@@ -1016,18 +1018,11 @@ private fun PlayerHome(
                     withContext(Dispatchers.Main) {
                         traktStatus = context.getString(R.string.trakt_checking_changes)
                     }
-                    val historyCursorKey = "trakt_episode_history_cursor:${session.username.lowercase()}"
-                    val oldHistoryCursor = preferences?.getString(historyCursorKey, null)
-                        ?: cachedActivities?.let { old ->
-                            runCatching { org.json.JSONObject(old).optJSONObject("episodes")?.optString("watched_at") }
-                                .getOrNull()?.takeIf(String::isNotBlank)
-                        }
                     val remote = api.loadLibrary(
                         session.accessToken,
                         onProgress = { progress -> withContext(Dispatchers.Main) { traktStatus = progress } },
                         previousActivities = cachedActivities,
                         currentActivities = activities,
-                        episodeHistoryCursor = oldHistoryCursor,
                         reconcileSeriesHistory = reconcileSeriesHistory
                     )
                     if (watchlistDirty) {
@@ -1229,6 +1224,16 @@ private fun PlayerHome(
                     // Trakt show on every sync.
                     val cachedRecords = trackedRecordsFor(media, media.asTitle())
                     val cachedSeries = mergeSeriesRecords(cachedRecords)
+                    val episodesToApply = episodes.filter { episode ->
+                        val key = "${episode.seasonNumber}:${episode.episodeNumber}"
+                        key !in cachedSeries?.watchedEpisodes.orEmpty() ||
+                            (episode.watchedAtMillis ?: 0L) > (cachedSeries?.watchedAt ?: 0L)
+                    }
+                    if (episodesToApply.isEmpty()) {
+                        processedWatchedEpisodes += episodes.size
+                        reportImportProgress("Prüfe gesehene Folgen", processedWatchedEpisodes - 1, sortedWatchedEpisodes.size)
+                        continue
+                    }
                     val entries = if (cachedSeries == null) {
                         localMatches(media)
                     } else emptyList()
@@ -1250,7 +1255,7 @@ private fun PlayerHome(
                     val watchedKeys = linkedSetOf<String>()
                     var latestResume: EpisodeResume? = null
                     var latestWatchedAt = old?.watchedAt ?: 0L
-                    for (episode in episodes) {
+                    for (episode in episodesToApply) {
                         val seasonNumber = episode.seasonNumber ?: continue
                         val episodeNumber = episode.episodeNumber ?: continue
                         val episodeKeys = buildList {
@@ -1269,14 +1274,15 @@ private fun PlayerHome(
                         .distinct()
                         val watchedKey = "$seasonNumber:$episodeNumber"
                         watchedKeys += watchedKey
-                        val alreadyImported = watchedKey in cachedSeries?.watchedEpisodes.orEmpty()
-                        val needsLocalMark = episodeKeys.any { key ->
-                            progressPreferences?.getBoolean("completed:$key", false) != true
-                        }
-                        if (!alreadyImported || needsLocalMark) completedEpisodes += episodeKeys
                         val watchedAt = episode.watchedAtMillis ?: 0L
-                        if (watchedAt >= latestWatchedAt) {
-                            latestWatchedAt = watchedAt
+                        completedEpisodes += episodeKeys.filter { key ->
+                            val localUpdated = progressPreferences?.getLong("progress_updated:$key", 0L) ?: 0L
+                            if (progressPreferences?.contains("manual_watched:$key") == true) {
+                                localUpdated > 0L && watchedAt > localUpdated
+                            } else localUpdated == 0L || watchedAt >= localUpdated
+                        }
+                        if (watchedAt > latestWatchedAt || old?.lastEpisode == null && latestResume == null) {
+                            latestWatchedAt = maxOf(latestWatchedAt, watchedAt)
                             latestResume = EpisodeResume(
                                 "$seasonNumber:$episodeNumber", seasonNumber, episodeNumber.toString(), null,
                                 episodeKeys.firstOrNull()
@@ -1389,9 +1395,8 @@ private fun PlayerHome(
                 }
                 progressPreferences?.edit()?.also { editor ->
                     completedEpisodes.forEach { key ->
-                        if (progressPreferences?.contains("manual_watched:$key") != true) {
-                            editor.putBoolean("completed:$key", true).remove(key).remove("trakt_percent:$key")
-                        }
+                        editor.putBoolean("completed:$key", true).remove(key)
+                            .remove("manual_watched:$key").remove("trakt_percent:$key")
                     }
                     importedProgress.forEach { (key, percent) ->
                         if (key !in completedEpisodes && progressPreferences?.contains("manual_watched:$key") != true) {
@@ -1408,12 +1413,8 @@ private fun PlayerHome(
                     ?.apply()
                 pendingActivities?.let { activities ->
                     traktSession?.username?.lowercase()?.let { username ->
-                        val episodeCursor = runCatching {
-                            org.json.JSONObject(activities).optJSONObject("episodes")?.optString("watched_at")
-                        }.getOrNull()?.takeIf(String::isNotBlank)
                         preferences?.edit()
                             ?.putString("trakt_last_activities:$username", activities)
-                            ?.also { editor -> episodeCursor?.let { editor.putString("trakt_episode_history_cursor:$username", it) } }
                             ?.putBoolean("trakt_watchlist_dirty:$username", false)
                             ?.also { editor ->
                                 if (remoteSeriesKeys != null) editor.putBoolean("trakt_series_history_reconciled:$username", true)
@@ -1434,8 +1435,8 @@ private fun PlayerHome(
         }
     }
 
-    LaunchedEffect(traktSyncRequested, traktBusy, traktSession?.username, restoring) {
-        if (traktSyncRequested && !traktBusy && traktSession != null && !restoring) {
+    LaunchedEffect(traktSyncRequested, traktBusy, sendingWatchStatus, traktSession?.username, restoring) {
+        if (traktSyncRequested && !traktBusy && !sendingWatchStatus && traktSession != null && !restoring) {
             // Let the cached guide and last channel render before remote account sync begins.
             delay(5_000)
             traktSyncRequested = false
@@ -2783,6 +2784,7 @@ private fun PlayerHome(
         return prefs.isPlaybackCompleted(key, fallback)
     }
     fun setWatched(section: PortalSection, title: PortalTitle, episodes: List<Pair<PortalSeason, PortalTitle>>, watched: Boolean) {
+        if (sendingWatchStatus || traktBusy) return
         val prefs = progressPreferences ?: return
         val keys = if (section == PortalSection.MOVIES) {
             setOf(titleSelection(section, title).progressKey) + movieHistory.filter { movie ->
@@ -2834,19 +2836,51 @@ private fun PlayerHome(
                 })
             }
         }
+        val account = traktSession?.username ?: return
+        val remoteTitle = title.copy(imdbId = title.imdbId ?: previous?.imdb, tmdbId = title.tmdbId ?: previous?.tmdb)
+        val numberedEpisodes = episodes.mapNotNull { (season, episode) ->
+            val (seasonKey, episodeKey) = seriesEpisodeKey(season, episode).split(':', limit = 2)
+            val seasonNumber = seasonKey.toIntOrNull()?.takeIf { it >= 0 } ?: return@mapNotNull null
+            val episodeNumber = episodeKey.toIntOrNull()?.takeIf { it > 0 } ?: return@mapNotNull null
+            seasonNumber to episodeNumber
+        }
+        sendingWatchStatus = true
+        scope.launch {
+            try {
+                val accepted = numberedEpisodes.size == episodes.size && withTraktSession { api, session ->
+                    session.username == account && api.setHistoryStatus(
+                        session.accessToken, section, remoteTitle, numberedEpisodes.toSet(), watched
+                    )
+                }
+                traktPlaybackNotice = context.getString(when {
+                    !accepted -> R.string.trakt_manual_history_failed
+                    watched -> R.string.trakt_manual_history_added
+                    else -> R.string.trakt_manual_history_removed
+                })
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                traktPlaybackNotice = context.getString(R.string.trakt_manual_history_failed)
+            } finally {
+                sendingWatchStatus = false
+            }
+        }
     }
 
     watchStatusAction?.let { update ->
         AlertDialog(
             onDismissRequest = { watchStatusAction = null },
             title = { Text(stringResource(R.string.watched_status)) },
+            text = if (traktSession != null) {
+                { Text(stringResource(R.string.trakt_manual_history_description)) }
+            } else null,
             confirmButton = {
-                MaterialTextButton(onClick = { update(true); watchStatusAction = null }) {
+                MaterialTextButton(enabled = !sendingWatchStatus && !traktBusy, onClick = { update(true); watchStatusAction = null }) {
                     Text(stringResource(R.string.mark_watched))
                 }
             },
             dismissButton = {
-                MaterialTextButton(onClick = { update(false); watchStatusAction = null }) {
+                MaterialTextButton(enabled = !sendingWatchStatus && !traktBusy, onClick = { update(false); watchStatusAction = null }) {
                     Text(stringResource(R.string.mark_unwatched))
                 }
             }
@@ -5575,7 +5609,7 @@ private fun PlayerHome(
                                     busy = traktBusy,
                                     status = traktStatus,
                                     onConnect = ::connectTrakt,
-                                    onSync = ::syncTrakt,
+                                    onSync = { syncTrakt(forceSeriesHistory = true) },
                                     onDisconnect = ::disconnectTrakt
                                 )
                                     }

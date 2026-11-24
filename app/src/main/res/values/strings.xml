@@ -346,6 +346,10 @@
     <string name="season_watched_status">Staffelstatus</string>
     <string name="mark_watched">Als gesehen markieren</string>
     <string name="mark_unwatched">Als ungesehen markieren</string>
+    <string name="trakt_manual_history_description">Bei verbundenem Trakt-Konto wird die Auswahl auch dort übernommen. „Ungesehen“ entfernt die Wiedergaben der ausgewählten Titel oder Folgen aus dem Trakt-Verlauf.</string>
+    <string name="trakt_manual_history_added">Als gesehen an Trakt übertragen.</string>
+    <string name="trakt_manual_history_removed">Aus dem Trakt-Verlauf entfernt.</string>
+    <string name="trakt_manual_history_failed">Lokal gespeichert. Trakt hat die Änderung nicht vollständig bestätigt.</string>
     <string name="episode_in_progress">Angefangen</string>
     <string name="episode_unwatched">Ungesehen</string>
     <string name="no_german_description">Keine deutsche Beschreibung verfügbar.</string>

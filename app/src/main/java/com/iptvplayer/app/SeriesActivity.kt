@@ -50,11 +50,18 @@ internal data class TrackedSeries(
 )
 
 internal fun seriesEpisodeKey(season: PortalSeason, episode: PortalTitle): String {
-    val seasonKey = season.number?.toString() ?: normalizedLabel(season.title.name)
-    val episodeKey = episode.episode?.let { it.toIntOrNull()?.toString() ?: normalizedLabel(it) }
+    val seasonKey = season.number?.toString() ?: numberedSeason.find(season.title.name)?.groupValues?.get(1)
+        ?.toIntOrNull()?.toString() ?: normalizedLabel(season.title.name)
+    val episodeKey = episode.episode?.let { raw ->
+        (raw.trim().toIntOrNull() ?: numberedEpisode.matchEntire(raw.trim())?.groupValues?.get(1)?.toIntOrNull())
+            ?.toString() ?: normalizedLabel(raw)
+    }
         ?: normalizedLabel(episode.name)
     return "$seasonKey:$episodeKey"
 }
+
+private val numberedSeason = Regex("""(?i)\b(?:staffel|season)\s+(\d+)\b""")
+private val numberedEpisode = Regex("""(?i)(?:s\d+\s*e|e|episode\s+|folge\s+)(\d+)""")
 
 internal fun SharedPreferences.saveInterruptedPlayback(key: String, position: Long, duration: Long) {
     edit().putLong(key, position)

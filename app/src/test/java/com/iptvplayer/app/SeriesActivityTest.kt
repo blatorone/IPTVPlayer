@@ -6,6 +6,13 @@ import org.junit.Test
 
 class SeriesActivityTest {
     @Test
+    fun numberedPortalLabelsMatchTraktEpisodeKeys() {
+        val season = PortalSeason(null, PortalTitle("Staffel 02"), emptyList())
+        assertEquals("2:3", seriesEpisodeKey(season, PortalTitle("Testfolge", episode = "S02E003")))
+        assertEquals("2:3", seriesEpisodeKey(season, PortalTitle("Testfolge", episode = "Folge 03")))
+    }
+
+    @Test
     fun selectsSeasonOneEpisodeOneEvenWhenThePortalReturnsAnotherOrder() {
         val firstEpisode = PortalTitle("Erste Folge", episode = "01")
         val first = PortalSeason(1, PortalTitle("Staffel 1"), listOf(

@@ -1,5 +1,10 @@
 # Änderungen
 
+## 1.0.68
+
+- Manuelle Gesehen- und Ungesehen-Markierungen werden an ein verbundenes Trakt-Konto übertragen.
+- Der Trakt-Folgenimport übernimmt auch nachträglich markierte Folgen anhand des vollständigen Gesehen-Stands.
+
 ## 1.0.67
 
 - Filme, Folgen, Staffeln und Serien lassen sich lokal als gesehen oder ungesehen markieren.

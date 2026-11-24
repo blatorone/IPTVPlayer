@@ -37,7 +37,7 @@ Ein nutzerkonfigurierbarer IPTV-Player für Android-Telefone und -Tablets sowie 
 
 ## Live, EPG und Navigation
 
-- Filme, Folgen, Staffeln und Serien lassen sich in der Detailansicht lokal als gesehen oder ungesehen markieren. Bei erneut gestarteter und unterbrochener Wiedergabe zeigen Balken und Fortsetzung die aktuelle Position.
+- Filme, Folgen, Staffeln und Serien lassen sich in der Detailansicht als gesehen oder ungesehen markieren. Bei verbundenem Trakt-Konto überträgt die Aktion die Änderung auch an den Trakt-Verlauf. Staffel- und Serienaktionen betreffen die geladenen Folgen. Bei erneut gestarteter und unterbrochener Wiedergabe zeigen Balken und Fortsetzung die aktuelle Position.
 
 - Die Hauptnavigation sitzt in Live-TV, Filmen, Serien, Suche und Einstellungen oben. Einstellungen zeigen ihre Bereiche direkt darunter. Film- und Serienseiten verwenden denselben dunklen Streaming-Stil; der Live-Bereich behält das EPG-Raster.
 - Rechts vom fokussierten Sender im Programmführer führt die Fernbedienung in die EPG-Zeitleiste; von dort lassen sich Sendungen und spätere Zeitfenster auswählen. Beim Öffnen des Wiedergabemenüs zeigt Live-TV Sender, laufende Sendung und EPG-Beschreibung.

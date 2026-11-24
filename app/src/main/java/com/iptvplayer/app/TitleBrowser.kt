@@ -514,7 +514,7 @@ internal fun SeriesSeasons(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(label, Modifier.padding(4.dp), style = MaterialTheme.typography.labelSmall, maxLines = 2)
-                        PortalImage(episode.poster ?: details?.picture ?: series.poster ?: season.title.poster, Modifier.fillMaxSize())
+                        PortalImage(details?.picture ?: episode.poster ?: series.poster ?: season.title.poster, Modifier.fillMaxSize())
                     }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         val entry = if (seriesEpisodeKey(season, episode) in unseen) {
@@ -524,7 +524,7 @@ internal fun SeriesSeasons(
                             MenuButton(entry, leftEdge.weight(1f)) { onEpisode(season, episode) }
                             MenuButton(stringResource(R.string.watched_status), Modifier) { onEpisodeWatchStatus(season, episode) }
                         }
-                        val description = germanDescription(episode.description) ?: details?.description
+                        val description = germanDescription(details?.description) ?: germanDescription(episode.description)
                         Text(
                             description ?: stringResource(R.string.no_german_episode_description),
                             style = MaterialTheme.typography.bodySmall, maxLines = 3, overflow = TextOverflow.Ellipsis

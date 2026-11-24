@@ -1,5 +1,12 @@
 # Änderungen
 
+## 1.0.70
+
+- Intro skipping no longer seeks backwards when image matching finishes late.
+- Player D-pad order follows the visible settings and subtitle button positions.
+- Audio and forced subtitles prefer the device language; non-German overview text is filtered.
+- TMDB episode descriptions and still images are loaded for each available season.
+
 ## 1.0.69
 
 - Die automatische Intro-Erkennung gleicht Bildfolgen auch bei moderaten Kompressionsabweichungen ab und richtet gelernte Intros zeitlich zuverlässiger aus.

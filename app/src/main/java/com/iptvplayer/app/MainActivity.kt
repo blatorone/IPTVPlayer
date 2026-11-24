@@ -196,7 +196,12 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Log.setLogLevel(Log.LOG_LEVEL_OFF)
-        player = ExoPlayer.Builder(this).build()
+        player = ExoPlayer.Builder(this).build().also { activePlayer ->
+            activePlayer.trackSelectionParameters = activePlayer.trackSelectionParameters
+                .buildUpon()
+                .setPreferredAudioLanguage(java.util.Locale.getDefault().language)
+                .build()
+        }
         enableEdgeToEdge()
         setContent {
             var accentChoice by remember {
@@ -3137,9 +3142,9 @@ private fun PlayerHome(
         value = emptyMap()
         val client = metadataClient ?: return@produceState
         val series = detailMetadata?.takeIf { details?.first == PortalSection.SERIES } ?: return@produceState
-        val seasonNumbers = seasons.orEmpty().filter { season ->
-            season.episodes.any { it.poster == null || germanDescription(it.description) == null }
-        }.mapNotNull { it.number }.distinct()
+        // Fetch TMDB stills and localized overviews even when the portal supplied
+        // a generic poster or a non-German episode description.
+        val seasonNumbers = seasons.orEmpty().mapNotNull { it.number }.distinct()
         for (batch in seasonNumbers.chunked(3)) {
             val loaded = coroutineScope {
                 batch.map { number ->
@@ -4322,11 +4327,13 @@ private fun PlayerHome(
                 val intro = if (manualIntro) {
                     EpisodeTiming(introStartSeconds * 1_000L, introEndSeconds * 1_000L).intro(duration)
                 } else portal.intro(duration) ?: detected?.intro(duration)
-                // Frame matching completes just after the repeated opening ends;
-                // keep the skip action available briefly instead of silently missing it.
+                // Never offer a stale skip target: that would seek backwards after
+                // frame matching completes near the end of an intro.
                 val introGrace = intro?.let { position > it.last && position - it.last <= 15_000L } == true
-                skipIntroTo = if (!introSkipped && intro != null && (position in intro || introGrace) &&
-                    active.isCurrentMediaItemSeekable) intro.last + 1 else null
+                val introTarget = futureIntroSkipTarget(intro, position)
+                skipIntroTo = if (!introSkipped && introTarget != null && position < introTarget &&
+                    (intro?.contains(position) == true || introGrace) && active.isCurrentMediaItemSeekable
+                ) introTarget else null
                 if (autoSkipIntro && active.isPlaying) skipIntroTo?.let {
                     active.seekTo(it)
                     skipIntroTo = null
@@ -7213,10 +7220,15 @@ internal fun PlayerFrame(
                             group to index
                         }
                     }
-                val forced = choices.firstOrNull { (group, index) ->
-                    group.getTrackFormat(index).selectionFlags and C.SELECTION_FLAG_FORCED != 0
-                }
                 val preferredLanguage = java.util.Locale.getDefault().language
+                val forced = choices.firstOrNull { (group, index) ->
+                    val format = group.getTrackFormat(index)
+                    format.selectionFlags and C.SELECTION_FLAG_FORCED != 0 &&
+                        format.language?.substringBefore('-') == preferredLanguage
+                } ?: choices.firstOrNull { (group, index) ->
+                    val format = group.getTrackFormat(index)
+                    format.selectionFlags and C.SELECTION_FLAG_FORCED != 0 && format.language.isNullOrBlank()
+                }
                 val languageChoice = choices.firstOrNull { (group, index) ->
                     group.getTrackFormat(index).language?.substringBefore('-') == preferredLanguage
                 }
@@ -7298,8 +7310,8 @@ internal fun PlayerFrame(
         // own click handler still decides which settings are actually available.
         if (settingsButton?.visibility == android.view.View.VISIBLE) settingsButton.isEnabled = true
         val bottomButtons = listOf(
-            view.findViewWithTag<android.view.View>("player_subtitles_action"),
             view.findViewById(androidx.media3.ui.R.id.exo_settings),
+            view.findViewWithTag<android.view.View>("player_subtitles_action"),
             view.findViewById(androidx.media3.ui.R.id.exo_fullscreen),
             view.findViewById(androidx.media3.ui.R.id.exo_overflow_show)
         ).filterNotNull()

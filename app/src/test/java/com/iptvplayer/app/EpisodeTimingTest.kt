@@ -74,6 +74,13 @@ class EpisodeTimingTest {
     }
 
     @Test
+    fun doesNotOfferIntroTargetBehindPlaybackPosition() {
+        val intro = EpisodeTiming(10_000, 20_000).intro(120_000)
+        assertEquals(20_000L, futureIntroSkipTarget(intro, 15_000))
+        assertNull(futureIntroSkipTarget(intro, 20_001))
+    }
+
+    @Test
     fun selectsNextNumberAndContinuesIntoTheNextSeason() {
         val first = PortalTitle("Eins", episode = "1")
         val second = PortalTitle("Zwei", episode = "2")

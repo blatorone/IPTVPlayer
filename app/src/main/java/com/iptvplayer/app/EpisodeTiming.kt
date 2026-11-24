@@ -17,6 +17,9 @@ internal data class EpisodeTiming(
         creditsStartMs?.takeIf { it > 0 && it < duration } ?: duration
 }
 
+internal fun futureIntroSkipTarget(intro: LongRange?, positionMs: Long): Long? =
+    intro?.last?.plus(1)?.takeIf { it > positionMs }
+
 internal fun JSONObject.episodeTiming(): EpisodeTiming {
     fun position(vararg fields: String): Long? {
         val containers = listOfNotNull(optJSONObject("markers"), this, optJSONObject("info"))

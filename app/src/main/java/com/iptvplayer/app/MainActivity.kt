@@ -1962,6 +1962,7 @@ private fun PlayerHome(
         mutableStateOf(emptyMap<String, List<PortalProgramme>>())
     }
     var epgFetchedAt by remember { mutableStateOf(emptyMap<String, Long>()) }
+    var visibleEpgChannels by remember { mutableStateOf(emptyList<StalkerChannel>()) }
     val epgInFlight = remember { mutableSetOf<String>() }
     val epgRequestLimit = remember { Semaphore(6) }
     val xmlTvRequestLimit = remember { Semaphore(3) }
@@ -2108,15 +2109,13 @@ private fun PlayerHome(
             } else if (refresh) {
                 val available = liveCategories.entries
                     .filter { visibleCategory(PortalSection.LIVE, it.key, it.key) }.flatMap { it.value }
-                val known = available.filter {
-                    val key = programmeKey(it)
-                    key in pinnedProgrammeKeys || key in epgCache
-                }
-                if (epgRefreshRequest == 0) delay(700)
-                val refreshTargets = if (epgRefreshRequest == 0) {
-                    val visible = sequenceOf(playing, programmeChannel).filterNotNull().filter { it in available }
-                    visible.toList() + available.filter { programmeKey(it) in pinnedProgrammeKeys }
-                } else available.take(12) + known
+                val selected = sequenceOf(playing, programmeChannel).filterNotNull()
+                val pinned = available.filter { programmeKey(it) in pinnedProgrammeKeys }
+                // Refresh only the EPG rows the user is currently looking at, plus the
+                // playing/selected and explicitly pinned channels. A cache entry alone
+                // must not make thousands of old channels refresh every cycle.
+                val refreshTargets = (selected + visibleEpgChannels.asSequence() + pinned.asSequence())
+                    .filter { it in available }.distinct().toList()
                 epgUpdateFailed = !loadProviderSchedules(refreshTargets, force = epgRefreshRequest > 0)
             }
         } finally {
@@ -4521,7 +4520,10 @@ private fun PlayerHome(
                                         descriptionBesideSchedule = descriptionBesideSchedule,
                                         refreshKey = epgRefreshRequest + if (guideCacheLoaded) 1 else 0,
                                         programmes = ::effectiveProgrammes,
-                                        onVisible = { visible -> if (!useXmlTv) loadProviderSchedules(visible) },
+                                        onVisible = { visible ->
+                                            visibleEpgChannels = visible
+                                            if (!useXmlTv) loadProviderSchedules(visible)
+                                        },
                                         onInteraction = { overlayInteraction++ },
                                         onScheduleFocused = { overlayScheduleFocused = it },
                                         onSelect = { channel ->
@@ -5712,7 +5714,10 @@ private fun PlayerHome(
                                 restorePlayingFocus = restoreLiveFocus,
                                 onPlayingFocusRestored = { restoreLiveFocus = false },
                                 onChannelLeft = { guidePanel = GuidePanel.CATEGORIES },
-                                onVisibleChannels = { visible -> if (!useXmlTv) loadProviderSchedules(visible) },
+                                onVisibleChannels = { visible ->
+                                    visibleEpgChannels = visible
+                                    if (!useXmlTv) loadProviderSchedules(visible)
+                                },
                                 onHighlight = {
                                     programmeChannel = it
                                     guideProgramme = null
@@ -7008,6 +7013,11 @@ internal fun PlayerFrame(
     }
     fun configureBottomFocus(view: PlayerView) {
         val progress = view.findViewById<android.view.View>(androidx.media3.ui.R.id.exo_progress) ?: return
+        val settingsButton = view.findViewById<android.view.View>(androidx.media3.ui.R.id.exo_settings)
+        // Media3 disables this button when it cannot currently find selectable tracks.
+        // Keep it focusable on TV so the settings entry remains in the D-pad route; its
+        // own click handler still decides which settings are actually available.
+        if (settingsButton?.visibility == android.view.View.VISIBLE) settingsButton.isEnabled = true
         val bottomButtons = listOf(
             androidx.media3.ui.R.id.exo_subtitle,
             androidx.media3.ui.R.id.exo_settings,
@@ -7141,6 +7151,39 @@ internal fun PlayerFrame(
                                 }
                                 if (controlsVisible) {
                                     extendControlsTimeout()
+                                    if (event.action == android.view.KeyEvent.ACTION_DOWN &&
+                                        event.repeatCount == 0 && event.keyCode in setOf(
+                                            android.view.KeyEvent.KEYCODE_DPAD_DOWN,
+                                            android.view.KeyEvent.KEYCODE_DPAD_UP
+                                        )
+                                    ) {
+                                        findViewById<android.view.View>(androidx.media3.ui.R.id.exo_settings)?.let { settings ->
+                                            if (settings.visibility == android.view.View.VISIBLE) settings.isEnabled = true
+                                        }
+                                        configureBottomFocus(this)
+                                        val focused = findFocus()
+                                        val progress = findViewById<android.view.View>(androidx.media3.ui.R.id.exo_progress)
+                                        val bottom = listOf(
+                                            androidx.media3.ui.R.id.exo_subtitle,
+                                            androidx.media3.ui.R.id.exo_settings,
+                                            androidx.media3.ui.R.id.exo_fullscreen,
+                                            androidx.media3.ui.R.id.exo_overflow_show
+                                        ).mapNotNull { findViewById<android.view.View>(it) }
+                                            .firstOrNull { it.visibility == android.view.View.VISIBLE && it.isEnabled && it.isFocusable }
+                                        val moved = when {
+                                            event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN && focused === progress ->
+                                                bottom?.requestFocus() == true
+                                            event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP && bottom != null &&
+                                                focused?.id in listOf(
+                                                    androidx.media3.ui.R.id.exo_subtitle,
+                                                    androidx.media3.ui.R.id.exo_settings,
+                                                    androidx.media3.ui.R.id.exo_fullscreen,
+                                                    androidx.media3.ui.R.id.exo_overflow_show
+                                                ) -> progress?.requestFocus() == true
+                                            else -> false
+                                        }
+                                        if (moved) return true
+                                    }
                                 } else {
                                     val direction = when (event.keyCode) {
                                         android.view.KeyEvent.KEYCODE_DPAD_LEFT -> GuideInput.REMOTE_LEFT

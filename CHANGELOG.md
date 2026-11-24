@@ -1,5 +1,12 @@
 # Änderungen
 
+## 1.0.59
+
+- D-Pad-Rechts vom fokussierten Sender setzt den Fokus im Programmführer direkt auf den aktuellen Zeitleisteneintrag; die Zeitleiste bleibt anschließend mit Links/Rechts navigierbar.
+- Im Live-Vollbild führt D-Pad-Runter von der Zeitachse gezielt zu den sichtbaren unteren Player-Einstellungen. Die Einstellungen bleiben erreichbar, auch wenn Media3 sie zunächst als nicht fokussierbar markiert.
+- Der periodische Anbieter-EPG-Abgleich fragt nur sichtbare, ausgewählte, laufende und angeheftete Sender ab. Ein alter Cacheeintrag allein löst keinen erneuten Abruf für alle zuvor besuchten Sender aus.
+- Portal-, Stream- und EPG-Snapshots sowie Trakt-Zugangstoken bleiben mit AES-GCM und Android-Keystore geschützt. Die vorhandenen Dateien und Datenbankinhalte werden in diesem Release nicht migriert oder gelöscht.
+
 ## 1.0.58
 
 - Beim Starten oder Fortsetzen von Filmen und Serien bleibt die Detailansicht sichtbar, bis Media3 die Wiedergabe tatsächlich startet. Fehler beim Laden führen nicht mehr direkt in einen leeren Vollbildschirm; automatische Folgenwechsel bleiben im Vollbild.

@@ -209,7 +209,13 @@ internal fun ProgrammeTimeline(
                             right = timelineFocus
                         }
                         .onHorizontalRemote { right ->
-                            if (right) focusTimelineRequest++ else onChannelLeft()
+                            if (right) {
+                                // The guide row is inside a LazyColumn; requesting focus on the
+                                // next frame can lose the key event when that row is rebound.
+                                // Try the explicit target immediately and retain the deferred
+                                // request as a fallback for rows that are still being composed.
+                                if (!timelineFocus.requestFocus()) focusTimelineRequest++
+                            } else onChannelLeft()
                         },
                     channel === highlighted, channel === playing,
                     rowHeight = rowHeight,

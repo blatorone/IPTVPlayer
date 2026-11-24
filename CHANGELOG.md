@@ -1,5 +1,10 @@
 # Änderungen
 
+## 1.0.57
+
+- Wiederholte Trakt-Verläufe verwenden für bereits verknüpfte Serien den lokal gespeicherten Serien- und Portalbezug, statt beim erneuten Abgleich wieder eine Portalsuche für jede Serie auszulösen.
+- Bereits importierte Folgen werden nicht erneut als lokal neu gesehen markiert. Der Fortschritt zeigt jetzt ausdrücklich an, wenn die empfangene Trakt-Historie mit gespeicherten Serien abgeglichen wird.
+
 ## 1.0.56
 
 - Einstellungen kehren nach Zurück zum zuvor genutzten Bereich zurück, statt die alte Seitenliste und anschließend den Programmführer zu öffnen. Zurück arbeitet in Film-, Serien- und TV-Unterseiten schrittweise; erst auf der Bereichsübersicht erscheint die Beenden-Bestätigung.

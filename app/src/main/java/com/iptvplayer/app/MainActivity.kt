@@ -1187,16 +1187,36 @@ private fun PlayerHome(
                     reportImportProgress("Importiere gesehene Titel", index, library.watched.size)
                 }
                 val sortedWatchedEpisodes = library.watchedEpisodes.sortedBy { it.watchedAtMillis ?: 0L }
+                if (sortedWatchedEpisodes.isNotEmpty()) {
+                    traktStatus = context.getString(R.string.trakt_matching_saved_episodes)
+                }
                 val watchedEpisodeGroups = sortedWatchedEpisodes.groupBy { media ->
                     "${media.traktId ?: media.imdbId ?: media.tmdbId ?: normalizedLabel(media.name)}:${media.year ?: 0}"
                 }.values
                 var processedWatchedEpisodes = 0
                 for (episodes in watchedEpisodeGroups) {
                     val media = episodes.first()
-                    val entries = localMatches(media, searchPortalIfMissing = true)
-                    val title = entries.firstOrNull()?.value ?: media.asTitle()
-                    val trackedKey = if (entries.isNotEmpty()) importedSeriesKey(title) else traktLibraryKey(media)
-                    val old = absorbSeries(media, title, trackedKey)
+                    // A full Trakt watched snapshot repeats all episodes when even one
+                    // play changes. Reuse an already linked local series record first;
+                    // otherwise this loop would issue a portal search for every known
+                    // Trakt show on every sync.
+                    val cachedRecords = trackedRecordsFor(media, media.asTitle())
+                    val cachedSeries = mergeSeriesRecords(cachedRecords)
+                    val entries = if (cachedSeries == null) {
+                        localMatches(media, searchPortalIfMissing = true)
+                    } else emptyList()
+                    val title = entries.firstOrNull()?.value ?: cachedSeries?.let { record ->
+                        PortalTitle(record.name, year = record.year, imdbId = record.imdb, tmdbId = record.tmdb)
+                    } ?: media.asTitle()
+                    val trackedKey = cachedSeries?.key ?: if (entries.isNotEmpty()) {
+                        importedSeriesKey(title)
+                    } else traktLibraryKey(media)
+                    val old = if (cachedSeries == null) {
+                        absorbSeries(media, title, trackedKey)
+                    } else {
+                        cachedRecords.forEach { updatedSeries.remove(it.key) }
+                        cachedSeries.copy(key = trackedKey)
+                    }
                     val refs = entries.mapNotNull { item ->
                         item.value.id?.let { SeriesPortalRef(item.source.identity, it) }
                     }.distinct()
@@ -1220,8 +1240,13 @@ private fun PlayerHome(
                             }
                         }
                         .distinct()
-                        completedEpisodes += episodeKeys
-                        watchedKeys += "$seasonNumber:$episodeNumber"
+                        val watchedKey = "$seasonNumber:$episodeNumber"
+                        watchedKeys += watchedKey
+                        val alreadyImported = watchedKey in cachedSeries?.watchedEpisodes.orEmpty()
+                        val needsLocalMark = episodeKeys.any { key ->
+                            progressPreferences?.getBoolean("completed:$key", false) != true
+                        }
+                        if (!alreadyImported || needsLocalMark) completedEpisodes += episodeKeys
                         val watchedAt = episode.watchedAtMillis ?: 0L
                         if (watchedAt >= latestWatchedAt) {
                             latestWatchedAt = watchedAt

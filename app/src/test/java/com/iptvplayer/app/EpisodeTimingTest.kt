@@ -13,12 +13,12 @@ class EpisodeTimingTest {
         val current = reference.take(6).map { it.copy(timeMs = it.timeMs + 6_000) }
         assertEquals(21_000L until 39_000L, confirmKnownOpening(current, reference, 15_000L until 33_000L))
         assertNull(confirmKnownOpening(current.dropLast(1), reference, 15_000L until 33_000L))
-        assertNull(confirmKnownOpening(current.map { it.copy(fingerprint = 0) }, reference, 15_000L until 33_000L))
+        assertNull(confirmKnownOpening(current.map { it.copy(fingerprint = 0, averageFingerprint = 0) }, reference, 15_000L until 33_000L))
     }
 
     @Test
     fun findsAnOpeningSharedByTwoEpisodesWithDifferentLeadIn() {
-        val shared = List(7) { index -> 255L shl (index * 8) }
+        val shared = List(7) { index -> (index + 1L) * -7046029254386353131L }
         fun frames(values: List<Long>) = values.mapIndexed { index, hash ->
             EpisodeFrame(index * 3_000L, hash, false)
         }
@@ -26,6 +26,34 @@ class EpisodeTimingTest {
         val previous = frames(listOf(0L, 0L) + shared + listOf(0L))
         assertEquals(3_000L until 21_000L, findRepeatedOpening(current, previous))
         assertNull(findRepeatedOpening(frames(List(12) { 0L }), frames(List(12) { 0L })))
+    }
+
+    @Test
+    fun matchesOneSecondOpeningsAcrossCompressionNoise() {
+        val shared = List(22) { index -> (index + 1L) * -7046029254386353131L }
+        fun episode(values: List<Pair<Long, Long>>) = values.mapIndexed { index, (difference, average) ->
+            EpisodeFrame(index * HLS_INTRO_FRAME_INTERVAL_MS, difference, false, average)
+        }
+        val previous = episode(listOf(0L to 0L, 0L to 0L, 0L to 0L) +
+            shared.map { it to it } + listOf(0L to 0L))
+        val currentIntro = shared.map { value -> (value xor 0x7fffL) to (value xor 0xfL) }
+        val current = episode(listOf(-1L to -1L, -1L to -1L) + currentIntro +
+            listOf(Long.MAX_VALUE to Long.MAX_VALUE))
+
+        assertEquals(2_000L until 23_000L,
+            findRepeatedOpening(current, previous, HLS_INTRO_FRAME_INTERVAL_MS))
+    }
+
+    @Test
+    fun openingFrameCachesReadOldAndNewFingerprints() {
+        val oldReference = decodeOpeningReference("episode-1|0,1;1000,2;2000,4;3000,8")
+        assertEquals(4, oldReference?.frames?.size)
+        assertEquals(2L, oldReference?.frames?.get(1)?.averageFingerprint)
+
+        val reference = OpeningReference("episode-2", List(4) { index ->
+            EpisodeFrame(index * 1_000L, 1L shl index, false, 7L shl index)
+        })
+        assertEquals(reference, decodeOpeningReference(reference.encode()))
     }
 
     @Test

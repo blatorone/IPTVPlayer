@@ -15,7 +15,12 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
-internal data class EpisodeFrame(val timeMs: Long, val fingerprint: Long, val creditsText: Boolean)
+internal data class EpisodeFrame(
+    val timeMs: Long,
+    val fingerprint: Long,
+    val creditsText: Boolean,
+    val averageFingerprint: Long = fingerprint
+)
 
 internal data class EpisodeVideoAnalysis(
     val opening: List<EpisodeFrame> = emptyList(),
@@ -24,13 +29,19 @@ internal data class EpisodeVideoAnalysis(
 
 internal data class LearnedOpening(val range: LongRange, val frames: List<EpisodeFrame>) {
     fun encode(): String = "${range.first},${range.last};" +
-        frames.joinToString(";") { "${it.timeMs},${it.fingerprint}" }
+        frames.joinToString(";") { "${it.timeMs},${it.fingerprint},${it.averageFingerprint}" }
 }
 
 internal data class OpeningReference(val mediaId: String, val frames: List<EpisodeFrame>) {
     fun encode(): String = "$mediaId|" + frames.take(180).joinToString(";") {
-        "${it.timeMs},${it.fingerprint}"
+        "${it.timeMs},${it.fingerprint},${it.averageFingerprint}"
     }
+}
+
+private fun decodeFrame(row: String): EpisodeFrame? {
+    val columns = row.split(',').mapNotNull(String::toLongOrNull)
+    if (columns.size !in 2..3) return null
+    return EpisodeFrame(columns[0], columns[1], false, columns.getOrElse(2) { columns[1] })
 }
 
 internal fun decodeOpeningReference(encoded: String?): OpeningReference? {
@@ -39,9 +50,7 @@ internal fun decodeOpeningReference(encoded: String?): OpeningReference? {
     if (separator <= 0) return null
     val mediaId = value.substring(0, separator)
     val frames = value.substring(separator + 1).split(';').take(180).mapNotNull { row ->
-        val columns = row.split(',').mapNotNull(String::toLongOrNull)
-        if (columns.size != 2 || columns[0] !in 0..180_000) null
-        else EpisodeFrame(columns[0], columns[1], false)
+        decodeFrame(row)?.takeIf { it.timeMs in 0..180_000 }
     }
     return frames.takeIf { it.size >= 4 }?.let { OpeningReference(mediaId, it) }
 }
@@ -51,9 +60,7 @@ internal fun decodeLearnedOpening(encoded: String?): LearnedOpening? {
     val bounds = rows.first().split(',').mapNotNull(String::toLongOrNull)
     if (bounds.size != 2 || bounds[0] < 0 || bounds[1] <= bounds[0] || bounds[1] > 180_000) return null
     val frames = rows.drop(1).take(7).mapNotNull { row ->
-        val columns = row.split(',').mapNotNull(String::toLongOrNull)
-        if (columns.size != 2 || columns[0] !in bounds[0]..bounds[1]) null
-        else EpisodeFrame(columns[0], columns[1], false)
+        decodeFrame(row)?.takeIf { it.timeMs in bounds[0]..bounds[1] }
     }
     return frames.takeIf { it.size >= 4 }?.let { LearnedOpening(bounds[0]..bounds[1], it) }
 }
@@ -87,18 +94,21 @@ internal fun confirmKnownOpening(
 ): LongRange? {
     val prefix = reference.filter { it.timeMs in intro }.take(7)
     if (prefix.size < 4) return null
-    val newest = current.lastOrNull()?.timeMs ?: return null
-    val recent = current.takeLast(14).associateBy { it.timeMs }
-    val offset = newest - prefix.last().timeMs
-    if (intro.first + offset < 0) return null
-    val matches = prefix.mapNotNull { referenceFrame ->
-        recent[referenceFrame.timeMs + offset]?.takeIf {
-            java.lang.Long.bitCount(it.fingerprint xor referenceFrame.fingerprint) <= 10
+    if (current.isEmpty()) return null
+    val offsets = current.takeLast(14).flatMap { frame ->
+        prefix.map { it.timeMs - frame.timeMs }
+    }.distinct()
+    val best = offsets.map { offset ->
+        offset to prefix.mapNotNull { referenceFrame ->
+            current.firstOrNull { it.timeMs == referenceFrame.timeMs - offset }
+                ?.takeIf { sameEpisodeFrame(it, referenceFrame) }
         }
-    }
-    if (matches.size >= maxOf(4, prefix.size - 1) &&
-        matches.map(EpisodeFrame::fingerprint).distinct().size >= 3
-    ) return (intro.first + offset)..(intro.last + offset)
+    }.maxByOrNull { (_, matches) -> matches.size } ?: return null
+    val (offset, matches) = best
+    if (intro.first - offset < 0) return null
+    if (matches.size >= maxOf(4, prefix.size) &&
+        matches.map { it.fingerprint xor java.lang.Long.rotateLeft(it.averageFingerprint, 17) }.distinct().size >= 3
+    ) return (intro.first - offset)..(intro.last - offset)
     return null
 }
 
@@ -171,7 +181,33 @@ private fun episodeFrame(timeMs: Long, pixels: IntArray, width: Int, height: Int
         }
         if (bright in 3..(width / 2)) textRows++
     }
-    return EpisodeFrame(timeMs, fingerprint, dark * 100 >= pixels.size * 80 && textRows >= 3)
+    val grid = IntArray(64)
+    var gridIndex = 0
+    var gridTotal = 0L
+    for (gy in 0..7) for (gx in 0..7) {
+        val x = (gx * width / 8 + width / 16).coerceIn(0, width - 1)
+        val y = (gy * height / 8 + height / 16).coerceIn(0, height - 1)
+        val level = luminance(x, y)
+        grid[gridIndex++] = level
+        gridTotal += level
+    }
+    val average = (gridTotal / grid.size).toInt()
+    var averageFingerprint = 0L
+    grid.forEachIndexed { index, value ->
+        if (value >= average) averageFingerprint = averageFingerprint or (1L shl index)
+    }
+    return EpisodeFrame(
+        timeMs, fingerprint, dark * 100 >= pixels.size * 80 && textRows >= 3,
+        averageFingerprint
+    )
+}
+
+private fun sameEpisodeFrame(first: EpisodeFrame, second: EpisodeFrame): Boolean {
+    val differenceHashDistance = java.lang.Long.bitCount(first.fingerprint xor second.fingerprint)
+    if (differenceHashDistance <= 10) return true
+    // A block-average hash is less sensitive to compression, scaling, and overlays.
+    val averageHashDistance = java.lang.Long.bitCount(first.averageFingerprint xor second.averageFingerprint)
+    return differenceHashDistance <= 22 && averageHashDistance <= 8
 }
 
 internal fun findCreditsStart(frames: List<EpisodeFrame>): Long? {
@@ -202,18 +238,18 @@ internal fun findRepeatedOpening(
             val b = previous[reference + count]
             if (a.timeMs - current[start].timeMs != count * stepMs ||
                 b.timeMs - previous[reference].timeMs != count * stepMs) break
-            if (java.lang.Long.bitCount(a.fingerprint xor b.fingerprint) <= 10) {
-                distinct += a.fingerprint
+            if (sameEpisodeFrame(a, b)) {
+                distinct += a.fingerprint xor java.lang.Long.rotateLeft(a.averageFingerprint, 17)
                 matched++
                 lastMatch = count
-            } else if (stepMs == FRAME_INTERVAL_MS || count == 0 || count - lastMatch > 2) break
+            } else if (count == 0 || count - lastMatch > 2) break
             count++
         }
         // A boundary after the match is necessary to offer a safe, conservative skip.
         val minimumSpan = if (stepMs == HLS_INTRO_FRAME_INTERVAL_MS) 10_000 else 15_000
         if (lastMatch * stepMs < minimumSpan || matched * 4 < (lastMatch + 1) * 3 ||
-            distinct.size < 5 || start + count >= current.size ||
-            reference + count >= previous.size) continue
+            distinct.size < 5 || start + lastMatch + 1 >= current.size ||
+            reference + lastMatch + 1 >= previous.size) continue
         val candidate = current[start].timeMs until current[start + lastMatch].timeMs
         if (candidate.last - candidate.first > (best?.let { it.last - it.first } ?: 0)) best = candidate
     }

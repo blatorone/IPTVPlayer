@@ -1,5 +1,9 @@
 # Änderungen
 
+## 1.0.69
+
+- Die automatische Intro-Erkennung gleicht Bildfolgen auch bei moderaten Kompressionsabweichungen ab und richtet gelernte Intros zeitlich zuverlässiger aus.
+
 ## 1.0.68
 
 - Manuelle Gesehen- und Ungesehen-Markierungen werden an ein verbundenes Trakt-Konto übertragen.

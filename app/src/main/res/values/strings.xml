@@ -445,5 +445,11 @@
     <string name="subtitle_tracks">Untertitel</string>
     <string name="subtitle_off">Aus</string>
     <string name="subtitle_none_available">Keine Untertitel f&#252;r diesen Stream verf&#252;gbar.</string>
+    <string name="subtitles_default_on">Untertitel standardm&#228;&#223;ig einschalten</string>
+    <string name="subtitles_default_off">Untertitel standardm&#228;&#223;ig ausschalten</string>
+    <string name="subtitles_forced_auto">Erzwungene Untertitel automatisch</string>
+    <string name="subtitle_current_episode">Nur diese Folge</string>
+    <string name="subtitle_for_series">F&#252;r diese Serie speichern</string>
+    <string name="subtitle_series_default">Serienstandard wiederherstellen</string>
     <string name="close">Schlie&#223;en</string>
 </resources>

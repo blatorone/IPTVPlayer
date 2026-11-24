@@ -102,6 +102,12 @@ internal sealed interface ImportStatus {
 }
 
 internal class StalkerPortal(address: String, macAddress: String) {
+    private data class ProgrammeCache(
+        val periodHours: Int,
+        val fetchedAt: Long,
+        val byChannelId: Map<String, List<PortalProgramme>>
+    )
+
     private val mac = normalizePortalMac(macAddress)
     private val endpoints = endpointsFor(address.trim())
     val sourceLabel: String = endpoints.first().let {
@@ -110,6 +116,8 @@ internal class StalkerPortal(address: String, macAddress: String) {
     private var endpoint = endpoints.first()
     private val sessionMutex = Mutex()
     private var sessionToken: String? = null
+    private val programmeMutex = Mutex()
+    @Volatile private var programmeCache: ProgrammeCache? = null
 
     suspend fun openSession(): String = sessionMutex.withLock {
         sessionToken ?: withContext(Dispatchers.IO) { authenticate() }.also { sessionToken = it }
@@ -515,25 +523,74 @@ internal class StalkerPortal(address: String, macAddress: String) {
         }?.toString()
     }
 
-    suspend fun loadProgramme(channel: StalkerChannel, token: String): List<PortalProgramme> =
+    suspend fun invalidateProgrammeCache() = programmeMutex.withLock { programmeCache = null }
+
+    suspend fun loadProgramme(
+        channel: StalkerChannel,
+        token: String,
+        periodHours: Int = 24,
+        refreshHours: Int = 6
+    ): List<PortalProgramme> =
         withContext(Dispatchers.IO) {
             val id = channel.id ?: return@withContext emptyList()
-            val entries = entriesFrom(request(
-                "itv", "get_short_epg", token, mapOf("ch_id" to id, "size" to "100")
-            ))
-            buildList {
-                for (index in 0 until entries.length()) {
-                    val entry = entries.optJSONObject(index) ?: continue
-                    val title = entry.text("name", "title") ?: continue
-                    add(PortalProgramme(
-                        decodeProgrammeText(title),
-                        portalProgrammeTime(entry.text("start_timestamp", "start", "time")),
-                        portalProgrammeTime(entry.text("stop_timestamp", "end_timestamp", "stop", "time_to")),
-                        entry.text("descr", "description", "plot")?.let(::decodeProgrammeText)
-                    ))
+            val now = System.currentTimeMillis()
+            val maxAge = if (refreshHours > 0) refreshHours * 3_600_000L else Long.MAX_VALUE
+            val cached = programmeMutex.withLock {
+                programmeCache?.takeIf {
+                    it.periodHours == periodHours && now - it.fetchedAt in 0..maxAge
+                } ?: run {
+                    val schedules = try {
+                        parseProgrammeSchedules(request(
+                            "itv", "get_epg_info", token, mapOf("period" to periodHours.toString())
+                        ))
+                    } catch (error: kotlinx.coroutines.CancellationException) {
+                        throw error
+                    } catch (_: Exception) {
+                        emptyMap()
+                    }
+                    ProgrammeCache(periodHours, now, schedules).also { programmeCache = it }
                 }
             }
+            cached.byChannelId[id]?.takeIf { it.isNotEmpty() }?.let { return@withContext it }
+
+            // Some Stalker installations do not implement get_epg_info. Keep
+            // their short guide as a compatibility fallback.
+            parseProgrammeRows(entriesFrom(
+                request("itv", "get_short_epg", token, mapOf("ch_id" to id, "size" to "100"))
+            ))
         }
+
+    private fun parseProgrammeSchedules(response: Any): Map<String, List<PortalProgramme>> {
+        val root = response as? JSONObject ?: return emptyMap()
+        val channels = root.optJSONObject("data") ?: root
+        val result = linkedMapOf<String, List<PortalProgramme>>()
+        val keys = channels.keys()
+        while (keys.hasNext()) {
+            val channelId = keys.next()
+            val value = channels.opt(channelId)
+            val rows = when (value) {
+                is JSONArray -> value
+                is JSONObject -> value.optJSONArray("data")
+                else -> null
+            } ?: continue
+            val programmes = parseProgrammeRows(rows)
+            if (programmes.isNotEmpty()) result[channelId] = programmes
+        }
+        return result
+    }
+
+    private fun parseProgrammeRows(entries: JSONArray): List<PortalProgramme> = buildList {
+        for (index in 0 until entries.length()) {
+            val entry = entries.optJSONObject(index) ?: continue
+            val title = entry.text("name", "title") ?: continue
+            add(PortalProgramme(
+                decodeProgrammeText(title),
+                portalProgrammeTime(entry.text("start_timestamp", "start", "time")),
+                portalProgrammeTime(entry.text("stop_timestamp", "end_timestamp", "stop", "time_to")),
+                entry.text("descr", "description", "plot")?.let(::decodeProgrammeText)
+            ))
+        }
+    }
 
     suspend fun resolve(channel: StalkerChannel, token: String): String {
         if (channel.direct) {

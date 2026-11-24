@@ -128,6 +128,7 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.Tracks
 import androidx.media3.common.util.Log
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
@@ -516,6 +517,12 @@ private fun PlayerHome(
     }
     var epgRefreshHours by remember(preferences) { mutableStateOf(preferences?.getInt("epg_refresh_hours", 6) ?: 6) }
     var epgHorizonHours by remember(preferences) { mutableStateOf(preferences?.getInt("epg_horizon_hours", 24) ?: 24) }
+    var subtitleDefaultEnabled by remember(preferences) {
+        mutableStateOf(preferences?.getBoolean("subtitle_default_enabled", false) ?: false)
+    }
+    var forcedSubtitlesEnabled by remember(preferences) {
+        mutableStateOf(preferences?.getBoolean("forced_subtitles_enabled", true) ?: true)
+    }
     var xmlTvSources by remember { mutableStateOf(emptyList<String>()) }
     var xmlTvSourcesLoaded by remember { mutableStateOf(storage == null) }
     var epgRefreshRequest by remember { mutableIntStateOf(0) }
@@ -2032,7 +2039,10 @@ private fun PlayerHome(
                 val portal = sessionFor(item.source)
                 try {
                     entries = epgRequestLimit.withPermit {
-                        portal.loadProgramme(item.value, portal.openSession())
+                        portal.loadProgramme(
+                            item.value, portal.openSession(),
+                            periodHours = epgHorizonHours, refreshHours = epgRefreshHours
+                        )
                             .guideWindow(System.currentTimeMillis() / 1_000, epgHorizonHours)
                     }
                     answered = true
@@ -2058,6 +2068,11 @@ private fun PlayerHome(
     }
 
     suspend fun loadProviderSchedules(channels: List<StalkerChannel>, force: Boolean = false): Boolean {
+        if (force) {
+            channels.asSequence().flatMap { liveVariants[it].orEmpty().asSequence() }
+                .distinctBy { it.source.identity }
+                .forEach { item -> sessionFor(item.source).invalidateProgrammeCache() }
+        }
         val results = coroutineScope {
             channels.distinct().map { channel -> async { loadProviderSchedule(channel, force) } }
                 .map { it.await() }
@@ -4345,6 +4360,13 @@ private fun PlayerHome(
                     (fullscreenGuidePanel == GuidePanel.GRID || watchingPrompt || skipIntroTo != null),
                 onEpisodeActionConfirm = ::activateEpisodeAction,
                 episodeActionVisible = episodeAction != 0 || fullscreenGuidePanel != GuidePanel.GRID || skipIntroTo != null,
+                subtitleDefaultEnabled = subtitleDefaultEnabled,
+                forcedSubtitlesEnabled = forcedSubtitlesEnabled,
+                subtitleSeriesKey = if (vodSection == PortalSection.SERIES) playbackSeries?.let {
+                    titleIdentity(it) ?: normalizedLabel(displayVodTitle(it))
+                } else null,
+                subtitlePlaybackKey = playbackAttempt?.mediaId,
+                subtitlePreferences = progressPreferences,
                 onControlsVisible = { playbackControlsVisible = it }
             )
             if (playbackControlsVisible && vodSection != null) {
@@ -5352,6 +5374,22 @@ private fun PlayerHome(
                                 }
                                 SettingsSection.PLAYBACK -> {
                                     MenuButton(stringResource(R.string.episode_settings), Modifier) { episodeSettingsOpen = true }
+                                    MenuButton(
+                                        stringResource(
+                                            if (subtitleDefaultEnabled) R.string.subtitles_default_on
+                                            else R.string.subtitles_default_off
+                                        ), Modifier, selected = subtitleDefaultEnabled
+                                    ) {
+                                        subtitleDefaultEnabled = !subtitleDefaultEnabled
+                                        preferences?.edit()?.putBoolean("subtitle_default_enabled", subtitleDefaultEnabled)?.apply()
+                                    }
+                                    MenuButton(
+                                        stringResource(R.string.subtitles_forced_auto), Modifier,
+                                        selected = forcedSubtitlesEnabled
+                                    ) {
+                                        forcedSubtitlesEnabled = !forcedSubtitlesEnabled
+                                        preferences?.edit()?.putBoolean("forced_subtitles_enabled", forcedSubtitlesEnabled)?.apply()
+                                    }
                                     MenuButton(stringResource(R.string.live_preview_in_vod, stringResource(vodLiveView.label)), Modifier) {
                                         vodLiveView = VodLiveView.entries[(vodLiveView.ordinal + 1) % VodLiveView.entries.size]
                                         preferences?.edit()?.putString("vod_live_view", vodLiveView.name)?.apply()
@@ -6936,6 +6974,11 @@ internal fun PlayerFrame(
     controlsDismissRequest: Int = 0,
     controlsAllowed: Boolean = true,
     actionPromptActive: Boolean = false,
+    subtitleDefaultEnabled: Boolean = false,
+    forcedSubtitlesEnabled: Boolean = true,
+    subtitleSeriesKey: String? = null,
+    subtitlePlaybackKey: String? = null,
+    subtitlePreferences: android.content.SharedPreferences? = null,
     onEpisodeActionConfirm: (() -> Unit)? = null,
     onPreviousEpisode: (() -> Unit)? = null,
     onNextEpisode: (() -> Unit)? = null,
@@ -6946,6 +6989,9 @@ internal fun PlayerFrame(
 ) {
     val accentArgb = MaterialTheme.colorScheme.primary.toArgb()
     var subtitleDialogOpen by remember(player) { mutableStateOf(false) }
+    var saveSubtitleChoiceForSeries by remember(player, subtitleSeriesKey) { mutableStateOf(false) }
+    var oneTimeSubtitleChoice by remember(player, subtitlePlaybackKey) { mutableStateOf(false) }
+    val currentOneTimeSubtitleChoice by rememberUpdatedState(oneTimeSubtitleChoice)
     val buffering by produceState(
         initialValue = false,
         player, active, fullscreen
@@ -6975,6 +7021,56 @@ internal fun PlayerFrame(
                 delay(200)
             }
         }
+    }
+    DisposableEffect(player, subtitleSeriesKey, subtitlePlaybackKey, subtitleDefaultEnabled, forcedSubtitlesEnabled) {
+        val activePlayer = player
+        if (activePlayer == null) return@DisposableEffect onDispose { }
+        val listener = object : Player.Listener {
+            override fun onTracksChanged(tracks: Tracks) {
+                if (currentOneTimeSubtitleChoice) return
+                val choices = tracks.groups.filter { it.type == C.TRACK_TYPE_TEXT }
+                    .flatMap { group ->
+                        (0 until group.length).filter(group::isTrackSupported).map { index ->
+                            group to index
+                        }
+                    }
+                val forced = choices.firstOrNull { (group, index) ->
+                    group.getTrackFormat(index).selectionFlags and C.SELECTION_FLAG_FORCED != 0
+                }
+                val preferredLanguage = java.util.Locale.getDefault().language
+                val languageChoice = choices.firstOrNull { (group, index) ->
+                    group.getTrackFormat(index).language?.substringBefore('-') == preferredLanguage
+                }
+                val savedMode = subtitleSeriesKey?.let { key ->
+                    subtitlePreferences?.getString("subtitle_series:$key", null)
+                }
+                val enabled = when (savedMode) {
+                    "OFF" -> false
+                    "FORCED" -> forced != null
+                    "ON" -> choices.isNotEmpty()
+                    else -> subtitleDefaultEnabled || (subtitleSeriesKey != null && forcedSubtitlesEnabled && forced != null)
+                }
+                val chosen = when {
+                    !enabled -> null
+                    forced != null && (savedMode == "FORCED" || savedMode == null && forcedSubtitlesEnabled) -> forced
+                    else -> languageChoice ?: choices.firstOrNull()
+                }
+                val current = activePlayer.trackSelectionParameters
+                val updated = current.buildUpon()
+                if (chosen == null) {
+                    updated.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                        .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                } else {
+                    updated.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                        .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                        .setOverrideForType(TrackSelectionOverride(chosen.first.mediaTrackGroup, listOf(chosen.second)))
+                }
+                val next = updated.build()
+                if (next != current) activePlayer.trackSelectionParameters = next
+            }
+        }
+        activePlayer.addListener(listener)
+        onDispose { activePlayer.removeListener(listener) }
     }
     val stop by rememberUpdatedState(onStop)
     val openFullscreen by rememberUpdatedState(onOpenFullscreen)
@@ -7023,11 +7119,11 @@ internal fun PlayerFrame(
         // own click handler still decides which settings are actually available.
         if (settingsButton?.visibility == android.view.View.VISIBLE) settingsButton.isEnabled = true
         val bottomButtons = listOf(
-            androidx.media3.ui.R.id.exo_subtitle,
-            androidx.media3.ui.R.id.exo_settings,
-            androidx.media3.ui.R.id.exo_fullscreen,
-            androidx.media3.ui.R.id.exo_overflow_show
-        ).mapNotNull { view.findViewById<android.view.View>(it) }
+            view.findViewWithTag<android.view.View>("player_subtitles_action"),
+            view.findViewById(androidx.media3.ui.R.id.exo_settings),
+            view.findViewById(androidx.media3.ui.R.id.exo_fullscreen),
+            view.findViewById(androidx.media3.ui.R.id.exo_overflow_show)
+        ).filterNotNull()
             .filter { it.visibility == android.view.View.VISIBLE && it.isEnabled }
         if (bottomButtons.isEmpty()) {
             progress.nextFocusDownId = progress.id
@@ -7167,23 +7263,20 @@ internal fun PlayerFrame(
                                         configureBottomFocus(this)
                                         val focused = findFocus()
                                         val progress = findViewById<android.view.View>(androidx.media3.ui.R.id.exo_progress)
-                                        val bottom = listOf(
-                                            androidx.media3.ui.R.id.exo_subtitle,
-                                            androidx.media3.ui.R.id.exo_settings,
-                                            androidx.media3.ui.R.id.exo_fullscreen,
-                                            androidx.media3.ui.R.id.exo_overflow_show
-                                        ).mapNotNull { findViewById<android.view.View>(it) }
-                                            .firstOrNull { it.visibility == android.view.View.VISIBLE && it.isEnabled && it.isFocusable }
+                                        val bottomTargets = listOfNotNull(
+                                            findViewWithTag<android.view.View>("player_subtitles_action"),
+                                            findViewById(androidx.media3.ui.R.id.exo_settings),
+                                            findViewById(androidx.media3.ui.R.id.exo_fullscreen),
+                                            findViewById(androidx.media3.ui.R.id.exo_overflow_show)
+                                        )
+                                        val bottom = bottomTargets.firstOrNull {
+                                            it.visibility == android.view.View.VISIBLE && it.isEnabled && it.isFocusable
+                                        }
                                         val moved = when {
                                             event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN && focused === progress ->
                                                 bottom?.requestFocus() == true
                                             event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP && bottom != null &&
-                                                focused?.id in listOf(
-                                                    androidx.media3.ui.R.id.exo_subtitle,
-                                                    androidx.media3.ui.R.id.exo_settings,
-                                                    androidx.media3.ui.R.id.exo_fullscreen,
-                                                    androidx.media3.ui.R.id.exo_overflow_show
-                                                ) -> progress?.requestFocus() == true
+                                            focused in bottomTargets -> progress?.requestFocus() == true
                                             else -> false
                                         }
                                         if (moved) return true
@@ -7257,20 +7350,6 @@ internal fun PlayerFrame(
                             val next = actionButton(android.R.drawable.ic_media_next, R.string.next_episode) {
                                 nextEpisode?.invoke()
                             }
-                            val subtitles = ImageButton(context).apply {
-                                id = android.view.View.generateViewId()
-                                tag = "player_subtitles_action"
-                                setImageResource(R.drawable.ic_subtitles)
-                                contentDescription = context.getString(R.string.subtitle_tracks)
-                                tooltipText = contentDescription
-                                isFocusable = true
-                                val background = TypedValue()
-                                if (context.theme.resolveAttribute(
-                                        android.R.attr.selectableItemBackgroundBorderless, background, true
-                                    )
-                                ) setBackgroundResource(background.resourceId)
-                                setOnClickListener { subtitleDialogOpen = true }
-                            }
                             val pause = row.findViewById<android.view.View>(androidx.media3.ui.R.id.exo_play_pause)
                             if (pause != null) {
                                 previous.id = android.view.View.generateViewId()
@@ -7284,7 +7363,6 @@ internal fun PlayerFrame(
                                     add(pause)
                                     if (next.visibility == android.view.View.VISIBLE) add(next)
                                     if (button.visibility == android.view.View.VISIBLE) add(button)
-                                    if (!livePlayback) add(subtitles)
                                 }
                                 controls.forEachIndexed { index, control ->
                                     enableRemoteFocus(control)
@@ -7301,11 +7379,41 @@ internal fun PlayerFrame(
                             row.addView(previous, index, LinearLayout.LayoutParams(size, size))
                             row.addView(next, row.indexOfChild(pause).coerceAtLeast(0) + 1, LinearLayout.LayoutParams(size, size))
                             row.addView(button, row.indexOfChild(next) + 1, LinearLayout.LayoutParams(size, size))
-                            row.addView(subtitles, row.childCount, LinearLayout.LayoutParams(size, size))
                             previous.tag = "previous_episode_action"
                             next.tag = "next_episode_action"
                             previous.isEnabled = canPreviousEpisode
                             next.isEnabled = canNextEpisode
+                        }
+                        findViewById<android.view.View>(androidx.media3.ui.R.id.exo_subtitle)?.visibility =
+                            android.view.View.GONE
+                        findViewById<LinearLayout>(androidx.media3.ui.R.id.exo_bottom_bar)?.let { bar ->
+                            if (bar.findViewWithTag<android.view.View>("player_subtitles_action") == null) {
+                                val cc = ImageButton(context).apply {
+                                    id = android.view.View.generateViewId()
+                                    tag = "player_subtitles_action"
+                                    setImageResource(R.drawable.ic_subtitles)
+                                    imageTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.WHITE)
+                                    contentDescription = context.getString(R.string.subtitle_tracks)
+                                    tooltipText = contentDescription
+                                    isFocusable = true
+                                    isFocusableInTouchMode = true
+                                    defaultFocusHighlightEnabled = false
+                                    val selectable = TypedValue()
+                                    if (context.theme.resolveAttribute(
+                                            android.R.attr.selectableItemBackgroundBorderless, selectable, true
+                                        )
+                                    ) setBackgroundResource(selectable.resourceId)
+                                    setOnClickListener {
+                                        saveSubtitleChoiceForSeries = false
+                                        subtitleDialogOpen = true
+                                    }
+                                }
+                                val gear = bar.findViewById<android.view.View>(androidx.media3.ui.R.id.exo_settings)
+                                val insertAt = gear?.let { bar.indexOfChild(it) + 1 }?.takeIf { it > 0 } ?: bar.childCount
+                                val size = (48 * context.resources.displayMetrics.density).toInt()
+                                bar.addView(cc, insertAt, LinearLayout.LayoutParams(size, size))
+                                enableRemoteFocus(cc)
+                            }
                         }
                         findViewById<android.view.View>(androidx.media3.ui.R.id.exo_progress)?.let { progress ->
                             progress.isFocusable = true
@@ -7322,13 +7430,13 @@ internal fun PlayerFrame(
                             }
                         }
                         listOf(
-                            androidx.media3.ui.R.id.exo_subtitle,
                             androidx.media3.ui.R.id.exo_settings,
                             androidx.media3.ui.R.id.exo_fullscreen,
                             androidx.media3.ui.R.id.exo_overflow_show
                         ).forEach { id ->
                             findViewById<android.view.View>(id)?.let(::enableRemoteFocus)
                         }
+                        findViewWithTag<android.view.View>("player_subtitles_action")?.let(::enableRemoteFocus)
                         configureBottomFocus(this)
                         this.player = player
                         if (fullscreen) post { if (allowControls) requestFocus() }
@@ -7366,7 +7474,7 @@ internal fun PlayerFrame(
                     val nextButton = view.findViewWithTag<android.view.View>("next_episode_action")
                     val subtitlesButton = view.findViewWithTag<android.view.View>("player_subtitles_action")
                     subtitlesButton?.visibility = if (livePlayback) android.view.View.GONE else android.view.View.VISIBLE
-                    val visibleControls = listOfNotNull(previousButton, pause, nextButton, stopButton, subtitlesButton)
+                    val visibleControls = listOfNotNull(previousButton, pause, nextButton, stopButton)
                         .filter { it.visibility == android.view.View.VISIBLE }
                     visibleControls.forEachIndexed { index, control ->
                         control.nextFocusLeftId = visibleControls.getOrNull(index - 1)?.id ?: control.id
@@ -7383,11 +7491,11 @@ internal fun PlayerFrame(
                         }
                     }
                     listOf(
-                        androidx.media3.ui.R.id.exo_subtitle,
                         androidx.media3.ui.R.id.exo_settings,
                         androidx.media3.ui.R.id.exo_fullscreen,
                         androidx.media3.ui.R.id.exo_overflow_show
                     ).forEach { id -> view.findViewById<android.view.View>(id)?.let(::enableRemoteFocus) }
+                    subtitlesButton?.let(::enableRemoteFocus)
                     configureBottomFocus(view)
                     view.useController = openFullscreen == null && controlsAllowed
                     if (previousEpisodeAction != episodeActionVisible) {
@@ -7426,39 +7534,101 @@ internal fun PlayerFrame(
                             )
                         }
                     }
+                val savedSeriesMode = subtitleSeriesKey?.let { key ->
+                    subtitlePreferences?.getString("subtitle_series:$key", null)
+                }
+                val subtitlesDisabled = C.TRACK_TYPE_TEXT in player.trackSelectionParameters.disabledTrackTypes
+                fun applySubtitleChoice(selection: TrackSelectionOverride?, enabled: Boolean, savedMode: String) {
+                    val persistForSeries = saveSubtitleChoiceForSeries && subtitleSeriesKey != null
+                    if (persistForSeries) {
+                        subtitlePreferences?.edit()?.putString("subtitle_series:$subtitleSeriesKey", savedMode)?.apply()
+                        oneTimeSubtitleChoice = false
+                    } else {
+                        oneTimeSubtitleChoice = true
+                    }
+                    val parameters = player.trackSelectionParameters.buildUpon()
+                        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !enabled)
+                        .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                    if (enabled && selection != null) parameters.setOverrideForType(selection)
+                    player.trackSelectionParameters = parameters.build()
+                    subtitleDialogOpen = false
+                }
+                fun useSeriesDefault() {
+                    subtitleSeriesKey?.let { key -> subtitlePreferences?.edit()?.remove("subtitle_series:$key")?.apply() }
+                    oneTimeSubtitleChoice = false
+                    val forced = subtitleChoices.firstOrNull { (group, index, _) ->
+                        group.getTrackFormat(index).selectionFlags and C.SELECTION_FLAG_FORCED != 0
+                    }
+                    val language = java.util.Locale.getDefault().language
+                    val preferred = subtitleChoices.firstOrNull { (group, index, _) ->
+                        group.getTrackFormat(index).language?.substringBefore('-') == language
+                    } ?: subtitleChoices.firstOrNull()
+                    val choice = when {
+                        forcedSubtitlesEnabled && forced != null -> forced
+                        subtitleDefaultEnabled -> preferred
+                        else -> null
+                    }
+                    val parameters = player.trackSelectionParameters.buildUpon()
+                        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, choice == null)
+                        .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                    choice?.let { (group, index, _) ->
+                        parameters.setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, listOf(index)))
+                    }
+                    player.trackSelectionParameters = parameters.build()
+                    subtitleDialogOpen = false
+                }
                 AlertDialog(
                     onDismissRequest = { subtitleDialogOpen = false },
                     title = { Text(stringResource(R.string.subtitle_tracks)) },
                     text = {
                         Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
-                            Button(
-                                onClick = {
-                                    val parameters = player.trackSelectionParameters.buildUpon()
-                                        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
-                                        .clearOverridesOfType(C.TRACK_TYPE_TEXT)
-                                    player.trackSelectionParameters = parameters.build()
-                                    subtitleDialogOpen = false
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) { Text(stringResource(R.string.subtitle_off)) }
+                            Row(Modifier.fillMaxWidth().focusGroup()) {
+                                MenuButton(
+                                    stringResource(R.string.subtitle_current_episode), Modifier.weight(1f),
+                                    selected = !saveSubtitleChoiceForSeries
+                                ) { saveSubtitleChoiceForSeries = false }
+                                if (subtitleSeriesKey != null) {
+                                    MenuButton(
+                                        stringResource(R.string.subtitle_for_series), Modifier.weight(1f),
+                                        selected = saveSubtitleChoiceForSeries
+                                    ) { saveSubtitleChoiceForSeries = true }
+                                }
+                            }
+                            MenuButton(
+                                stringResource(R.string.subtitle_off), Modifier.fillMaxWidth(),
+                                selected = subtitlesDisabled || savedSeriesMode == "OFF"
+                            ) { applySubtitleChoice(null, false, "OFF") }
+                            if (subtitleSeriesKey != null) {
+                                MenuButton(
+                                    stringResource(R.string.subtitles_forced_auto), Modifier.fillMaxWidth(),
+                                    selected = savedSeriesMode == "FORCED"
+                                ) {
+                                    val forced = subtitleChoices.firstOrNull { (group, index, _) ->
+                                        group.getTrackFormat(index).selectionFlags and C.SELECTION_FLAG_FORCED != 0
+                                    }
+                                    applySubtitleChoice(
+                                        forced?.let { (group, index, _) -> TrackSelectionOverride(group.mediaTrackGroup, listOf(index)) },
+                                        forced != null, "FORCED"
+                                    )
+                                }
+                                MenuButton(stringResource(R.string.subtitle_series_default), Modifier.fillMaxWidth()) {
+                                    useSeriesDefault()
+                                }
+                            }
                             if (subtitleChoices.isEmpty()) {
                                 Text(
                                     stringResource(R.string.subtitle_none_available),
                                     modifier = Modifier.padding(top = 12.dp)
                                 )
                             } else subtitleChoices.forEach { (group, index, label) ->
-                                Button(
-                                    onClick = {
-                                        val parameters = player.trackSelectionParameters.buildUpon()
-                                            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-                                            .clearOverridesOfType(C.TRACK_TYPE_TEXT)
-                                            .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, listOf(index)))
-                                        player.trackSelectionParameters = parameters.build()
-                                        subtitleDialogOpen = false
-                                    },
-                                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                                MenuButton(
+                                    "${if (saveSubtitleChoiceForSeries && subtitleSeriesKey != null) "Serie" else "Diese Folge"}: $label",
+                                    Modifier.fillMaxWidth(),
+                                    selected = group.isTrackSelected(index) && !subtitlesDisabled
                                 ) {
-                                    Text(if (group.isTrackSelected(index)) "✓ $label" else label)
+                                    applySubtitleChoice(
+                                        TrackSelectionOverride(group.mediaTrackGroup, listOf(index)), true, "ON"
+                                    )
                                 }
                             }
                         }

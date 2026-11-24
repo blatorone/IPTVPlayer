@@ -1,5 +1,13 @@
 # Änderungen
 
+## 1.0.61
+
+- Die Untertitelauswahl sitzt neben den Player-Einstellungen und verwendet dieselbe Fokusumrandung wie andere Aktionen. Allgemein bleiben Untertitel standardmäßig aus; erzwungene Spuren lassen sich automatisch wählen. Pro Serie kann eine einmalige oder dauerhafte Auswahl gespeichert werden.
+- Stalker-EPG fragt das eingestellte Zeitfenster über `get_epg_info` ab, statt pro Sender nur maximal 100 kurze Programme anzufordern. Nicht unterstützende Portale behalten den Kurz-EPG als Rückfallweg.
+- Die Startberechnung der zusammengeführten Quellenzahlen läuft erst beim Öffnen der Quellen-Seite und konkurriert nicht mehr mit dem Wiederherstellen des gespeicherten Live-TV-Katalogs.
+- Portalprüfungen beginnen parallel zum Aufbau der gespeicherten Senderansicht.
+- Unabhängige Trakt-Bibliotheksbereiche werden mit begrenzter Parallelität geladen. Die Fortschrittsanzeige benennt Wiedergabestände für Filme und Folgen getrennt.
+
 ## 1.0.60
 
 - Die Startberechnung der zusammengeführten Quellenzahlen läuft erst beim Öffnen der Quellen-Seite und konkurriert nicht mehr mit dem Wiederherstellen des gespeicherten Live-TV-Katalogs.

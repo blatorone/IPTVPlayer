@@ -138,6 +138,7 @@ import android.view.SurfaceView
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -197,12 +198,24 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         Log.setLogLevel(Log.LOG_LEVEL_OFF)
         // The audio sink is wrapped so that series openings can also be recognised by their theme music.
+        // Passthrough audio (Dolby to the TV or receiver) is never decoded by the app; users may
+        // choose to decode it so that the theme music can be analysed as well.
+        val decodeAudioForIntro = getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE)
+            .getBoolean("decode_audio_for_intro", false)
         val renderers = object : androidx.media3.exoplayer.DefaultRenderersFactory(this) {
             override fun buildAudioSink(
                 context: Context, enableFloatOutput: Boolean, enableAudioOutputPlaybackParams: Boolean
-            ): androidx.media3.exoplayer.audio.AudioSink? =
-                super.buildAudioSink(context, enableFloatOutput, enableAudioOutputPlaybackParams)
-                    ?.let(::EpisodeAudioTapSink)
+            ): androidx.media3.exoplayer.audio.AudioSink? {
+                val sink = if (decodeAudioForIntro) {
+                    // Without a context the sink assumes no passthrough support and decodes all audio.
+                    @Suppress("DEPRECATION")
+                    androidx.media3.exoplayer.audio.DefaultAudioSink.Builder()
+                        .setEnableFloatOutput(enableFloatOutput)
+                        .setEnableAudioOutputPlaybackParameters(enableAudioOutputPlaybackParams)
+                        .build()
+                } else super.buildAudioSink(context, enableFloatOutput, enableAudioOutputPlaybackParams)
+                return sink?.let(::EpisodeAudioTapSink)
+            }
         }
         player = ExoPlayer.Builder(this, renderers).build().also { activePlayer ->
             activePlayer.trackSelectionParameters = activePlayer.trackSelectionParameters
@@ -553,6 +566,9 @@ private fun PlayerHome(
     var autoNextEpisode by remember(preferences) {
         mutableStateOf(preferences?.getBoolean("auto_next_episode", true) ?: true)
     }
+    var decodeAudioForIntro by remember(preferences) {
+        mutableStateOf(preferences?.getBoolean("decode_audio_for_intro", false) ?: false)
+    }
     var autoSkipIntro by remember(preferences) {
         mutableStateOf(preferences?.getBoolean("auto_skip_intro", false) ?: false)
     }
@@ -604,6 +620,12 @@ private fun PlayerHome(
     var advancingEpisode by remember { mutableStateOf(false) }
     var watchingPrompt by remember { mutableStateOf(false) }
     var skipIntroTo by remember { mutableStateOf<Long?>(null) }
+    /** Media item whose skip-intro offer was used or dismissed; it is not offered again for it. */
+    /**
+     * Media item and skip target up to which the skip-intro offer was used (or Long.MAX_VALUE
+     * after Back). It returns only if the opening turns out to end clearly later.
+     */
+    var introOfferClosed by remember { mutableStateOf<Pair<String, Long>?>(null) }
     var metadataBusy by remember { mutableStateOf(false) }
     var metadataError by remember { mutableStateOf(false) }
     var pendingSeriesEpisode by remember { mutableStateOf<Pair<PortalTitle, EpisodeResume>?>(null) }
@@ -1066,6 +1088,16 @@ private fun PlayerHome(
                 } ?: return@launch
                 val localMatchCache = mutableMapOf<String, List<SourceItem<PortalTitle>>>()
                 val portalSearchLimiter = Semaphore(3)
+                // One prepared lookup per portal and section for this import, built once even
+                // when many entries are resolved concurrently; released when the sync ends.
+                val syncScope = this
+                val catalogueMatchers = mutableMapOf<String, Deferred<CatalogueMatcher>>()
+                fun catalogueMatcher(source: SavedPortal, section: PortalSection): Deferred<CatalogueMatcher> =
+                    catalogueMatchers.getOrPut("${source.identity}:${section.name}") {
+                        syncScope.async(Dispatchers.Default) {
+                            CatalogueMatcher(source.catalogs[section]?.titles.orEmpty())
+                        }
+                    }
                 suspend fun localMatches(
                     media: TraktMedia,
                     searchPortalIfMissing: Boolean = false
@@ -1074,17 +1106,15 @@ private fun PlayerHome(
                     val cached = localMatchCache[cacheKey]
                     if (cached != null && (cached.isNotEmpty() || !searchPortalIfMissing)) return cached
                     val expected = media.asTitle()
-                    var matches = cached ?: withContext(Dispatchers.Default) {
-                        enabledSavedSources.flatMap { source ->
-                            val titles = source.catalogs[media.section]?.titles.orEmpty()
-                            equivalentCatalogueTitle(
-                                expected,
-                                titles,
+                    var matches = cached ?: run {
+                        val matchers = enabledSavedSources.map { it to catalogueMatcher(it, media.section).await() }
+                        withContext(Dispatchers.Default) {
+                            matchers.mapNotNull { (source, matcher) ->
                                 // Trakt IDs often exist while portal titles omit external IDs. Exact
                                 // title plus release year is still a safe local match; conflicting IDs
-                                // remain rejected by equivalentCatalogueTitle.
-                                requireVerifiedIdentity = false
-                            )?.let { listOf(SourceItem(source, it)) }.orEmpty()
+                                // remain rejected.
+                                matcher.find(expected, requireVerifiedIdentity = false)?.let { SourceItem(source, it) }
+                            }
                         }
                     }
                     if (matches.isEmpty() && searchPortalIfMissing) {
@@ -1682,22 +1712,29 @@ private fun PlayerHome(
             else entries.first().value
         }
 
-    val knownLiveCountries = remember(sourcesForBrowsing) {
-        sourcesForBrowsing.flatMap { source ->
-            source.channels.map { channel ->
-                categoryCountry(channel.name, channel.genreName ?: source.genres[channel.genreId])
-            }
-        }.toSet()
-    }
-    val knownCountries = remember(knownLiveCountries, vodGroups) {
-        (knownLiveCountries +
-            vodGroups.values.flatMap { groups ->
-                groups.filterKeys { id ->
-                    VodCategory.entries.none { it.id == id && it in listOf(VodCategory.ALL, VodCategory.THIS_YEAR) }
-                }.values.flatten().map {
-                    categoryCountry(it.value.name, it.value.country)
+    // Country detection parses every channel name; with large portals this took seconds and
+    // previously ran on the main thread during composition, which caused input ANRs right
+    // after a fast start. It now runs in the background and the list fills in when ready.
+    val knownLiveCountries by produceState(emptySet<String>(), sourcesForBrowsing) {
+        value = withContext(Dispatchers.Default) {
+            sourcesForBrowsing.flatMap { source ->
+                source.channels.map { channel ->
+                    categoryCountry(channel.name, channel.genreName ?: source.genres[channel.genreId])
                 }
-            }).toSet()
+            }.toSet()
+        }
+    }
+    val knownCountries by produceState(emptySet<String>(), knownLiveCountries, vodGroups) {
+        value = withContext(Dispatchers.Default) {
+            (knownLiveCountries +
+                vodGroups.values.flatMap { groups ->
+                    groups.filterKeys { id ->
+                        VodCategory.entries.none { it.id == id && it in listOf(VodCategory.ALL, VodCategory.THIS_YEAR) }
+                    }.values.flatten().map {
+                        categoryCountry(it.value.name, it.value.country)
+                    }
+                }).toSet()
+        }
     }
 
     fun saveCountries(selection: Set<String>) {
@@ -2743,19 +2780,38 @@ private fun PlayerHome(
             .map { it.first }
     }
 
+    // Matches across portals are remembered while sources and country selection stay the
+    // same; detail views call this during composition.
+    val titleEntryCache = remember(sourcesForBrowsing, combine, countries, storedSource?.identity) {
+        HashMap<Pair<PortalSection, PortalTitle>, List<SourceItem<PortalTitle>>>()
+    }
+    LaunchedEffect(sourcesForBrowsing) {
+        // Index large catalogues in the background after start-up work has settled, so the
+        // first detail view does not build them on the main thread.
+        delay(5_000)
+        withContext(Dispatchers.Default) {
+            for (source in sourcesForBrowsing) for (section in listOf(PortalSection.MOVIES, PortalSection.SERIES)) {
+                val titles = source.catalogs[section]?.titles.orEmpty()
+                if (titles.size >= 256) equivalentCatalogueTitle(PortalTitle(""), titles)
+            }
+        }
+    }
+
     fun titleEntries(section: PortalSection, title: PortalTitle): List<SourceItem<PortalTitle>> {
         val known = searchedVariants[title] ?: groupVariants[title]
         if (known != null) return countryVariants(section, known).ifEmpty { known.take(1) }
         val source = storedSource ?: return emptyList()
         if (!combine) return listOf(SourceItem(source, title))
-        val entries = listOf(SourceItem(source, title)) + sourcesForBrowsing
-            .filter { it.identity != source.identity }.mapNotNull { other ->
-                equivalentCatalogueTitle(
-                    title, other.catalogs[section]?.titles.orEmpty(), requireVerifiedIdentity = section == PortalSection.SERIES
-                )
-                    ?.let { SourceItem(other, it) }
-            }
-        return countryVariants(section, entries).ifEmpty { entries.take(1) }
+        return titleEntryCache.getOrPut(section to title) {
+            val entries = listOf(SourceItem(source, title)) + sourcesForBrowsing
+                .filter { it.identity != source.identity }.mapNotNull { other ->
+                    equivalentCatalogueTitle(
+                        title, other.catalogs[section]?.titles.orEmpty(), requireVerifiedIdentity = section == PortalSection.SERIES
+                    )
+                        ?.let { SourceItem(other, it) }
+                }
+            countryVariants(section, entries).ifEmpty { entries.take(1) }
+        }
     }
 
     suspend fun findEquivalent(
@@ -4065,6 +4121,13 @@ private fun PlayerHome(
                 dismissPlaybackControls++
                 return
             }
+            if (skipIntroTo != null) {
+                // Back only closes the skip-intro offer, for the rest of this episode; the
+                // remote's left/right then seek again instead of moving between offer buttons.
+                skipIntroTo = null
+                introOfferClosed = playbackAttempt?.mediaId?.let { it to Long.MAX_VALUE }
+                return
+            }
             if (fullscreenGuidePanel != GuidePanel.GRID) {
                 showFullscreenPanel(
                     if (vodSection == PortalSection.SERIES) fullscreenGuidePanel.afterSeriesOverlay(GuideInput.BACK)
@@ -4171,7 +4234,9 @@ private fun PlayerHome(
                 } else !fullscreen && openCurrentFullscreen())
     })
     val screenBack by rememberUpdatedState<(Boolean) -> Boolean>({ released ->
-        val handled = fullscreen && (playbackControlsVisible || watchingPrompt || fullscreenGuidePanel != GuidePanel.GRID) || !fullscreen && (
+        val handled = fullscreen && (
+            playbackControlsVisible || watchingPrompt || skipIntroTo != null || fullscreenGuidePanel != GuidePanel.GRID
+        ) || !fullscreen && (
             isMainMenuOpen() || selected == Destination.MOVIES || selected == Destination.SERIES
         )
         if (handled && released) navigateBack()
@@ -4289,14 +4354,19 @@ private fun PlayerHome(
                     decodeAudioReference(store?.read(key, IntroFingerprintStore.AUDIO_REFERENCE))
                 }
             }?.takeIf { it.first != selection.id }
-        val learned = seriesKey?.let { key ->
+        var variants = seriesKey?.let { key ->
             withContext(Dispatchers.IO) {
-                decodeLearnedOpening(store?.read(key, IntroFingerprintStore.VIDEO_LEARNED)?.decodeToString())
+                decodeIntroVariants(store?.read(key, IntroFingerprintStore.INTRO_VARIANTS)).ifEmpty {
+                    // An opening learned by an earlier version becomes the first variant.
+                    val video = decodeLearnedOpening(store?.read(key, IntroFingerprintStore.VIDEO_LEARNED)?.decodeToString())
+                    val audio = decodeLearnedAudio(store?.read(key, IntroFingerprintStore.AUDIO_LEARNED))
+                    listOfNotNull(
+                        video?.let { IntroVariant(it.range, it.frames, audio?.takeIf { a -> a.first == it.range }?.second.orEmpty(), 0L) },
+                        audio?.takeIf { video == null || it.first != video.range }?.let { IntroVariant(it.first, emptyList(), it.second, 0L) }
+                    )
+                }
             }
-        }
-        val learnedAudio = seriesKey?.let { key ->
-            withContext(Dispatchers.IO) { decodeLearnedAudio(store?.read(key, IntroFingerprintStore.AUDIO_LEARNED)) }
-        }
+        }.orEmpty()
         if (active.currentMediaItem != item) return@LaunchedEffect
         val audioToken = if (scanOpening && sampleFromSurface) EpisodeAudioTap.start() else null
         // Intro diagnostics contain counts and times only, never titles or addresses.
@@ -4304,14 +4374,15 @@ private fun PlayerHome(
             context,
             "intro_start s:${if (sampleFromSurface) 1 else 0} " +
                 "rf:${previous?.second?.size ?: 0} ra:${previousAudio?.second?.size ?: 0} " +
-                "lv:${learned?.range?.let { "${it.first / 1000}-${it.last / 1000}" } ?: "-"} " +
-                "la:${learnedAudio?.first?.let { "${it.first / 1000}-${it.last / 1000}" } ?: "-"}"
+                "iv:" + variants.joinToString(",") { "${it.range.first / 1000}-${it.range.last / 1000}" }.ifEmpty { "-" }
         )
         var lastFrames = 0
         var lastAudio = 0
         var lastLoud = 0
         var lastVideoRange: LongRange? = null
         var lastAudioRange: LongRange? = null
+        var learnedRange: LongRange? = null
+        var usageRecorded = false
         try {
             val updates = if (sampleFromSurface) flow {
                 val opening = mutableListOf<EpisodeFrame>()
@@ -4378,21 +4449,23 @@ private fun PlayerHome(
             updates.collect { analysis ->
                 if (active.currentMediaItem != item) return@collect
                 if (seriesKey != null && (analysis.opening.isNotEmpty() || analysis.audio.isNotEmpty())) {
-                    // A learned opening is confirmed early so the skip is offered while it runs.
-                    // The comparison with another episode keeps running until the scan ends: an
-                    // opening with fast cuts can first look shorter than it is, so every longer
-                    // overlapping result extends the range and corrects the learned opening.
-                    val currentIntro = timing.introStartMs?.let { start -> timing.introEndMs?.let { start until it } }
-                    val (known, videoRange, audioRange) = withContext(Dispatchers.Default) {
-                        val known = if (currentIntro != null) null else
-                            learned?.let { confirmKnownOpening(analysis.opening, it.frames, it.range, stepMs) }
-                                ?: learnedAudio?.let { (range, prints) -> confirmKnownAudioOpening(analysis.audio, prints, range) }
+                    // Learned openings (variants) are recognised early so the skip is offered while
+                    // they run, and are re-checked as playback continues. The comparison with the
+                    // previous episode keeps running until the scan ends and corrects or adds variants.
+                    val (observations, videoRange, audioRange) = withContext(Dispatchers.Default) {
+                        val seen = variants.mapNotNull { variant ->
+                            val observation = observeKnownOpening(analysis.opening, variant.frames, variant.range, stepMs)
+                                ?: confirmKnownAudioOpening(analysis.audio, variant.prints, variant.range)
+                                    ?.let { OpeningObservation(it, diverged = false, lastMatchMs = null) }
+                            observation?.let { variant to it }
+                        }
                         Triple(
-                            known,
+                            seen,
                             previous?.let { findRepeatedOpening(analysis.opening, it.second, stepMs) },
                             previousAudio?.let { findRepeatedAudioOpening(analysis.audio, it.second) }
                         )
                     }
+                    if (active.currentMediaItem != item) return@collect
                     val compared = mergeOpeningRanges(videoRange, audioRange)
                     lastFrames = analysis.opening.size
                     lastAudio = analysis.audio.size
@@ -4407,34 +4480,41 @@ private fun PlayerHome(
                                 "f:${analysis.opening.size} p:${analysis.audio.size}"
                         )
                     }
-                    if (known != null && currentIntro == null) {
-                        AppDiagnostics.record(context, "intro_learned_confirmed ${known.first / 1000}-${known.last / 1000}")
+                    val known = chooseIntro(observations.map { it.second })
+                    val intro = known?.let { recognised ->
+                        compared?.takeIf { it.first <= recognised.last && recognised.first <= it.last && it.last > recognised.last }
+                            ?.let { recognised.first..it.last } ?: recognised
+                    } ?: compared
+                    val currentIntro = timing.introStartMs?.let { start -> timing.introEndMs?.let { start until it } }
+                    if (intro != currentIntro) {
+                        // A recognised opening the episode then left is withdrawn rather than kept.
+                        timing = timing.copy(introStartMs = intro?.first, introEndMs = intro?.last?.plus(1))
+                        AppDiagnostics.record(
+                            context,
+                            "intro_range at:${active.currentPosition / 1000} " +
+                                "${intro?.let { "${it.first / 1000}-${it.last / 1000}" } ?: "-"} " +
+                                "seen:" + observations.joinToString(",") { (_, o) ->
+                                    "${o.range.first / 1000}-${o.range.last / 1000}${if (o.diverged) "x" else ""}"
+                                }
+                        )
                     }
-                    if (active.currentMediaItem != item) return@collect
-                    val base = currentIntro ?: known
-                    val extended = compared?.let { found ->
-                        when {
-                            base == null -> found
-                            found.first <= base.last && base.first <= found.last && found.last > base.last ->
-                                minOf(base.first, found.first)..found.last
-                            else -> null
+                    if (store != null) {
+                        val now = System.currentTimeMillis()
+                        var changed = false
+                        if (compared != null && compared != learnedRange) {
+                            learnedRange = compared
+                            variants = learnIntroVariant(variants, observations, compared, analysis.opening, analysis.audio, now)
+                            changed = true
+                        } else if (!usageRecorded && observations.any { !it.second.diverged }) {
+                            // Recently seen variants are kept when the limit is reached.
+                            val used = observations.filterNot { it.second.diverged }.map { it.first }
+                            variants = variants.map { variant -> if (used.any { it === variant }) variant.copy(lastUsed = now) else variant }
+                            changed = true
                         }
-                    }
-                    val intro = extended ?: base
-                    if (intro != null && intro != currentIntro) {
-                        timing = timing.copy(introStartMs = intro.first, introEndMs = intro.last + 1)
-                    }
-                    if (extended != null && store != null) {
-                        val frames = analysis.opening.filter { it.timeMs in extended }
-                        val prints = analysis.audio.filter { it.timeMs in extended.first..minOf(extended.last, extended.first + 30_000L) }
-                        withContext(Dispatchers.IO) {
-                            if (frames.size >= 4) store.write(
-                                seriesKey, IntroFingerprintStore.VIDEO_LEARNED,
-                                LearnedOpening(extended, frames).encode().encodeToByteArray()
-                            )
-                            if (prints.count(AudioPrint::loud) >= 40) store.write(
-                                seriesKey, IntroFingerprintStore.AUDIO_LEARNED, encodeLearnedAudio(extended, prints)
-                            )
+                        if (changed) {
+                            usageRecorded = true
+                            val encoded = encodeIntroVariants(variants)
+                            withContext(Dispatchers.IO) { store.write(seriesKey, IntroFingerprintStore.INTRO_VARIANTS, encoded) }
                         }
                     }
                     // Keep this episode as reference for the next one, but do not replace a
@@ -4501,7 +4581,6 @@ private fun PlayerHome(
         val attempt = playbackAttempt ?: return@LaunchedEffect
         val active = player ?: return@LaunchedEffect
         if (attempt.selection.section != PortalSection.SERIES) return@LaunchedEffect
-        var introSkipped = false
         while (playbackAttempt === attempt) {
             val duration = active.duration
             if (active.currentMediaItem?.mediaId == attempt.mediaId && duration > 0) {
@@ -4515,13 +4594,17 @@ private fun PlayerHome(
                 // frame matching completes near the end of an intro.
                 val introGrace = intro?.let { position > it.last && position - it.last <= 15_000L } == true
                 val introTarget = futureIntroSkipTarget(intro, position)
-                skipIntroTo = if (!introSkipped && introTarget != null && position < introTarget &&
+                val closedUntil = introOfferClosed?.takeIf { it.first == attempt.mediaId }?.second
+                val introClosed = closedUntil != null && (
+                    closedUntil == Long.MAX_VALUE || introTarget == null || introTarget <= closedUntil + 2_000L
+                )
+                skipIntroTo = if (!introClosed && introTarget != null && position < introTarget &&
                     (intro?.contains(position) == true || introGrace) && active.isCurrentMediaItemSeekable
                 ) introTarget else null
                 if (autoSkipIntro && active.isPlaying) skipIntroTo?.let {
                     active.seekTo(it)
                     skipIntroTo = null
-                    introSkipped = true
+                    introOfferClosed = attempt.mediaId to it
                 }
                 val nextAt = if (manualCredits) {
                     (duration - creditsBeforeEndSeconds * 1_000L).takeIf { it > 0 } ?: duration
@@ -4578,8 +4661,10 @@ private fun PlayerHome(
             val introOffset = if (skipIntroTo != null) 1 else 0
             when {
                 skipIntroTo != null && episodeActionSelection == 0 -> {
-                    player?.seekTo(requireNotNull(skipIntroTo))
+                    val target = requireNotNull(skipIntroTo)
+                    player?.seekTo(target)
                     skipIntroTo = null
+                    introOfferClosed = playbackAttempt?.mediaId?.let { it to target }
                 }
                 nextEpisodeSeconds != null && episodeActionSelection == introOffset ->
                     advanceEpisode(confirmed = true)
@@ -5267,6 +5352,11 @@ private fun PlayerHome(
                     autoSkipIntro = !autoSkipIntro
                     preferences?.edit()?.putBoolean("auto_skip_intro", autoSkipIntro)?.apply()
                 }
+                MenuButton(stringResource(R.string.decode_audio_for_intro), Modifier, selected = decodeAudioForIntro) {
+                    decodeAudioForIntro = !decodeAudioForIntro
+                    preferences?.edit()?.putBoolean("decode_audio_for_intro", decodeAudioForIntro)?.apply()
+                }
+                Text(stringResource(R.string.decode_audio_for_intro_hint), style = MaterialTheme.typography.bodySmall)
                 MenuButton(
                     stringResource(if (manualIntro) R.string.intro_manual else R.string.intro_automatic),
                     Modifier

@@ -130,27 +130,41 @@ private class CatalogueIndex(private val titles: List<PortalTitle>) {
         matchKeys(expected).flatMap { positions[it].orEmpty() }.distinct().sorted().map(titles::get)
 }
 
-private val catalogueIndexes = ArrayDeque<Pair<java.lang.ref.WeakReference<List<PortalTitle>>, CatalogueIndex>>()
-
-/** Indexes are kept for the few most recently searched catalogue lists, compared by identity. */
-private fun catalogueIndex(titles: List<PortalTitle>): CatalogueIndex {
-    synchronized(catalogueIndexes) {
-        catalogueIndexes.firstOrNull { it.first.get() === titles }?.let { return it.second }
-    }
-    val index = CatalogueIndex(titles)
-    synchronized(catalogueIndexes) {
-        catalogueIndexes.removeAll { it.first.get() == null || it.first.get() === titles }
-        catalogueIndexes.addFirst(java.lang.ref.WeakReference(titles) to index)
-        while (catalogueIndexes.size > 6) catalogueIndexes.removeLast()
-    }
-    return index
+private class CachedCatalogueIndex(titles: List<PortalTitle>) {
+    val titles = java.lang.ref.WeakReference(titles)
+    var index: CatalogueIndex? = null
 }
 
-internal fun equivalentCatalogueTitle(
-    title: PortalTitle, candidates: List<PortalTitle>, requireVerifiedIdentity: Boolean = false
+private val catalogueIndexes = ArrayDeque<CachedCatalogueIndex>()
+
+/**
+ * Indexes of the most recently searched catalogue lists, compared by identity. Each list
+ * is indexed only once: concurrent lookups wait for the same build instead of all
+ * fingerprinting the whole catalogue in parallel.
+ */
+private fun catalogueIndex(titles: List<PortalTitle>): CatalogueIndex {
+    val entry = synchronized(catalogueIndexes) {
+        val existing = catalogueIndexes.firstOrNull { it.titles.get() === titles }
+        if (existing != null) {
+            catalogueIndexes.remove(existing)
+            catalogueIndexes.addFirst(existing)
+            existing
+        } else {
+            catalogueIndexes.removeAll { it.titles.get() == null }
+            CachedCatalogueIndex(titles).also {
+                catalogueIndexes.addFirst(it)
+                while (catalogueIndexes.size > 8) catalogueIndexes.removeLast()
+            }
+        }
+    }
+    synchronized(entry) {
+        return entry.index ?: CatalogueIndex(titles).also { entry.index = it }
+    }
+}
+
+private fun pickEquivalent(
+    expected: TitleFingerprint, relevant: List<PortalTitle>, requireVerifiedIdentity: Boolean
 ): PortalTitle? {
-    val expected = fingerprint(title)
-    val relevant = if (candidates.size >= 256) catalogueIndex(candidates).candidates(expected) else candidates
     val matches = relevant.map { it to fingerprint(it) }
         .filter { (_, candidate) -> expected.matches(candidate, !requireVerifiedIdentity) }
     if (matches.mapNotNull { it.second.year }.distinct().size > 1 ||
@@ -158,6 +172,27 @@ internal fun equivalentCatalogueTitle(
         matches.mapNotNull { it.second.tmdb }.distinct().size > 1
     ) return null
     return matches.firstOrNull()?.first
+}
+
+internal fun equivalentCatalogueTitle(
+    title: PortalTitle, candidates: List<PortalTitle>, requireVerifiedIdentity: Boolean = false
+): PortalTitle? {
+    val expected = fingerprint(title)
+    val relevant = if (candidates.size >= 256) catalogueIndex(candidates).candidates(expected) else candidates
+    return pickEquivalent(expected, relevant, requireVerifiedIdentity)
+}
+
+/**
+ * A prepared lookup for many searches in one catalogue, for example a Trakt import. It
+ * returns the same result as [equivalentCatalogueTitle] and is released with its owner.
+ */
+internal class CatalogueMatcher(titles: List<PortalTitle>) {
+    private val index = CatalogueIndex(titles)
+
+    fun find(title: PortalTitle, requireVerifiedIdentity: Boolean = false): PortalTitle? {
+        val expected = fingerprint(title)
+        return pickEquivalent(expected, index.candidates(expected), requireVerifiedIdentity)
+    }
 }
 
 internal fun <T> mergeSourceItems(

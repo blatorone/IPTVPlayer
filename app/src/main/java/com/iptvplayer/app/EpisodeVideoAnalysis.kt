@@ -107,18 +107,28 @@ internal suspend fun sampleEpisodeSurface(surface: SurfaceView, timeMs: Long): E
     }
 }
 
+/** How the current episode relates to a learned opening. Times are in the current episode. */
+internal data class OpeningObservation(
+    val range: LongRange,
+    /** The footage stopped matching before the learned opening ended (for example a short version). */
+    val diverged: Boolean,
+    /** Time of the last frame that still matched the learned opening. */
+    val lastMatchMs: Long?
+)
+
 /**
- * Confirms a previously learned opening in the current episode while it is still
- * running. Frames are aligned by offset voting with a tolerance of one sample, so
- * dropped samples, buffering and sampling phase differences do not break the
- * match. A clear majority of the already played reference frames must match.
+ * Recognises a learned opening while it is still running and keeps checking it as
+ * playback continues. Frames are aligned by offset voting with a tolerance of one
+ * sample, so dropped samples, buffering and phase differences do not break the match;
+ * a clear majority of the already played frames must match. A sustained run of
+ * differing frames inside the learned range marks the opening as diverged.
  */
-internal fun confirmKnownOpening(
+internal fun observeKnownOpening(
     current: List<EpisodeFrame>,
     reference: List<EpisodeFrame>,
     intro: LongRange,
     stepMs: Long = HLS_INTRO_FRAME_INTERVAL_MS
-): LongRange? {
+): OpeningObservation? {
     val prefix = reference.filter { it.timeMs in intro && it.detail }.sortedBy(EpisodeFrame::timeMs)
     if (prefix.size < 4 || current.isEmpty()) return null
     val sortedCurrent = current.sortedBy(EpisodeFrame::timeMs)
@@ -127,6 +137,9 @@ internal fun confirmKnownOpening(
         val start = intro.first - offset
         if (start < 0) continue
         var observed = 0
+        var run = 0
+        var diverged = false
+        var lastMatch: Long? = null
         val matched = mutableListOf<EpisodeFrame>()
         for (referenceFrame in prefix) {
             val target = referenceFrame.timeMs - offset
@@ -134,14 +147,31 @@ internal fun confirmKnownOpening(
             val near = framesNear(sortedCurrent, target, stepMs).filter(EpisodeFrame::detail)
             if (near.isEmpty()) continue
             observed++
-            if (near.any { sameEpisodeFrame(it, referenceFrame) }) matched += referenceFrame
+            if (near.any { sameEpisodeFrame(it, referenceFrame) }) {
+                matched += referenceFrame
+                lastMatch = target
+                run = 0
+            } else if (++run >= OPENING_END_MISMATCHES) {
+                diverged = true
+                break
+            }
         }
-        if (matched.size >= 5 && matched.size * 10 >= observed * 7 && distinctScenes(matched) >= 3) {
-            return start..(intro.last - offset)
+        // The majority rule applies to the part before a divergence.
+        val considered = observed - run
+        if (matched.size >= 5 && matched.size * 10 >= considered * 7 && distinctScenes(matched) >= 3) {
+            return OpeningObservation(start..(intro.last - offset), diverged, lastMatch)
         }
     }
     return null
 }
+
+/** A learned opening recognised early in the current episode, unless the episode left it. */
+internal fun confirmKnownOpening(
+    current: List<EpisodeFrame>,
+    reference: List<EpisodeFrame>,
+    intro: LongRange,
+    stepMs: Long = HLS_INTRO_FRAME_INTERVAL_MS
+): LongRange? = observeKnownOpening(current, reference, intro, stepMs)?.takeUnless { it.diverged }?.range
 
 internal fun analyzeEpisodeVideo(
     uri: Uri,

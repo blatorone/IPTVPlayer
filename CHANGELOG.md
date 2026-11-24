@@ -1,5 +1,12 @@
 # Änderungen
 
+## 1.0.77
+
+- Behebt „App reagiert nicht“ kurz nach dem Start: Die Ländererkennung aller Sender läuft im Hintergrund statt beim Zeichnen der Oberfläche, und Katalogindizes werden nur einmal statt parallel mehrfach aufgebaut. Der Trakt-Abgleich verwendet je Portal einen eigenen, einmal erstellten Index.
+- Eine Serie kann mehrere gelernte Intros haben (bis zu vier), etwa eine lange und eine kurze Fassung oder ein neues Intro einer späteren Staffel. Solange mehrere Fassungen möglich sind, springt „Intro überspringen“ nur bis zum frühesten möglichen Ende und rückt nach, sobald die laufende Fassung feststeht; verlässt die Folge ein erkanntes Intro, wird der Hinweis zurückgezogen. Ein zu kurz gelerntes Intro wird beim nächsten Folgenvergleich korrigiert.
+- Zurück blendet „Intro überspringen“ aus; danach spulen Links und Rechts wieder. Ausgeblendet erscheint der Hinweis erst in der nächsten Folge wieder; nach dem Überspringen nur dann, wenn sich das Intro als deutlich länger herausstellt.
+- Neue Einstellung „Dolby-Ton für Intro-Erkennung selbst dekodieren“ (standardmäßig aus): Durchgeleiteter Dolby-Ton liefert der App keine Tondaten. Ist die Einstellung an, dekodiert die App den Ton, damit auch die Titelmusik verglichen werden kann; über ARC oder optisch kommt dann unter Umständen nur Stereo an. Wirkt nach einem Neustart.
+
 ## 1.0.76
 
 - Der Diagnosebericht wird nach jeder Intro-Suche und beim App-Start zusätzlich im eigenen App-Ordner `Android/data/com.iptvplayer.app/files` abgelegt. Eine Ordnerauswahl ist dafür nicht nötig, was auf TV-Geräten oft nicht möglich ist.

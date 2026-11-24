@@ -366,6 +366,8 @@
     <string name="auto_next_episode">Nächste Folge automatisch starten</string>
     <string name="auto_skip_intro">Intro automatisch überspringen</string>
     <string name="skip_intro_automatically">Intro automatisch überspringen</string>
+    <string name="decode_audio_for_intro">Dolby-Ton für Intro-Erkennung selbst dekodieren</string>
+    <string name="decode_audio_for_intro_hint">Erkennt Intros zusätzlich an der Titelmusik. Der Ton geht dann als PCM statt als Dolby-Bitstream an Fernseher oder Anlage; über ARC oder optisch kann dadurch nur Stereo ankommen. Wirkt nach einem Neustart der App.</string>
     <string name="intro_manual">Intro: Eigene Zeitmarken</string>
     <string name="intro_automatic">Intro: Automatische Erkennung</string>
     <string name="intro_start_time">Intro beginnt bei %1$s</string>

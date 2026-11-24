@@ -1,5 +1,10 @@
 # Änderungen
 
+## 1.0.56
+
+- Einstellungen kehren nach Zurück zum zuvor genutzten Bereich zurück, statt die alte Seitenliste und anschließend den Programmführer zu öffnen. Zurück arbeitet in Film-, Serien- und TV-Unterseiten schrittweise; erst auf der Bereichsübersicht erscheint die Beenden-Bestätigung.
+- Laufende Sender sind im Programmführer und in der Vollbild-Senderliste nur mit einer Akzent-Umrandung markiert. Die Flächenhervorhebung bleibt dem aktuellen Fokus vorbehalten.
+
 ## 1.0.55
 
 - Trakt verarbeitet importierte Episoden gebündelt pro Serie. Bei einer geänderten Trakt-Aktivität werden die Folgen weiterhin für geräteübergreifende Synchronisierung abgefragt, bereits zusammengehörige Episoden lösen aber nicht mehr für jede einzelne Folge erneut Portalabgleich und Serienzusammenführung aus.

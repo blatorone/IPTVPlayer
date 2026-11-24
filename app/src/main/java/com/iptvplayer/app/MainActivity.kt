@@ -420,6 +420,7 @@ private fun PlayerHome(
     var selected by remember { mutableStateOf<Destination?>(Destination.LIVE) }
     var pendingVodCategory by rememberSaveable { mutableStateOf<Destination?>(null) }
     var lastFocused by rememberSaveable { mutableStateOf(Destination.LIVE) }
+    var settingsReturnDestination by rememberSaveable { mutableStateOf(Destination.LIVE) }
     var lastSettingsSection by rememberSaveable { mutableStateOf(SettingsSection.GENERAL) }
     val initialFocus = remember { FocusRequester() }
     val settingsFocusRequesters = remember {
@@ -3726,6 +3727,16 @@ private fun PlayerHome(
     fun isMainMenuOpen() = selected == Destination.LIVE && guidePanel == GuidePanel.MENU && !fullscreen
     val mainMenuOpen = isMainMenuOpen()
     LaunchedEffect(mainMenuOpen) { if (!mainMenuOpen) lastBack = 0L }
+    fun openSettings() {
+        val current = if (isMainMenuOpen()) lastFocused else selected ?: lastFocused
+        settingsReturnDestination = current.takeUnless {
+            it == Destination.SETTINGS || it == Destination.SOURCES || it == Destination.CATEGORIES
+        } ?: Destination.LIVE
+        settingsSection = null
+        guidePanel = GuidePanel.GRID
+        lastBack = 0L
+        selected = Destination.SETTINGS
+    }
     fun returnToCategories() {
         lastLiveCategory = category
         category = null
@@ -3764,6 +3775,15 @@ private fun PlayerHome(
         fullscreen = true
         return true
     }
+    fun requestAppExit() {
+        val now = SystemClock.elapsedRealtime()
+        if (lastBack != 0L && now - lastBack <= EXIT_CONFIRMATION_MS) {
+            savePlaybackPosition()
+            onExit()
+        } else {
+            lastBack = now
+        }
+    }
     fun navigateBack() {
         if (fullscreen) {
             if (watchingPrompt) {
@@ -3783,16 +3803,16 @@ private fun PlayerHome(
             }
             leaveFullscreen()
         } else if (isMainMenuOpen()) {
-            val now = SystemClock.elapsedRealtime()
-            if (lastBack != 0L && now - lastBack <= EXIT_CONFIRMATION_MS) {
-                savePlaybackPosition()
-                onExit()
-            } else {
-                lastBack = now
-            }
+            requestAppExit()
         } else if (inGuide) {
-            if (guidePanel == GuidePanel.GRID) openMainMenu()
+            if (guidePanel == GuidePanel.GRID) requestAppExit()
             else guidePanel = GuidePanel.GRID
+        } else if (selected == Destination.SETTINGS && settingsSection != null) settingsSection = null
+        else if (selected == Destination.SETTINGS) {
+            selected = settingsReturnDestination
+            guidePanel = GuidePanel.GRID
+            lastBack = 0L
+            if (selected == Destination.LIVE) restoreGuideEntryFocus()
         } else if (selected == null && category != null) returnToCategories()
         else if (selected == Destination.SERIES && openedSeason != null) openedSeason = null
         else if (selected == Destination.SERIES && openedSeries != null) {
@@ -3809,10 +3829,10 @@ private fun PlayerHome(
         else if (selected == Destination.MOVIES && movieHistoryOpen) movieHistoryOpen = false
         else if (selected == Destination.MOVIES && movieWatchlistOpen) movieWatchlistOpen = false
         else if (selected == Destination.SOURCES || selected == Destination.CATEGORIES) selected = Destination.SETTINGS
-        else if (selected == Destination.SETTINGS && settingsSection != null) settingsSection = null
         else if ((selected == Destination.MOVIES && selectedGroup?.first == PortalSection.MOVIES) ||
             (selected == Destination.SERIES && selectedGroup?.first == PortalSection.SERIES)
         ) closeGroup()
+        else if (selected == Destination.MOVIES || selected == Destination.SERIES) requestAppExit()
         else openMainMenu()
     }
     var playerControlsRequest by remember { mutableIntStateOf(0) }
@@ -4510,13 +4530,15 @@ private fun PlayerHome(
                                             leadingIcon = destination.icon.takeUnless { mainMenuStyle == MainMenuStyle.TEXT },
                                             iconOnly = mainMenuStyle == MainMenuStyle.ICONS
                                         ) {
-                                            showFullscreenPanel(GuidePanel.GRID)
-                                            guidePanel = GuidePanel.GRID
-                                            lastFocused = destination
-                                            pendingVodCategory = destination.takeIf { it == Destination.MOVIES || it == Destination.SERIES }
-                                            selected = destination
                                             fullscreen = false
-                                            if (destination == Destination.LIVE) restoreGuideEntryFocus()
+                                            if (destination == Destination.SETTINGS) openSettings() else {
+                                                showFullscreenPanel(GuidePanel.GRID)
+                                                guidePanel = GuidePanel.GRID
+                                                lastFocused = destination
+                                                pendingVodCategory = destination.takeIf { it == Destination.MOVIES || it == Destination.SERIES }
+                                                selected = destination
+                                                if (destination == Destination.LIVE) restoreGuideEntryFocus()
+                                            }
                                         }
                                     }
                                 }
@@ -4999,11 +5021,13 @@ private fun PlayerHome(
                             (item == Destination.SETTINGS &&
                                 destination in listOf(Destination.SOURCES, Destination.CATEGORIES)),
                         onClick = {
-                            lastFocused = item
-                            guidePanel = GuidePanel.GRID
-                            if (item == Destination.LIVE) restoreGuideEntryFocus()
-                            pendingVodCategory = item.takeIf { it == Destination.MOVIES || it == Destination.SERIES }
-                            selected = item
+                            if (item == Destination.SETTINGS) openSettings() else {
+                                lastFocused = item
+                                guidePanel = GuidePanel.GRID
+                                if (item == Destination.LIVE) restoreGuideEntryFocus()
+                                pendingVodCategory = item.takeIf { it == Destination.MOVIES || it == Destination.SERIES }
+                                selected = item
+                            }
                         }
                     )
                 }
@@ -5050,14 +5074,15 @@ private fun PlayerHome(
                                         Destination.SOURCES, Destination.CATEGORIES
                                     ),
                                 onClick = {
-                                    lastFocused = item
-                                    guidePanel = GuidePanel.GRID
-                                    if (item == Destination.LIVE) restoreGuideEntryFocus()
-                                    pendingVodCategory = item.takeIf {
-                                        it == Destination.MOVIES || it == Destination.SERIES
+                                    if (item == Destination.SETTINGS) openSettings() else {
+                                        lastFocused = item
+                                        guidePanel = GuidePanel.GRID
+                                        if (item == Destination.LIVE) restoreGuideEntryFocus()
+                                        pendingVodCategory = item.takeIf {
+                                            it == Destination.MOVIES || it == Destination.SERIES
+                                        }
+                                        selected = item
                                     }
-                                    if (item == Destination.SETTINGS) settingsSection = null
-                                    selected = item
                                 }
                             )
                         }
@@ -6141,6 +6166,12 @@ private fun PlayerHome(
                 Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     topNavigation()
                     header()
+                    if (lastBack != 0L && !mainMenuOpen) Text(
+                        stringResource(R.string.press_back_again_to_exit),
+                        Modifier.align(Alignment.CenterHorizontally),
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.bodySmall
+                    )
                     Column(
                         Modifier.weight(1f).fillMaxWidth().guideNavigationInput(interceptRemote = { input ->
                             !input.vertical && (guidePanel != GuidePanel.GRID || controlBindings[input]?.let {
@@ -6251,6 +6282,12 @@ private fun PlayerHome(
                         }
                     }
                     if (destination != Destination.SEARCH) header()
+                    if (lastBack != 0L && !mainMenuOpen) Text(
+                        stringResource(R.string.press_back_again_to_exit),
+                        Modifier.align(Alignment.CenterHorizontally),
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.bodySmall
+                    )
                     Column(
                         Modifier.weight(1f).then(
                             if (destination == Destination.SEARCH) Modifier else Modifier.verticalScroll(contentScroll)

@@ -125,13 +125,12 @@ internal fun FullscreenChannelList(
                 Surface(
                     color = when {
                         focused -> colors.tertiaryContainer
-                        playing === channel -> colors.secondaryContainer
                         else -> colors.surfaceContainerLow
                     },
                     shape = MaterialTheme.shapes.medium,
                     border = when {
                         focused -> BorderStroke(2.dp, colors.primary)
-                        playing === channel -> BorderStroke(1.dp, colors.secondary)
+                        playing === channel -> BorderStroke(1.5.dp, colors.primary)
                         else -> null
                     },
                     modifier = focus.fillMaxWidth()

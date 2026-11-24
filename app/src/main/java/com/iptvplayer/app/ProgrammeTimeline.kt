@@ -1,6 +1,7 @@
 package com.iptvplayer.app
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
@@ -294,10 +295,17 @@ private fun GuideChannelCell(
             .padding(end = 2.dp)
             .background(when {
                 focused -> colors.tertiaryContainer
-                playing -> colors.primaryContainer
+                playing -> colors.surfaceContainerHigh
                 highlighted -> colors.secondaryContainer
                 else -> colors.surfaceContainerHigh
             })
+            .then(
+                when {
+                    focused -> Modifier.border(BorderStroke(2.dp, colors.primary), RoundedCornerShape(4.dp))
+                    playing -> Modifier.border(BorderStroke(1.5.dp, colors.primary), RoundedCornerShape(4.dp))
+                    else -> Modifier
+                }
+            )
             .onFocusChanged {
                 if (it.isFocused && !focused) onFocus()
                 focused = it.isFocused

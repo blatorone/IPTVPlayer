@@ -1186,9 +1186,12 @@ private fun PlayerHome(
                     reportImportProgress("Importiere gesehene Titel", index, library.watched.size)
                 }
                 val sortedWatchedEpisodes = library.watchedEpisodes.sortedBy { it.watchedAtMillis ?: 0L }
-                for ((index, media) in sortedWatchedEpisodes.withIndex()) {
-                    val seasonNumber = media.seasonNumber ?: continue
-                    val episodeNumber = media.episodeNumber ?: continue
+                val watchedEpisodeGroups = sortedWatchedEpisodes.groupBy { media ->
+                    "${media.traktId ?: media.imdbId ?: media.tmdbId ?: normalizedLabel(media.name)}:${media.year ?: 0}"
+                }.values
+                var processedWatchedEpisodes = 0
+                for (episodes in watchedEpisodeGroups) {
+                    val media = episodes.first()
                     val entries = localMatches(media, searchPortalIfMissing = true)
                     val title = entries.firstOrNull()?.value ?: media.asTitle()
                     val trackedKey = if (entries.isNotEmpty()) importedSeriesKey(title) else traktLibraryKey(media)
@@ -1196,40 +1199,54 @@ private fun PlayerHome(
                     val refs = entries.mapNotNull { item ->
                         item.value.id?.let { SeriesPortalRef(item.source.identity, it) }
                     }.distinct()
-                    val episodeKeys = buildList {
-                        val canonical = titleIdentity(title)
-                        if (canonical != null) add("SERIES:catalogue:$canonical:$seasonNumber:$episodeNumber")
-                        entries.forEach { item ->
-                            val variantCanonical = titleIdentity(item.value)
-                            val scope = variantCanonical?.let { "catalogue" } ?: item.source.identity
-                            val seriesId = variantCanonical ?: item.value.id ?: item.value.name
-                            add("SERIES:$scope:$seriesId:$seasonNumber:$episodeNumber")
+                    val watchedKeys = linkedSetOf<String>()
+                    var latestResume: EpisodeResume? = null
+                    var latestWatchedAt = old?.watchedAt ?: 0L
+                    for (episode in episodes) {
+                        val seasonNumber = episode.seasonNumber ?: continue
+                        val episodeNumber = episode.episodeNumber ?: continue
+                        val episodeKeys = buildList {
+                            val canonical = titleIdentity(title)
+                            if (canonical != null) add("SERIES:catalogue:$canonical:$seasonNumber:$episodeNumber")
+                            entries.forEach { item ->
+                                val variantCanonical = titleIdentity(item.value)
+                                val scope = variantCanonical?.let { "catalogue" } ?: item.source.identity
+                                val seriesId = variantCanonical ?: item.value.id ?: item.value.name
+                                add("SERIES:$scope:$seriesId:$seasonNumber:$episodeNumber")
+                            }
+                            if (isEmpty() && title.id != null) {
+                                add("SERIES:trakt:${title.id}:$seasonNumber:$episodeNumber")
+                            }
                         }
-                        if (isEmpty() && title.id != null) {
-                            add("SERIES:trakt:${title.id}:$seasonNumber:$episodeNumber")
+                        .distinct()
+                        completedEpisodes += episodeKeys
+                        watchedKeys += "$seasonNumber:$episodeNumber"
+                        val watchedAt = episode.watchedAtMillis ?: 0L
+                        if (watchedAt >= latestWatchedAt) {
+                            latestWatchedAt = watchedAt
+                            latestResume = EpisodeResume(
+                                "$seasonNumber:$episodeNumber", seasonNumber, episodeNumber.toString(), null,
+                                episodeKeys.firstOrNull()
+                                    ?: "SERIES:catalogue:${titleIdentity(title) ?: title.name}:$seasonNumber:$episodeNumber"
+                            )
                         }
-                    }.distinct()
-                    completedEpisodes += episodeKeys
-                    val episodeProgressKey = episodeKeys.firstOrNull()
-                    val watchedAt = media.watchedAtMillis ?: 0L
-                    val lastEpisode = old?.lastEpisode.takeIf { old != null && old.watchedAt > watchedAt }
-                        ?: EpisodeResume(
-                            "$seasonNumber:$episodeNumber", seasonNumber, episodeNumber.toString(), null,
-                            episodeProgressKey ?: "SERIES:catalogue:${titleIdentity(title) ?: title.name}:$seasonNumber:$episodeNumber"
-                        )
+                    }
+                    if (watchedKeys.isEmpty()) continue
                     val tracked = (old ?: TrackedSeries(
                         trackedKey, displayVodTitle(title), refs, title.year ?: media.year,
                         title.imdbId ?: media.imdbId, title.tmdbId ?: media.tmdbId
                     )).copy(
                         refs = (old?.refs.orEmpty() + refs).distinct(), viewed = true,
-                        watchedAt = maxOf(old?.watchedAt ?: 0L, watchedAt), lastEpisode = lastEpisode,
-                        known = old?.known.orEmpty() + "$seasonNumber:$episodeNumber",
-                        unseen = old?.unseen.orEmpty() - "$seasonNumber:$episodeNumber",
-                        watchedEpisodes = old?.watchedEpisodes.orEmpty() + "$seasonNumber:$episodeNumber"
+                        watchedAt = maxOf(old?.watchedAt ?: 0L, latestWatchedAt),
+                        lastEpisode = latestResume ?: old?.lastEpisode,
+                        known = old?.known.orEmpty() + watchedKeys,
+                        unseen = old?.unseen.orEmpty() - watchedKeys,
+                        watchedEpisodes = old?.watchedEpisodes.orEmpty() + watchedKeys
                     )
                     updatedSeries[trackedKey] = tracked
-                    matched++
-                    reportImportProgress("Markiere gesehene Folgen", index, sortedWatchedEpisodes.size)
+                    matched += watchedKeys.size
+                    processedWatchedEpisodes += episodes.size
+                    reportImportProgress("Markiere gesehene Folgen", processedWatchedEpisodes - 1, sortedWatchedEpisodes.size)
                 }
                 for ((index, media) in library.playback.withIndex()) {
                     val percent = media.progressPercent?.takeIf { it > 0f } ?: continue

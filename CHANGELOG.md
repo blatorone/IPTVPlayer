@@ -1,5 +1,9 @@
 # Änderungen
 
+## 1.0.55
+
+- Trakt verarbeitet importierte Episoden gebündelt pro Serie. Bei einer geänderten Trakt-Aktivität werden die Folgen weiterhin für geräteübergreifende Synchronisierung abgefragt, bereits zusammengehörige Episoden lösen aber nicht mehr für jede einzelne Folge erneut Portalabgleich und Serienzusammenführung aus.
+
 ## 1.0.54
 
 - Parallele Portalimporte sichern ihre Ergebnisse und Fortschrittsmeldungen jetzt synchronisiert. Der Abschluss eines Live-, Film- oder Serienimports kann dadurch keine gleichzeitig aktualisierten Bereiche mehr aus dem gespeicherten Portalstand verdrängen.

@@ -6275,9 +6275,10 @@ private fun PlayerHome(
                     )
                     Column(
                         Modifier.weight(1f).fillMaxWidth().guideNavigationInput(interceptRemote = { input ->
-                            !input.vertical && (guidePanel != GuidePanel.GRID || controlBindings[input]?.let {
-                                it != ControlAction.DEFAULT && it != ControlAction.CHANNELS
-                            } == true)
+                            !input.vertical && (guidePanel != GuidePanel.GRID ||
+                                input != GuideInput.REMOTE_RIGHT && controlBindings[input]?.let {
+                                    it != ControlAction.DEFAULT && it != ControlAction.CHANNELS
+                                } == true)
                         }) {
                             if (!runMappedControl(it)) navigateGuide(it)
                         }

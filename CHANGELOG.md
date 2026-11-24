@@ -1,5 +1,9 @@
 # Änderungen
 
+## 1.0.64
+
+- Im Programmführer hat die Navigation mit der Rechts-Taste in der EPG-Zeitleiste Vorrang vor der allgemeinen Fernbedienungsbelegung.
+
 ## 1.0.63
 
 - Behebt einen Absturz beim Öffnen des Players, indem die Untertitel-Schaltfläche in der Media3-Buttonleiste neben den Einstellungen eingefügt wird.

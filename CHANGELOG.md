@@ -1,5 +1,9 @@
 # Änderungen
 
+## 1.0.54
+
+- Parallele Portalimporte sichern ihre Ergebnisse und Fortschrittsmeldungen jetzt synchronisiert. Der Abschluss eines Live-, Film- oder Serienimports kann dadurch keine gleichzeitig aktualisierten Bereiche mehr aus dem gespeicherten Portalstand verdrängen.
+
 ## 1.0.53
 
 - Automatische vollständige Portalabgleiche beim Start werden pro Quelle auf höchstens einen Abruf in sechs Stunden begrenzt. Dazwischen bleibt der Katalogcache direkt nutzbar und es wird nur der Portalzugang geprüft; eine manuelle Aktualisierung bleibt sofort möglich.

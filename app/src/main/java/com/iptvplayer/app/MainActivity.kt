@@ -141,6 +141,8 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
@@ -3014,6 +3016,10 @@ private fun PlayerHome(
             var refreshedChannels = previous?.channels.orEmpty()
             var refreshedGenres = previous?.genres.orEmpty()
             var refreshedCatalogs = previous?.catalogs.orEmpty()
+            // LIVE, MOVIES and SERIES load concurrently. Their results and progress
+            // must be committed as one snapshot at a time so one section cannot
+            // overwrite another section's newer in-memory catalogue.
+            val snapshotMutex = Mutex()
             val keepEnabled = activate || previous?.enabled != false || previous?.autoDisabled == true
             val initialSnapshot = SavedPortal(
                 enteredAddress, enteredMac, refreshedChannels, refreshedGenres, refreshedCatalogs,
@@ -3024,11 +3030,13 @@ private fun PlayerHome(
             // during a slow catalogue load must not make a newly added source disappear.
             persistPortalSnapshot(initialSnapshot)
             suspend fun persistProgress() {
-                persistPortalSnapshot(SavedPortal(
-                    enteredAddress, enteredMac, refreshedChannels, refreshedGenres, refreshedCatalogs,
-                    previous?.epgChannelIds.orEmpty(), previous?.subscriptionExpiry,
-                    enabled = keepEnabled, reachable = true, autoDisabled = false
-                ))
+                snapshotMutex.withLock {
+                    persistPortalSnapshot(SavedPortal(
+                        enteredAddress, enteredMac, refreshedChannels, refreshedGenres, refreshedCatalogs,
+                        previous?.epgChannelIds.orEmpty(), previous?.subscriptionExpiry,
+                        enabled = keepEnabled, reachable = true, autoDisabled = false
+                    ))
+                }
             }
             importStatuses = PortalSection.entries.associateWith { ImportStatus.Loading }
             coroutineScope {
@@ -3047,16 +3055,20 @@ private fun PlayerHome(
                                 }
                                 val imported = source.loadChannels(token) { loaded, total ->
                                     withContext(Dispatchers.Main) {
-                                        importStatuses = importStatuses +
-                                            (section to ImportStatus.Progress(loaded, total))
+                                        snapshotMutex.withLock {
+                                            importStatuses = importStatuses +
+                                                (section to ImportStatus.Progress(loaded, total))
+                                        }
                                     }
                                 }
                                 imported to labels.await()
                             }
-                            refreshedChannels = if (imported.partial) {
-                                (imported.channels + refreshedChannels).distinctBy { it.id ?: it.command }
-                            } else imported.channels
-                            refreshedGenres = refreshedGenres + labels
+                            snapshotMutex.withLock {
+                                refreshedChannels = if (imported.partial) {
+                                    (imported.channels + refreshedChannels).distinctBy { it.id ?: it.command }
+                                } else imported.channels
+                                refreshedGenres = refreshedGenres + labels
+                            }
                             if (imported.partial) ImportStatus.Partial(imported.channels.size)
                             else ImportStatus.Count(imported.channels.size)
                         } else {
@@ -3082,7 +3094,9 @@ private fun PlayerHome(
                                 },
                                 groups = catalog.groups.ifEmpty { retainedCatalog.groups }
                             )
-                            refreshedCatalogs = refreshedCatalogs + (section to mergedCatalog)
+                            snapshotMutex.withLock {
+                                refreshedCatalogs = refreshedCatalogs + (section to mergedCatalog)
+                            }
                             catalog.total?.let { ImportStatus.Count(it) }
                                 ?: ImportStatus.Loaded(catalog.titles.size)
                         }
@@ -3096,7 +3110,9 @@ private fun PlayerHome(
                             else -> ImportStatus.Error(R.string.portal_live_list_invalid)
                         }
                     }
-                    importStatuses = importStatuses + (section to status)
+                    snapshotMutex.withLock {
+                        importStatuses = importStatuses + (section to status)
+                    }
                     if (status is ImportStatus.Count || status is ImportStatus.Loaded || status is ImportStatus.Partial) {
                         persistProgress()
                     }

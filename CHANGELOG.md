@@ -1,5 +1,9 @@
 # Änderungen
 
+## 1.0.76
+
+- Der Diagnosebericht wird nach jeder Intro-Suche und beim App-Start zusätzlich im eigenen App-Ordner `Android/data/com.iptvplayer.app/files` abgelegt. Eine Ordnerauswahl ist dafür nicht nötig, was auf TV-Geräten oft nicht möglich ist.
+
 ## 1.0.75
 
 - Der Diagnosebericht enthält Messwerte der Intro-Erkennung: Anzahl erfasster Bilder und Tonmuster, die von Bild- und Tonvergleich erkannten Zeitbereiche und den Zustand der Tonanalyse. Titel, Adressen und Inhalte werden nicht aufgezeichnet.

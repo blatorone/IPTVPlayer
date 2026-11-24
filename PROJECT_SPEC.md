@@ -24,7 +24,7 @@ Ein nutzerkonfigurierbarer IPTV-Player für Android-Telefone und -Tablets sowie 
 
 - Der Portalstatus (erreichbar, nicht erreichbar oder ungeprüft) wird lokal gespeichert. Portale können manuell deaktiviert werden; standardmäßig deaktiviert die App eine beim Handshake nicht erreichbare Quelle automatisch. Automatisch deaktivierte Quellen werden bei später erfolgreicher Prüfung wieder aktiviert; manuell deaktivierte Quellen bleiben aus. Deaktivierte Quellen bleiben gespeichert, werden aber aus Suche, Zusammenführung, Metadatenabgleich und Wiedergabe ausgeschlossen.
 - Nach Portalaktualisierungen zeigt eine kurze Meldung die erfolgreichen und nicht erreichbaren Quellen an. Die Quellenverwaltung zeigt ihren Status und bietet Aktivieren/Deaktivieren sowie eine Einstellung für die automatische Deaktivierung.
-- Diagnoseberichte lassen sich als einzelne Datei exportieren, ohne zuvor einen Ordner auswählen zu müssen.
+- Diagnoseberichte lassen sich als einzelne Datei exportieren, ohne zuvor einen Ordner auswählen zu müssen. Zusätzlich hält die App eine aktuelle Kopie im eigenen externen App-Ordner bereit, die ohne Dateiauswahl erreichbar ist.
 
 - Mehrere M3U-/M3U8-Playlisten per URL oder vom Nutzer gewählter Datei hinzufügen, ändern, aktualisieren und entfernen. Relative URLs anhand der Playlist-Quelle auflösen; Metadaten wie `tvg-id`, Name, Logo und Gruppe berücksichtigen. Fehlerhafte Einträge isolieren und Importergebnis anzeigen.
 - Xtream-kompatible Quellen mit Serveradresse und Zugangsdaten unterstützen; Live, Filme, Serien, Kategorien und verfügbare Metadaten übernehmen. Zugangsdaten geschützt ablegen und aus Anzeigen und Logs heraushalten.

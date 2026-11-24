@@ -4490,6 +4490,8 @@ private fun PlayerHome(
                     "intro:${timing.introStartMs?.div(1000) ?: "-"}-${timing.introEndMs?.div(1000) ?: "-"}"
             )
             if (audioToken != null) AppDiagnostics.record(context, "intro_audio " + EpisodeAudioTap.summary())
+            val appContext = context.applicationContext
+            kotlin.concurrent.thread(name = "diagnostics-copy") { AppDiagnostics.writeLocalCopy(appContext) }
         }
     }
     LaunchedEffect(

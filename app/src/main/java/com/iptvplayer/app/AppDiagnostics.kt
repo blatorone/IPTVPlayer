@@ -35,6 +35,8 @@ internal object AppDiagnostics {
             }
             installed = true
             record(app, "app_started")
+            // Refresh the readable copy, including a crash report from the previous run.
+            kotlin.concurrent.thread(name = "diagnostics-copy") { writeLocalCopy(app) }
         }
     }
 
@@ -68,21 +70,49 @@ internal object AppDiagnostics {
     }
 
     private fun writeReport(context: Context, target: Uri) {
+        context.contentResolver.openOutputStream(target, "w")?.bufferedWriter(Charsets.UTF_8)?.use { writer ->
+            writeReportText(context, writer)
+        } ?: error("Die Diagnose-Datei konnte nicht geschrieben werden.")
+    }
+
+    /**
+     * Keeps a current copy of the report in the app's own external folder
+     * (Android/data/<package>/files). It needs no permission or folder selection, which
+     * TV devices often cannot offer, and contains the same restricted data as an export.
+     */
+    fun writeLocalCopy(context: Context) {
+        runCatching {
+            val directory = context.getExternalFilesDir(null) ?: return
+            val target = File(directory, "StreamWatch-Diagnose.txt")
+            val temporary = File(directory, "StreamWatch-Diagnose.txt.tmp")
+            synchronized(lock) {
+                temporary.bufferedWriter(Charsets.UTF_8).use { writeReportText(context, it) }
+                if (!temporary.renameTo(target)) {
+                    target.delete()
+                    temporary.renameTo(target)
+                }
+            }
+        }
+    }
+
+    private fun writeReportText(context: Context, writer: java.io.Writer) {
         val events = File(context.filesDir, "streamwatch-events.log")
         val crash = File(context.filesDir, "streamwatch-crash.log")
         val crashEvent = File(context.filesDir, "streamwatch-crash-event.log")
-        context.contentResolver.openOutputStream(target, "w")?.bufferedWriter(Charsets.UTF_8)?.use { writer ->
-            writer.appendLine("StreamWatch Diagnosebericht")
-            writer.appendLine("Zeitpunkt: ${Instant.now()}")
-            writer.appendLine("Android: ${Build.VERSION.SDK_INT} (${Build.VERSION.RELEASE})")
-            writer.appendLine("Gerät: ${Build.MANUFACTURER} ${Build.MODEL}")
-            writer.appendLine("\n--- Ereignisse ---")
-            if (events.exists()) writer.append(events.readText(Charsets.UTF_8))
-            if (crashEvent.exists()) writer.append(crashEvent.readText(Charsets.UTF_8))
-            writer.appendLine("\n--- Letzter Absturz ---")
-            if (crash.exists()) writer.append(crash.readText(Charsets.UTF_8))
-            else writer.appendLine("Kein Absturzbericht vorhanden.")
-        } ?: error("Die Diagnose-Datei konnte nicht geschrieben werden.")
+        val version = runCatching {
+            @Suppress("DEPRECATION") context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        }.getOrNull().orEmpty()
+        writer.appendLine("StreamWatch Diagnosebericht")
+        writer.appendLine("Zeitpunkt: ${Instant.now()}")
+        writer.appendLine("Version: ${version.ifBlank { "unbekannt" }}")
+        writer.appendLine("Android: ${Build.VERSION.SDK_INT} (${Build.VERSION.RELEASE})")
+        writer.appendLine("Gerät: ${Build.MANUFACTURER} ${Build.MODEL}")
+        writer.appendLine("\n--- Ereignisse ---")
+        if (events.exists()) writer.append(events.readText(Charsets.UTF_8))
+        if (crashEvent.exists()) writer.append(crashEvent.readText(Charsets.UTF_8))
+        writer.appendLine("\n--- Letzter Absturz ---")
+        if (crash.exists()) writer.append(crash.readText(Charsets.UTF_8))
+        else writer.appendLine("Kein Absturzbericht vorhanden.")
     }
 
     private fun writeCrash(context: Context, thread: Thread, error: Throwable) {

@@ -4299,6 +4299,19 @@ private fun PlayerHome(
         }
         if (active.currentMediaItem != item) return@LaunchedEffect
         val audioToken = if (scanOpening && sampleFromSurface) EpisodeAudioTap.start() else null
+        // Intro diagnostics contain counts and times only, never titles or addresses.
+        AppDiagnostics.record(
+            context,
+            "intro_start s:${if (sampleFromSurface) 1 else 0} " +
+                "rf:${previous?.second?.size ?: 0} ra:${previousAudio?.second?.size ?: 0} " +
+                "lv:${learned?.range?.let { "${it.first / 1000}-${it.last / 1000}" } ?: "-"} " +
+                "la:${learnedAudio?.first?.let { "${it.first / 1000}-${it.last / 1000}" } ?: "-"}"
+        )
+        var lastFrames = 0
+        var lastAudio = 0
+        var lastLoud = 0
+        var lastVideoRange: LongRange? = null
+        var lastAudioRange: LongRange? = null
         try {
             val updates = if (sampleFromSurface) flow {
                 val opening = mutableListOf<EpisodeFrame>()
@@ -4370,14 +4383,32 @@ private fun PlayerHome(
                     // opening with fast cuts can first look shorter than it is, so every longer
                     // overlapping result extends the range and corrects the learned opening.
                     val currentIntro = timing.introStartMs?.let { start -> timing.introEndMs?.let { start until it } }
-                    val (known, compared) = withContext(Dispatchers.Default) {
+                    val (known, videoRange, audioRange) = withContext(Dispatchers.Default) {
                         val known = if (currentIntro != null) null else
                             learned?.let { confirmKnownOpening(analysis.opening, it.frames, it.range, stepMs) }
                                 ?: learnedAudio?.let { (range, prints) -> confirmKnownAudioOpening(analysis.audio, prints, range) }
-                        known to mergeOpeningRanges(
+                        Triple(
+                            known,
                             previous?.let { findRepeatedOpening(analysis.opening, it.second, stepMs) },
                             previousAudio?.let { findRepeatedAudioOpening(analysis.audio, it.second) }
                         )
+                    }
+                    val compared = mergeOpeningRanges(videoRange, audioRange)
+                    lastFrames = analysis.opening.size
+                    lastAudio = analysis.audio.size
+                    lastLoud = analysis.audio.count(AudioPrint::loud)
+                    if (videoRange != lastVideoRange || audioRange != lastAudioRange) {
+                        lastVideoRange = videoRange
+                        lastAudioRange = audioRange
+                        AppDiagnostics.record(
+                            context,
+                            "intro_match at:${active.currentPosition / 1000} v:${videoRange?.let { "${it.first / 1000}-${it.last / 1000}" } ?: "-"} " +
+                                "a:${audioRange?.let { "${it.first / 1000}-${it.last / 1000}" } ?: "-"} " +
+                                "f:${analysis.opening.size} p:${analysis.audio.size}"
+                        )
+                    }
+                    if (known != null && currentIntro == null) {
+                        AppDiagnostics.record(context, "intro_learned_confirmed ${known.first / 1000}-${known.last / 1000}")
                     }
                     if (active.currentMediaItem != item) return@collect
                     val base = currentIntro ?: known
@@ -4453,6 +4484,12 @@ private fun PlayerHome(
             }
         } finally {
             audioToken?.let(EpisodeAudioTap::stop)
+            if (scanOpening) AppDiagnostics.record(
+                context,
+                "intro_end f:$lastFrames p:$lastAudio loud:$lastLoud " +
+                    "intro:${timing.introStartMs?.div(1000) ?: "-"}-${timing.introEndMs?.div(1000) ?: "-"}"
+            )
+            if (audioToken != null) AppDiagnostics.record(context, "intro_audio " + EpisodeAudioTap.summary())
         }
     }
     LaunchedEffect(

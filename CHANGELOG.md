@@ -1,5 +1,9 @@
 # Änderungen
 
+## 1.0.75
+
+- Der Diagnosebericht enthält Messwerte der Intro-Erkennung: Anzahl erfasster Bilder und Tonmuster, die von Bild- und Tonvergleich erkannten Zeitbereiche und den Zustand der Tonanalyse. Titel, Adressen und Inhalte werden nicht aufgezeichnet.
+
 ## 1.0.74
 
 - Schnellerer Start mit deutlich weniger Speicher: Die gespeicherte Portalbibliothek wird blockweise ver- und entschlüsselt und als Datenstrom gelesen, statt als Ganzes über den Android-Keystore und als vollständiges JSON-Dokument im Speicher. Das verringert Abstürze auf Geräten mit wenig Arbeitsspeicher wie dem Fire TV Stick.

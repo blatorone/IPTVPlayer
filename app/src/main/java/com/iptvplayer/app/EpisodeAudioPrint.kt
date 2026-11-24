@@ -64,11 +64,37 @@ internal object EpisodeAudioTap {
     private val real = DoubleArray(AUDIO_WINDOW)
     private val imaginary = DoubleArray(AUDIO_WINDOW)
 
+    // Counters for diagnostics: whether decoded audio reaches the analysis at all.
+    @Volatile private var buffers = 0
+    @Volatile private var pcmBuffers = 0
+    @Volatile private var failures = 0
+    @Volatile private var lastEncoding = C.ENCODING_INVALID
+    @Volatile private var lastMediaMs = Long.MIN_VALUE
+
+    fun noteBuffer(pcm: Boolean, encoding: Int, mediaTimeUs: Long) {
+        buffers++
+        if (pcm) pcmBuffers++
+        lastEncoding = encoding
+        lastMediaMs = mediaTimeUs / 1_000
+    }
+
+    fun noteFailure() {
+        failures++
+    }
+
+    /** Counts and the last media time, without content, for the diagnostics log. */
+    fun summary(): String =
+        "b:$buffers pcm:$pcmBuffers e:$lastEncoding x:$failures t:${if (lastMediaMs == Long.MIN_VALUE) "-" else lastMediaMs / 1_000}"
+
     /** Starts a new capture and returns its token; prints of earlier captures are discarded. */
     @Synchronized
     fun start(): Int {
         generation++
         queue.clear()
+        buffers = 0
+        pcmBuffers = 0
+        failures = 0
+        lastMediaMs = Long.MIN_VALUE
         active = true
         return generation
     }
@@ -252,11 +278,14 @@ internal class EpisodeAudioTapSink(sink: AudioSink) : ForwardingAudioSink(sink) 
 
     override fun handleBuffer(buffer: ByteBuffer, presentationTimeUs: Long, encodedAccessUnitCount: Int): Boolean {
         // The sink receives the same buffer again until it is fully consumed; analyse it once.
-        if (pcm && EpisodeAudioTap.active && (buffer !== lastBuffer || presentationTimeUs != lastPresentationUs)) {
+        if (EpisodeAudioTap.active && (buffer !== lastBuffer || presentationTimeUs != lastPresentationUs)) {
             lastBuffer = buffer
             lastPresentationUs = presentationTimeUs
-            runCatching {
+            EpisodeAudioTap.noteBuffer(pcm, encoding, presentationTimeUs - streamOffsetUs)
+            if (pcm) try {
                 EpisodeAudioTap.accept(buffer, presentationTimeUs - streamOffsetUs, encoding, channels, rate)
+            } catch (_: RuntimeException) {
+                EpisodeAudioTap.noteFailure()
             }
         }
         return super.handleBuffer(buffer, presentationTimeUs, encodedAccessUnitCount)

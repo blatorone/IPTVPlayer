@@ -69,7 +69,19 @@ private fun flagCountries(text: String): Set<String> = buildSet {
     }
 }
 
+// Country detection depends only on the text; category labels repeat for thousands of channels.
+private val countryCache = java.util.concurrent.ConcurrentHashMap<String, String>()
+
 internal fun categoryCountry(name: String, explicit: String? = null): String {
+    val key = if (explicit == null) name else name + '\u0000' + explicit
+    countryCache[key]?.let { return it }
+    val country = detectCategoryCountry(name, explicit)
+    if (countryCache.size > 50_000) countryCache.clear()
+    countryCache[key] = country
+    return country
+}
+
+private fun detectCategoryCountry(name: String, explicit: String?): String {
     val field = explicit.orEmpty()
     countryToken(field, explicit = true)?.let { return it }
     val explicitMarkers = markedCountries(field)

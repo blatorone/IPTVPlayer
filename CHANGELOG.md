@@ -1,5 +1,10 @@
 # Änderungen
 
+## 1.0.78
+
+- Fällt ein laufender Sender aus und die App wechselt zur nächsten Variante, bleibt die aktuelle Ansicht erhalten. Der Programmführer springt dabei nicht mehr ins Vollbild; nur ein noch nicht gestarteter Sender oder Film öffnet wie gewählt das Vollbild.
+- Sendergruppen und Kategorien werden schneller aufgebaut: Länder- und Sendernamenserkennung merken sich ihre Ergebnisse, sodass wiederkehrende Kategorienamen und gleiche Sender mehrerer Portale nur einmal ausgewertet werden. Die Diagnose misst die Dauer des Gruppierens.
+
 ## 1.0.77
 
 - Behebt „App reagiert nicht“ kurz nach dem Start: Die Ländererkennung aller Sender läuft im Hintergrund statt beim Zeichnen der Oberfläche, und Katalogindizes werden nur einmal statt parallel mehrfach aufgebaut. Der Trakt-Abgleich verwendet je Portal einen eigenen, einmal erstellten Index.

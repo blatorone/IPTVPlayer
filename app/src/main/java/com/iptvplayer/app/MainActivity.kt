@@ -1569,9 +1569,15 @@ private fun PlayerHome(
         // feel frozen even though the source data had already been restored locally.
         liveGroupsLoading = true
         try {
+            val started = SystemClock.elapsedRealtime()
             val groups = withContext(Dispatchers.Default) {
                 buildLiveChannelGroups(sourcesForBrowsing, combine, mergePortalChannels, countries)
             }
+            AppDiagnostics.record(
+                context,
+                "live_groups ms:${SystemClock.elapsedRealtime() - started} " +
+                    "ch:${sourcesForBrowsing.sumOf { it.channels.size }} g:${groups.size}"
+            )
             val originals = groups.map { it.variants.first().item.value }.toSet()
             displayChannels.keys.retainAll(originals)
             liveGroups = groups.associateBy { group ->
@@ -2581,7 +2587,13 @@ private fun PlayerHome(
         savePlaybackPosition(onFailure = true)
         val position = attempt.progressKey?.let { progressPreferences?.getLong(it, attempt.positionMs) }
             ?: attempt.positionMs
-        runPlayback(attempt.copy(index = attempt.index + 1, positionMs = position))
+        // `starting` is cleared once the stream played. A failover after that keeps the
+        // current view: switching to another variant must not pull the guide into fullscreen.
+        val stillStarting = starting != null
+        runPlayback(attempt.copy(
+            index = attempt.index + 1, positionMs = position,
+            openFullscreenOnStart = attempt.openFullscreenOnStart && stillStarting
+        ))
     }
 
     fun playChannel(channel: StalkerChannel, openFullscreenOnStart: Boolean = true) {

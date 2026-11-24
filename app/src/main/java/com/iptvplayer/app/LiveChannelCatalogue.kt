@@ -81,7 +81,20 @@ private val generalStation = Regex(
     RegexOption.IGNORE_CASE
 )
 
+// The description depends only on the channel name and provider category; the same names repeat
+// across portals and every regrouping (country selection, refresh) would parse them again.
+private val descriptionCache = java.util.concurrent.ConcurrentHashMap<String, ChannelDescription>()
+
 internal fun describeChannel(channel: StalkerChannel, providerCategory: String?): ChannelDescription {
+    val key = channel.name + '\u0000' + providerCategory.orEmpty()
+    descriptionCache[key]?.let { return it }
+    val description = parseChannelDescription(channel, providerCategory)
+    if (descriptionCache.size > 60_000) descriptionCache.clear()
+    descriptionCache[key] = description
+    return description
+}
+
+private fun parseChannelDescription(channel: StalkerChannel, providerCategory: String?): ChannelDescription {
     val providerLabel = providerCategory.orEmpty()
     val countryInName = categoryCountry(channel.name)
     val country = if (countryInName == UNKNOWN_COUNTRY) categoryCountry(providerLabel) else countryInName

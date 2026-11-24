@@ -1,5 +1,11 @@
 # Änderungen
 
+## 1.0.60
+
+- Die Startberechnung der zusammengeführten Quellenzahlen läuft erst beim Öffnen der Quellen-Seite und konkurriert nicht mehr mit dem Wiederherstellen des gespeicherten Live-TV-Katalogs.
+- Portalprüfungen beginnen parallel zum Aufbau der gespeicherten Senderansicht.
+- Unabhängige Trakt-Bibliotheksbereiche werden mit begrenzter Parallelität geladen. Die Fortschrittsanzeige benennt Wiedergabestände für Filme und Folgen getrennt.
+
 ## 1.0.59
 
 - D-Pad-Rechts vom fokussierten Sender setzt den Fokus im Programmführer direkt auf den aktuellen Zeitleisteneintrag; die Zeitleiste bleibt anschließend mit Links/Rechts navigierbar.

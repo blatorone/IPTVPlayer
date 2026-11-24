@@ -718,7 +718,11 @@ private fun PlayerHome(
             source.epgChannelIds.hashCode()
         )
     }
-    LaunchedEffect(sourceContentKeys) {
+    LaunchedEffect(sourceContentKeys, selected) {
+        // These merged counts are only shown on the Sources page. Building them
+        // during every cold start duplicated the much more important live-group
+        // work and competed with restoring the cached guide.
+        if (selected != Destination.SOURCES) return@LaunchedEffect
         val snapshot = savedSources
         val counts = withContext(Dispatchers.Default) {
             val perSource = snapshot.associate { source ->
@@ -3355,7 +3359,7 @@ private fun PlayerHome(
     }
 
     LaunchedEffect(restoring, refreshPortalsAtStartup, liveGroupsReady) {
-        if (restoring || !liveGroupsReady || startupPortalRefreshStarted || savedSources.isEmpty()) return@LaunchedEffect
+        if (restoring || startupPortalRefreshStarted || savedSources.isEmpty()) return@LaunchedEffect
         startupPortalRefreshStarted = true
         val sources = savedSources.filter { it.enabled || it.autoDisabled }
         val unavailable = mutableListOf<String>()

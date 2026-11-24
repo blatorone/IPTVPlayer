@@ -239,19 +239,44 @@ internal class TraktApi(private val clientId: String) {
         accessToken: String,
         onProgress: suspend (String) -> Unit = {}
     ): TraktLibrary = withContext(Dispatchers.IO) {
-        val watchlist = loadItems("/sync/watchlist/movies", PortalSection.MOVIES, accessToken, onProgress) +
-            loadItems("/sync/watchlist/shows", PortalSection.SERIES, accessToken, onProgress)
-        val watchedMovies = loadItems(
-            "/sync/watched/movies", PortalSection.MOVIES, accessToken, onProgress, maxItems = 10
-        )
-        val (watchedShows, aggregatedEpisodes, seriesProgress) = loadWatchedShows(accessToken, onProgress)
+        // These endpoints are independent. Fetch them concurrently, but keep a
+        // small cap so TV devices and Trakt's API are not flooded with requests.
+        val requestLimit = kotlinx.coroutines.sync.Semaphore(3)
+        suspend fun <T> limited(block: suspend () -> T): T = requestLimit.withPermit { block() }
+        val (watchlist, watchedData, playback) = coroutineScope {
+                val watchlistMovies = async {
+                    limited { loadItems("/sync/watchlist/movies", PortalSection.MOVIES, accessToken, onProgress) }
+                }
+                val watchlistShows = async {
+                    limited { loadItems("/sync/watchlist/shows", PortalSection.SERIES, accessToken, onProgress) }
+                }
+                val watchedMovies = async {
+                    limited {
+                        loadItems("/sync/watched/movies", PortalSection.MOVIES, accessToken, onProgress, maxItems = 10)
+                    }
+                }
+                val watchedShows = async { limited { loadWatchedShows(accessToken, onProgress) } }
+                val playbackMovies = async {
+                    limited { loadPlaybackItems("/sync/playback/movies", PortalSection.MOVIES, accessToken, onProgress) }
+                }
+                val playbackEpisodes = async {
+                    limited { loadPlaybackItems("/sync/playback/episodes", PortalSection.SERIES, accessToken, onProgress) }
+                }
+                Triple(
+                    watchlistMovies.await() + watchlistShows.await(),
+                    watchedMovies.await() to watchedShows.await(),
+                    playbackMovies.await() + playbackEpisodes.await()
+                )
+            }
+        val watchedMovies = watchedData.first
+        val watchedShowData = watchedData.second
+        val (watchedShows, aggregatedEpisodes, seriesProgress) = watchedShowData
         val watchedEpisodes = aggregatedEpisodes.ifEmpty {
             // Keep compatibility with responses without season data, but only
             // inspect the newest 100 events and at most ten distinct shows.
             loadRecentEpisodeHistory(accessToken, onProgress)
         }
         val watched = watchedMovies + watchedShows
-        val playback = loadPlaybackProgress(accessToken, onProgress)
         TraktLibrary(
             watchlist.distinctBy(::mediaIdentity), watched.distinctBy(::mediaIdentity),
             playback.distinctBy { "${mediaIdentity(it)}:${it.seasonNumber}:${it.episodeNumber}" },
@@ -259,12 +284,6 @@ internal class TraktApi(private val clientId: String) {
             seriesProgress
         )
     }
-
-    private suspend fun loadPlaybackProgress(
-        accessToken: String,
-        onProgress: suspend (String) -> Unit
-    ): List<TraktMedia> = loadPlaybackItems("/sync/playback/movies", PortalSection.MOVIES, accessToken, onProgress) +
-        loadPlaybackItems("/sync/playback/episodes", PortalSection.SERIES, accessToken, onProgress)
 
     private suspend fun loadPlaybackItems(
         path: String, section: PortalSection, token: String, onProgress: suspend (String) -> Unit
@@ -274,10 +293,12 @@ internal class TraktApi(private val clientId: String) {
         var pageCount: Int? = null
         var hasMore = true
         do {
+            val kindLabel = if (section == PortalSection.MOVIES) "Filme" else "Folgen"
+            onProgress("Lade Trakt-Wiedergabestände ($kindLabel)…")
             val response = request("$path?page=$page&limit=100", "GET", token = token)
             val array = response.jsonArray()
             pageCount = response.pageCount ?: pageCount
-            onProgress("Lade Wiedergabest\u00e4nde: Seite $page${pageCount?.let { " von $it" } ?: ""}")
+            onProgress("Lade Wiedergabestände ($kindLabel): Seite $page${pageCount?.let { " von $it" } ?: ""}")
             hasMore = array.length() == 100
             for (index in 0 until array.length()) {
                 val row = array.optJSONObject(index) ?: continue

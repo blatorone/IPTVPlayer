@@ -1005,7 +1005,9 @@ private fun PlayerHome(
                     val activities = api.loadLastActivities(session.accessToken)
                     val cachedActivities = preferences?.getString(activityKey, null)
                     val watchlistDirty = preferences?.getBoolean(dirtyKey, true) ?: true
-                    if (cachedActivities == activities && !watchlistDirty) {
+                    val historyReconcileKey = "trakt_series_history_reconciled:${session.username.lowercase()}"
+                    val reconcileSeriesHistory = preferences?.getBoolean(historyReconcileKey, false) != true
+                    if (cachedActivities == activities && !watchlistDirty && !reconcileSeriesHistory) {
                         withContext(Dispatchers.Main) {
                             traktStatus = context.getString(R.string.trakt_cache_current)
                         }
@@ -1025,7 +1027,8 @@ private fun PlayerHome(
                         onProgress = { progress -> withContext(Dispatchers.Main) { traktStatus = progress } },
                         previousActivities = cachedActivities,
                         currentActivities = activities,
-                        episodeHistoryCursor = oldHistoryCursor
+                        episodeHistoryCursor = oldHistoryCursor,
+                        reconcileSeriesHistory = reconcileSeriesHistory
                     )
                     if (watchlistDirty) {
                         localSaved.forEachIndexed { index, item ->
@@ -1105,6 +1108,7 @@ private fun PlayerHome(
                         refs = records.flatMap { it.refs }.distinct(),
                         saved = records.any { it.saved },
                         viewed = records.any { it.viewed },
+                        localViewed = records.any { it.localViewed },
                         known = records.flatMapTo(linkedSetOf()) { it.known },
                         unseen = records.flatMapTo(linkedSetOf()) { it.unseen } - watchedEpisodes,
                         checkedAt = records.maxOf { it.checkedAt },
@@ -1371,7 +1375,13 @@ private fun PlayerHome(
                 watchlist = updatedWatchlist
                 movieBookmarks = updatedMovieBookmarks.values.toList()
                 movieHistory = updatedMovieHistory.values.sortedByDescending { it.watchedAt }.take(10)
-                seriesActivity = updatedSeries.values.toList()
+                val remoteSeriesKeys = library.seriesHistorySnapshot?.flatMapTo(hashSetOf()) { media ->
+                    trackedRecordsFor(media, media.asTitle()).map { it.key }
+                }
+                seriesActivity = updatedSeries.values.map { record ->
+                    if (remoteSeriesKeys == null || !record.viewed) record
+                    else record.copy(hiddenFromHistory = !record.localViewed && record.key !in remoteSeriesKeys)
+                }
                 progressPreferences?.edit()?.also { editor ->
                     completedEpisodes.forEach { key ->
                         editor.putBoolean("completed:$key", true).remove(key).remove("trakt_percent:$key")
@@ -1384,6 +1394,11 @@ private fun PlayerHome(
                     }
                 }?.apply()
                 preferences?.edit()?.putStringSet("watchlist", watchlist)?.apply()
+                progressPreferences?.edit()
+                    ?.putString("movie_bookmarks", encodeMovieHistory(movieBookmarks))
+                    ?.putString("movie_history", encodeMovieHistory(movieHistory))
+                    ?.putString("series_activity", encodeSeriesActivity(seriesActivity))
+                    ?.apply()
                 pendingActivities?.let { activities ->
                     traktSession?.username?.lowercase()?.let { username ->
                         val episodeCursor = runCatching {
@@ -1393,14 +1408,12 @@ private fun PlayerHome(
                             ?.putString("trakt_last_activities:$username", activities)
                             ?.also { editor -> episodeCursor?.let { editor.putString("trakt_episode_history_cursor:$username", it) } }
                             ?.putBoolean("trakt_watchlist_dirty:$username", false)
+                            ?.also { editor ->
+                                if (remoteSeriesKeys != null) editor.putBoolean("trakt_series_history_reconciled:$username", true)
+                            }
                             ?.apply()
                     }
                 }
-                progressPreferences?.edit()
-                    ?.putString("movie_bookmarks", encodeMovieHistory(movieBookmarks))
-                    ?.putString("movie_history", encodeMovieHistory(movieHistory))
-                    ?.putString("series_activity", encodeSeriesActivity(seriesActivity))
-                    ?.apply()
                 traktStatus = context.getString(R.string.trakt_sync_complete, matched)
                 traktPlaybackNotice = context.getString(R.string.trakt_sync_complete, matched)
             } catch (error: CancellationException) {
@@ -1740,6 +1753,8 @@ private fun PlayerHome(
             refs = (initial.refs + refs).distinct(),
             saved = saved ?: initial.saved,
             viewed = initial.viewed || watchedEpisode != null,
+            localViewed = initial.localViewed || watchedEpisode != null,
+            hiddenFromHistory = initial.hiddenFromHistory && watchedEpisode == null,
             known = if (watchedEpisode != null && initial.checkedAt > 0) {
                 initial.known + watchedEpisode.episodeKey
             } else initial.known,
@@ -6064,8 +6079,8 @@ private fun PlayerHome(
                             val showContinue = seriesActivityView == SeriesActivityView.CONTINUE
                             val entries = seriesActivity.filter { entry ->
                                 (when {
-                                    showHistory -> entry.viewed
-                                    showContinue -> entry.viewed && entry.isComplete != true
+                                    showHistory -> entry.viewed && !entry.hiddenFromHistory
+                                    showContinue -> entry.viewed && !entry.hiddenFromHistory && entry.isComplete != true
                                     else -> entry.saved
                                 }) && hasPortalReference(
                                     PortalSection.SERIES,

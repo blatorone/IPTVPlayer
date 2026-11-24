@@ -1,5 +1,9 @@
 # Änderungen
 
+## 1.0.65
+
+- Der Trakt-Abgleich blendet entfernte Serien lokal im Serienverlauf und unter „Weiter schauen“ aus. Gespeicherte Fortschrittsdaten bleiben erhalten.
+
 ## 1.0.64
 
 - Im Programmführer hat die Navigation mit der Rechts-Taste in der EPG-Zeitleiste Vorrang vor der allgemeinen Fernbedienungsbelegung.

@@ -68,7 +68,8 @@ internal data class TraktLibrary(
     val watched: List<TraktMedia>,
     val playback: List<TraktMedia> = emptyList(),
     val watchedEpisodes: List<TraktMedia> = emptyList(),
-    val seriesProgress: List<TraktSeriesProgress> = emptyList()
+    val seriesProgress: List<TraktSeriesProgress> = emptyList(),
+    val seriesHistorySnapshot: List<TraktMedia>? = null
 )
 
 /** Changed Trakt sections. A null baseline deliberately means a first/full sync. */
@@ -251,9 +252,11 @@ internal class TraktApi(private val clientId: String) {
         onProgress: suspend (String) -> Unit = {},
         previousActivities: String? = null,
         currentActivities: String? = null,
-        episodeHistoryCursor: String? = null
+        episodeHistoryCursor: String? = null,
+        reconcileSeriesHistory: Boolean = false
     ): TraktLibrary = withContext(Dispatchers.IO) {
         val delta = activityDelta(previousActivities, currentActivities)
+        val loadSeriesHistory = reconcileSeriesHistory || delta.full || delta.watchedEpisodes || delta.playbackEpisodes
         // These endpoints are independent. Fetch them concurrently, but keep a
         // small cap so TV devices and Trakt's API are not flooded with requests.
         val requestLimit = kotlinx.coroutines.sync.Semaphore(3)
@@ -275,7 +278,7 @@ internal class TraktApi(private val clientId: String) {
                     } else emptyList()
                 }
                 val watchedShows = async {
-                    if (delta.full) limited { loadWatchedShows(accessToken, onProgress) }
+                    if (loadSeriesHistory) limited { loadWatchedShows(accessToken, onProgress) }
                     else Triple(emptyList(), emptyList(), emptyList())
                 }
                 val playbackMovies = async {
@@ -284,7 +287,7 @@ internal class TraktApi(private val clientId: String) {
                     } else emptyList()
                 }
                 val playbackEpisodes = async {
-                    if (delta.full || delta.playbackEpisodes) limited {
+                    if (loadSeriesHistory) limited {
                         loadPlaybackItems("/sync/playback/episodes", PortalSection.SERIES, accessToken, onProgress)
                     } else emptyList()
                 }
@@ -297,28 +300,26 @@ internal class TraktApi(private val clientId: String) {
         val watchedMovies = watchedData.first
         val watchedShowData = watchedData.second
         val (watchedShows, aggregatedEpisodes, seriesProgress) = watchedShowData
-        val changedEpisodes = if (!delta.full && delta.watchedEpisodes) {
+        val changedEpisodes = if (!delta.full && !reconcileSeriesHistory && delta.watchedEpisodes) {
             loadRecentEpisodeHistory(accessToken, onProgress, episodeHistoryCursor, maxShows = Int.MAX_VALUE)
         } else emptyList()
-        // A history delta cannot express removals. If the activity changed but no new
-        // plays are returned, reconcile the watched snapshot so unwatch operations land.
-        val reconcileWatchedShows = !delta.full && delta.watchedEpisodes && changedEpisodes.isEmpty()
-        val (fallbackShows, fallbackEpisodes, fallbackProgress) = if (reconcileWatchedShows) {
-            loadWatchedShows(accessToken, onProgress)
-        } else Triple(emptyList(), emptyList(), emptyList())
         val watchedEpisodes = if (!delta.full) {
-            aggregatedEpisodes + fallbackEpisodes + changedEpisodes
+            if (reconcileSeriesHistory || delta.watchedEpisodes && changedEpisodes.isEmpty()) {
+                aggregatedEpisodes
+            } else changedEpisodes
         } else aggregatedEpisodes.ifEmpty {
             // Keep compatibility with responses without season data, but only
             // inspect the newest 100 events and at most ten distinct shows.
             loadRecentEpisodeHistory(accessToken, onProgress)
         }
-        val watched = watchedMovies + watchedShows + fallbackShows
+        val watched = watchedMovies + if (delta.full || reconcileSeriesHistory) watchedShows else emptyList()
         TraktLibrary(
             watchlist.distinctBy(::mediaIdentity), watched.distinctBy(::mediaIdentity),
             playback.distinctBy { "${mediaIdentity(it)}:${it.seasonNumber}:${it.episodeNumber}" },
             watchedEpisodes.distinctBy { "${mediaIdentity(it)}:${it.seasonNumber}:${it.episodeNumber}:${it.watchedAtMillis}" },
-            seriesProgress + fallbackProgress
+            seriesProgress.takeIf { delta.full || reconcileSeriesHistory || delta.watchedEpisodes }.orEmpty(),
+            if (loadSeriesHistory) (watchedShows + playback.filter { it.section == PortalSection.SERIES })
+                .distinctBy(::mediaIdentity) else null
         )
     }
 

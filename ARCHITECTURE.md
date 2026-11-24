@@ -73,6 +73,8 @@ Trakt wird über eine feste, öffentliche StreamWatch Client ID und den OAuth-Ge
 
 Der Trakt-Abgleich lädt API-Daten auf IO und führt umfangreiche Titelvergleiche auf `Dispatchers.Default` aus. Vor einem großen Abgleich fragt die App `sync/last_activities` ab und vergleicht den Stand pro Konto mit dem lokal gespeicherten Wert. Bei unveränderten Aktivitäten und unveränderter lokaler Merkliste wird der vorhandene lokale Abgleich beibehalten und die großen Bibliotheksabfragen entfallen. Compose-Zustände und Fortschrittsmeldungen werden auf dem UI-Dispatcher aktualisiert; der laufende Abgleich sperrt die Navigation nicht. Portalimport, Portalaktualisierung, Sendergruppierung und Trakt-Synchronisierung melden ihren Fortschritt in der Oberfläche.
 
+Für den Serienverlauf lädt der Trakt-Abgleich bei der ersten Bereinigung und bei geänderter Episodenaktivität die gesehenen Serien und pausierten Folgen vollständig. Serien, die in beiden Antworten fehlen, werden lokal im Verlauf und unter „Weiter schauen“ ausgeblendet, sofern seit Einführung der Herkunftsmarkierung keine eigene lokale Wiedergabe erfasst wurde. Vorhandene Fortschrittsdaten bleiben gespeichert, da frühere App-Versionen die Herkunft nicht getrennt speicherten.
+
 ## Live-Startkategorie
 
 Die zuletzt gewählte Live-Kategorie wird in den vorhandenen App-Einstellungen lokal gespeichert. Beim Start wird die gespeicherte Senderidentität einer Kategorie zugeordnet; der Programmführer beschränkt seine Senderspalte auf diese Kategorie. Fehlt die Zuordnung, wird die zuletzt gewählte oder erste sichtbare Kategorie verwendet.

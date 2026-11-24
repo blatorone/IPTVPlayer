@@ -300,24 +300,23 @@ internal class TraktApi(private val clientId: String) {
         val watchedMovies = watchedData.first
         val watchedShowData = watchedData.second
         val (watchedShows, aggregatedEpisodes, seriesProgress) = watchedShowData
-        val changedEpisodes = if (!delta.full && !reconcileSeriesHistory && delta.watchedEpisodes) {
+        val changedEpisodes = if (!delta.full && delta.watchedEpisodes) {
             loadRecentEpisodeHistory(accessToken, onProgress, episodeHistoryCursor, maxShows = Int.MAX_VALUE)
         } else emptyList()
         val watchedEpisodes = if (!delta.full) {
-            if (reconcileSeriesHistory || delta.watchedEpisodes && changedEpisodes.isEmpty()) {
-                aggregatedEpisodes
-            } else changedEpisodes
+            changedEpisodes
         } else aggregatedEpisodes.ifEmpty {
             // Keep compatibility with responses without season data, but only
             // inspect the newest 100 events and at most ten distinct shows.
             loadRecentEpisodeHistory(accessToken, onProgress)
         }
-        val watched = watchedMovies + if (delta.full || reconcileSeriesHistory) watchedShows else emptyList()
+        val watched = watchedMovies + if (delta.full) watchedShows else emptyList()
+        val changedPlayback = playback.filter { it.section != PortalSection.SERIES || delta.full || delta.playbackEpisodes }
         TraktLibrary(
             watchlist.distinctBy(::mediaIdentity), watched.distinctBy(::mediaIdentity),
-            playback.distinctBy { "${mediaIdentity(it)}:${it.seasonNumber}:${it.episodeNumber}" },
+            changedPlayback.distinctBy { "${mediaIdentity(it)}:${it.seasonNumber}:${it.episodeNumber}" },
             watchedEpisodes.distinctBy { "${mediaIdentity(it)}:${it.seasonNumber}:${it.episodeNumber}:${it.watchedAtMillis}" },
-            seriesProgress.takeIf { delta.full || reconcileSeriesHistory || delta.watchedEpisodes }.orEmpty(),
+            seriesProgress.takeIf { delta.full || delta.watchedEpisodes }.orEmpty(),
             if (loadSeriesHistory) (watchedShows + playback.filter { it.section == PortalSection.SERIES })
                 .distinctBy(::mediaIdentity) else null
         )

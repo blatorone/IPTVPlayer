@@ -399,6 +399,7 @@
     <string name="trakt_connect_failed">Die Trakt-Verbindung ist fehlgeschlagen.</string>
     <string name="trakt_disconnect_failed">Die gespeicherte Trakt-Anmeldung konnte nicht entfernt werden.</string>
     <string name="trakt_sync_complete">Trakt-Synchronisierung abgeschlossen. Verarbeitete Einträge: %1$d.</string>
+    <string name="trakt_reconcile_series_history">Gleiche den lokalen Serienverlauf mit Trakt ab …</string>
     <string name="trakt_cache_current">Trakt ist aktuell – gespeicherter Stand wird verwendet.</string>
     <string name="trakt_checking_changes">Prüfe, ob neue Trakt-Daten vorliegen …</string>
     <string name="trakt_matching_saved_episodes">Gleiche Trakt-Folgen mit dem gespeicherten Serienstand ab …</string>

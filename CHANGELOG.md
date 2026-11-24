@@ -1,5 +1,9 @@
 # Änderungen
 
+## 1.0.66
+
+- Die Bereinigung des Trakt-Serienverlaufs importiert bereits abgeglichene Daten nicht erneut und zeigt den lokalen Abgleich separat an.
+
 ## 1.0.65
 
 - Der Trakt-Abgleich blendet entfernte Serien lokal im Serienverlauf und unter „Weiter schauen“ aus. Gespeicherte Fortschrittsdaten bleiben erhalten.

@@ -1375,8 +1375,13 @@ private fun PlayerHome(
                 watchlist = updatedWatchlist
                 movieBookmarks = updatedMovieBookmarks.values.toList()
                 movieHistory = updatedMovieHistory.values.sortedByDescending { it.watchedAt }.take(10)
-                val remoteSeriesKeys = library.seriesHistorySnapshot?.flatMapTo(hashSetOf()) { media ->
-                    trackedRecordsFor(media, media.asTitle()).map { it.key }
+                val remoteSeriesKeys = library.seriesHistorySnapshot?.let { snapshot ->
+                    traktStatus = context.getString(R.string.trakt_reconcile_series_history)
+                    withContext(Dispatchers.Default) {
+                        snapshot.flatMapTo(hashSetOf()) { media ->
+                            trackedRecordsFor(media, media.asTitle()).map { it.key }
+                        }
+                    }
                 }
                 seriesActivity = updatedSeries.values.map { record ->
                     if (remoteSeriesKeys == null || !record.viewed) record

@@ -515,4 +515,6 @@
     <string name="kids_rating_checking">Altersfreigabe wird geprüft …</string>
     <string name="category_lock">Sperren</string>
     <string name="category_unlock">Sperre aufheben</string>
+    <string name="update_last_check">Letzte Prüfung %1$s</string>
+    <string name="update_never_checked">Noch nicht geprüft</string>
 </resources>

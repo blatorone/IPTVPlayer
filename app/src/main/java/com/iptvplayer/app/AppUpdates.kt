@@ -148,7 +148,9 @@ internal fun rememberAppUpdates(): AppUpdateUi {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val preferences = remember(context) { context.getSharedPreferences("app_updates", Context.MODE_PRIVATE) }
-    var auto by remember { mutableStateOf(preferences.getBoolean("automatic", false)) }
+    // Only searches; installing always needs the user's confirmation. Users can switch it off.
+    var auto by remember { mutableStateOf(preferences.getBoolean("automatic", true)) }
+    var lastCheck by remember { mutableStateOf(preferences.getLong("last_check", 0L)) }
     var result by remember { mutableStateOf<Int?>(null) }
     var release by remember { mutableStateOf<AppRelease?>(null) }
     var busy by remember { mutableStateOf(false) }
@@ -162,7 +164,8 @@ internal fun rememberAppUpdates(): AppUpdateUi {
             try {
                 release = checkRelease(context)
                 if (manual && release != null) dialogOpen = true
-                preferences.edit().putLong("last_check", System.currentTimeMillis()).apply()
+                lastCheck = System.currentTimeMillis()
+                preferences.edit().putLong("last_check", lastCheck).apply()
                 if (release == null) result = R.string.update_current
             } catch (error: CancellationException) {
                 throw error
@@ -230,7 +233,15 @@ internal fun rememberAppUpdates(): AppUpdateUi {
             Text(stringResource(R.string.update_available, available.tag))
             SettingRow(stringResource(R.string.update_show)) { dialogOpen = true }
         }
-        SettingRow(stringResource(R.string.update_check), enabled = !busy) { check(manual = true) }
+        val checked = lastCheck.takeIf { it > 0 }?.let {
+            java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy, HH:mm").withZone(java.time.ZoneId.systemDefault())
+                .format(java.time.Instant.ofEpochMilli(it))
+        }
+        SettingRow(
+            stringResource(R.string.update_check) + ": " + (checked?.let { stringResource(R.string.update_last_check, it) }
+                ?: stringResource(R.string.update_never_checked)),
+            enabled = !busy
+        ) { check(manual = true) }
         SettingRow(stringResource(R.string.update_auto), selected = auto) {
             auto = !auto
             preferences.edit().putBoolean("automatic", auto).apply()

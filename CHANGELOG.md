@@ -6,6 +6,7 @@
 - Zurück aus den Einstellungen führt immer zum zuletzt genutzten Bereich (Live-TV, Filme, Serien); schnelles mehrfaches Zurück beendet die App dabei nicht mehr.
 - PIN-Tastatur: Ziffern mittig in den Tasten. Beim Festlegen wird die Länge gewählt (4, 6, 8 oder benutzerdefiniert, mindestens 4); beim Eingeben wird nach der festgelegten Länge automatisch bestätigt.
 - Programmführer: Das Play-Symbol des laufenden Senders steht rechts am Rand.
+- App-Updates: Die automatische Suche nach Updates ist standardmäßig eingeschaltet (nur suchen, installiert wird erst nach Bestätigung; abschaltbar). Neben „Nach Updates suchen“ steht die letzte Prüfung mit Datum und Uhrzeit.
 
 ## 1.0.86
 

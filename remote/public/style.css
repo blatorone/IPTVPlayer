@@ -76,3 +76,7 @@ button.primary, nav button.active, .segments button.active { color: var(--on-acc
   box-shadow: inset 0 0 0 2px rgba(0,0,0,.25); }
 .swatch[aria-pressed=true] { border-color: #fff; }
 .color-row { flex-wrap: wrap; }
+.category-overview { max-height: 55vh; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; }
+.overview-row { display: flex; justify-content: space-between; gap: 10px; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+.overview-row:last-child { border-bottom: none; }
+.overview-row .sub { flex: none; color: var(--muted); font-size: .8rem; }

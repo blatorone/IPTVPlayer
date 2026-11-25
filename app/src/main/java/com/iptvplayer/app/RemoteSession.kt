@@ -39,7 +39,8 @@ internal interface RemoteHandler {
     fun applyRemote(command: RemoteCommand): RemoteReply
 }
 
-internal data class RemoteReply(val ok: Boolean, val message: String? = null)
+/** [data] is an optional answer for the phone (for example a portal's category list). */
+internal data class RemoteReply(val ok: Boolean, val message: String? = null, val data: com.google.gson.JsonObject? = null)
 
 /**
  * One temporary remote settings session of this device. Holds the secret only in memory; after
@@ -154,7 +155,7 @@ internal class RemoteSession(
             }
             val reply = runCatching { handler.applyRemote(command) }
                 .getOrElse { RemoteReply(false, "Die Änderung ist fehlgeschlagen.") }
-            send(RemoteProtocol.encodeResult(reply.ok, reply.message))
+            send(RemoteProtocol.encodeResult(reply.ok, reply.message, reply.data))
             lastSentState = null
             publish()
         }

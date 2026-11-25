@@ -122,6 +122,7 @@ async function receive(data) {
     show();
     render();
   } else if (message.t === "result") {
+    if (message.data && message.data.sections) { portalCategories = message.data; renderPortals(); }
     if (message.message || !message.ok) toast(message.message || "Das hat nicht geklappt.", !message.ok);
   }
 }
@@ -236,12 +237,37 @@ function renderPortals() {
         title: "Wird für Live-TV, Filme und Serien zuerst verwendet",
         onclick: () => send({ t: "portalPreferred", id: p.id, preferred: !p.preferred }) },
         p.preferred ? "★ Bevorzugt" : "☆ Bevorzugen"),
+      el("button", { onclick: () => {
+        if (portalCategories && portalCategories.id === p.id) { portalCategories = null; renderPortals(); }
+        else send({ t: "portalCategories", id: p.id });
+      } }, portalCategories && portalCategories.id === p.id ? "Kategorien schließen" : "Kategorien"),
       el("button", { onclick: () => { editingPortal = editingPortal === p.id ? null : p.id; renderPortals(); } },
         editingPortal === p.id ? "Schließen" : "Bearbeiten"),
       el("button", { class: "danger", onclick: () => {
         if (confirm(`${p.label} wirklich entfernen?`)) send({ t: "portalRemove", id: p.id });
       } }, "Entfernen")),
-    editingPortal === p.id ? portalEditForm(p) : null)));
+    editingPortal === p.id ? portalEditForm(p) : null,
+    portalCategories && portalCategories.id === p.id ? categoryOverview(portalCategories) : null)));
+}
+
+// The provider's own categories of one portal (read-only), to see which countries it offers.
+let portalCategories = null;
+let overviewSection = "LIVE";
+function categoryOverview(data) {
+  const names = { LIVE: "Live-TV", MOVIES: "Filme", SERIES: "Serien" };
+  const list = data.sections[overviewSection] || [];
+  const countries = new Map();
+  for (const c of list) countries.set(c.country, (countries.get(c.country) || 0) + 1);
+  const summary = [...countries].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([c, n]) => `${c} ${n}`).join(" · ");
+  return el("div", { class: "edit-form" },
+    el("div", { class: "segments" }, Object.keys(names).map((key) => el("button", {
+      class: key === overviewSection ? "active" : "",
+      onclick: () => { overviewSection = key; renderPortals(); } }, `${names[key]} (${(data.sections[key] || []).length})`))),
+    list.length
+      ? [el("p", { class: "hint" }, summary),
+         el("div", { class: "category-overview" }, list.map((c) => el("div", { class: "overview-row" },
+           el("span", {}, c.name), el("span", { class: "sub" }, [c.country, c.count].filter((v) => v != null).join(" · ")))))]
+      : el("p", { class: "hint" }, "Für diesen Bereich hat das Portal keine Kategorien geliefert."));
 }
 
 let editingPortal = null;

@@ -157,4 +157,25 @@ class RemoteProtocolTest {
         assertEquals("https://trakt.tv/activate", settings[4].asJsonObject["link"].asString)
         assertFalse(state.settings.applyRemoteValue("refresh", JsonPrimitive(true)))
     }
+
+    @Test
+    fun portalCategoriesAreAnsweredWithData() {
+        assertEquals(RemoteCommand.PortalCategories("id1"), decode("""{"t":"portalCategories","epoch":"e1","id":"id1"}"""))
+        assertNull(decode("""{"t":"portalCategories","epoch":"e1"}"""))
+        val categories = mapOf(
+            PortalSection.LIVE to listOf(
+                ProviderCategory("DE | Nachrichten", "DE", 12),
+                ProviderCategory("TR | Haber", "TR", null),
+                ProviderCategory("DE | Sport", "DE", 30)
+            )
+        )
+        val data = encodeProviderCategories("id1", "Portal 1", categories)
+        val result = JsonParser.parseString(RemoteProtocol.encodeResult(true, null, data)).asJsonObject
+        val live = result["data"].asJsonObject["sections"].asJsonObject["LIVE"].asJsonArray
+        assertEquals(3, live.size())
+        assertEquals("DE | Nachrichten", live[0].asJsonObject["name"].asString)
+        assertEquals(12, live[0].asJsonObject["count"].asInt)
+        assertFalse(live[1].asJsonObject.has("count"))
+        assertEquals("DE 2 · TR 1", countrySummary(categories.getValue(PortalSection.LIVE)) { it })
+    }
 }

@@ -634,6 +634,7 @@ private fun PlayerHome(
     }
     var exitDialogOpen by remember { mutableStateOf(false) }
     var accentPaletteOpen by remember { mutableStateOf(false) }
+    var portalCategoriesFor by remember { mutableStateOf<SavedPortal?>(null) }
     // Settings: whether focus is in the rows on the right, and a request to move it there.
     var settingsContentFocused by remember { mutableStateOf(false) }
     var settingsContentFocusRequest by remember { mutableIntStateOf(0) }
@@ -4749,6 +4750,11 @@ private fun PlayerHome(
         else if (selected == Destination.MOVIES || selected == Destination.SERIES) requestAppExit()
         else openMainMenu()
     }
+    portalCategoriesFor?.let { source ->
+        PortalCategoriesDialog(
+            stringResource(R.string.portal_categories_title, portalName(source)), source
+        ) { portalCategoriesFor = null }
+    }
     if (exitDialogOpen) AlertDialog(
         onDismissRequest = { exitDialogOpen = false },
         title = { Text(stringResource(R.string.exit_dialog_title)) },
@@ -5340,6 +5346,9 @@ private fun PlayerHome(
             is RemoteCommand.PortalPreferred -> savedSources.firstOrNull { it.identity == command.id }?.let { source ->
                 setPreferredPortal(if (command.preferred) source.identity else preferredPortal.takeUnless { it == source.identity })
                 RemoteReply(true, if (command.preferred) "Wird zuerst verwendet." else null)
+            } ?: RemoteReply(false, "Portal nicht gefunden.")
+            is RemoteCommand.PortalCategories -> savedSources.firstOrNull { it.identity == command.id }?.let { source ->
+                RemoteReply(true, data = encodeProviderCategories(source.identity, portalName(source), providerCategories(source)))
             } ?: RemoteReply(false, "Portal nicht gefunden.")
             is RemoteCommand.Action -> (entries().firstOrNull { it.id == command.id } as? RemoteEntry.Action)
                 ?.let { RemoteReply(true, it.run()) } ?: RemoteReply(false, "Diese Aktion ist gerade nicht verfügbar.")
@@ -7353,6 +7362,8 @@ private fun PlayerHome(
                                 ) { setPortalEnabled(source, !source.enabled) }
                             }
                             }
+                            // The provider's own categories (before grouping): which countries are in the portal.
+                            MenuButton(stringResource(R.string.portal_categories), Modifier) { portalCategoriesFor = source }
                             // "Bevorzugen" has its own frame next to the portal, so it is not taken for the switch.
                             val preferred = preferredPortal == source.identity
                             MenuButton(

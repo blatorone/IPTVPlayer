@@ -396,6 +396,9 @@
     <string name="player_speed_normal">Normal</string>
     <string name="player_audio">Tonspur</string>
     <string name="player_portal">Portal</string>
+    <string name="portal_categories">Kategorien</string>
+    <string name="portal_categories_title">Kategorien des Anbieters · %1$s</string>
+    <string name="portal_categories_empty">Für diesen Bereich hat das Portal keine Kategorien geliefert.</string>
     <string name="portal_prefer">Bevorzugen</string>
     <string name="portal_preferred">★ Bevorzugt</string>
     <string name="title_portal_auto">Portal: automatisch</string>

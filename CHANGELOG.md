@@ -1,5 +1,9 @@
 # Änderungen
 
+## 1.0.92
+
+- Quellen: Neben jedem Portal zeigt „Kategorien“ die Kategorien so, wie der Anbieter sie liefert – für Live-TV, Filme und Serien, mit erkanntem Land und Anzahl, oben zusammengefasst nach Ländern. So sieht man vor der Gruppierung, welche Länder ein Portal enthält. Auch am Handy bei den Portalen.
+
 ## 1.0.91
 
 - Portale: Der Schalter zum Aktivieren/Deaktivieren sitzt jetzt im Rahmen des Portals; „Bevorzugen“ hat rechts daneben einen eigenen Rahmen.

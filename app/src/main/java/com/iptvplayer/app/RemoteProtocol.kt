@@ -27,6 +27,8 @@ import com.google.gson.JsonPrimitive
  *   {"t":"kidsPin","pin":"…"|null,"current":"…"}      separate PIN for leaving kids mode
  *   {"t":"parental","field":"lockAdult","value":false,"pin":"…"}
  *   {"t":"portalPreferred","id":"…","preferred":true}
+ *   {"t":"portalCategories","id":"…"}                   the provider's own categories of a portal
+ *                                                       (answered in "result" as "data")
  *   {"t":"action","id":"…"}                             run an action entry (button)
  *   {"t":"input","id":"…","value":"…"}                  submit an input entry (text field)
  * A setting may carry "showIf":{"id":"…","value":"…"}: the phone shows it only while that
@@ -142,6 +144,7 @@ internal sealed interface RemoteCommand {
     data class KidsPin(val pin: String?, val current: String?) : RemoteCommand
     data class Parental(val field: String, val value: JsonElement?, val pin: String?) : RemoteCommand
     data class PortalPreferred(val id: String, val preferred: Boolean) : RemoteCommand
+    data class PortalCategories(val id: String) : RemoteCommand
     data class Action(val id: String) : RemoteCommand
     data class Input(val id: String, val value: String) : RemoteCommand
 }
@@ -263,10 +266,11 @@ internal object RemoteProtocol {
         })
     }.toString()
 
-    fun encodeResult(ok: Boolean, message: String?): String = JsonObject().apply {
+    fun encodeResult(ok: Boolean, message: String?, data: JsonObject? = null): String = JsonObject().apply {
         addProperty("t", "result")
         addProperty("ok", ok)
         message?.let { addProperty("message", it) }
+        data?.let { add("data", it) }
     }.toString()
 
     /** Parses a command; null for anything malformed or sent for an older epoch. */
@@ -307,6 +311,7 @@ internal object RemoteProtocol {
             "portalEnabled" -> RemoteCommand.PortalEnabled(root.text("id") ?: return null, root.flag("enabled") ?: return null)
             "portalRemove" -> RemoteCommand.PortalRemove(root.text("id") ?: return null)
             "portalPreferred" -> RemoteCommand.PortalPreferred(root.text("id") ?: return null, root.flag("preferred") ?: return null)
+            "portalCategories" -> RemoteCommand.PortalCategories(root.text("id") ?: return null)
             "action" -> RemoteCommand.Action(root.text("id") ?: return null)
             "input" -> RemoteCommand.Input(root.text("id") ?: return null, root.text("value") ?: return null)
             "pin" -> RemoteCommand.Pin(root.pin("pin") ?: return null, root.pin("current"))

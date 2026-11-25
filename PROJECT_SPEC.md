@@ -135,9 +135,16 @@ Im Programmführer erscheint während aktiver Live-Wiedergabe eine fokussierbare
 
 - Der Programmführer öffnet die zuletzt gewählte Live-Kategorie. Beim Start wird die Kategorie des zuletzt gespeicherten Senders bevorzugt; die Senderliste zeigt nur Sender dieser Kategorie.
 
-## Temporäre QR-Playlistverwaltung
+## Temporäre Fernverwaltung per QR-Code
 
-Auf ausdrücklichen Start des Nutzers stellt das Gerät eine zeitlich begrenzte Verwaltungsseite im lokalen Netzwerk bereit. Ein QR-Code öffnet sie auf einem anderen Gerät. Nutzer können Quellen eingeben, ändern oder entfernen und müssen Änderungen bestätigen. Der Dienst endet nach Ablauf, beim expliziten Beenden und beim Verlassen des Verwaltungsablaufs; aktive Verbindungen schließen. Ein zufälliges, kurzlebiges Sitzungsgeheimnis schützt die Sitzung; keine Zugangsdaten im QR-Code oder in Logs. Zugriff nur im lokalen Netz, keine Portfreigabe oder Cloud-Vermittlung. Da lokales HTTP mitlesbar sein kann, sensible Daten nur nach verständlichem Hinweis und möglichst über eine abgesicherte Verbindung übertragen; konkrete sichere Transportlösung vor Implementierung entscheiden. Netzwerkisolierung und nicht erreichbare Geräte verständlich behandeln.
+Auf ausdrücklichen Start des Nutzers zeigt das Gerät einen QR-Code. Damit öffnet ein Handy eine Verwaltungsseite im Browser (keine App-Installation) und kann alle Einstellungen der App ändern: Portale hinzufügen, ändern und entfernen (Stalker, später M3U und Xtream), Länder und Kategorien für Live-TV, Filme und Serien ein- und ausblenden, Kindersicherung, PIN und eigene Sperren sowie die übrigen Einstellungen. Das funktioniert im Heimnetz und von unterwegs.
+
+- Transport (entschieden 2026-11-25): Handy und Gerät verbinden sich jeweils ausgehend per WebSocket mit einem Vermittler (Cloudflare Worker mit Durable Object, Gratis-Tarif). Die Verwaltungsseite wird über HTTPS veröffentlicht (Cloudflare Pages). Keine Portfreigabe am Router. Als Notlösung ohne Internet kann zusätzlich eine direkte Heimnetz-Verbindung angeboten werden.
+- Schutz: Das Gerät erzeugt pro Sitzung ein zufälliges 32-Byte-Geheimnis. Es steht nur im Fragment (`#…`) der QR-Adresse und wird nie an einen Server gesendet. Daraus werden per HKDF-SHA256 eine Raumkennung für den Vermittler und ein AES-256-GCM-Schlüssel abgeleitet; alle Nachrichten sind Ende-zu-Ende verschlüsselt, mit Absenderrolle und Folgenummer gegen Wiederholung und Spiegelung gesichert. Der Vermittler sieht nur Raumkennung, IP-Adressen, Zeitpunkte und Datenmengen, speichert und protokolliert nichts.
+- Lebensdauer: nur solange die Sitzung am Gerät aktiv ist. Sie endet beim Beenden am Gerät, nach Ablauf ohne Nutzung und beim Verlassen der App; danach ist das Geheimnis wertlos. Keine dauerhafte Freigabe.
+- Adresse des Vermittlers steht an einer Stelle in der App und wird im QR-Code mitgegeben, damit ein späterer Wechsel des Cloudflare-Kontos per App-Update möglich ist.
+- Plattformneutral: Seite und Nachrichtenformat sind unabhängig von Android, damit spätere iOS- und Linux-Versionen denselben Ablauf anbieten.
+- Keine Zugangsdaten, Geheimnisse oder Inhalte in Logs. Fehler (kein Internet, Sitzung abgelaufen, Gerät nicht erreichbar) verständlich anzeigen.
 
 ## Optionale Cloud-Synchronisierung
 

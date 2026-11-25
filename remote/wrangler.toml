@@ -1,0 +1,22 @@
+# StreamWatch Fernverwaltung: Handy-Seite (public/) und Vermittler (src/) in einem Worker.
+# Der Vermittler reicht nur Ende-zu-Ende-verschlüsselte Nachrichten zwischen Gerät und Handy
+# weiter und speichert nichts. Siehe PROJECT_SPEC.md, Abschnitt Fernverwaltung.
+name = "streamwatch-remote"
+main = "src/index.js"
+compatibility_date = "2025-11-01"
+workers_dev = true
+
+[assets]
+directory = "public"
+
+# Keine Protokollierung von Anfragen im Worker.
+[observability]
+enabled = false
+
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "Room"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]

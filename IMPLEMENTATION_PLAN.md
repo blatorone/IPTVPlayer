@@ -38,7 +38,14 @@ Filme, Serien, Details und Episoden aus verfügbaren Quellen anzeigen; explizite
 
 ## 6. Temporäre QR-Verwaltung
 
-Transport und Sicherheitsmodell vorab festlegen; zeitbegrenzten lokalen Dienst, QR-Sitzung, Formular, Bestätigung und zuverlässiges Beenden realisieren. Keine dauerhafte Freigabe.
+Transport und Schutzmodell sind festgelegt (siehe `PROJECT_SPEC.md`, Fernverwaltung): Cloudflare-Vermittler per WebSocket, Seite über Cloudflare Pages, Ende-zu-Ende-Verschlüsselung mit Geheimnis im QR-Fragment. Schritte:
+
+1. Verschlüsselung und Rahmenformat mit Tests (`RemoteSessionCrypto`) – umgesetzt.
+2. Nachrichtenformat für Einstellungen (Lesen des Zustands, Änderungen, Bestätigung) mit Tests.
+3. Sitzung am Gerät: Start in den Einstellungen, QR-Code, Verbindungsstatus, „Zugriff beenden“, Ablauf, Ende beim Verlassen der App.
+4. Verwaltungsseite (HTML/JS im Repo, WebCrypto) für alle Einstellungen.
+5. Vermittler (Cloudflare Worker im Repo) und Veröffentlichung – Einrichtung im Cloudflare-Konto nur auf ausdrücklichen Auftrag.
+6. Optional: direkte Heimnetz-Verbindung als Notlösung.
 **Fertig:** Ein zweites Gerät kann eine bestätigte Änderung vornehmen; abgelaufene oder ungültige Sitzung scheitert; Dienst endet wie spezifiziert. Geheimnisse werden geschützt und nicht geloggt.
 
 ## 7. Optionale BYO-Cloud
@@ -85,4 +92,4 @@ Abnahme aus `PROJECT_SPEC.md` mit Touch und TV-Fernbedienung durchführen; unter
 
 Aus der Sichtung der TV-Referenz folgen weitere Funktionspakete für Aufnahmen, Anbieterarchive, Erinnerungen, Kindersicherung (Grundfunktion seit 1.0.85 umgesetzt, siehe ARCHITECTURE.md), Datensicherung, erweiterte Fernbedienungsbelegung und gerätespezifische Wiedergabe. Für Aufnahmen und Archiv sind getrennte Abnahmekriterien zu Speicherziel, Gerät und unterstützter Quelle erforderlich.
 
-Konkrete SDK-/Gerätematrix und Versionen; belastbare Länder-Metadaten; Hintergrundverhalten außerhalb der App; QR-Transport und Schutzmodell; Cloud-Anbieter, Datenumfang, KDF-Parameter und Konflikt-UX; automatische nächste Episode. Keine dieser Optionen als fertige Implementierung ausgeben.
+Konkrete SDK-/Gerätematrix und Versionen; belastbare Länder-Metadaten; Hintergrundverhalten außerhalb der App; Cloud-Anbieter, Datenumfang, KDF-Parameter und Konflikt-UX; automatische nächste Episode. Keine dieser Optionen als fertige Implementierung ausgeben.

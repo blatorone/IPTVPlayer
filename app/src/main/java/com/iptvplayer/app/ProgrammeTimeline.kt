@@ -76,6 +76,26 @@ internal class GuideWindow(offset: Long = 0L, onlyPinned: Boolean = false) {
 @Composable
 internal fun rememberGuideWindow(): GuideWindow = rememberSaveable(saver = GuideWindow.Saver) { GuideWindow() }
 
+/**
+ * Portals often deliver overlapping or duplicated entries (the same show twice with shifted
+ * times, or a long block covering the next shows). The guide shows one clean sequence: equal
+ * starts collapse to the entry with the most information, and every show ends at the latest
+ * where the next one begins. Entries without a start time stay at the end unchanged.
+ */
+internal fun normalizeSchedule(schedule: List<PortalProgramme>): List<PortalProgramme> {
+    val timed = schedule.filter { it.startSeconds != null }
+    if (timed.size < 2) return schedule
+    val unique = timed.groupBy { it.startSeconds!! }.toSortedMap().values.map { same ->
+        same.maxWith(compareBy<PortalProgramme>({ it.title.isNotBlank() }, { it.description?.length ?: 0 }, { it.endSeconds ?: 0 }))
+    }
+    val cleaned = unique.mapIndexed { index, programme ->
+        val next = unique.getOrNull(index + 1)?.startSeconds
+        val end = programme.endSeconds
+        if (next != null && (end == null || end > next)) programme.copy(endSeconds = next) else programme
+    }
+    return cleaned + schedule.filter { it.startSeconds == null }
+}
+
 private fun latestGuideOffset(horizonHours: Int): Long = ((horizonHours * 3_600L - 1) / GUIDE_WINDOW) * GUIDE_WINDOW
 
 /** Früher / Jetzt / Später / Nur vorgemerkte, shown in the top bar next to the category. */

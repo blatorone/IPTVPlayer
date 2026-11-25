@@ -2258,7 +2258,7 @@ private fun PlayerHome(
         }
     }
 
-    fun effectiveProgrammes(channel: StalkerChannel): List<PortalProgramme>? =
+    fun rawProgrammes(channel: StalkerChannel): List<PortalProgramme>? =
         if (useXmlTv) {
             externalGuides.firstNotNullOfOrNull { guide ->
                 liveVariants[channel].orEmpty().firstNotNullOfOrNull { item ->
@@ -2269,6 +2269,14 @@ private fun PlayerHome(
             val key = programmeKey(channel)
             if (key == null) emptyList() else epgCache[key]
         }
+    val cleanSchedules = remember { HashMap<Any, Pair<List<PortalProgramme>, List<PortalProgramme>>>() }
+    // Grid and preview share one cleaned schedule per channel, recomputed only when the raw list changes.
+    fun effectiveProgrammes(channel: StalkerChannel): List<PortalProgramme>? {
+        val raw = rawProgrammes(channel) ?: return null
+        val key: Any = programmeKey(channel) ?: channel
+        cleanSchedules[key]?.takeIf { it.first === raw }?.let { return it.second }
+        return normalizeSchedule(raw).also { cleanSchedules[key] = raw to it }
+    }
 
     suspend fun loadProviderSchedule(channel: StalkerChannel, force: Boolean = false): Boolean {
         val key = programmeKey(channel) ?: return true

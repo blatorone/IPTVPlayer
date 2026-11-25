@@ -1,5 +1,9 @@
 # Änderungen
 
+## 1.0.82
+
+- „Besetzung“ erscheint nur noch, wenn TMDB oder Trakt für den Titel Schauspieler kennen. Die Besetzung wird beim Öffnen der Details im Hintergrund abgefragt und danach ohne erneutes Laden angezeigt; ohne TMDB- und Trakt-Zugang gibt es den Punkt nicht.
+
 ## 1.0.81
 
 - Besetzung: Film- und Seriendetails haben einen Punkt „Besetzung“ mit Schauspielern, Fotos und Rollen. Ein Schauspieler zeigt seine Filme und Serien getrennt in zwei Reitern, aber nur, was in den Portalen vorhanden ist. Daten kommen von TMDB, ohne TMDB-Zugang von Trakt.

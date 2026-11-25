@@ -531,6 +531,8 @@ private fun PlayerHome(
     var newEpisodesNotice by remember { mutableStateOf<String?>(null) }
     var castOf by remember { mutableStateOf<Triple<PortalSection, PortalTitle, Int?>?>(null) }
     var castPerson by remember { mutableStateOf<CastMember?>(null) }
+    /** Cast found for the open details title; the "Besetzung" button only appears when it is not empty. */
+    var castPreview by remember { mutableStateOf<Pair<PortalTitle, List<CastMember>>?>(null) }
     LaunchedEffect(newEpisodesNotice) {
         val notice = newEpisodesNotice ?: return@LaunchedEffect
         // Episode checks run one series at a time; collect findings briefly before showing them.
@@ -5361,21 +5363,40 @@ private fun PlayerHome(
     }
     }
     FullscreenLayer()
+    suspend fun loadCast(section: PortalSection, title: PortalTitle, tmdbId: Int?): List<CastMember> {
+        val client = metadataClient
+        return when {
+            client != null && tmdbId != null -> client.cast(section, tmdbId)
+            traktSession != null -> withTraktSession { api, session -> api.cast(section, title, session.accessToken) }
+            else -> emptyList()
+        }
+    }
     // Cast and filmography dialogs, in their own composable method (JVM method size limit).
     @Composable
     fun CastLayer() {
+        // The cast of the open title is looked up in the background; "Besetzung" is only
+        // offered when TMDB or Trakt know actors for it.
+        val openTitle = details?.takeIf { it.first != PortalSection.LIVE }
+        val tmdbForDetails = detailMetadata?.id
+        LaunchedEffect(openTitle, tmdbForDetails, metadataClient, traktSession?.username) {
+            castPreview = null
+            val (section, title) = openTitle ?: return@LaunchedEffect
+            if (metadataClient == null && traktSession == null) return@LaunchedEffect
+            val members = try {
+                loadCast(section, title, tmdbForDetails)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                emptyList()
+            }
+            castPreview = title to members
+        }
         val (castSection, castTitle, tmdbId) = castOf ?: return
         CastDialog(
             displayVodTitle(castTitle),
             load = {
-                val client = metadataClient
-                when {
-                    client != null && tmdbId != null -> client.cast(castSection, tmdbId)
-                    traktSession != null -> withTraktSession { api, session ->
-                        api.cast(castSection, castTitle, session.accessToken)
-                    }
-                    else -> emptyList()
-                }
+                castPreview?.takeIf { it.first == castTitle && it.second.isNotEmpty() }?.second
+                    ?: loadCast(castSection, castTitle, tmdbId)
             },
             onPerson = { castPerson = it },
             onDismiss = { castOf = null }
@@ -6709,7 +6730,9 @@ private fun PlayerHome(
                                 } else null,
                                 onFavorite = { toggleSavedTitle(section, title, true) },
                                 onWatch = { toggleSavedTitle(section, title, false) },
-                                onCast = { castOf = Triple(section, displayTitle, detailMetadata?.id) }
+                                onCast = castPreview?.takeIf { it.first == title && it.second.isNotEmpty() }?.let {
+                                    { castOf = Triple(section, title, detailMetadata?.id) }
+                                }
                             )
                             }
                             if (section == PortalSection.SERIES) {

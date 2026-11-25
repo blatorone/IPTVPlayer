@@ -396,6 +396,7 @@ private val mainDestinations = Destination.entries.filter {
     it != Destination.SOURCES && it != Destination.CATEGORIES
 }
 private const val EXIT_CONFIRMATION_MS = 3_000L
+private const val SETTINGS_PAGE_FOCUS_GRACE_MS = 800L
 
 private fun playerColors(accent: AccentChoice) = darkColorScheme(
     primary = accent.color,
@@ -831,6 +832,7 @@ private fun PlayerHome(
         }.toTypedArray())
     }
     var controlSettingsOpen by remember { mutableStateOf(false) }
+    var settingsPageOpenedAt by remember { mutableStateOf(0L) }
     var openedSeries by remember { mutableStateOf<PortalTitle?>(null) }
     var seasons by remember { mutableStateOf<List<PortalSeason>?>(null) }
     var playbackSeasons by remember { mutableStateOf(emptyList<PortalSeason>()) }
@@ -4293,9 +4295,14 @@ private fun PlayerHome(
     fun isMainMenuOpen() = selected == Destination.LIVE && guidePanel == GuidePanel.MENU && !fullscreen
     val mainMenuOpen = isMainMenuOpen()
     LaunchedEffect(mainMenuOpen) { if (!mainMenuOpen) lastBack = 0L }
+    fun settingsPageOpen() = epgSettingsOpen || episodeSettingsOpen || controlSettingsOpen ||
+        metadataSettingsOpen || guideAppearancePage != null
+    fun openSettingsPage(open: () -> Unit) {
+        settingsPageOpenedAt = SystemClock.elapsedRealtime()
+        open()
+    }
     fun closeSettingsPages(): Boolean {
-        val open = epgSettingsOpen || episodeSettingsOpen || controlSettingsOpen || metadataSettingsOpen ||
-            guideAppearancePage != null
+        val open = settingsPageOpen()
         epgSettingsOpen = false
         episodeSettingsOpen = false
         controlSettingsOpen = false
@@ -6288,7 +6295,7 @@ private fun PlayerHome(
                                     }
                                 }
                                 SettingsSection.GUIDE ->
-                                    SettingRow(stringResource(R.string.epg_settings), Modifier) { epgSettingsOpen = true }
+                                    SettingRow(stringResource(R.string.epg_settings), Modifier) { openSettingsPage { epgSettingsOpen = true } }
                                 SettingsSection.APPEARANCE -> {
                                     SettingRow(
                                 stringResource(R.string.accent_color_setting, stringResource(accentChoice.label)),
@@ -6316,14 +6323,14 @@ private fun PlayerHome(
                                         preferences?.edit()?.putString("provider_category_style", providerCategoryStyle.name)?.apply()
                                     }
                                     SettingRow(stringResource(R.string.guide_grid_appearance), Modifier) {
-                                        guideAppearancePage = GuideAppearancePage.GRID
+                                        openSettingsPage { guideAppearancePage = GuideAppearancePage.GRID }
                                     }
                                     SettingRow(stringResource(R.string.guide_channel_list_appearance), Modifier) {
-                                        guideAppearancePage = GuideAppearancePage.CHANNELS
+                                        openSettingsPage { guideAppearancePage = GuideAppearancePage.CHANNELS }
                                     }
                                 }
                                 SettingsSection.PLAYBACK -> {
-                                    SettingRow(stringResource(R.string.episode_settings), Modifier) { episodeSettingsOpen = true }
+                                    SettingRow(stringResource(R.string.episode_settings), Modifier) { openSettingsPage { episodeSettingsOpen = true } }
                                     SettingRow(
                                         stringResource(
                                             if (subtitleDefaultEnabled) R.string.subtitles_default_on
@@ -6360,7 +6367,7 @@ private fun PlayerHome(
                                     }
                                 }
                                 SettingsSection.CONTROLS ->
-                                    SettingRow(stringResource(R.string.control_settings), Modifier) { controlSettingsOpen = true }
+                                    SettingRow(stringResource(R.string.control_settings), Modifier) { openSettingsPage { controlSettingsOpen = true } }
                                 SettingsSection.UPDATES -> appUpdates.settings()
                                 SettingsSection.PARENTAL -> ParentalSettings(parental) { pinRequest = it }
                                 SettingsSection.ABOUT -> {
@@ -6390,7 +6397,7 @@ private fun PlayerHome(
                                 SettingsSection.METADATA -> {
                                     Text("Aktive Quelle für Folgeninfos: $activeEpisodeProvider")
                                     SettingRow(stringResource(R.string.tmdb_settings), Modifier) {
-                                        metadataSettingsOpen = true
+                                        openSettingsPage { metadataSettingsOpen = true }
                                     }
                                     if (activeEpisodeProvider == "TVmaze") {
                                         SettingRow(stringResource(R.string.tvmaze_credit), Modifier) {
@@ -7423,7 +7430,13 @@ private fun PlayerHome(
                                     badge = 1.takeIf { item == SettingsSection.UPDATES && appUpdates.available },
                                     modifier = Modifier.focusRequester(settingsFocusRequesters.getValue(item))
                                         .onFocusChanged {
-                                            if (it.isFocused && settingsSection != item) {
+                                            // Opening a page removes the row that had focus, and Android
+                                            // briefly hands focus to the first section ("Allgemein").
+                                            // That must not close the page that has just opened.
+                                            val justOpened = settingsPageOpen() &&
+                                                SystemClock.elapsedRealtime() - settingsPageOpenedAt <
+                                                SETTINGS_PAGE_FOCUS_GRACE_MS
+                                            if (it.isFocused && settingsSection != item && !justOpened) {
                                                 closeSettingsPages()
                                                 // Sources and categories are pages of the settings too.
                                                 if (selected != Destination.SETTINGS) selected = Destination.SETTINGS

@@ -1,5 +1,9 @@
 # Änderungen
 
+## 1.0.88
+
+- Behoben: Einstellungs-Unterseiten (z. B. „Tasten und Gesten belegen“, EPG, Folgen, TMDB, Programmführer gestalten) schlossen sich beim Öffnen sofort wieder und die Einstellungen sprangen zu „Allgemein“. Die Unterseite öffnet sich jetzt zuverlässig und bekommt den Fokus.
+
 ## 1.0.87
 
 - Einstellungen: Quellen, Kategorien, App-Updates, Trakt und Info im neuen Stil (Zeilen mit Schaltern/Werten). Quellen und Kategorien erscheinen rechts neben der Rubrikenleiste. Das Änderungs-Popup bei Updates bleibt.

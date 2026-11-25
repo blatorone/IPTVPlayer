@@ -234,6 +234,28 @@ internal class TraktApi(private val clientId: String) {
         return null
     }
 
+    /**
+     * Picks the Trakt entry for a portal title. A title found by external ID or with the same
+     * normalized name must be unambiguous. Portal titles are often localized ("Die Simpsons")
+     * while Trakt lists the original title; then the best-ranked search result is used only if
+     * its release year matches exactly.
+     */
+    private fun chooseTraktCandidate(
+        candidates: List<JSONObject>, title: PortalTitle, byId: Boolean, yearTolerance: Int
+    ): JSONObject? {
+        val expected = normalizedLabel(displayVodTitle(title))
+        val titleYear = title.year ?: vodReleaseYear(title)
+        fun year(row: JSONObject) = row.optInt("year", 0).takeIf { it > 0 }
+        val named = candidates.filter { row ->
+            val year = year(row)
+            (byId || normalizedLabel(row.optString("title")) == expected) &&
+                (titleYear == null || year == null || kotlin.math.abs(titleYear - year) <= yearTolerance)
+        }.distinctBy { it.optJSONObject("ids")?.optLong("trakt", 0) }
+        if (named.isNotEmpty() || byId) return named.singleOrNull()
+        val year = titleYear ?: return null
+        return candidates.firstOrNull()?.takeIf { year(it) == year }
+    }
+
     private fun descriptionLanguage(): String =
         java.util.Locale.getDefault().language.takeIf { it.matches(Regex("[a-z]{2}")) } ?: "de"
 
@@ -266,13 +288,7 @@ internal class TraktApi(private val clientId: String) {
         val candidates = request(path, "GET", token = accessToken).body.arrayObjects().mapNotNull { result ->
             result.optJSONObject(kind)
         }
-        val expected = normalizedLabel(displayVodTitle(title))
-        val match = candidates.filter { item ->
-            val name = normalizedLabel(item.optString("title"))
-            val year = item.optInt("year", 0).takeIf { it > 0 }
-            (externalId != null || name == expected) &&
-                (title.year == null || year == null || kotlin.math.abs(title.year - year) <= 1)
-        }.distinctBy { it.optJSONObject("ids")?.optLong("trakt", 0) }.singleOrNull() ?: return null
+        val match = chooseTraktCandidate(candidates, title, byId = externalId != null, yearTolerance = 1) ?: return null
         val original = match.optString("overview").takeIf(String::isNotBlank)
         // Search results carry the English summary; the translation is a separate request.
         val translated = if (descriptionLanguage() == "en") null else {
@@ -288,8 +304,12 @@ internal class TraktApi(private val clientId: String) {
                 }
             }
         }
+        // A localized portal title stays visible when Trakt was matched by its original title.
+        val traktName = match.optString("title").takeIf(String::isNotBlank)
+        val shownName = traktName?.takeIf { normalizedLabel(it) == normalizedLabel(displayVodTitle(title)) }
+            ?: displayVodTitle(title).ifBlank { title.name }
         return TraktTitleMetadata(
-            match.optString("title").takeIf(String::isNotBlank) ?: title.name,
+            shownName,
             match.optInt("year", 0).takeIf { it > 0 },
             translated ?: original,
             match.optDouble("rating").takeIf { it.isFinite() && it > 0 }
@@ -310,12 +330,7 @@ internal class TraktApi(private val clientId: String) {
             request("/search/$kind?query=$query", "GET", token = accessToken)
                 .body.arrayObjects().mapNotNull { it.optJSONObject(kind) }
         }
-        val expected = normalizedLabel(displayVodTitle(title))
-        return candidates.filter { row ->
-            val name = normalizedLabel(row.optString("title"))
-            val year = row.optInt("year", 0).takeIf { it > 0 }
-            (idPath != null || name == expected) && (title.year == null || year == null || year == title.year)
-        }.distinctBy { it.optJSONObject("ids")?.optLong("trakt", 0) }.singleOrNull()
+        return chooseTraktCandidate(candidates, title, byId = idPath != null, yearTolerance = 0)
     }
 
     suspend fun setHistoryStatus(

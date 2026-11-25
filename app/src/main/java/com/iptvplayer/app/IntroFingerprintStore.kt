@@ -48,6 +48,8 @@ internal class IntroFingerprintStore(private val directory: File) {
         const val AUDIO_REFERENCE = "aref"
         const val AUDIO_LEARNED = "alearn"
         const val INTRO_VARIANTS = "variants"
+        const val OUTRO_VARIANTS = "outros"
+        const val OUTRO_REFERENCE = "oref"
 
         fun create(context: Context) = IntroFingerprintStore(File(context.noBackupFilesDir, "intro-fingerprints"))
     }

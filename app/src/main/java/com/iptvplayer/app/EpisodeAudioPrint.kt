@@ -250,9 +250,26 @@ internal object EpisodeAudioTap {
     }
 }
 
-/** Forwards everything to [sink] and hands decoded PCM with its media time to [EpisodeAudioTap]. */
+/**
+ * Forwards everything to [sink] and hands decoded PCM with its media time to [EpisodeAudioTap].
+ * With [decodeEncoded] the sink declines passthrough of encoded audio (for example Dolby), so the
+ * player decodes it and the regular output receives PCM that the intro analysis can use as well.
+ */
 @OptIn(UnstableApi::class)
-internal class EpisodeAudioTapSink(sink: AudioSink) : ForwardingAudioSink(sink) {
+internal class EpisodeAudioTapSink(
+    sink: AudioSink,
+    private val decodeEncoded: Boolean = false
+) : ForwardingAudioSink(sink) {
+    // Passthrough is only declined when the device can decode the format itself; otherwise
+    // the track would have no audio at all (for example Dolby on an NVIDIA Shield).
+    private fun declined(format: Format) = decodeEncoded && format.sampleMimeType != MimeTypes.AUDIO_RAW &&
+        format.sampleMimeType?.let(::hasPlatformDecoder) == true
+
+    override fun supportsFormat(format: Format): Boolean = !declined(format) && super.supportsFormat(format)
+
+    override fun getFormatSupport(format: Format): Int =
+        if (declined(format)) AudioSink.SINK_FORMAT_UNSUPPORTED else super.getFormatSupport(format)
+
     private var pcm = false
     private var encoding = C.ENCODING_INVALID
     private var channels = 0
@@ -513,3 +530,14 @@ internal fun confirmKnownAudioOpening(
 
 /** Consecutive differing seconds after which shared theme music is considered over. */
 internal const val OPENING_END_SECONDS = 4
+
+private val platformDecoders = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+
+/** Whether the device offers a regular decoder for [mimeType]. */
+internal fun hasPlatformDecoder(mimeType: String): Boolean = platformDecoders.getOrPut(mimeType) {
+    runCatching {
+        android.media.MediaCodecList(android.media.MediaCodecList.REGULAR_CODECS).codecInfos.any { info ->
+            !info.isEncoder && info.supportedTypes.any { it.equals(mimeType, ignoreCase = true) }
+        }
+    }.getOrDefault(false)
+}

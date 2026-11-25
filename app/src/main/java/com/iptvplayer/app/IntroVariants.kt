@@ -119,3 +119,27 @@ internal fun learnIntroVariant(
     } else variants + learned
     return updated.sortedByDescending(IntroVariant::lastUsed).take(MAX_INTRO_VARIANTS)
 }
+
+/** The closing part of an episode that is compared between episodes, counted back from its end. */
+internal const val CLOSING_WINDOW_MS = OPENING_SCAN_LIMIT_MS
+
+/** Footage after recurring end credits for at least this long counts as a post-credits scene. */
+private const val POST_CREDITS_MIN_MS = 20_000L
+
+internal data class ClosingDecision(
+    /** Credits followed by more footage: offered as "skip credits", the next episode follows at the end. */
+    val skip: LongRange?,
+    /** Credits running until the end: the next episode is offered when they begin. */
+    val creditsStart: Long?
+)
+
+/**
+ * Interprets the end credits found in the closing window, whose time 0 is
+ * `duration - CLOSING_WINDOW_MS` (or the episode start for short episodes).
+ */
+internal fun closingDecision(range: LongRange, windowStart: Long, duration: Long): ClosingDecision {
+    val start = windowStart + range.first
+    val end = windowStart + range.last + 1
+    return if (duration - end >= POST_CREDITS_MIN_MS) ClosingDecision(start until end, null)
+    else ClosingDecision(null, start)
+}

@@ -32,7 +32,9 @@ internal data class EpisodeFrame(
 internal data class EpisodeVideoAnalysis(
     val opening: List<EpisodeFrame> = emptyList(),
     val creditsStartMs: Long? = null,
-    val audio: List<AudioPrint> = emptyList()
+    val audio: List<AudioPrint> = emptyList(),
+    /** Frames of the closing window at one per second; time 0 is the window start. */
+    val closing: List<EpisodeFrame> = emptyList()
 )
 
 /** Openings are searched within the first minutes; long cold opens are common. */

@@ -231,6 +231,7 @@
     <string name="select_all_sources">Alle auswählen</string>
     <string name="clear_source_selection">Auswahl leeren</string>
     <string name="show_touch_back_button">Zurück-Schaltfläche auf dem Bildschirm anzeigen</string>
+    <string name="key_sounds">Tastentöne bei der Bedienung (folgt den Systemtönen des Geräts)</string>
     <string name="refresh_all_progress">Aktualisiere Quelle %1$d von %2$d …</string>
     <string name="refresh_all_summary">Quellen vollständig aktualisiert: %1$d · mit Fehlern oder unvollständig: %2$d</string>
     <string name="merge_sources">Quellen zusammenführen</string>
@@ -367,7 +368,7 @@
     <string name="auto_skip_intro">Intro automatisch überspringen</string>
     <string name="skip_intro_automatically">Intro automatisch überspringen</string>
     <string name="decode_audio_for_intro">Dolby-Ton für Intro-Erkennung selbst dekodieren</string>
-    <string name="decode_audio_for_intro_hint">Erkennt Intros zusätzlich an der Titelmusik. Der Ton geht dann als PCM statt als Dolby-Bitstream an Fernseher oder Anlage; über ARC oder optisch kann dadurch nur Stereo ankommen. Wirkt nach einem Neustart der App.</string>
+    <string name="decode_audio_for_intro_hint">Erkennt Intros zusätzlich an der Titelmusik. Der Ton geht dann dekodiert statt als Dolby-Bitstream an Fernseher oder Anlage; über ARC oder optisch kann dadurch nur Stereo ankommen. Kann das Gerät den Ton nicht selbst dekodieren, bitte wieder ausschalten. Wirkt nach einem Neustart der App.</string>
     <string name="intro_manual">Intro: Eigene Zeitmarken</string>
     <string name="intro_automatic">Intro: Automatische Erkennung</string>
     <string name="intro_start_time">Intro beginnt bei %1$s</string>
@@ -377,6 +378,7 @@
     <string name="credits_before_end">Abspann beginnt %1$s vor Folgenende</string>
     <string name="episode_notice_seconds">Hinweis zur nächsten Folge: %1$d Sekunden vorher</string>
     <string name="skip_intro">Intro überspringen</string>
+    <string name="skip_credits">Abspann überspringen</string>
     <string name="episode_countdown">%1$s startet in %2$d Sekunden</string>
     <string name="next_episode_ready">Nächste Folge: %1$s</string>
     <string name="next_episode_airdate">Nächste Folge %1$s · %2$s</string>

@@ -24,8 +24,20 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-private val logos = object : LruCache<String, Bitmap>(12 * 1024) {
-    override fun sizeOf(key: String, value: Bitmap): Int = maxOf(1, value.byteCount / 1024)
+// Decoded images, sized by the device: an eighth of the app heap (12 to 48 MB). The previous
+// fixed 12 MB held only about a dozen posters, so scrolling decoded them again and again.
+@Volatile private var imageCache: LruCache<String, Bitmap>? = null
+
+private val imageCacheLock = Any()
+
+private fun imageCache(context: Context): LruCache<String, Bitmap> = imageCache ?: synchronized(imageCacheLock) {
+    imageCache ?: run {
+        val heapMb = (context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager)?.memoryClass ?: 128
+        val sizeKb = (heapMb * 1024 / 8).coerceIn(12 * 1024, 48 * 1024)
+        object : LruCache<String, Bitmap>(sizeKb) {
+            override fun sizeOf(key: String, value: Bitmap): Int = maxOf(1, value.byteCount / 1024)
+        }.also { imageCache = it }
+    }
 }
 private const val MAX_IMAGE_BYTES = 1024 * 1024
 private const val MAX_DISK_CACHE_BYTES = 48L * 1024 * 1024
@@ -48,9 +60,10 @@ internal fun PortalImage(
     val cacheKey = "$maxPixels:$address"
     val logo by produceState<Bitmap?>(null, cacheKey) {
         value = null
-        value = logos.get(cacheKey) ?: withContext(Dispatchers.IO) {
+        val cache = imageCache(context)
+        value = cache.get(cacheKey) ?: withContext(Dispatchers.IO) {
             try {
-                loadLogo(context, address, maxPixels)?.also { logos.put(cacheKey, it) }
+                loadLogo(context, address, maxPixels)?.also { cache.put(cacheKey, it) }
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
@@ -124,6 +137,9 @@ private fun decodeImage(bytes: ByteArray, maxPixels: Int): Bitmap? {
         options.inSampleSize = maxOf(1, options.inSampleSize) * 2
     }
     options.inJustDecodeBounds = false
+    // Posters and stills have no transparency and need half the memory as RGB_565; small
+    // channel logos keep their alpha channel.
+    if (maxPixels > 128) options.inPreferredConfig = Bitmap.Config.RGB_565
     return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
 }
 

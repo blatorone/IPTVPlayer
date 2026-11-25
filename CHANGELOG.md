@@ -1,5 +1,13 @@
 # Änderungen
 
+## 1.0.79
+
+- Abspann mit Zusatzszene: Die App lernt den Abspann einer Serie aus den letzten fünf Minuten zweier Folgen. Folgt auf den Abspann noch weiteres Material (etwa bei Rick and Morty), erscheint während des Abspanns „Abspann überspringen“; „Nächste Folge“ kommt erst kurz vor dem tatsächlichen Ende mit der eingestellten Vorlaufzeit. Ohne Zusatzszene bleibt es bei „Nächste Folge“ zu Beginn des Abspanns. Zurück blendet den Hinweis aus; übersprungen wird nie automatisch.
+- Tastentöne: Die Fernbedienungsnavigation spielt die Navigations- und Bestätigungstöne des Geräts, sofern dessen Systemtöne eingeschaltet sind. Im reinen Vollbild bleibt es still. Abschaltbar unter Einstellungen → Allgemein.
+- „Dolby-Ton für Intro-Erkennung selbst dekodieren“ führte zu fehlendem Ton. Der normale Audioausgang des Geräts bleibt jetzt erhalten; die Einstellung greift nur noch, wenn das Gerät einen passenden Decoder besitzt (die NVIDIA Shield hat keinen Dolby-Decoder für Apps und gibt Dolby weiter durch).
+- Folgenbeschreibungen, Folgenbilder und Serienbeschreibungen von Trakt erscheinen auch bei lokalisierten Portaltiteln (etwa „Die Simpsons“ zu „The Simpsons“): Die Suche nutzt bekannte IDs aus dem Verlauf und sonst den besten Treffer mit gleichem Erscheinungsjahr. Der Portaltitel bleibt sichtbar.
+- Poster und Folgenbilder laden flüssiger: Der Bildspeicher richtet sich nach dem Gerät, Poster belegen nur noch halb so viel Speicher.
+
 ## 1.0.78
 
 - Fällt ein laufender Sender aus und die App wechselt zur nächsten Variante, bleibt die aktuelle Ansicht erhalten. Der Programmführer springt dabei nicht mehr ins Vollbild; nur ein noch nicht gestarteter Sender oder Film öffnet wie gewählt das Vollbild.

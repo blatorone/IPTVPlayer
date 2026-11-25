@@ -164,8 +164,26 @@ class MainActivity : ComponentActivity() {
     private var playbackInputAction: (() -> Unit)? = null
     private var promptInputAction: ((android.view.KeyEvent) -> Boolean)? = null
     private var consumedLongBack = false
+    @Volatile private var keySoundsEnabled = false
+
+    /** Plays the device navigation sounds; they follow the system sound setting of the device. */
+    private fun playKeySound(event: android.view.KeyEvent) {
+        if (!keySoundsEnabled || event.action != android.view.KeyEvent.ACTION_DOWN || event.repeatCount != 0) return
+        val effect = when (event.keyCode) {
+            android.view.KeyEvent.KEYCODE_DPAD_UP -> android.view.SoundEffectConstants.NAVIGATION_UP
+            android.view.KeyEvent.KEYCODE_DPAD_DOWN -> android.view.SoundEffectConstants.NAVIGATION_DOWN
+            android.view.KeyEvent.KEYCODE_DPAD_LEFT -> android.view.SoundEffectConstants.NAVIGATION_LEFT
+            android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> android.view.SoundEffectConstants.NAVIGATION_RIGHT
+            android.view.KeyEvent.KEYCODE_DPAD_CENTER, android.view.KeyEvent.KEYCODE_ENTER,
+            android.view.KeyEvent.KEYCODE_NUMPAD_ENTER, android.view.KeyEvent.KEYCODE_BUTTON_A ->
+                android.view.SoundEffectConstants.CLICK
+            else -> return
+        }
+        window?.decorView?.playSoundEffect(effect)
+    }
 
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        playKeySound(event)
         // Modal playback prompts own the remote while visible, before PlayerView or
         // Compose can route directional keys to the guide/list behind the prompt.
         if (promptInputAction?.invoke(event) == true) return true
@@ -205,17 +223,11 @@ class MainActivity : ComponentActivity() {
         val renderers = object : androidx.media3.exoplayer.DefaultRenderersFactory(this) {
             override fun buildAudioSink(
                 context: Context, enableFloatOutput: Boolean, enableAudioOutputPlaybackParams: Boolean
-            ): androidx.media3.exoplayer.audio.AudioSink? {
-                val sink = if (decodeAudioForIntro) {
-                    // Without a context the sink assumes no passthrough support and decodes all audio.
-                    @Suppress("DEPRECATION")
-                    androidx.media3.exoplayer.audio.DefaultAudioSink.Builder()
-                        .setEnableFloatOutput(enableFloatOutput)
-                        .setEnableAudioOutputPlaybackParameters(enableAudioOutputPlaybackParams)
-                        .build()
-                } else super.buildAudioSink(context, enableFloatOutput, enableAudioOutputPlaybackParams)
-                return sink?.let(::EpisodeAudioTapSink)
-            }
+            ): androidx.media3.exoplayer.audio.AudioSink? =
+                // The device-aware sink always stays in place; with the option the wrapper only
+                // declines passthrough, so encoded audio is decoded and played as regular PCM.
+                super.buildAudioSink(context, enableFloatOutput, enableAudioOutputPlaybackParams)
+                    ?.let { EpisodeAudioTapSink(it, decodeEncoded = decodeAudioForIntro) }
         }
         player = ExoPlayer.Builder(this, renderers).build().also { activePlayer ->
             activePlayer.trackSelectionParameters = activePlayer.trackSelectionParameters
@@ -247,6 +259,7 @@ class MainActivity : ComponentActivity() {
                     registerScreenBack = { screenBackAction = it },
                     registerPlaybackInput = { playbackInputAction = it },
                     registerPromptInput = { promptInputAction = it },
+                    registerKeySounds = { keySoundsEnabled = it },
                     onExit = ::finish,
                     onFullscreen = { fullscreen ->
                         val controller = WindowCompat.getInsetsController(window, window.decorView)
@@ -442,6 +455,7 @@ private fun PlayerHome(
     registerScreenBack: ((((Boolean) -> Boolean)?) -> Unit) = {},
     registerPlaybackInput: (((() -> Unit)?) -> Unit) = {},
     registerPromptInput: ((((android.view.KeyEvent) -> Boolean)?) -> Unit) = {},
+    registerKeySounds: (Boolean) -> Unit = {},
     onExit: () -> Unit = {},
     onFullscreen: (Boolean) -> Unit = {},
     canPlay: () -> Boolean = { false }
@@ -468,6 +482,9 @@ private fun PlayerHome(
     }
     var showSettingsBackButton by remember(preferences, isTelevision) {
         mutableStateOf(preferences?.getBoolean("show_settings_back_button", !isTelevision) ?: !isTelevision)
+    }
+    var keySounds by remember(preferences) {
+        mutableStateOf(preferences?.getBoolean("key_sounds", true) ?: true)
     }
     var vodLiveView by remember(preferences) {
         val saved = preferences?.getString("vod_live_view", null)
@@ -592,6 +609,7 @@ private fun PlayerHome(
     }
     val seriesOpenings = remember { mutableMapOf<Pair<String, String>, Pair<String, List<EpisodeFrame>>>() }
     val seriesOpeningAudio = remember { mutableMapOf<Pair<String, String>, Pair<String, List<AudioPrint>>>() }
+    val seriesClosings = remember { mutableMapOf<Pair<String, String>, Pair<String, List<EpisodeFrame>>>() }
     val introStore = remember(context, preview) { if (preview) null else IntroFingerprintStore.create(context) }
     LaunchedEffect(progressPreferences) {
         // Opening fingerprints of earlier versions used another hash and grew without limit;
@@ -626,6 +644,9 @@ private fun PlayerHome(
      * after Back). It returns only if the opening turns out to end clearly later.
      */
     var introOfferClosed by remember { mutableStateOf<Pair<String, Long>?>(null) }
+    var outroOfferClosed by remember { mutableStateOf<Pair<String, Long>?>(null) }
+    /** Whether the current skip offer is for end credits rather than the opening. */
+    var skipIsOutro by remember { mutableStateOf(false) }
     var metadataBusy by remember { mutableStateOf(false) }
     var metadataError by remember { mutableStateOf(false) }
     var pendingSeriesEpisode by remember { mutableStateOf<Pair<PortalTitle, EpisodeResume>?>(null) }
@@ -3267,9 +3288,17 @@ private fun PlayerHome(
         val seriesTitle = details?.takeIf { it.first == PortalSection.SERIES }?.second
             ?: return@produceState
         if (traktSession != null) {
+            // Series from the history already carry the IDs Trakt reported; they identify the
+            // show reliably even when the portal uses a localized title.
+            val tracked = trackedSeries(seriesTitle)
+            val lookupTitle = seriesTitle.copy(
+                imdbId = seriesTitle.imdbId ?: tracked?.imdb,
+                tmdbId = seriesTitle.tmdbId ?: tracked?.tmdb,
+                year = seriesTitle.year ?: tracked?.year
+            )
             val summaries = try {
                 withTraktSession { api, session ->
-                    api.episodeDescriptions(seriesTitle, session.accessToken)
+                    api.episodeDescriptions(lookupTitle, session.accessToken)
                 }
             } catch (error: CancellationException) {
                 throw error
@@ -4137,7 +4166,8 @@ private fun PlayerHome(
                 // Back only closes the skip-intro offer, for the rest of this episode; the
                 // remote's left/right then seek again instead of moving between offer buttons.
                 skipIntroTo = null
-                introOfferClosed = playbackAttempt?.mediaId?.let { it to Long.MAX_VALUE }
+                val closed = playbackAttempt?.mediaId?.let { it to Long.MAX_VALUE }
+                if (skipIsOutro) outroOfferClosed = closed else introOfferClosed = closed
                 return
             }
             if (fullscreenGuidePanel != GuidePanel.GRID) {
@@ -4245,6 +4275,14 @@ private fun PlayerHome(
                     true
                 } else !fullscreen && openCurrentFullscreen())
     })
+    SideEffect {
+        // Navigation sounds while browsing; plain fullscreen video stays silent so seeking
+        // with left and right does not click.
+        registerKeySounds(
+            keySounds && (!fullscreen || playbackControlsVisible || watchingPrompt || skipIntroTo != null ||
+                fullscreenGuidePanel != GuidePanel.GRID)
+        )
+    }
     val screenBack by rememberUpdatedState<(Boolean) -> Boolean>({ released ->
         val handled = fullscreen && (
             playbackControlsVisible || watchingPrompt || skipIntroTo != null || fullscreenGuidePanel != GuidePanel.GRID
@@ -4379,6 +4417,21 @@ private fun PlayerHome(
                 }
             }
         }.orEmpty()
+        // End credits are learned like openings, from the closing window of two episodes.
+        val closingStart = (duration - CLOSING_WINDOW_MS).coerceAtLeast(0L)
+        val previousClosing = seriesClosings[seriesKey]?.takeIf { it.first != selection.id }
+            ?: seriesKey?.let { key ->
+                withContext(Dispatchers.IO) {
+                    decodeOpeningReference(store?.read(key, IntroFingerprintStore.OUTRO_REFERENCE)?.decodeToString())
+                }
+            }?.takeIf { it.mediaId != selection.id }?.let { it.mediaId to it.frames }
+        var outroVariants = seriesKey?.let { key ->
+            withContext(Dispatchers.IO) { decodeIntroVariants(store?.read(key, IntroFingerprintStore.OUTRO_VARIANTS)) }
+        }.orEmpty()
+        var outroLearned: LongRange? = null
+        var savedClosing = 0
+        var processedClosing = 0
+        var processedOpening = -1
         if (active.currentMediaItem != item) return@LaunchedEffect
         val audioToken = if (scanOpening && sampleFromSurface) EpisodeAudioTap.start() else null
         // Intro diagnostics contain counts and times only, never titles or addresses.
@@ -4404,6 +4457,9 @@ private fun PlayerHome(
                 var creditsComplete = !scanCredits
                 var lastOpeningBucket = -HLS_INTRO_FRAME_INTERVAL_MS
                 var lastCreditsBucket = -5_000L
+                var lastClosingBucket = -1_000L
+                val closing = mutableListOf<EpisodeFrame>()
+                var emittedClosing = 0
                 var emittedFrames = 0
                 var emittedAudio = 0
                 var emittedCredits = 0
@@ -4430,22 +4486,32 @@ private fun PlayerHome(
                             }
                         }
                         if (inCredits) {
-                            val bucket = position / 5_000L * 5_000L
-                            if (bucket > lastCreditsBucket) {
+                            // One sample per second; the closing window (last five minutes) is kept
+                            // for comparing end credits between episodes, every fifth second also
+                            // feeds the credit-text heuristic.
+                            val bucket = position / 1_000L * 1_000L
+                            if (bucket > lastClosingBucket) {
                                 sampleEpisodeSurface(surface, bucket)?.let { frame ->
-                                    credits += frame
-                                    lastCreditsBucket = bucket
+                                    lastClosingBucket = bucket
+                                    if (bucket >= closingStart) closing += frame.copy(timeMs = bucket - closingStart)
+                                    if (bucket - lastCreditsBucket >= 5_000L) {
+                                        credits += frame
+                                        lastCreditsBucket = bucket
+                                    }
                                 }
                             }
                         }
                     }
                     // Compare only when new evidence arrived instead of on every poll.
                     val audioReady = audio.size - emittedAudio >= 20 || openingComplete && audio.size > emittedAudio
-                    if (opening.size != emittedFrames || audioReady || credits.size != emittedCredits) {
+                    if (opening.size != emittedFrames || audioReady || credits.size != emittedCredits ||
+                        closing.size != emittedClosing
+                    ) {
                         emittedFrames = opening.size
                         emittedAudio = audio.size
                         emittedCredits = credits.size
-                        emit(EpisodeVideoAnalysis(opening.toList(), findCreditsStart(credits), audio.toList()))
+                        emittedClosing = closing.size
+                        emit(EpisodeVideoAnalysis(opening.toList(), findCreditsStart(credits), audio.toList(), closing.toList()))
                     }
                     if (active.playbackState == Player.STATE_ENDED ||
                         active.duration > 0 && position >= active.duration - 1_000L
@@ -4460,7 +4526,11 @@ private fun PlayerHome(
             var savedAudio = 0
             updates.collect { analysis ->
                 if (active.currentMediaItem != item) return@collect
-                if (seriesKey != null && (analysis.opening.isNotEmpty() || analysis.audio.isNotEmpty())) {
+                // Opening work only runs when new opening frames or prints arrived, not for
+                // every closing sample near the end of the episode.
+                val openingEvidence = analysis.opening.size + analysis.audio.size
+                if (seriesKey != null && openingEvidence > 0 && openingEvidence != processedOpening) {
+                    processedOpening = openingEvidence
                     // Learned openings (variants) are recognised early so the skip is offered while
                     // they run, and are re-checked as playback continues. The comparison with the
                     // previous episode keeps running until the scan ends and corrects or adds variants.
@@ -4568,7 +4638,59 @@ private fun PlayerHome(
                         if (writeAudio) savedAudio = analysis.audio.size
                     }
                 }
-                analysis.creditsStartMs?.let { marker ->
+                if (seriesKey != null && analysis.closing.size != processedClosing) {
+                    processedClosing = analysis.closing.size
+                    val closing = analysis.closing
+                    val (outroSeen, outroCompared) = withContext(Dispatchers.Default) {
+                        outroVariants.mapNotNull { variant ->
+                            observeKnownOpening(closing, variant.frames, variant.range)?.let { variant to it }
+                        } to previousClosing?.let { findRepeatedOpening(closing, it.second, HLS_INTRO_FRAME_INTERVAL_MS) }
+                    }
+                    if (active.currentMediaItem != item) return@collect
+                    val recognised = chooseIntro(outroSeen.map { it.second })
+                    val outro = recognised?.let { known ->
+                        outroCompared?.takeIf { it.first <= known.last && known.first <= it.last && it.last > known.last }
+                            ?.let { known.first..it.last } ?: known
+                    } ?: outroCompared
+                    val decision = outro?.let { closingDecision(it, closingStart, duration) }
+                    val skip = decision?.skip
+                    val previousOutro = timing.outro(duration)
+                    timing = timing.copy(
+                        outroStartMs = skip?.first, outroEndMs = skip?.last?.plus(1),
+                        creditsStartMs = if (skip != null) null else decision?.creditsStart ?: timing.creditsStartMs
+                    )
+                    if (timing.outro(duration) != previousOutro || decision?.creditsStart != null && outroCompared != outroLearned) {
+                        AppDiagnostics.record(
+                            context,
+                            "outro at:${active.currentPosition / 1000} skip:${skip?.let { "${it.first / 1000}-${it.last / 1000}" } ?: "-"} " +
+                                "credits:${decision?.creditsStart?.div(1000) ?: "-"} f:${closing.size}"
+                        )
+                    }
+                    if (store != null) {
+                        if (outroCompared != null && outroCompared != outroLearned) {
+                            outroLearned = outroCompared
+                            outroVariants = learnIntroVariant(
+                                outroVariants, outroSeen, outroCompared, closing, emptyList(), System.currentTimeMillis()
+                            )
+                            val encoded = encodeIntroVariants(outroVariants)
+                            withContext(Dispatchers.IO) { store.write(seriesKey, IntroFingerprintStore.OUTRO_VARIANTS, encoded) }
+                        }
+                        // Keep this episode's closing as reference once most of the window was seen.
+                        val covered = closing.size >= 120 && closing.size - savedClosing >= 30 ||
+                            active.playbackState == Player.STATE_ENDED && closing.size > savedClosing
+                        if (covered && closing.size >= (previousClosing?.second?.size ?: 0) / 2) {
+                            if (seriesClosings.size >= 16 && seriesKey !in seriesClosings) {
+                                seriesClosings.remove(seriesClosings.keys.first())
+                            }
+                            seriesClosings[seriesKey] = selection.id to closing
+                            savedClosing = closing.size
+                            val encoded = OpeningReference(selection.id, closing).encode().encodeToByteArray()
+                            withContext(Dispatchers.IO) { store.write(seriesKey, IntroFingerprintStore.OUTRO_REFERENCE, encoded) }
+                        }
+                    }
+                }
+                // Credits followed by more footage are skipped instead of ending the episode early.
+                analysis.creditsStartMs?.takeIf { timing.outroStartMs == null }?.let { marker ->
                     timing = timing.copy(creditsStartMs = marker)
                     progressPreferences?.edit()?.putLong(markerKey, marker)?.apply()
                 }
@@ -4610,10 +4732,22 @@ private fun PlayerHome(
                 val introClosed = closedUntil != null && (
                     closedUntil == Long.MAX_VALUE || introTarget == null || introTarget <= closedUntil + 2_000L
                 )
-                skipIntroTo = if (!introClosed && introTarget != null && position < introTarget &&
+                val introOffer = if (!introClosed && introTarget != null && position < introTarget &&
                     (intro?.contains(position) == true || introGrace) && active.isCurrentMediaItemSeekable
                 ) introTarget else null
-                if (autoSkipIntro && active.isPlaying) skipIntroTo?.let {
+                // End credits followed by more footage: offer to skip to the post-credits scene.
+                val outro = if (manualCredits) null else detected?.outro(duration)
+                val outroTarget = futureIntroSkipTarget(outro, position)
+                val outroClosedUntil = outroOfferClosed?.takeIf { it.first == attempt.mediaId }?.second
+                val outroClosed = outroClosedUntil != null && (
+                    outroClosedUntil == Long.MAX_VALUE || outroTarget == null || outroTarget <= outroClosedUntil + 2_000L
+                )
+                val outroOffer = if (!outroClosed && outroTarget != null && outro?.contains(position) == true &&
+                    active.isCurrentMediaItemSeekable
+                ) outroTarget else null
+                skipIntroTo = introOffer ?: outroOffer
+                skipIsOutro = introOffer == null && outroOffer != null
+                if (autoSkipIntro && active.isPlaying && !skipIsOutro) skipIntroTo?.let {
                     active.seekTo(it)
                     skipIntroTo = null
                     introOfferClosed = attempt.mediaId to it
@@ -4676,7 +4810,8 @@ private fun PlayerHome(
                     val target = requireNotNull(skipIntroTo)
                     player?.seekTo(target)
                     skipIntroTo = null
-                    introOfferClosed = playbackAttempt?.mediaId?.let { it to target }
+                    val closed = playbackAttempt?.mediaId?.let { it to target }
+                    if (skipIsOutro) outroOfferClosed = closed else introOfferClosed = closed
                 }
                 nextEpisodeSeconds != null && episodeActionSelection == introOffset ->
                     advanceEpisode(confirmed = true)
@@ -5082,13 +5217,15 @@ private fun PlayerHome(
                         } else {
                         skipIntroTo?.let { position ->
                             MenuButton(
-                                stringResource(R.string.skip_intro),
+                                stringResource(if (skipIsOutro) R.string.skip_credits else R.string.skip_intro),
                                 Modifier.focusRequester(episodeActionFocus),
                                 selected = episodeActionSelection == 0,
                                 onFocused = { episodeActionSelection = 0 }
                             ) {
                                 player?.seekTo(position)
                                 skipIntroTo = null
+                                val closed = playbackAttempt?.mediaId?.let { it to position }
+                                if (skipIsOutro) outroOfferClosed = closed else introOfferClosed = closed
                             }
                         }
                         nextEpisodeSeconds?.let { seconds ->
@@ -5748,6 +5885,10 @@ private fun PlayerHome(
                                         preferences?.edit()?.putBoolean(
                                             "show_settings_back_button", showSettingsBackButton
                                         )?.apply()
+                                    }
+                                    MenuButton(stringResource(R.string.key_sounds), Modifier, selected = keySounds) {
+                                        keySounds = !keySounds
+                                        preferences?.edit()?.putBoolean("key_sounds", keySounds)?.apply()
                                     }
                                     MenuButton(
                                         stringResource(R.string.start_last_channel),

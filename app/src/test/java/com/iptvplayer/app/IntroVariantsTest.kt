@@ -78,6 +78,21 @@ class IntroVariantsTest {
     }
 
     @Test
+    fun creditsWithPostCreditsSceneAreSkippedOtherwiseTheNextEpisodeFollows() {
+        // 22 min episode; closing window starts five minutes before the end (at 17:00).
+        val duration = 22 * 60_000L
+        val windowStart = duration - CLOSING_WINDOW_MS
+        // Credits from 18:00 to 18:40, then a 2:20 post-credits scene.
+        val withScene = closingDecision(60_000L until 100_000L, windowStart, duration)
+        assertEquals((windowStart + 60_000L) until (windowStart + 100_000L), withScene.skip)
+        assertNull(withScene.creditsStart)
+        // Credits running until ten seconds before the end: offer the next episode instead.
+        val plain = closingDecision(240_000L until 290_000L, windowStart, duration)
+        assertNull(plain.skip)
+        assertEquals(windowStart + 240_000L, plain.creditsStart)
+    }
+
+    @Test
     fun variantsRoundTrip() {
         val prints = List(50) { AudioPrint(10_000L + it * 47, it, true) }
         val variants = listOf(longVariant.copy(prints = prints), shortVariant)

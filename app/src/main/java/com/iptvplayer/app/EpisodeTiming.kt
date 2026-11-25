@@ -5,8 +5,17 @@ import org.json.JSONObject
 internal data class EpisodeTiming(
     val introStartMs: Long? = null,
     val introEndMs: Long? = null,
-    val creditsStartMs: Long? = null
+    val creditsStartMs: Long? = null,
+    /** End credits that are followed by more footage (for example a post-credits scene). */
+    val outroStartMs: Long? = null,
+    val outroEndMs: Long? = null
 ) {
+    fun outro(duration: Long): LongRange? {
+        val from = outroStartMs ?: return null
+        val to = outroEndMs ?: return null
+        return (from until to).takeIf { from >= 0 && from < to && to < duration }
+    }
+
     fun intro(duration: Long): LongRange? {
         val from = introStartMs ?: return null
         val to = introEndMs ?: return null

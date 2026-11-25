@@ -165,6 +165,39 @@ internal class TmdbClient(private val token: String) {
                 number to TmdbEpisodeDetails(germanDescription(episode.value("overview")), picture)
             }.toMap()
 
+    /** Main cast of a film or series, in billing order. */
+    suspend fun cast(section: PortalSection, id: Int): List<CastMember> {
+        val movie = section == PortalSection.MOVIES
+        return request(if (movie) "movie/$id/credits" else "tv/$id/aggregate_credits")
+            .optJSONArray("cast").objects().take(60).mapNotNull { row ->
+                val name = row.value("name") ?: return@mapNotNull null
+                val role = if (movie) row.value("character")
+                else row.optJSONArray("roles").objects().firstNotNullOfOrNull { it.value("character") }
+                CastMember(name, role, profileImage(row), row.optLong("id").takeIf { it > 0 }, null)
+            }.distinctBy { it.tmdbId ?: it.name }
+    }
+
+    /** Films and series a person appeared in. */
+    suspend fun personCredits(personId: Long): List<PersonCredit> =
+        request("person/$personId/combined_credits").optJSONArray("cast").objects().mapNotNull { row ->
+            val section = when (row.value("media_type")) {
+                "movie" -> PortalSection.MOVIES
+                "tv" -> PortalSection.SERIES
+                else -> return@mapNotNull null
+            }
+            val movie = section == PortalSection.MOVIES
+            val title = row.value(if (movie) "title" else "name") ?: return@mapNotNull null
+            PersonCredit(
+                section, title, row.value(if (movie) "original_title" else "original_name"),
+                row.value(if (movie) "release_date" else "first_air_date")?.take(4)?.toIntOrNull(),
+                null, row.optInt("id").takeIf { it > 0 }?.toString()
+            )
+        }.distinctBy { "${it.section}:${it.tmdbId}" }
+
+    private fun profileImage(row: JSONObject): String? =
+        row.value("profile_path")?.takeIf { it.matches(Regex("/[A-Za-z0-9_.-]+")) }
+            ?.let { "https://image.tmdb.org/t/p/w185$it" }
+
     private suspend fun request(path: String, parameters: Map<String, String> = emptyMap()): JSONObject =
         withContext(Dispatchers.IO) {
             val query = (mapOf("language" to "de-DE") + parameters).entries.joinToString("&") { (key, value) ->

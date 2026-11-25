@@ -529,6 +529,8 @@ private fun PlayerHome(
         portalRefreshNotice = null
     }
     var newEpisodesNotice by remember { mutableStateOf<String?>(null) }
+    var castOf by remember { mutableStateOf<Triple<PortalSection, PortalTitle, Int?>?>(null) }
+    var castPerson by remember { mutableStateOf<CastMember?>(null) }
     LaunchedEffect(newEpisodesNotice) {
         val notice = newEpisodesNotice ?: return@LaunchedEffect
         // Episode checks run one series at a time; collect findings briefly before showing them.
@@ -892,6 +894,28 @@ private fun PlayerHome(
         val enabledSources = savedSources.filter { it.enabled }
         val active = storedSource?.takeIf { it.enabled }
         if (mergeSources) enabledSources.ifEmpty { listOfNotNull(active) } else listOfNotNull(active)
+    }
+    // Live-TV, films and series only appear when an active source provides them. Without any
+    // source everything stays visible so the setup remains reachable.
+    val visibleDestinations = remember(sourcesForBrowsing) {
+        fun offers(section: PortalSection) = sourcesForBrowsing.any { source ->
+            source.catalogs[section]?.let { it.titles.isNotEmpty() || it.groups.isNotEmpty() } == true
+        }
+        if (sourcesForBrowsing.isEmpty()) mainDestinations else mainDestinations.filter { destination ->
+            when (destination) {
+                Destination.LIVE -> sourcesForBrowsing.any { it.channels.isNotEmpty() }
+                Destination.MOVIES -> offers(PortalSection.MOVIES)
+                Destination.SERIES -> offers(PortalSection.SERIES)
+                else -> true
+            }
+        }
+    }
+    LaunchedEffect(visibleDestinations) {
+        val content = setOf(Destination.LIVE, Destination.MOVIES, Destination.SERIES)
+        val current = selected
+        if (current in content && current !in visibleDestinations) {
+            selected = visibleDestinations.firstOrNull { it in content } ?: Destination.SETTINGS
+        }
     }
     val combine = mergeSources
     fun categoryOrderKey(section: PortalSection): String =
@@ -4815,6 +4839,9 @@ private fun PlayerHome(
             delay(250)
         }
     }
+    // Kept in its own composable method: the JVM limits a single method to 64 KB.
+    @Composable
+    fun FullscreenLayer() {
     if (fullscreen) {
         val episodeActionFocus = remember { FocusRequester() }
         val episodeActionSecondaryFocus = remember { FocusRequester() }
@@ -5198,7 +5225,7 @@ private fun PlayerHome(
                                 }
                                     }
                                 GuidePanel.MENU -> LazyColumn(Modifier.weight(1f)) {
-                                    items(mainDestinations) { destination ->
+                                    items(visibleDestinations) { destination ->
                                         MenuButton(
                                             stringResource(destination.label), Modifier.fillMaxWidth(),
                                             leadingIcon = destination.icon.takeUnless { mainMenuStyle == MainMenuStyle.TEXT },
@@ -5332,6 +5359,56 @@ private fun PlayerHome(
         }
         return
     }
+    }
+    FullscreenLayer()
+    // Cast and filmography dialogs, in their own composable method (JVM method size limit).
+    @Composable
+    fun CastLayer() {
+        val (castSection, castTitle, tmdbId) = castOf ?: return
+        CastDialog(
+            displayVodTitle(castTitle),
+            load = {
+                val client = metadataClient
+                when {
+                    client != null && tmdbId != null -> client.cast(castSection, tmdbId)
+                    traktSession != null -> withTraktSession { api, session ->
+                        api.cast(castSection, castTitle, session.accessToken)
+                    }
+                    else -> emptyList()
+                }
+            },
+            onPerson = { castPerson = it },
+            onDismiss = { castOf = null }
+        )
+        castPerson?.let { person ->
+            PersonDialog(
+                person,
+                load = {
+                    val client = metadataClient
+                    val tmdbPerson = person.tmdbId
+                    val traktPerson = person.traktId
+                    val credits = when {
+                        client != null && tmdbPerson != null -> client.personCredits(tmdbPerson)
+                        traktSession != null && traktPerson != null -> withTraktSession { api, session ->
+                            api.personCredits(traktPerson, session.accessToken)
+                        }
+                        else -> emptyList()
+                    }
+                    val sources = sourcesForBrowsing
+                    withContext(Dispatchers.Default) {
+                        matchPersonCredits(credits, sources) { kind, items -> countryVariants(kind, items) }
+                    }
+                },
+                onOpen = { kind, title ->
+                    castPerson = null
+                    castOf = null
+                    showTitle(kind, title)
+                },
+                onDismiss = { castPerson = null }
+            )
+        }
+    }
+    CastLayer()
     if (askForCountries) {
         AlertDialog(
             onDismissRequest = { askForCountries = false },
@@ -5684,10 +5761,10 @@ private fun PlayerHome(
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.primary
                 )
-                mainDestinations.forEach { item ->
-                    val position = mainDestinations.indexOf(item)
-                    val previousItem = mainDestinations.getOrNull(position - 1) ?: item
-                    val nextItem = mainDestinations.getOrNull(position + 1) ?: item
+                visibleDestinations.forEach { item ->
+                    val position = visibleDestinations.indexOf(item)
+                    val previousItem = visibleDestinations.getOrNull(position - 1) ?: item
+                    val nextItem = visibleDestinations.getOrNull(position + 1) ?: item
                     MenuButton(
                         label = stringResource(item.label),
                         leadingIcon = item.icon.takeUnless { mainMenuStyle == MainMenuStyle.TEXT },
@@ -5738,9 +5815,9 @@ private fun PlayerHome(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        mainDestinations.forEachIndexed { index, item ->
-                            val previous = mainDestinations.getOrNull(index - 1) ?: item
-                            val next = mainDestinations.getOrNull(index + 1) ?: item
+                        visibleDestinations.forEachIndexed { index, item ->
+                            val previous = visibleDestinations.getOrNull(index - 1) ?: item
+                            val next = visibleDestinations.getOrNull(index + 1) ?: item
                             MenuButton(
                                 stringResource(item.label),
                                 Modifier.focusRequester(destinationFocusRequesters.getValue(item))
@@ -6631,7 +6708,8 @@ private fun PlayerHome(
                                     }
                                 } else null,
                                 onFavorite = { toggleSavedTitle(section, title, true) },
-                                onWatch = { toggleSavedTitle(section, title, false) }
+                                onWatch = { toggleSavedTitle(section, title, false) },
+                                onCast = { castOf = Triple(section, displayTitle, detailMetadata?.id) }
                             )
                             }
                             if (section == PortalSection.SERIES) {

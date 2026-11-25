@@ -89,13 +89,14 @@ internal fun ColumnScope.TitleGrid(
         mutableStateOf(if (preferPopularity) TitleSort.POPULARITY else TitleSort.NAME)
     }
     var filter by rememberSaveable { mutableStateOf(TitleFilter.ALL) }
-    var year by rememberSaveable { mutableStateOf<Int?>(null) }
+    var yearFrom by rememberSaveable { mutableStateOf<Int?>(null) }
+    var yearTo by rememberSaveable { mutableStateOf<Int?>(null) }
+    val yearSpan = yearFrom?.let { from -> YearSpan(from, yearTo ?: from) }
     var sorting by remember { mutableStateOf(false) }
     var filtering by remember { mutableStateOf(false) }
-    var selectingYear by remember { mutableStateOf(false) }
     val years = remember(titles) { titles.mapNotNull(::vodReleaseYear).distinct().sortedDescending() }
     val matches = titles.filter {
-        (year == null || vodReleaseYear(it) == year) && when (filter) {
+        (yearSpan == null || yearSpan.contains(vodReleaseYear(it))) && when (filter) {
             TitleFilter.ALL -> true
             TitleFilter.WATCHLIST -> isSaved(it)
         }
@@ -130,20 +131,9 @@ internal fun ColumnScope.TitleGrid(
                 }
             }
         }
-        if (years.isNotEmpty()) Box {
-            MenuButton(year?.toString() ?: stringResource(R.string.all_years), Modifier) { selectingYear = true }
-            DropdownMenu(expanded = selectingYear, onDismissRequest = { selectingYear = false }) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.all_years)) },
-                    onClick = { year = null; selectingYear = false }
-                )
-                years.forEach { available ->
-                    DropdownMenuItem(
-                        text = { Text(available.toString()) },
-                        onClick = { year = available; selectingYear = false }
-                    )
-                }
-            }
+        if (years.isNotEmpty()) YearFilterButton(years, yearSpan) { span ->
+            yearFrom = span?.from
+            yearTo = span?.to
         }
     }
     val allRow = rememberLazyListState()
@@ -360,7 +350,8 @@ internal fun TitleDetails(
     watchProgress: EpisodeCardProgress?,
     onWatchStatus: (() -> Unit)?,
     onFavorite: () -> Unit,
-    onWatch: () -> Unit
+    onWatch: () -> Unit,
+    onCast: (() -> Unit)? = null
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Poster(title, Modifier.width(if (compact) 72.dp else 116.dp).clip(MaterialTheme.shapes.medium))
@@ -412,6 +403,7 @@ internal fun TitleDetails(
                 // Favourites and watchlist are one list ("Merkliste"), synchronised with Trakt when connected.
                 val watchlistModifier = if (section == PortalSection.SERIES && primaryAction == null) leftEdge else Modifier
                 MenuButton(stringResource(R.string.watchlist), watchlistModifier, selected = saved, onClick = onWatch)
+                onCast?.let { MenuButton(stringResource(R.string.cast), Modifier, onClick = it) }
                 onWatchStatus?.let { MenuButton(stringResource(R.string.watched_status), Modifier, onClick = it) }
             }
             watchProgress?.let { WatchProgress(it) }

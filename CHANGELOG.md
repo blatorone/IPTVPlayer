@@ -1,5 +1,12 @@
 # Änderungen
 
+## 1.0.81
+
+- Besetzung: Film- und Seriendetails haben einen Punkt „Besetzung“ mit Schauspielern, Fotos und Rollen. Ein Schauspieler zeigt seine Filme und Serien getrennt in zwei Reitern, aber nur, was in den Portalen vorhanden ist. Daten kommen von TMDB, ohne TMDB-Zugang von Trakt.
+- Jahresfilter: Überall gleich mit „Alle Jahre“, einzelnen Jahren und „Benutzerdefiniert …“ mit Von- und Bis-Auswahl, in Kategorien wie auf Schauspielerseiten.
+- Live-TV, Filme und Serien erscheinen im Hauptmenü nur noch, wenn ein aktives Portal dafür Inhalte hat.
+- Interner Umbau: Vollbild-Steuerung und Besetzung liegen in eigenen Funktionen, weil die Hauptansicht die Größengrenze einer JVM-Methode erreicht hatte.
+
 ## 1.0.80
 
 - Portaltitel der Form „Name - 2026“ verlieren den übrig gebliebenen Bindestrich. Dadurch werden sie wieder Trakt und TMDB zugeordnet, etwa für den Gesehen-Status („Spider-Man: Brand New Day“).

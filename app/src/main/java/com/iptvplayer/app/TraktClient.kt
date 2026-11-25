@@ -316,6 +316,53 @@ internal class TraktApi(private val clientId: String) {
         )
     }
 
+    /** Main cast of a film or series from Trakt, used when no TMDB access is configured. */
+    suspend fun cast(section: PortalSection, title: PortalTitle, accessToken: String): List<CastMember> {
+        val kind = if (section == PortalSection.MOVIES) "movie" else "show"
+        val match = findHistoryTitle(title, kind, accessToken) ?: return emptyList()
+        val traktId = match.optJSONObject("ids")?.optLong("trakt", 0)?.takeIf { it > 0 } ?: return emptyList()
+        val body = try {
+            request("/${kind}s/$traktId/people?extended=images", "GET", token = accessToken).body
+        } catch (error: TraktApiException) {
+            request("/${kind}s/$traktId/people", "GET", token = accessToken).body
+        }
+        val cast = runCatching { JSONObject(body).optJSONArray("cast") }.getOrNull() ?: return emptyList()
+        return List(cast.length()) { cast.optJSONObject(it) }.filterNotNull().take(60).mapNotNull { row ->
+            val person = row.optJSONObject("person") ?: return@mapNotNull null
+            val name = person.optString("name").takeIf { it.isNotBlank() && it != "null" } ?: return@mapNotNull null
+            val ids = person.optJSONObject("ids")
+            val role = row.optJSONArray("characters")?.optString(0)?.takeIf { it.isNotBlank() && it != "null" }
+                ?: row.optString("character").takeIf { it.isNotBlank() && it != "null" }
+            CastMember(
+                name, role, traktImage(person.optJSONObject("images"), "headshot"),
+                ids?.optLong("tmdb", 0)?.takeIf { it > 0 }, ids?.optLong("trakt", 0)?.takeIf { it > 0 }
+            )
+        }
+    }
+
+    /** Films and series of a Trakt person. */
+    suspend fun personCredits(traktId: Long, accessToken: String): List<PersonCredit> = coroutineScope {
+        listOf(PortalSection.MOVIES to "movie", PortalSection.SERIES to "show").map { (section, kind) ->
+            async {
+                val body = try {
+                    request("/people/$traktId/${kind}s", "GET", token = accessToken).body
+                } catch (error: TraktApiException) {
+                    return@async emptyList()
+                }
+                val cast = runCatching { JSONObject(body).optJSONArray("cast") }.getOrNull() ?: return@async emptyList()
+                List(cast.length()) { cast.optJSONObject(it)?.optJSONObject(kind) }.filterNotNull().mapNotNull { item ->
+                    val name = item.optString("title").takeIf { it.isNotBlank() && it != "null" } ?: return@mapNotNull null
+                    val ids = item.optJSONObject("ids")
+                    PersonCredit(
+                        section, name, null, item.optInt("year", 0).takeIf { it > 0 },
+                        ids?.optString("imdb")?.takeIf { it.startsWith("tt") },
+                        ids?.optLong("tmdb", 0)?.takeIf { it > 0 }?.toString()
+                    )
+                }
+            }
+        }.awaitAll().flatten()
+    }
+
     private suspend fun findShow(title: PortalTitle, accessToken: String): JSONObject? =
         findHistoryTitle(title, "show", accessToken)
 

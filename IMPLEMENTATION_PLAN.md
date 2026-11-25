@@ -38,13 +38,13 @@ Filme, Serien, Details und Episoden aus verfügbaren Quellen anzeigen; explizite
 
 ## 6. Temporäre QR-Verwaltung
 
-Transport und Schutzmodell sind festgelegt (siehe `PROJECT_SPEC.md`, Fernverwaltung): Cloudflare-Vermittler per WebSocket, Seite über Cloudflare Pages, Ende-zu-Ende-Verschlüsselung mit Geheimnis im QR-Fragment. Schritte:
+Transport und Schutzmodell sind festgelegt (siehe `PROJECT_SPEC.md`, Fernverwaltung): ein Cloudflare Worker (Ordner `remote/`) als Vermittler per WebSocket und für die Seite, Ende-zu-Ende-Verschlüsselung mit Geheimnis im QR-Fragment. Schritte:
 
 1. Verschlüsselung und Rahmenformat mit Tests (`RemoteSessionCrypto`) – umgesetzt.
 2. Nachrichtenformat für Einstellungen (Lesen des Zustands, Änderungen, Bestätigung) mit Tests.
 3. Sitzung am Gerät: Start in den Einstellungen, QR-Code, Verbindungsstatus, „Zugriff beenden“, Ablauf, Ende beim Verlassen der App.
 4. Verwaltungsseite (HTML/JS im Repo, WebCrypto) für alle Einstellungen.
-5. Vermittler (Cloudflare Worker im Repo) und Veröffentlichung – Einrichtung im Cloudflare-Konto nur auf ausdrücklichen Auftrag.
+5. Vermittler (`remote/src/index.js`, lokal getestet) und Veröffentlichung – Einrichtung im Cloudflare-Konto nur auf ausdrücklichen Auftrag.
 6. Optional: direkte Heimnetz-Verbindung als Notlösung.
 **Fertig:** Ein zweites Gerät kann eine bestätigte Änderung vornehmen; abgelaufene oder ungültige Sitzung scheitert; Dienst endet wie spezifiziert. Geheimnisse werden geschützt und nicht geloggt.
 

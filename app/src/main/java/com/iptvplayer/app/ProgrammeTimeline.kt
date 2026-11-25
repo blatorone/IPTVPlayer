@@ -33,6 +33,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -58,6 +59,41 @@ import kotlinx.coroutines.flow.first
 
 private const val GUIDE_INTERVAL = 1_800L
 private const val GUIDE_WINDOW = 4 * GUIDE_INTERVAL
+
+/** Time window and filter of the guide; shared by the grid and the controls in the top bar. */
+internal class GuideWindow(offset: Long = 0L, onlyPinned: Boolean = false) {
+    var offset by mutableStateOf(offset)
+    var onlyPinned by mutableStateOf(onlyPinned)
+
+    companion object {
+        val Saver = listSaver<GuideWindow, Any>(
+            save = { listOf(it.offset, it.onlyPinned) },
+            restore = { GuideWindow(it[0] as Long, it[1] as Boolean) }
+        )
+    }
+}
+
+@Composable
+internal fun rememberGuideWindow(): GuideWindow = rememberSaveable(saver = GuideWindow.Saver) { GuideWindow() }
+
+private fun latestGuideOffset(horizonHours: Int): Long = ((horizonHours * 3_600L - 1) / GUIDE_WINDOW) * GUIDE_WINDOW
+
+/** Früher / Jetzt / Später / Nur vorgemerkte, shown in the top bar next to the category. */
+@Composable
+internal fun GuideWindowControls(window: GuideWindow, horizonHours: Int, entry: Modifier) {
+    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+        MenuButton(stringResource(R.string.guide_previous_window), entry) {
+            window.offset = (window.offset - GUIDE_WINDOW).coerceAtLeast(-GUIDE_WINDOW)
+        }
+        MenuButton(stringResource(R.string.guide_now), entry, selected = window.offset == 0L) { window.offset = 0 }
+        MenuButton(stringResource(R.string.guide_next_window), entry) {
+            window.offset = (window.offset + GUIDE_WINDOW).coerceAtMost(latestGuideOffset(horizonHours))
+        }
+        MenuButton(stringResource(R.string.guide_pinned_only), entry, selected = window.onlyPinned) {
+            window.onlyPinned = !window.onlyPinned
+        }
+    }
+}
 private data class GuideSlot(val programme: PortalProgramme, val from: Long, val stop: Long)
 
 @Composable
@@ -74,6 +110,7 @@ internal fun ProgrammeTimeline(
     appearance: GuideAppearance,
     refreshKey: Int,
     horizonHours: Int,
+    window: GuideWindow,
     active: Boolean,
     channelColumnFocus: FocusRequester,
     restorePlayingFocus: Boolean,
@@ -85,8 +122,8 @@ internal fun ProgrammeTimeline(
     onPlay: (StalkerChannel) -> Unit,
     onTogglePin: (StalkerChannel) -> Unit
 ) {
-    var onlyPinned by rememberSaveable { mutableStateOf(false) }
-    var offset by rememberSaveable { mutableStateOf(0L) }
+    var onlyPinned by window::onlyPinned
+    var offset by window::offset
     var details by remember { mutableStateOf<Pair<StalkerChannel, PortalProgramme?>?>(null) }
     val now by produceState(Instant.now().epochSecond) {
         while (true) {
@@ -95,12 +132,8 @@ internal fun ProgrammeTimeline(
         }
     }
     val start = now - now % GUIDE_INTERVAL + offset
-    val latest = ((horizonHours * 3_600L - 1) / GUIDE_WINDOW) * GUIDE_WINDOW
-    val channelEntry = Modifier.focusProperties {
-        canFocus = active
-        down = channelColumnFocus
-    }
-    val rowHeight = (if (compact) 36.dp else 48.dp) * appearance.rowSize.factor
+    val latest = latestGuideOffset(horizonHours)
+    val rowHeight = (if (compact) 34.dp else 42.dp) * appearance.rowSize.factor
     val displayed = remember(channels, pinnedIds, onlyPinned) {
         if (onlyPinned) channels.filter { programmeKey(it) in pinnedIds } else channels
     }
@@ -140,21 +173,6 @@ internal fun ProgrammeTimeline(
         }
     }
     Column(Modifier.fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(if (compact) 2.dp else 4.dp)) {
-    Row(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(guideDate(start), Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
-        MenuButton(stringResource(R.string.guide_previous_window), channelEntry) { offset = (offset - GUIDE_WINDOW).coerceAtLeast(-GUIDE_WINDOW) }
-        MenuButton(stringResource(R.string.guide_now), channelEntry) { offset = 0 }
-        MenuButton(stringResource(R.string.guide_next_window), channelEntry) {
-            offset = (offset + GUIDE_WINDOW).coerceAtMost(latest)
-        }
-        MenuButton(
-            stringResource(R.string.guide_pinned_only), channelEntry, selected = onlyPinned
-        ) { onlyPinned = !onlyPinned }
-    }
     if (displayed.isEmpty()) {
         Text(stringResource(if (onlyPinned) R.string.guide_no_pinned else R.string.no_channels))
         return@Column
@@ -163,9 +181,11 @@ internal fun ProgrammeTimeline(
         Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .padding(vertical = if (compact) 3.dp else 6.dp)
     ) {
+        // As in a classic TV guide the ruler carries the date where the channel column starts.
         Text(
-            stringResource(R.string.channels), Modifier.weight(1.25f).padding(start = 8.dp),
-            style = MaterialTheme.typography.labelMedium
+            guideDate(start), Modifier.weight(1.25f).padding(start = 8.dp),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary
         )
         Row(Modifier.weight(3f)) {
             repeat(4) { index ->

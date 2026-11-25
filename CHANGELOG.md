@@ -1,5 +1,14 @@
 # Änderungen
 
+## 1.0.84
+
+- Vollbild: Das Vollbild öffnete sich seit 1.0.82 nicht mehr (Start, langes Zurück, laufenden Sender wählen), weil der normale Bildschirm darübergezeichnet wurde. Behoben.
+- Besetzung: Trakt-Suchen per IMDb-/TMDB-Kennung nutzten ein falsches Format und fanden nichts. Mit Trakt-Konto fragt die Besetzung jetzt zusätzlich direkt TMDB. Damit erscheint „Besetzung“ wieder bei Filmen und Serien.
+- Programmführer im TiviMate-Stil: Überschrift entfällt; Kategorie, Statusmeldungen und Früher/Jetzt/Später/Nur vorgemerkte stehen gemeinsam in einer festen Zeile, der Ladebalken in einem festen Streifen darüber. Kleinere Vorschau ohne Rahmen, größerer Titel mit Restlaufzeit und längerer Beschreibung, Datum in der Zeitleiste und flachere Zeilen – deutlich mehr Sender sichtbar, nichts verrutscht beim Laden.
+- Einstellungen neu aufgebaut: Rubriken mit Symbolen links, Inhalte rechts als Zeilen mit An/Aus-Schalter oder Wertanzeige. Beim Öffnen liegt der Fokus auf der ersten Rubrik; die doppelte Rubrikenliste entfällt, Zurück verlässt die Einstellungen.
+- „Bald verfügbar“ erscheint bei Serien nur noch, wenn es tatsächlich angekündigte Folgen gibt.
+- Alle Film- und Seriengenres haben ein eigenes farbiges Symbol (Action/Abenteuer, Animation/Anime, Komödie, Horror, Krimi, Doku, Familie, Romantik, Drama, Fantasy, Neu, Beliebt, Kino u. a.).
+
 ## 1.0.83
 
 - Behebt, dass das Vollbild nach dem ersten Mal nicht mehr öffnete (langes Zurück, Auswahl des laufenden Senders): Die seit 1.0.81 ausgelagerte Vollbildsteuerung wird wieder bei jeder Aktualisierung der Oberfläche neu aufgebaut.

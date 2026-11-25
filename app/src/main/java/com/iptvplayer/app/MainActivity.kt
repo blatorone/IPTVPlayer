@@ -335,6 +335,29 @@ private fun providerCategoryIcon(name: String): Int? = when (serviceCategory(nam
     else -> null
 }
 
+/** Symbol for a film or series genre; provider categories keep their own symbol. */
+private fun genreCategoryIcon(group: PortalGroup): Int? =
+    when (VodCategory.entries.firstOrNull { it.id == group.id } ?: vodCategory(group)) {
+        VodCategory.ALL -> R.drawable.genre_all
+        VodCategory.RECENT -> R.drawable.genre_new
+        VodCategory.THIS_YEAR -> R.drawable.genre_year
+        VodCategory.POPULAR -> R.drawable.genre_popular
+        VodCategory.CINEMA -> R.drawable.genre_cinema
+        VodCategory.CINEMA_THIS_YEAR, VodCategory.CINEMA_LAST_YEAR -> R.drawable.genre_ticket
+        VodCategory.FAMILY -> R.drawable.genre_family
+        VodCategory.ANIMATION -> R.drawable.genre_animation
+        VodCategory.ACTION -> R.drawable.genre_action
+        VodCategory.COMEDY -> R.drawable.genre_comedy
+        VodCategory.HORROR -> R.drawable.genre_horror
+        VodCategory.CRIME -> R.drawable.genre_crime
+        VodCategory.FANTASY -> R.drawable.genre_fantasy
+        VodCategory.DOCUMENTARY -> R.drawable.genre_documentary
+        VodCategory.ROMANCE -> R.drawable.genre_romance
+        VodCategory.DRAMA -> R.drawable.genre_drama
+        VodCategory.OTHER -> R.drawable.genre_other
+        else -> null
+    }
+
 private enum class VodLiveView(val label: Int) {
     BACKGROUND(R.string.vod_live_background),
     CORNER(R.string.vod_live_corner),
@@ -408,17 +431,17 @@ private data class PlaybackAttempt(
 
 private enum class SeriesActivityView { CONTINUE, UPCOMING, HISTORY, WATCHLIST }
 private data class PortalContentCounts(val tv: Int, val movies: Int, val series: Int)
-private enum class SettingsSection(val label: Int) {
-    GENERAL(R.string.settings_general),
-    SOURCES(R.string.settings_library),
-    GUIDE(R.string.destination_guide),
-    APPEARANCE(R.string.settings_appearance),
-    PLAYBACK(R.string.settings_playback),
-    CONTROLS(R.string.settings_controls),
-    METADATA(R.string.settings_metadata),
-    SYNC(R.string.settings_sync),
-    UPDATES(R.string.settings_updates),
-    ABOUT(R.string.settings_about)
+private enum class SettingsSection(val label: Int, val icon: Int) {
+    GENERAL(R.string.settings_general, R.drawable.settings_general),
+    SOURCES(R.string.settings_library, R.drawable.settings_library),
+    GUIDE(R.string.destination_guide, R.drawable.settings_guide),
+    APPEARANCE(R.string.settings_appearance, R.drawable.settings_appearance),
+    PLAYBACK(R.string.settings_playback, R.drawable.settings_playback),
+    CONTROLS(R.string.settings_controls, R.drawable.settings_controls),
+    METADATA(R.string.settings_metadata, R.drawable.settings_metadata),
+    SYNC(R.string.settings_sync, R.drawable.settings_sync),
+    UPDATES(R.string.settings_updates, R.drawable.settings_updates),
+    ABOUT(R.string.settings_about, R.drawable.settings_about)
 }
 
 private fun liveSelection(channel: StalkerChannel, group: LiveChannelGroup, combine: Boolean): PlaybackSelection {
@@ -4101,6 +4124,7 @@ private fun PlayerHome(
     )
     val guidePanelFocus = remember { FocusRequester() }
     val guideChannelFocus = remember { FocusRequester() }
+    val guideWindow = rememberGuideWindow()
     val destinationFocusRequesters = remember {
         mainDestinations.associateWith { FocusRequester() }
     }
@@ -4187,7 +4211,9 @@ private fun PlayerHome(
         settingsReturnDestination = current.takeUnless {
             it == Destination.SETTINGS || it == Destination.SOURCES || it == Destination.CATEGORIES
         } ?: Destination.LIVE
-        settingsSection = null
+        // Settings open on their first section, focused in the section bar at the top.
+        settingsSection = SettingsSection.entries.first()
+        lastSettingsSection = SettingsSection.entries.first()
         guidePanel = GuidePanel.GRID
         lastBack = 0L
         selected = Destination.SETTINGS
@@ -4270,8 +4296,7 @@ private fun PlayerHome(
         } else if (inGuide) {
             if (guidePanel == GuidePanel.GRID) requestAppExit()
             else guidePanel = GuidePanel.GRID
-        } else if (selected == Destination.SETTINGS && settingsSection != null) settingsSection = null
-        else if (selected == Destination.SETTINGS) {
+        } else if (selected == Destination.SETTINGS) {
             selected = settingsReturnDestination
             guidePanel = GuidePanel.GRID
             lastBack = 0L
@@ -5388,6 +5413,8 @@ private fun PlayerHome(
     }
     }
     FullscreenLayer()
+    // The fullscreen layer replaces the whole screen; its own return only leaves the layer.
+    if (fullscreen) return
     suspend fun loadCast(section: PortalSection, title: PortalTitle, tmdbId: Int?): List<CastMember> {
         val client = metadataClient
         if (client != null && tmdbId != null) {
@@ -5416,10 +5443,21 @@ private fun PlayerHome(
             castPreview = null
             val (section, title) = openTitle ?: return@LaunchedEffect
             if (metadataClient == null && traktSession == null) return@LaunchedEffect
-            // The TMDB match of the details arrives shortly after opening; wait for it briefly
-            // instead of answering with an incomplete lookup.
-            val tmdbForDetails = if (metadataClient == null) null else withTimeoutOrNull(6_000) {
-                snapshotFlow { detailMetadata?.id }.filterNotNull().first()
+            // Without Trakt the TMDB match of the details arrives shortly after opening; wait for
+            // it briefly. With Trakt the details skip TMDB, so the cast asks TMDB itself.
+            val client = metadataClient
+            val tmdbForDetails = when {
+                client == null -> null
+                traktSession == null -> withTimeoutOrNull(6_000) {
+                    snapshotFlow { detailMetadata?.id }.filterNotNull().first()
+                }
+                else -> title.tmdbId?.toIntOrNull() ?: try {
+                    client.lookup(section, title)?.id
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Exception) {
+                    null
+                }
             }
             val members = try {
                 loadCast(section, title, tmdbForDetails)
@@ -5813,7 +5851,7 @@ private fun PlayerHome(
             val compactGuide = inGuide && (maxHeight < 400.dp || maxWidth < 680.dp)
             val basePreviewWidth = if (compactGuide) {
                 minOf(maxWidth * 0.24f, maxHeight * 0.43f).coerceAtLeast(76.dp)
-            } else (maxWidth * 0.29f).coerceIn(128.dp, 290.dp)
+            } else (maxWidth * 0.25f).coerceIn(128.dp, 250.dp)
             val guidePreviewWidth = (basePreviewWidth * guideAppearance.previewSize.factor)
                 .coerceAtMost(minOf(maxWidth * 0.45f, maxHeight * 0.7f))
             val menu: @Composable () -> Unit = {
@@ -5912,10 +5950,43 @@ private fun PlayerHome(
                 }
             }
             val header: @Composable () -> Unit = {
+                val portalRefreshText = startupPortalRefresh?.let { (number, total) ->
+                    val source = savedSources.filter { it.enabled || it.autoDisabled }.getOrNull(number - 1)
+                    val host = source?.address?.let { runCatching { java.net.URI(it).host }.getOrNull() }
+                        ?.takeIf(String::isNotBlank) ?: "Portal"
+                    stringResource(R.string.portal_refresh_progress, number, total, host)
+                }
+                val portalCheckText = startupPortalCheck?.let { (number, total) ->
+                    stringResource(R.string.portal_check_progress, number, total)
+                }
+                val busy = restoring || connecting || liveGroupsLoading || traktBusy || portalRefreshText != null ||
+                    portalCheckText != null || importStatuses.values.any { it == ImportStatus.Loading || it is ImportStatus.Progress }
+                // All background activity in one line next to the category; together with the fixed
+                // progress strip above, the screen below never moves while something loads.
+                val statusLine = if (!busy) "" else buildList {
+                    if (restoring) add(stringResource(R.string.startup_loading))
+                    if (liveGroupsLoading) add(stringResource(R.string.live_groups_loading))
+                    portalRefreshText?.let(::add)
+                    portalCheckText?.let(::add)
+                    batchProgress?.let { (number, total) -> add("Portal-Import: $number / $total") }
+                    if (traktBusy) traktStatus?.let(::add)
+                    importStatuses.forEach { (section, status) ->
+                        when (status) {
+                            ImportStatus.Loading -> add(stringResource(section.label) + " wird geladen …")
+                            is ImportStatus.Progress -> add(
+                                "${stringResource(section.label)}: ${status.loaded}" + (status.total?.let { " / $it" } ?: "")
+                            )
+                            else -> Unit
+                        }
+                    }
+                }.joinToString("  ·  ")
+                Box(Modifier.fillMaxWidth().height(4.dp)) {
+                    if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+                }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (vodSectionForScreen != null) Box(Modifier.weight(1f))
-                    else if (destination != Destination.SEARCH) Text(
-                        text = stringResource(if (inGuide) R.string.destination_guide else destination?.label ?: R.string.destination_live),
+                    // The top menu already marks Live-TV, so the guide shows its category only.
+                    if (vodSectionForScreen == null && destination != Destination.SEARCH && !inGuide) Text(
+                        text = stringResource(destination?.label ?: R.string.destination_live),
                         style = if (compactGuide) MaterialTheme.typography.titleSmall else MaterialTheme.typography.headlineSmall
                     )
                     if (inGuide) {
@@ -5928,6 +5999,18 @@ private fun PlayerHome(
                             guidePanel = GuidePanel.CATEGORIES
                         }
                     }
+                    Text(
+                        statusLine, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (inGuide) GuideWindowControls(
+                        guideWindow, epgHorizonHours,
+                        Modifier.focusProperties {
+                            canFocus = guidePanel == GuidePanel.GRID
+                            down = guideChannelFocus
+                        }
+                    )
                     if (vodSectionForScreen != null && cataloguePlaybackView == VodLiveView.CORNER) {
                         playing?.let { channel ->
                             Box(Modifier.width(cornerPreviewWidth)) {
@@ -5937,36 +6020,6 @@ private fun PlayerHome(
                                     onOpenFullscreen = { if (vodSection == null) playChannel(channel) else fullscreen = true }
                                 )
                             }
-                        }
-                    }
-                }
-                val portalRefreshText = startupPortalRefresh?.let { (number, total) ->
-                    val source = savedSources.filter { it.enabled || it.autoDisabled }.getOrNull(number - 1)
-                    val host = source?.address?.let { runCatching { java.net.URI(it).host }.getOrNull() }
-                        ?.takeIf(String::isNotBlank) ?: "Portal"
-                    stringResource(R.string.portal_refresh_progress, number, total, host)
-                }
-                val portalCheckText = startupPortalCheck?.let { (number, total) ->
-                    stringResource(R.string.portal_check_progress, number, total)
-                }
-                if (restoring || connecting || liveGroupsLoading || traktBusy || portalRefreshText != null || portalCheckText != null ||
-                    importStatuses.values.any { it == ImportStatus.Loading || it is ImportStatus.Progress }
-                ) {
-                    LinearProgressIndicator(Modifier.fillMaxWidth())
-                    if (restoring) Text(stringResource(R.string.startup_loading))
-                    if (liveGroupsLoading) Text(stringResource(R.string.live_groups_loading))
-                    portalRefreshText?.let { Text(it) }
-                    portalCheckText?.let { Text(it) }
-                    batchProgress?.let { (number, total) -> Text("Portal-Import: $number / $total") }
-                    if (traktBusy) traktStatus?.let { Text(it) }
-                    importStatuses.forEach { (section, status) ->
-                        when (status) {
-                            ImportStatus.Loading -> Text(stringResource(section.label) + " wird geladen …")
-                            is ImportStatus.Progress -> Text(
-                                "${stringResource(section.label)}: ${status.loaded}" +
-                                    (status.total?.let { " / $it" } ?: "")
-                            )
-                            else -> Unit
                         }
                     }
                 }
@@ -6016,18 +6069,8 @@ private fun PlayerHome(
                     )
                     Destination.SETTINGS -> {
                         val section = settingsSection
-                        if (section == null) {
-                            SettingsSection.entries.forEach { item ->
-                                MenuButton(
-                                    stringResource(item.label),
-                                    Modifier.focusRequester(settingsFocusRequesters.getValue(item)),
-                                    count = 1.takeIf { item == SettingsSection.UPDATES && appUpdates.available }
-                                ) {
-                                    lastSettingsSection = item
-                                    settingsSection = item
-                                }
-                            }
-                        } else {
+                        // The sections are chosen in the bar above; there is no separate section list.
+                        if (section != null) {
                             Surface(
                                 modifier = Modifier.fillMaxWidth(),
                                 color = MaterialTheme.colorScheme.surfaceContainer,
@@ -6053,12 +6096,12 @@ private fun PlayerHome(
                                         if (showSettingsBackButton) MenuButton(
                                             stringResource(R.string.navigation_back),
                                             Modifier.focusRequester(initialFocus)
-                                        ) { settingsSection = null }
+                                        ) { navigateBack() }
                                     }
                                     androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                                     when (section) {
                                 SettingsSection.GENERAL -> {
-                                    MenuButton(
+                                    SettingRow(
                                         stringResource(R.string.show_touch_back_button), Modifier,
                                         selected = showSettingsBackButton
                                     ) {
@@ -6067,11 +6110,11 @@ private fun PlayerHome(
                                             "show_settings_back_button", showSettingsBackButton
                                         )?.apply()
                                     }
-                                    MenuButton(stringResource(R.string.key_sounds), Modifier, selected = keySounds) {
+                                    SettingRow(stringResource(R.string.key_sounds), Modifier, selected = keySounds) {
                                         keySounds = !keySounds
                                         preferences?.edit()?.putBoolean("key_sounds", keySounds)?.apply()
                                     }
-                                    MenuButton(
+                                    SettingRow(
                                         stringResource(R.string.start_last_channel),
                                         Modifier,
                                         selected = playLastChannelAtStartup
@@ -6081,7 +6124,7 @@ private fun PlayerHome(
                                     }
                                 }
                                 SettingsSection.SOURCES -> {
-                                    MenuButton(
+                                    SettingRow(
                                         stringResource(R.string.portal_refresh_at_start), Modifier,
                                         selected = refreshPortalsAtStartup
                                     ) {
@@ -6090,15 +6133,15 @@ private fun PlayerHome(
                                             "refresh_portals_at_startup", refreshPortalsAtStartup
                                         )?.apply()
                                     }
-                                    MenuButton(
+                                    SettingRow(
                                         label = stringResource(R.string.destination_sources),
                                         modifier = Modifier,
                                         onClick = { selected = Destination.SOURCES }
                                     )
-                                    MenuButton(stringResource(R.string.category_settings), Modifier) {
+                                    SettingRow(stringResource(R.string.category_settings), Modifier) {
                                         selected = Destination.CATEGORIES
                                     }
-                                    MenuButton(
+                                    SettingRow(
                                         stringResource(R.string.auto_disable_unavailable_portals), Modifier,
                                         selected = autoDisableUnavailablePortals
                                     ) {
@@ -6109,9 +6152,9 @@ private fun PlayerHome(
                                     }
                                 }
                                 SettingsSection.GUIDE ->
-                                    MenuButton(stringResource(R.string.epg_settings), Modifier) { epgSettingsOpen = true }
+                                    SettingRow(stringResource(R.string.epg_settings), Modifier) { epgSettingsOpen = true }
                                 SettingsSection.APPEARANCE -> {
-                                    MenuButton(
+                                    SettingRow(
                                 stringResource(R.string.accent_color_setting, stringResource(accentChoice.label)),
                                 Modifier
                             ) {
@@ -6119,7 +6162,7 @@ private fun PlayerHome(
                                     AccentChoice.entries[(accentChoice.ordinal + 1) % AccentChoice.entries.size]
                                 )
                             }
-                            MenuButton(
+                            SettingRow(
                                         stringResource(R.string.menu_style_setting, stringResource(mainMenuStyle.label)),
                                         Modifier
                                     ) {
@@ -6127,7 +6170,7 @@ private fun PlayerHome(
                                         mainMenuStyle = styles[(mainMenuStyle.ordinal + 1) % styles.size]
                                         preferences?.edit()?.putString("main_menu_style", mainMenuStyle.name)?.apply()
                                     }
-                                    MenuButton(
+                                    SettingRow(
                                         stringResource(R.string.provider_category_style_setting, stringResource(providerCategoryStyle.label)),
                                         Modifier
                                     ) {
@@ -6136,16 +6179,16 @@ private fun PlayerHome(
                                         ]
                                         preferences?.edit()?.putString("provider_category_style", providerCategoryStyle.name)?.apply()
                                     }
-                                    MenuButton(stringResource(R.string.guide_grid_appearance), Modifier) {
+                                    SettingRow(stringResource(R.string.guide_grid_appearance), Modifier) {
                                         guideAppearancePage = GuideAppearancePage.GRID
                                     }
-                                    MenuButton(stringResource(R.string.guide_channel_list_appearance), Modifier) {
+                                    SettingRow(stringResource(R.string.guide_channel_list_appearance), Modifier) {
                                         guideAppearancePage = GuideAppearancePage.CHANNELS
                                     }
                                 }
                                 SettingsSection.PLAYBACK -> {
-                                    MenuButton(stringResource(R.string.episode_settings), Modifier) { episodeSettingsOpen = true }
-                                    MenuButton(
+                                    SettingRow(stringResource(R.string.episode_settings), Modifier) { episodeSettingsOpen = true }
+                                    SettingRow(
                                         stringResource(
                                             if (subtitleDefaultEnabled) R.string.subtitles_default_on
                                             else R.string.subtitles_default_off
@@ -6154,14 +6197,14 @@ private fun PlayerHome(
                                         subtitleDefaultEnabled = !subtitleDefaultEnabled
                                         preferences?.edit()?.putBoolean("subtitle_default_enabled", subtitleDefaultEnabled)?.apply()
                                     }
-                                    MenuButton(
+                                    SettingRow(
                                         stringResource(R.string.subtitles_forced_auto), Modifier,
                                         selected = forcedSubtitlesEnabled
                                     ) {
                                         forcedSubtitlesEnabled = !forcedSubtitlesEnabled
                                         preferences?.edit()?.putBoolean("forced_subtitles_enabled", forcedSubtitlesEnabled)?.apply()
                                     }
-                                    MenuButton(stringResource(R.string.live_preview_in_vod, stringResource(vodLiveView.label)), Modifier) {
+                                    SettingRow(stringResource(R.string.live_preview_in_vod, stringResource(vodLiveView.label)), Modifier) {
                                         vodLiveView = VodLiveView.entries[(vodLiveView.ordinal + 1) % VodLiveView.entries.size]
                                         preferences?.edit()?.putString("vod_live_view", vodLiveView.name)?.apply()
                                     }
@@ -6170,7 +6213,7 @@ private fun PlayerHome(
                                         PortalSection.SERIES to R.string.vod_series_playback
                                     )) {
                                         val view = vodPlaybackViews.getValue(section)
-                                        MenuButton(stringResource(label, stringResource(
+                                        SettingRow(stringResource(label, stringResource(
                                             if (view == VodLiveView.HIDDEN) R.string.vod_playback_off else view.label
                                         )), Modifier) {
                                             val next = VodLiveView.entries[(view.ordinal + 1) % VodLiveView.entries.size]
@@ -6181,7 +6224,7 @@ private fun PlayerHome(
                                     }
                                 }
                                 SettingsSection.CONTROLS ->
-                                    MenuButton(stringResource(R.string.control_settings), Modifier) { controlSettingsOpen = true }
+                                    SettingRow(stringResource(R.string.control_settings), Modifier) { controlSettingsOpen = true }
                                 SettingsSection.UPDATES -> appUpdates.settings()
                                 SettingsSection.ABOUT -> {
                                     AboutSettings()
@@ -6190,15 +6233,15 @@ private fun PlayerHome(
                                         if (diagnosticsTree == null) R.string.diagnostics_folder_missing
                                         else R.string.diagnostics_folder_selected
                                     ))
-                                    MenuButton(stringResource(R.string.diagnostics_choose_folder), Modifier) {
+                                    SettingRow(stringResource(R.string.diagnostics_choose_folder), Modifier) {
                                         runCatching { chooseDiagnosticsFolder.launch(null) }
                                             .onFailure { diagnosticsStatus = context.getString(R.string.diagnostics_folder_open_failed) }
                                     }
-                                    MenuButton(stringResource(R.string.diagnostics_save_file), Modifier) {
+                                    SettingRow(stringResource(R.string.diagnostics_save_file), Modifier) {
                                         runCatching { saveDiagnosticsFile.launch("StreamWatch-Diagnose.txt") }
                                             .onFailure { diagnosticsStatus = context.getString(R.string.diagnostics_folder_open_failed) }
                                     }
-                                    MenuButton(stringResource(R.string.diagnostics_export), Modifier, enabled = diagnosticsTree != null) {
+                                    SettingRow(stringResource(R.string.diagnostics_export), Modifier, enabled = diagnosticsTree != null) {
                                         diagnosticsTree?.let { tree ->
                                             runCatching { AppDiagnostics.export(context, tree) }
                                                 .onSuccess { diagnosticsStatus = context.getString(R.string.diagnostics_export_complete) }
@@ -6209,11 +6252,11 @@ private fun PlayerHome(
                                 }
                                 SettingsSection.METADATA -> {
                                     Text("Aktive Quelle für Folgeninfos: $activeEpisodeProvider")
-                                    MenuButton(stringResource(R.string.tmdb_settings), Modifier) {
+                                    SettingRow(stringResource(R.string.tmdb_settings), Modifier) {
                                         metadataSettingsOpen = true
                                     }
                                     if (activeEpisodeProvider == "TVmaze") {
-                                        MenuButton(stringResource(R.string.tvmaze_credit), Modifier) {
+                                        SettingRow(stringResource(R.string.tvmaze_credit), Modifier) {
                                             uriHandler.openUri("https://www.tvmaze.com/")
                                         }
                                     }
@@ -6457,9 +6500,7 @@ private fun PlayerHome(
                                 val livePreview = playing.takeIf { vodSection == null }
                                 val infoChannel = programmeChannel ?: livePreview
                                 Row(
-                                    Modifier.fillMaxWidth().focusGroup()
-                                        .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp))
-                                        .padding(if (compactGuide) 4.dp else 8.dp),
+                                    Modifier.fillMaxWidth().focusGroup(),
                                     horizontalArrangement = Arrangement.spacedBy(if (compactGuide) 8.dp else 16.dp)
                                 ) {
                                     if (guideAppearance.showPreview) Box(Modifier.width(guidePreviewWidth)) {
@@ -6489,13 +6530,32 @@ private fun PlayerHome(
                                             )
                                             Text(
                                                 current?.title ?: stringResource(R.string.no_guide),
-                                                style = if (compactGuide) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleMedium,
+                                                style = if (compactGuide) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleLarge,
                                                 maxLines = 1, overflow = TextOverflow.Ellipsis
                                             )
+                                            val from = current?.startSeconds
+                                            val to = current?.endSeconds
+                                            if (from != null && to != null && to > from) {
+                                                val nowSeconds = Instant.now().epochSecond
+                                                if (nowSeconds in from until to) Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                ) {
+                                                    LinearProgressIndicator(
+                                                        progress = { (nowSeconds - from).toFloat() / (to - from) },
+                                                        modifier = Modifier.width(72.dp)
+                                                    )
+                                                    Text(
+                                                        "noch ${(to - nowSeconds + 59) / 60} Min",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                            }
                                             current?.description?.let {
                                                 Text(
                                                     it, style = MaterialTheme.typography.bodySmall,
-                                                    maxLines = if (compactGuide) 1 else 3, overflow = TextOverflow.Ellipsis
+                                                    maxLines = if (compactGuide) 1 else 5, overflow = TextOverflow.Ellipsis
                                                 )
                                             }
                                         }
@@ -6522,6 +6582,7 @@ private fun PlayerHome(
                                 appearance = guideAppearance,
                                 refreshKey = epgRefreshRequest + if (guideCacheLoaded) 1 else 0,
                                 horizonHours = epgHorizonHours,
+                                window = guideWindow,
                                 active = guidePanel == GuidePanel.GRID,
                                 channelColumnFocus = guideChannelFocus,
                                 restorePlayingFocus = restoreLiveFocus,
@@ -7104,10 +7165,12 @@ private fun PlayerHome(
                                     providerMark = providerCategoryMark(group.name).takeIf {
                                         providerCategoryStyle != ProviderCategoryStyle.LABELS && providerCategoryIcon(group.name) == null
                                     },
-                                    providerIcon = providerCategoryIcon(group.name).takeIf {
+                                    providerIcon = providerCategoryIcon(group.name)?.takeIf {
                                         providerCategoryStyle != ProviderCategoryStyle.LABELS
-                                    },
-                                    providerMarkOnly = providerCategoryStyle == ProviderCategoryStyle.SYMBOLS,
+                                    } ?: genreCategoryIcon(group),
+                                    // "Symbol only" applies to provider categories; genres keep their name.
+                                    providerMarkOnly = providerCategoryStyle == ProviderCategoryStyle.SYMBOLS &&
+                                        serviceCategory(group.name) != null,
                                     selected = selectedGroup?.first == section && selectedGroup?.second?.id == group.id &&
                                         !movieHistoryOpen && !movieWatchlistOpen && seriesActivityView == null,
                                     hiddenIndicator = categoryKey(section, group.id) in hiddenCategories,
@@ -7133,7 +7196,17 @@ private fun PlayerHome(
                                 movieHistoryOpen = true
                             } else seriesActivityView = SeriesActivityView.CONTINUE
                         }
-                        if (section == PortalSection.SERIES) MenuButton(
+                        // "Bald verfügbar" only appears when a followed series really has an announced episode.
+                        val hasUpcoming = section == PortalSection.SERIES && remember(seriesActivity, savedSources) {
+                            upcomingSeries(seriesActivity, java.time.LocalDate.now()).any { (entry, _) ->
+                                hasPortalReference(
+                                    PortalSection.SERIES,
+                                    PortalTitle(entry.name, year = entry.year, imdbId = entry.imdb, tmdbId = entry.tmdb),
+                                    entry.refs
+                                )
+                            }
+                        }
+                        if (hasUpcoming) MenuButton(
                             stringResource(R.string.upcoming_series), Modifier,
                             selected = seriesActivityView == SeriesActivityView.UPCOMING
                         ) {
@@ -7182,26 +7255,6 @@ private fun PlayerHome(
             } else {
                 Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     topNavigation()
-                    if (destination == Destination.SETTINGS) {
-                        Surface(color = MaterialTheme.colorScheme.surfaceContainer, shape = RoundedCornerShape(14.dp)) {
-                            Row(
-                                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 6.dp, vertical = 4.dp),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                SettingsSection.entries.forEach { item ->
-                                    MenuButton(
-                                        stringResource(item.label), Modifier,
-                                        selected = settingsSection == item,
-                                        count = 1.takeIf { item == SettingsSection.UPDATES && appUpdates.available }
-                                    ) {
-                                        lastSettingsSection = item
-                                        settingsSection = item
-                                    }
-                                }
-                            }
-                        }
-                    }
                     if (destination != Destination.SEARCH) header()
                     if (lastBack != 0L && !mainMenuOpen) Text(
                         stringResource(R.string.press_back_again_to_exit),
@@ -7209,7 +7262,34 @@ private fun PlayerHome(
                         color = MaterialTheme.colorScheme.primary,
                         style = MaterialTheme.typography.bodySmall
                     )
-                    Column(
+                    if (destination == Destination.SETTINGS) Row(
+                        Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(20.dp)
+                    ) {
+                        // Settings: sections on the left, the rows of the chosen section on the right.
+                        Column(
+                            Modifier.weight(0.27f).fillMaxHeight()
+                                .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(16.dp))
+                                .verticalScroll(rememberScrollState()).padding(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            SettingsSection.entries.forEach { item ->
+                                SettingsNavItem(
+                                    stringResource(item.label), item.icon,
+                                    selected = settingsSection == item,
+                                    badge = 1.takeIf { item == SettingsSection.UPDATES && appUpdates.available },
+                                    modifier = Modifier.focusRequester(settingsFocusRequesters.getValue(item))
+                                        .onFocusChanged { if (it.isFocused) { lastSettingsSection = item; settingsSection = item } }
+                                ) {
+                                    lastSettingsSection = item
+                                    settingsSection = item
+                                }
+                            }
+                        }
+                        Column(
+                            Modifier.weight(0.73f).verticalScroll(contentScroll),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) { content() }
+                    } else Column(
                         Modifier.weight(1f).then(
                             if (destination == Destination.SEARCH) Modifier else Modifier.verticalScroll(contentScroll)
                         ),

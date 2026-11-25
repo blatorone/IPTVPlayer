@@ -279,10 +279,9 @@ internal class TraktApi(private val clientId: String) {
         accessToken: String
     ): TraktTitleMetadata? {
         val kind = if (section == PortalSection.MOVIES) "movie" else "show"
-        val externalId = title.imdbId?.takeIf { it.matches(Regex("tt[0-9]+")) }
-            ?: title.tmdbId?.toLongOrNull()?.takeIf { it > 0 }?.let { "tmdb:$it" }
+        val externalId = traktIdSearchPath(title)
         val path = if (externalId != null) {
-            "/search/${URLEncoder.encode(externalId, "UTF-8")}?type=$kind&extended=full"
+            "$externalId?type=$kind&extended=full"
         } else {
             val query = URLEncoder.encode(displayVodTitle(title), "UTF-8")
             "/search/$kind?query=$query&extended=full"
@@ -369,17 +368,17 @@ internal class TraktApi(private val clientId: String) {
         findHistoryTitle(title, "show", accessToken)
 
     private suspend fun findHistoryTitle(title: PortalTitle, kind: String, accessToken: String): JSONObject? {
-        val idPath = title.imdbId?.takeIf { it.matches(Regex("tt[0-9]+")) }
-            ?: title.tmdbId?.toLongOrNull()?.takeIf { it > 0 }?.let { "tmdb:$it" }
+        val idPath = traktIdSearchPath(title)
         val candidates = if (idPath != null) {
-            request("/search/${URLEncoder.encode(idPath, "UTF-8")}?type=$kind", "GET", token = accessToken)
+            request("$idPath?type=$kind", "GET", token = accessToken)
                 .body.arrayObjects().mapNotNull { it.optJSONObject(kind) }
         } else {
             val query = URLEncoder.encode(displayVodTitle(title), "UTF-8")
             request("/search/$kind?query=$query", "GET", token = accessToken)
                 .body.arrayObjects().mapNotNull { it.optJSONObject(kind) }
         }
-        return chooseTraktCandidate(candidates, title, byId = idPath != null, yearTolerance = 0)
+        // Portal years are often off by one (German release vs. premiere).
+        return chooseTraktCandidate(candidates, title, byId = idPath != null, yearTolerance = 1)
     }
 
     suspend fun setHistoryStatus(
@@ -862,3 +861,8 @@ internal fun movieIdentityKeys(name: String, year: Int?, imdbId: String?, tmdbId
     tmdbId?.toLongOrNull()?.takeIf { it > 0 }?.let { add("tmdb:$it") }
     normalizedLabel(displayVodTitle(PortalTitle(name))).takeIf { it.isNotBlank() && year != null }?.let { add("title:$it:$year") }
 }
+
+/** Trakt's ID lookup: `/search/imdb/tt…` or `/search/tmdb/…` (not `tmdb:…`). */
+internal fun traktIdSearchPath(title: PortalTitle): String? =
+    title.imdbId?.takeIf { it.matches(Regex("tt[0-9]+")) }?.let { "/search/imdb/$it" }
+        ?: title.tmdbId?.toLongOrNull()?.takeIf { it > 0 }?.let { "/search/tmdb/$it" }

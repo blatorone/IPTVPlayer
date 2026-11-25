@@ -56,4 +56,11 @@ class CastBrowserTest {
         assertEquals(emptyList<Pair<PortalSection, PortalTitle>>(),
             matchPersonCredits(credits, listOf(portal)) { _, _ -> emptyList() })
     }
+
+    @Test
+    fun traktLooksUpTitlesByIdWithSlashSeparatedPaths() {
+        assertEquals("/search/imdb/tt0088763", traktIdSearchPath(PortalTitle("Zurück in die Zukunft", imdbId = "tt0088763", tmdbId = "105")))
+        assertEquals("/search/tmdb/105", traktIdSearchPath(PortalTitle("Zurück in die Zukunft", tmdbId = "105")))
+        assertEquals(null, traktIdSearchPath(PortalTitle("Ohne Kennung")))
+    }
 }

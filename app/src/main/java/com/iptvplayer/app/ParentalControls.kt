@@ -1,7 +1,16 @@
 package com.iptvplayer.app
 
 import android.content.SharedPreferences
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Surface
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -93,14 +102,21 @@ internal class ParentalControls(private val preferences: SharedPreferences?) {
     fun checkKidsPin(pin: String): Boolean =
         if (separateKidsPin) preferences?.getString("kids_pin_hash", null) == hash(pin, "kids_pin_salt") else checkPin(pin)
 
+    /** Length of the stored PINs: entering one is confirmed as soon as it is reached. */
+    val pinLength: Int? get() = preferences?.getInt("parental_pin_length", 0)?.takeIf { it >= 4 }
+    val kidsExitPinLength: Int? get() =
+        if (separateKidsPin) preferences?.getInt("kids_pin_length", 0)?.takeIf { it >= 4 } else pinLength
+
     fun setPin(pin: String) {
-        preferences?.edit()?.putString("parental_pin_hash", hash(pin, "parental_pin_salt"))?.apply()
+        preferences?.edit()?.putString("parental_pin_hash", hash(pin, "parental_pin_salt"))
+            ?.putInt("parental_pin_length", pin.length)?.apply()
         hasPin = true
     }
 
     fun setKidsPin(pin: String?) {
         if (pin == null) preferences?.edit()?.remove("kids_pin_hash")?.apply()
-        else preferences?.edit()?.putString("kids_pin_hash", hash(pin, "kids_pin_salt"))?.apply()
+        else preferences?.edit()?.putString("kids_pin_hash", hash(pin, "kids_pin_salt"))
+            ?.putInt("kids_pin_length", pin.length)?.apply()
         separateKidsPin = pin != null
     }
 
@@ -161,16 +177,20 @@ internal fun PinDialog(
     title: String,
     message: String?,
     confirmTwice: Boolean = false,
+    length: Int? = null,
     onPin: (String) -> Boolean,
     onDismiss: () -> Unit
 ) {
+    // A new PIN first asks for its length; an existing one is confirmed when its length is reached.
+    var chosenLength by remember { mutableStateOf(if (confirmTwice) null else length) }
+    var choosing by remember { mutableStateOf(confirmTwice) }
     var pin by remember { mutableStateOf("") }
     var first by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val wrong = stringResource(R.string.pin_wrong)
     val mismatch = stringResource(R.string.pin_mismatch)
     val firstKey = remember { FocusRequester() }
-    LaunchedEffect(Unit) {
+    LaunchedEffect(choosing) {
         withFrameNanos { }
         runCatching { firstKey.requestFocus() }
     }
@@ -193,26 +213,50 @@ internal fun PinDialog(
             error = wrong
         }
     }
+    fun type(digit: String) {
+        val limit = chosenLength ?: 12
+        if (pin.length >= limit) return
+        pin += digit
+        if (pin.length == chosenLength) submit()
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                message?.let { Text(it) }
+            Column(
+                Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                message?.let { Text(it, textAlign = TextAlign.Center) }
+                if (choosing) {
+                    Text(stringResource(R.string.pin_length_question), style = MaterialTheme.typography.labelLarge)
+                    listOf(4, 6, 8, null).forEachIndexed { index, option ->
+                        PinKey(
+                            option?.let { stringResource(R.string.pin_length_digits, it) } ?: stringResource(R.string.pin_length_custom),
+                            Modifier.width(220.dp).then(if (index == 0) Modifier.focusRequester(firstKey) else Modifier)
+                        ) {
+                            chosenLength = option
+                            choosing = false
+                        }
+                    }
+                    return@Column
+                }
                 if (confirmTwice) Text(
                     stringResource(if (first == null) R.string.pin_enter_new else R.string.pin_repeat),
                     style = MaterialTheme.typography.labelLarge
                 )
+                val slots = chosenLength ?: maxOf(4, pin.length)
                 Text(
-                    if (pin.isEmpty()) "– – – –" else "●".repeat(pin.length),
-                    Modifier.fillMaxWidth(), textAlign = TextAlign.Center,
-                    style = MaterialTheme.typography.headlineMedium
+                    (0 until slots).joinToString(" ") { if (it < pin.length) "●" else "–" },
+                    style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center
                 )
-                error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                listOf(listOf("1", "2", "3"), listOf("4", "5", "6"), listOf("7", "8", "9"), listOf("⌫", "0", "OK")).forEach { row ->
+                error?.let { Text(it, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center) }
+                val confirmKey = if (chosenLength == null) "OK" else ""
+                listOf(listOf("1", "2", "3"), listOf("4", "5", "6"), listOf("7", "8", "9"), listOf("⌫", "0", confirmKey)).forEach { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         row.forEach { key ->
-                            MenuButton(
+                            if (key.isEmpty()) Box(Modifier.width(72.dp)) else PinKey(
                                 key,
                                 Modifier.width(72.dp).then(if (key == "1") Modifier.focusRequester(firstKey) else Modifier),
                                 enabled = key != "OK" || pin.length >= 4
@@ -220,7 +264,7 @@ internal fun PinDialog(
                                 when (key) {
                                     "⌫" -> pin = pin.dropLast(1)
                                     "OK" -> submit()
-                                    else -> if (pin.length < 8) pin += key
+                                    else -> type(key)
                                 }
                             }
                         }
@@ -233,12 +277,33 @@ internal fun PinDialog(
     )
 }
 
+/** One key of the PIN pad: label centred, focus frame like the other buttons. */
+@Composable
+private fun PinKey(label: String, modifier: Modifier, enabled: Boolean = true, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    val colors = MaterialTheme.colorScheme
+    Surface(
+        modifier = modifier.height(52.dp)
+            .onFocusChanged { focused = it.isFocused }
+            .focusProperties { canFocus = enabled }
+            .clickable(enabled = enabled, onClick = onClick),
+        color = if (focused) colors.surfaceContainerHighest else colors.surfaceContainerHigh,
+        contentColor = if (enabled) colors.onSurface else colors.onSurface.copy(alpha = 0.38f),
+        shape = RoundedCornerShape(12.dp),
+        border = if (focused) BorderStroke(2.dp, colors.primary) else null
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(label, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+        }
+    }
+}
+
 /** "Kindersicherung" page of the settings. */
 @Composable
 internal fun ParentalSettings(parental: ParentalControls, request: (PinRequest) -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     fun withPin(action: () -> Unit) = request(
-        PinRequest(context.getString(R.string.pin_enter), null, check = parental::checkPin) { action() }
+        PinRequest(context.getString(R.string.pin_enter), null, check = parental::checkPin, length = parental.pinLength) { action() }
     )
     fun newPin(title: Int, onPin: (String) -> Unit) = request(
         PinRequest(context.getString(title), null, newPin = true, check = { true }, onSuccess = onPin)
@@ -269,7 +334,7 @@ internal fun ParentalSettings(parental: ParentalControls, request: (PinRequest) 
         else newPin(R.string.kids_separate_pin) { parental.setKidsPin(it) }
     }
     if (parental.kidsMode) SettingRow(stringResource(R.string.kids_mode_exit)) {
-        request(PinRequest(context.getString(R.string.kids_mode_exit), null, check = parental::checkKidsPin) {
+        request(PinRequest(context.getString(R.string.kids_mode_exit), null, check = parental::checkKidsPin, length = parental.kidsExitPinLength) {
             parental.updateKidsMode(false)
         })
     } else SettingRow(stringResource(R.string.kids_mode_start)) { parental.updateKidsMode(true) }

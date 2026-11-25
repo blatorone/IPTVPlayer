@@ -37,27 +37,25 @@ internal fun TraktSettings(
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(stringResource(R.string.trakt_intro), style = MaterialTheme.typography.bodyMedium)
         if (accountName == null) {
-            MenuButton(
+            SettingRow(
                 stringResource(if (busy) R.string.trakt_connecting else R.string.trakt_connect),
-                Modifier.fillMaxWidth(),
-                enabled = !busy && deviceCode == null,
+                                enabled = !busy && deviceCode == null,
                 onClick = onConnect
             )
         } else {
             Text(stringResource(R.string.trakt_connected_as, accountName), fontWeight = FontWeight.SemiBold)
-            MenuButton(
+            SettingRow(
                 stringResource(if (busy) R.string.trakt_syncing else R.string.trakt_sync_now),
-                Modifier.fillMaxWidth(), enabled = !busy, onClick = onSync
+                enabled = !busy, onClick = onSync
             )
-            MenuButton(
+            SettingRow(
                 stringResource(R.string.trakt_disconnect),
-                Modifier.fillMaxWidth(), enabled = !busy, onClick = onDisconnect
+                enabled = !busy, onClick = onDisconnect
             )
         }
         if (deviceCode != null) {
             Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 QrCode(deviceCode.qrUrl, Modifier.size(148.dp))

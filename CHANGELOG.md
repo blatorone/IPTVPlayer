@@ -1,5 +1,12 @@
 # Änderungen
 
+## 1.0.87
+
+- Einstellungen: Quellen, Kategorien, App-Updates, Trakt und Info im neuen Stil (Zeilen mit Schaltern/Werten). Quellen und Kategorien erscheinen rechts neben der Rubrikenleiste. Das Änderungs-Popup bei Updates bleibt.
+- Zurück aus den Einstellungen führt immer zum zuletzt genutzten Bereich (Live-TV, Filme, Serien); schnelles mehrfaches Zurück beendet die App dabei nicht mehr.
+- PIN-Tastatur: Ziffern mittig in den Tasten. Beim Festlegen wird die Länge gewählt (4, 6, 8 oder benutzerdefiniert, mindestens 4); beim Eingeben wird nach der festgelegten Länge automatisch bestätigt.
+- Programmführer: Das Play-Symbol des laufenden Senders steht rechts am Rand.
+
 ## 1.0.86
 
 - Behoben: 1.0.85 ließ sich auf Android 11 (z. B. NVIDIA Shield) nicht starten („VerifyError“). Der Hauptbildschirm übergab seine sehr vielen Zustände als Parameter an einzelne Funktionen; ab einer Größe lehnt Android den erzeugten Code ab. Diese Werte liegen jetzt in Feldern (Compiler-Einstellung für Lambdas); der Start wurde auf der Shield mit einem Release-Build geprüft.

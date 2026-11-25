@@ -486,7 +486,10 @@
     <string name="settings_parental">Kindersicherung</string>
     <string name="pin_wrong">Falsche PIN.</string>
     <string name="pin_mismatch">Die PINs stimmen nicht überein. Bitte neu eingeben.</string>
-    <string name="pin_enter_new">Neue PIN (mindestens 4 Ziffern)</string>
+    <string name="pin_enter_new">Neue PIN eingeben</string>
+    <string name="pin_length_question">Wie lang soll die PIN sein?</string>
+    <string name="pin_length_digits">%1$d Ziffern</string>
+    <string name="pin_length_custom">Benutzerdefiniert (mind. 4)</string>
     <string name="pin_repeat">PIN wiederholen</string>
     <string name="pin_enter">PIN eingeben</string>
     <string name="pin_set">PIN festlegen</string>

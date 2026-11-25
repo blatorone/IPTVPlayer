@@ -366,7 +366,19 @@ private fun GuideChannelCell(
             number.toString(), Modifier.width(if (compact) 24.dp else 32.dp),
             style = MaterialTheme.typography.labelSmall.scaled(appearance.textSize.factor), maxLines = 1
         )
-        // The running channel gets a small play symbol in the text colour, besides its frame.
+        if (appearance.showLogos) ChannelLogo(
+            channel.logo,
+            Modifier.width(if (compact) 22.dp else 28.dp).height(if (compact) 18.dp else 24.dp)
+        )
+        Text(
+            channel.name,
+            Modifier.weight(1f),
+            style = (if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelMedium)
+                .scaled(appearance.textSize.factor),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+        // The running channel gets a small play symbol in the text colour, besides its frame, at the right edge.
         if (playing) androidx.compose.foundation.Canvas(Modifier.width(if (compact) 8.dp else 10.dp).height(if (compact) 10.dp else 12.dp)) {
             drawPath(
                 androidx.compose.ui.graphics.Path().apply {
@@ -378,17 +390,6 @@ private fun GuideChannelCell(
                 textColor
             )
         }
-        if (appearance.showLogos) ChannelLogo(
-            channel.logo,
-            Modifier.width(if (compact) 22.dp else 28.dp).height(if (compact) 18.dp else 24.dp)
-        )
-        Text(
-            channel.name,
-            style = (if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelMedium)
-                .scaled(appearance.textSize.factor),
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
     }
 }
 

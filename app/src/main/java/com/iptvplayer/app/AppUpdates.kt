@@ -180,6 +180,31 @@ internal fun rememberAppUpdates(): AppUpdateUi {
             check(manual = false)
         }
     }
+    fun install(available: AppRelease) {
+        scope.launch {
+            try {
+                result = null
+                if (!context.packageManager.canRequestPackageInstalls()) {
+                    result = R.string.update_permission
+                    context.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}")))
+                    return@launch
+                }
+                busy = true
+                val apk = downloadRelease(context, available)
+                val uri = FileProvider.getUriForFile(context, "${context.packageName}.updates", apk)
+                context.startActivity(Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(uri, "application/vnd.android.package-archive")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                })
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                result = R.string.update_install_failed
+            } finally {
+                busy = false
+            }
+        }
+    }
     release?.takeIf { dialogOpen }?.let { available ->
         AlertDialog(
             onDismissRequest = { if (!busy) dialogOpen = false },
@@ -192,31 +217,7 @@ internal fun rememberAppUpdates(): AppUpdateUi {
                 }
             },
             confirmButton = {
-                if (!busy) MenuButton(stringResource(R.string.update_install), Modifier) {
-                    scope.launch {
-                        try {
-                            result = null
-                            if (!context.packageManager.canRequestPackageInstalls()) {
-                                result = R.string.update_permission
-                                context.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}")))
-                                return@launch
-                            }
-                            busy = true
-                            val apk = downloadRelease(context, available)
-                            val uri = FileProvider.getUriForFile(context, "${context.packageName}.updates", apk)
-                            context.startActivity(Intent(Intent.ACTION_VIEW).apply {
-                                setDataAndType(uri, "application/vnd.android.package-archive")
-                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                            })
-                        } catch (error: CancellationException) {
-                            throw error
-                        } catch (_: Exception) {
-                            result = R.string.update_install_failed
-                        } finally {
-                            busy = false
-                        }
-                    }
-                }
+                if (!busy) MenuButton(stringResource(R.string.update_install), Modifier) { install(available) }
             },
             dismissButton = {
                 if (!busy) MenuButton(stringResource(android.R.string.cancel), Modifier) { dialogOpen = false }
@@ -224,12 +225,13 @@ internal fun rememberAppUpdates(): AppUpdateUi {
         )
     }
     return AppUpdateUi(release != null) {
+        // The changes of a new version stay in their popup ("Update anzeigen").
         release?.let { available ->
             Text(stringResource(R.string.update_available, available.tag))
-            MenuButton(stringResource(R.string.update_show), Modifier.fillMaxWidth()) { dialogOpen = true }
+            SettingRow(stringResource(R.string.update_show)) { dialogOpen = true }
         }
-        MenuButton(stringResource(R.string.update_check), Modifier.fillMaxWidth()) { check(manual = true) }
-        MenuButton(stringResource(R.string.update_auto), Modifier.fillMaxWidth(), selected = auto) {
+        SettingRow(stringResource(R.string.update_check), enabled = !busy) { check(manual = true) }
+        SettingRow(stringResource(R.string.update_auto), selected = auto) {
             auto = !auto
             preferences.edit().putBoolean("automatic", auto).apply()
         }

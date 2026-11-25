@@ -301,6 +301,7 @@ internal class PinRequest(
     val message: String?,
     val newPin: Boolean = false,
     val check: (String) -> Boolean,
+    val length: Int? = null,
     val onSuccess: (String) -> Unit
 )
 
@@ -557,6 +558,7 @@ private fun PlayerHome(
     var traktSession by remember { mutableStateOf<TraktSession?>(null) }
     val parental = remember(preferences) { ParentalControls(preferences) }
     var pinRequest by remember { mutableStateOf<PinRequest?>(null) }
+    var exitBlockedUntil by remember { mutableStateOf(0L) }
     val ageRatings = remember { HashMap<String, Int?>() }
     var traktDeviceCode by remember { mutableStateOf<TraktDeviceCode?>(null) }
     var traktBusy by remember { mutableStateOf(false) }
@@ -3218,7 +3220,7 @@ private fun PlayerHome(
                             age?.let { context.getString(R.string.kids_age_value, it) }
                                 ?: context.getString(R.string.kids_rating_unknown)
                         ),
-                        check = parental::checkKidsPin
+                        check = parental::checkKidsPin, length = parental.kidsExitPinLength
                     ) {
                         parental.allowedTitles += key
                         showTitle(section, title)
@@ -4319,7 +4321,8 @@ private fun PlayerHome(
             val kids = parental.kidsMode
             if (pinRequest == null) pinRequest = PinRequest(
                 context.getString(if (kids) R.string.kids_mode_exit else R.string.pin_enter), null,
-                check = if (kids) parental::checkKidsPin else parental::checkPin
+                check = if (kids) parental::checkKidsPin else parental::checkPin,
+                length = if (kids) parental.kidsExitPinLength else parental.pinLength
             ) {
                 if (kids) parental.updateKidsMode(false)
                 openSettingsNow()
@@ -4368,6 +4371,7 @@ private fun PlayerHome(
     }
     fun requestAppExit() {
         val now = SystemClock.elapsedRealtime()
+        if (now < exitBlockedUntil) return
         if (lastBack != 0L && now - lastBack <= EXIT_CONFIRMATION_MS) {
             savePlaybackPosition()
             onExit()
@@ -4410,6 +4414,7 @@ private fun PlayerHome(
             // Back from a settings page returns to its section first.
             settingsFocusRequesters[settingsSection]?.let { requester -> runCatching { requester.requestFocus() } }
         } else if (selected == Destination.SETTINGS) {
+            exitBlockedUntil = SystemClock.elapsedRealtime() + EXIT_CONFIRMATION_MS
             selected = settingsReturnDestination
             guidePanel = GuidePanel.GRID
             lastBack = 0L
@@ -4569,7 +4574,7 @@ private fun PlayerHome(
             onToggleLock = if (parental.hasPin) { group ->
                 val key = categoryKey(section, group.id)
                 if (key in parental.lockedCategories) {
-                    pinRequest = PinRequest(context.getString(R.string.pin_enter), null, check = parental::checkPin) {
+                    pinRequest = PinRequest(context.getString(R.string.pin_enter), null, check = parental::checkPin, length = parental.pinLength) {
                         parental.toggleLocked(key)
                     }
                 } else parental.toggleLocked(key)
@@ -4578,7 +4583,7 @@ private fun PlayerHome(
     }
     pinRequest?.let { request ->
         PinDialog(
-            request.title, request.message, confirmTwice = request.newPin,
+            request.title, request.message, confirmTwice = request.newPin, length = request.length,
             onPin = { pin ->
                 val ok = request.check(pin)
                 if (ok) {
@@ -6408,36 +6413,40 @@ private fun PlayerHome(
                         }
                     }
                     Destination.CATEGORIES -> {
+                        Text(stringResource(R.string.category_settings), style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.primary)
                         Text(stringResource(R.string.category_settings_hint))
-                        MenuButton(
+                        SettingRow(
                             stringResource(R.string.select_countries),
                             Modifier.focusRequester(initialFocus)
                         ) { choosingCountries = true }
-                        MenuButton(
+                        SettingRow(
                             stringResource(R.string.auto_country_prompt),
                             Modifier, selected = automaticCountries
                         ) {
                             automaticCountries = !automaticCountries
                             preferences?.edit()?.putBoolean("autoCountries", automaticCountries)?.apply()
                         }
-                        MenuButton(
+                        SettingRow(
                             stringResource(R.string.show_hidden_categories),
                             Modifier,
                             selected = showHiddenCategories
                         ) { showHiddenCategories = !showHiddenCategories }
                     }
                     Destination.SOURCES -> {
+                        Text(stringResource(R.string.destination_sources), style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.primary)
                         if (savedSources.isNotEmpty()) {
-                            MenuButton(stringResource(R.string.export_portals), Modifier) {
+                            SettingRow(stringResource(R.string.export_portals), Modifier) {
                                 exportPortals.launch("streamwatch-portals.json")
                             }
                         }
-                        MenuButton(stringResource(R.string.import_portals), Modifier) {
+                        SettingRow(stringResource(R.string.import_portals), Modifier) {
                             importPortals.launch(arrayOf("application/json", "text/plain"))
                         }
                         Text(stringResource(R.string.portal_transfer_privacy))
                         portalTransferStatus?.let { Text(it) }
-                        MenuButton(
+                        SettingRow(
                             label = stringResource(R.string.add_portal),
                             modifier = Modifier.focusRequester(initialFocus),
                             onClick = {
@@ -6448,19 +6457,19 @@ private fun PlayerHome(
                                 }
                             }
                         )
-                        MenuButton(
+                        SettingRow(
                             stringResource(R.string.refresh_all_sources),
                             Modifier.fillMaxWidth(),
                             enabled = savedSources.isNotEmpty() && !connecting && !restoring,
                             onClick = { refreshSources(savedSources) }
                         )
-                        MenuButton(
+                        SettingRow(
                             stringResource(R.string.refresh_sources),
                             Modifier.fillMaxWidth(),
                             enabled = savedSources.isNotEmpty() && !connecting && !restoring,
                             onClick = ::openSourceRefreshDialog
                         )
-                        MenuButton(
+                        SettingRow(
                             stringResource(R.string.merge_sources), Modifier,
                             selected = mergeSources
                         ) {
@@ -6477,7 +6486,7 @@ private fun PlayerHome(
                         ))
                         val activePortalId = storedSource?.identity
                         if (!mergeSources && activePortalId != null) {
-                            MenuButton(stringResource(R.string.merge_portal_channels), Modifier, selected = mergePortalChannels) {
+                            SettingRow(stringResource(R.string.merge_portal_channels), Modifier, selected = mergePortalChannels) {
                                 mergedIndividualPortals = if (mergePortalChannels) mergedIndividualPortals - activePortalId
                                     else mergedIndividualPortals + activePortalId
                                 preferences?.edit()?.putStringSet("merged_individual_portals", mergedIndividualPortals)?.apply()
@@ -6495,7 +6504,7 @@ private fun PlayerHome(
                                 null -> R.string.portal_status_unknown
                             }))
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                MenuButton(
+                                SettingRow(
                                 listOf(
                                     stringResource(
                                         if (!mergeSources && isActive) R.string.active_portal_label else R.string.saved_portal_label,
@@ -6524,7 +6533,7 @@ private fun PlayerHome(
                                     style = MaterialTheme.typography.labelSmall
                                 )
                             }
-                            MenuButton(
+                            SettingRow(
                                 stringResource(if (source.enabled) R.string.disable_portal else R.string.enable_portal),
                                 Modifier,
                                 selected = source.enabled
@@ -6548,7 +6557,7 @@ private fun PlayerHome(
                             style = MaterialTheme.typography.titleSmall
                         )
                         storedSource?.takeUnless { mergeSources }?.let { saved ->
-                            MenuButton(stringResource(R.string.edit_portal), Modifier) {
+                            SettingRow(stringResource(R.string.edit_portal), Modifier) {
                                 if (!connecting) {
                                     address = saved.address
                                     mac = saved.mac
@@ -6595,7 +6604,7 @@ private fun PlayerHome(
                             Text(stringResource(R.string.refresh_all_summary, updated, failed))
                         }
                         if (liveVariants.isNotEmpty()) {
-                            MenuButton(
+                            SettingRow(
                                 label = stringResource(R.string.open_live_tv),
                                 modifier = Modifier,
                                 onClick = {
@@ -6604,7 +6613,7 @@ private fun PlayerHome(
                                 }
                             )
                         }
-                        MenuButton(
+                        SettingRow(
                             label = stringResource(R.string.back_to_settings),
                             modifier = Modifier,
                             onClick = { selected = Destination.SETTINGS }
@@ -7395,7 +7404,9 @@ private fun PlayerHome(
                         color = MaterialTheme.colorScheme.primary,
                         style = MaterialTheme.typography.bodySmall
                     )
-                    if (destination == Destination.SETTINGS) Row(
+                    if (destination == Destination.SETTINGS || destination == Destination.SOURCES ||
+                        destination == Destination.CATEGORIES
+                    ) Row(
                         Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(20.dp)
                     ) {
                         // Settings: sections on the left, the rows of the chosen section on the right.
@@ -7414,6 +7425,8 @@ private fun PlayerHome(
                                         .onFocusChanged {
                                             if (it.isFocused && settingsSection != item) {
                                                 closeSettingsPages()
+                                                // Sources and categories are pages of the settings too.
+                                                if (selected != Destination.SETTINGS) selected = Destination.SETTINGS
                                                 lastSettingsSection = item
                                                 settingsSection = item
                                             }
@@ -8737,7 +8750,7 @@ private fun AboutSettings() {
     val context = LocalContext.current
     val app = remember(context) { context.packageManager.getPackageInfo(context.packageName, 0) }
     val code = if (android.os.Build.VERSION.SDK_INT >= 28) app.longVersionCode else app.versionCode.toLong()
-    Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleLarge)
+    StreamWatchLogo(30.dp)
     Text(stringResource(R.string.about_version, app.versionName.orEmpty()))
     Text(stringResource(R.string.about_version_code, code))
     Text(stringResource(R.string.about_version_date, stringResource(R.string.version_date)))

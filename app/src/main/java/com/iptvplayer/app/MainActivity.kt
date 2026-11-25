@@ -295,6 +295,15 @@ class MainActivity : ComponentActivity() {
 }
 
 /** Where "Zurück" leads after opening a title from an actor's filmography. */
+/** A pending PIN prompt; [newPin] asks twice to set a PIN. */
+internal class PinRequest(
+    val title: String,
+    val message: String?,
+    val newPin: Boolean = false,
+    val check: (String) -> Boolean,
+    val onSuccess: (String) -> Unit
+)
+
 private class CastReturn(
     val destination: Destination?,
     val details: Pair<PortalSection, PortalTitle>?,
@@ -450,6 +459,7 @@ private enum class SettingsSection(val label: Int, val icon: Int) {
     CONTROLS(R.string.settings_controls, R.drawable.settings_controls),
     METADATA(R.string.settings_metadata, R.drawable.settings_metadata),
     SYNC(R.string.settings_sync, R.drawable.settings_sync),
+    PARENTAL(R.string.settings_parental, R.drawable.settings_parental),
     UPDATES(R.string.settings_updates, R.drawable.settings_updates),
     ABOUT(R.string.settings_about, R.drawable.settings_about)
 }
@@ -545,6 +555,9 @@ private fun PlayerHome(
     var metadataClient by remember { mutableStateOf<TmdbClient?>(null) }
     var metadataSettingsOpen by remember { mutableStateOf(false) }
     var traktSession by remember { mutableStateOf<TraktSession?>(null) }
+    val parental = remember(preferences) { ParentalControls(preferences) }
+    var pinRequest by remember { mutableStateOf<PinRequest?>(null) }
+    val ageRatings = remember { HashMap<String, Int?>() }
     var traktDeviceCode by remember { mutableStateOf<TraktDeviceCode?>(null) }
     var traktBusy by remember { mutableStateOf(false) }
     var sendingWatchStatus by remember { mutableStateOf(false) }
@@ -2087,6 +2100,8 @@ private fun PlayerHome(
     }
     fun visibleCategory(section: PortalSection, id: String, label: String, country: String? = null): Boolean {
         val hidden = categoryKey(section, id) in hiddenCategories
+        val kidsFriendly = section != PortalSection.LIVE && (id == VodCategory.FAMILY.id || id == VodCategory.ANIMATION.id)
+        if (!parental.allowsCategory(categoryKey(section, id), label, kidsFriendly)) return false
         return (showHiddenCategories || !hidden) &&
             (section == PortalSection.LIVE || combine || countries.isEmpty() || categoryCountry(label, country) in countries ||
                 (showHiddenCategories && hidden))
@@ -3160,7 +3175,58 @@ private fun PlayerHome(
         )
     }
 
+    /** Age rating from TMDB (FSK) or Trakt; cached per title for this session. */
+    suspend fun titleAge(section: PortalSection, title: PortalTitle): Int? {
+        val key = "${section.name}:${title.tmdbId ?: title.imdbId ?: displayVodTitle(title)}"
+        if (ageRatings.containsKey(key)) return ageRatings[key]
+        val client = metadataClient
+        val age = try {
+            val fromTmdb = client?.let { tmdb ->
+                val id = title.tmdbId?.toIntOrNull() ?: tmdb.lookup(section, title)?.id
+                id?.let { tmdb.ageRating(section, it) }
+            }
+            fromTmdb ?: if (traktSession != null) withTraktSession { api, session ->
+                ageFromRating(api.lookupTitleMetadata(section, title, session.accessToken)?.certification)
+            } else null
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            null
+        }
+        ageRatings[key] = age
+        return age
+    }
+    val detailAge by produceState<Int?>(null, details, metadataClient, traktSession?.username) {
+        value = null
+        val (section, title) = details?.takeIf { it.first != PortalSection.LIVE } ?: return@produceState
+        if (metadataClient == null && traktSession == null) return@produceState
+        value = titleAge(section, title)
+    }
     fun showTitle(section: PortalSection, title: PortalTitle) {
+        if (parental.kidsMode && section != PortalSection.LIVE) {
+            val key = "${section.name}:${title.tmdbId ?: title.imdbId ?: displayVodTitle(title)}"
+            if (key !in parental.allowedTitles) {
+                scope.launch {
+                    val age = titleAge(section, title)
+                    if (parental.allowsAge(age)) {
+                        parental.allowedTitles += key
+                        showTitle(section, title)
+                    } else pinRequest = PinRequest(
+                        context.getString(R.string.kids_title_blocked),
+                        context.getString(
+                            R.string.kids_title_blocked_message, displayVodTitle(title),
+                            age?.let { context.getString(R.string.kids_age_value, it) }
+                                ?: context.getString(R.string.kids_rating_unknown)
+                        ),
+                        check = parental::checkKidsPin
+                    ) {
+                        parental.allowedTitles += key
+                        showTitle(section, title)
+                    }
+                }
+                return
+            }
+        }
         if (reopenPlayback(
                 titleSelection(section, title),
                 matchSeries = section == PortalSection.SERIES
@@ -4235,7 +4301,7 @@ private fun PlayerHome(
         guideAppearancePage = null
         return open
     }
-    fun openSettings() {
+    fun openSettingsNow() {
         closeSettingsPages()
         val current = if (isMainMenuOpen()) lastFocused else selected ?: lastFocused
         settingsReturnDestination = current.takeUnless {
@@ -4247,6 +4313,20 @@ private fun PlayerHome(
         guidePanel = GuidePanel.GRID
         lastBack = 0L
         selected = Destination.SETTINGS
+    }
+    fun openSettings() {
+        if (parental.kidsMode || parental.hasPin && parental.protectSettings) {
+            val kids = parental.kidsMode
+            if (pinRequest == null) pinRequest = PinRequest(
+                context.getString(if (kids) R.string.kids_mode_exit else R.string.pin_enter), null,
+                check = if (kids) parental::checkKidsPin else parental::checkPin
+            ) {
+                if (kids) parental.updateKidsMode(false)
+                openSettingsNow()
+            }
+            return
+        }
+        openSettingsNow()
     }
     fun returnToCategories() {
         lastLiveCategory = category
@@ -4484,7 +4564,30 @@ private fun PlayerHome(
                 categoryOrders[key] = order
                 preferences?.edit()?.putString(key, org.json.JSONArray(order).toString())?.apply()
             },
-            onDismiss = { categoryMenu = null }
+            onDismiss = { categoryMenu = null },
+            isLocked = { categoryKey(section, it.id) in parental.lockedCategories },
+            onToggleLock = if (parental.hasPin) { group ->
+                val key = categoryKey(section, group.id)
+                if (key in parental.lockedCategories) {
+                    pinRequest = PinRequest(context.getString(R.string.pin_enter), null, check = parental::checkPin) {
+                        parental.toggleLocked(key)
+                    }
+                } else parental.toggleLocked(key)
+            } else null
+        )
+    }
+    pinRequest?.let { request ->
+        PinDialog(
+            request.title, request.message, confirmTwice = request.newPin,
+            onPin = { pin ->
+                val ok = request.check(pin)
+                if (ok) {
+                    pinRequest = null
+                    request.onSuccess(pin)
+                }
+                ok
+            },
+            onDismiss = { pinRequest = null }
         )
     }
     LaunchedEffect(watchingPrompt) {
@@ -5881,12 +5984,7 @@ private fun PlayerHome(
             val guidePreviewWidth = (basePreviewWidth * guideAppearance.previewSize.factor)
                 .coerceAtMost(minOf(maxWidth * 0.45f, maxHeight * 0.7f))
             val menu: @Composable () -> Unit = {
-                Text(
-                    text = stringResource(R.string.app_name),
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                StreamWatchLogo(26.dp, Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
                 visibleDestinations.forEach { item ->
                     val position = visibleDestinations.indexOf(item)
                     val previousItem = visibleDestinations.getOrNull(position - 1) ?: item
@@ -5932,11 +6030,7 @@ private fun PlayerHome(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(
-                        stringResource(R.string.app_name),
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                    StreamWatchLogo(28.dp)
                     Row(
                         Modifier.weight(1f).focusGroup().horizontalScroll(rememberScrollState()),
                         verticalAlignment = Alignment.CenterVertically,
@@ -6263,6 +6357,7 @@ private fun PlayerHome(
                                 SettingsSection.CONTROLS ->
                                     SettingRow(stringResource(R.string.control_settings), Modifier) { controlSettingsOpen = true }
                                 SettingsSection.UPDATES -> appUpdates.settings()
+                                SettingsSection.PARENTAL -> ParentalSettings(parental) { pinRequest = it }
                                 SettingsSection.ABOUT -> {
                                     AboutSettings()
                                     Text(stringResource(R.string.diagnostics_description))
@@ -6830,6 +6925,7 @@ private fun PlayerHome(
                             TitleDetails(
                                 displayTitle, section,
                                 metadataRating = traktDetailMetadata?.rating ?: detailMetadata?.rating ?: tvmazeDetailMetadata?.rating,
+                                ageRating = detailAge,
                                 metadataProvider = metadataProvider,
                                 favorite = titleKey(section, title) in favorites,
                                 saved = isTitleSaved(section, title),

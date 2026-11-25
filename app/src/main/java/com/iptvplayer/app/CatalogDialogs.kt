@@ -45,7 +45,9 @@ internal fun CategoryDialog(
     isHidden: (PortalGroup) -> Boolean,
     onApply: (Set<String>, Boolean) -> Unit,
     onMove: (String, CategoryMove) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    isLocked: (PortalGroup) -> Boolean = { false },
+    onToggleLock: ((PortalGroup) -> Unit)? = null
 ) {
     var selection by remember(initiallySelected) {
         mutableStateOf(setOfNotNull(initiallySelected))
@@ -72,7 +74,8 @@ internal fun CategoryDialog(
                 items(groups, key = { it.id }) { group ->
                     val hidden = isHidden(group)
                     MenuButton(
-                        if (hidden) stringResource(R.string.hidden_category_label, group.name) else group.name,
+                        (if (isLocked(group)) "🔒 " else "") +
+                            if (hidden) stringResource(R.string.hidden_category_label, group.name) else group.name,
                         Modifier.fillMaxWidth(),
                         selected = group.id in selection,
                         hiddenIndicator = hidden
@@ -82,7 +85,13 @@ internal fun CategoryDialog(
                     }
                 }
             }
-            if (!moving && selected != null) MenuButton(stringResource(R.string.category_move), Modifier) { moving = true }
+            if (!moving && selected != null) Row {
+                MenuButton(stringResource(R.string.category_move), Modifier) { moving = true }
+                val group = groups.firstOrNull { it.id == selected }
+                if (group != null && onToggleLock != null) MenuButton(
+                    stringResource(if (isLocked(group)) R.string.category_unlock else R.string.category_lock), Modifier
+                ) { onToggleLock(group) }
+            }
             }
         },
         confirmButton = {

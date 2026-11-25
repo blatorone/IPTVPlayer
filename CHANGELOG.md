@@ -2,6 +2,11 @@
 
 ## 1.0.85
 
+- Kindersicherung (neue Rubrik in den Einstellungen): PIN festlegen, Einstellungen per PIN schützen, Erotik-Kategorien automatisch sperren, einzelne Kategorien über „Kategorien verwalten“ sperren, gesperrte Inhalte bis zum Beenden der App freigeben.
+- Kindermodus mit Altersstufe (FSK 0/6/12/16/18): nur Kinder- und Familienkategorien (ab FSK 16 alle außer Erotik), Erotik immer ausgeblendet. Filme und Serien werden beim Öffnen anhand der Altersfreigabe (TMDB, sonst Trakt) geprüft; unbekannte Freigabe bleibt gesperrt und lässt sich per PIN einmalig freigeben. Beenden nur mit PIN – wahlweise eigene Kindermodus-PIN oder dieselbe wie für die Einstellungen.
+- Filme und Serien zeigen in den Details die Altersfreigabe (z. B. „FSK 12“).
+- StreamWatch-Logo (Play-Symbol mit Schriftzug, transparenter Hintergrund) statt reinem Text in der oberen Leiste und im Menü.
+- Programmführer: Der laufende Sender bekommt zusätzlich zur Umrandung ein kleines Play-Symbol in Schriftfarbe.
 - Einstellungen: Unterseiten (Programmführer gestalten, Senderliste, EPG, Folgen, Steuerung, TMDB) öffnen sich nicht mehr als Popup, sondern ersetzen rechts die Zeilen der Rubrik – im selben Stil mit Schaltern und Werten. Zurück führt erst zur Rubrik, dann zum zuletzt genutzten Bereich (Live-TV, Filme oder Serien).
 - Besetzung: Filme aus der Filmografie eines Schauspielers öffnen sich jetzt (vorher sprang die App zurück). Zurück geht immer genau einen Schritt: Titel → Filmografie → Besetzung → ursprünglicher Titel.
 - Filmografie mit denselben Filtern wie die Film- und Serienlisten: Sortierung, Merkliste und Jahre.

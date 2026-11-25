@@ -84,3 +84,9 @@ Die zuletzt gewählte Live-Kategorie wird in den vorhandenen App-Einstellungen l
 ## Teststrategie
 
 Parser mit kleinen synthetischen Fixtures, relativen URLs, defekten Einträgen, Zeitzonen und großen Eingaben testen. Repository- und Migrationstests mit temporärer Datenbank; Zuordnung und Konflikte deterministisch testen. Player über Fake-Adapter auf Navigation, Nutzerwechsel, Abbruch und endliches Failover prüfen; Media3 auf Geräten mit legalen Testmedien integrieren. Compose-/TV-Tests prüfen Fokus, D-Pad und Zurück. QR-Ablauf, Zugriffsschutz und Shutdown; Sync-Roundtrip, Manipulation, falsche Passphrase und Konflikte; CI und signierte Installation auf realistischen Geräten prüfen.
+
+## Kindersicherung
+
+`ParentalControls` (ParentalControls.kt) hält PIN-Schutz und Kindermodus. PINs liegen nur als gesalzene SHA-256-Hashes in den lokalen Einstellungen; es gibt keine Übertragung. Die Sichtbarkeit von Kategorien läuft zentral über `visibleCategory` → `allowsCategory`: Erotik-Kategorien (Namensmuster) und manuell gesperrte Kategorien sind ohne PIN-Freigabe ausgeblendet; im Kindermodus erscheinen nur Kinder-/Familienkategorien (ab FSK 16 alle außer Erotik). Einzelne Filme und Serien werden im Kindermodus beim Öffnen (`showTitle`) anhand der Altersfreigabe geprüft: TMDB (`release_dates`/`content_ratings`, Deutschland vor USA), sonst Trakt-`certification`; unbekannt gilt als gesperrt und lässt sich mit der PIN einmalig freigeben. Einstellungen sind optional, im Kindermodus immer PIN-geschützt; die Kindermodus-PIN kann eigenständig oder die Haupt-PIN sein.
+
+Grenzen: Portale liefern keine Altersfreigaben; ohne TMDB-Schlüssel oder Trakt-Konto bleiben im Kindermodus alle Titel bis zur PIN-Freigabe gesperrt. Die Suche filtert Live-Sender nicht nach Kindermodus; Titel aus der Suche durchlaufen dieselbe Prüfung beim Öffnen.

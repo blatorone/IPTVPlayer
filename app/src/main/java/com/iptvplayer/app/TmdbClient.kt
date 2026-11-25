@@ -181,6 +181,18 @@ internal class TmdbClient(private val token: String) {
             }.distinctBy { it.tmdbId ?: it.name }
     }
 
+    /** Age rating: German FSK first, otherwise the US rating converted to an age. */
+    suspend fun ageRating(section: PortalSection, id: Int): Int? {
+        val movie = section == PortalSection.MOVIES
+        val results = request(if (movie) "movie/$id/release_dates" else "tv/$id/content_ratings")
+            .optJSONArray("results").objects()
+        fun forCountry(country: String): Int? = results.firstOrNull { it.value("iso_3166_1") == country }?.let { row ->
+            if (movie) row.optJSONArray("release_dates").objects().firstNotNullOfOrNull { ageFromRating(it.value("certification")) }
+            else ageFromRating(row.value("rating"))
+        }
+        return forCountry("DE") ?: forCountry("US")
+    }
+
     /** Films and series a person appeared in. */
     suspend fun personCredits(personId: Long): List<PersonCredit> =
         request("person/$personId/combined_credits").optJSONArray("cast").objects().mapNotNull { row ->

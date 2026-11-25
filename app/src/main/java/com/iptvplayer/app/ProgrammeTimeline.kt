@@ -336,6 +336,7 @@ private fun GuideChannelCell(
 ) {
     var focused by remember { mutableStateOf(false) }
     val colors = MaterialTheme.colorScheme
+    val textColor = androidx.compose.material3.LocalContentColor.current
     Row(
         modifier.height(rowHeight)
             .padding(end = 2.dp)
@@ -365,6 +366,18 @@ private fun GuideChannelCell(
             number.toString(), Modifier.width(if (compact) 24.dp else 32.dp),
             style = MaterialTheme.typography.labelSmall.scaled(appearance.textSize.factor), maxLines = 1
         )
+        // The running channel gets a small play symbol in the text colour, besides its frame.
+        if (playing) androidx.compose.foundation.Canvas(Modifier.width(if (compact) 8.dp else 10.dp).height(if (compact) 10.dp else 12.dp)) {
+            drawPath(
+                androidx.compose.ui.graphics.Path().apply {
+                    moveTo(0f, 0f)
+                    lineTo(size.width, size.height / 2f)
+                    lineTo(0f, size.height)
+                    close()
+                },
+                textColor
+            )
+        }
         if (appearance.showLogos) ChannelLogo(
             channel.logo,
             Modifier.width(if (compact) 22.dp else 28.dp).height(if (compact) 18.dp else 24.dp)

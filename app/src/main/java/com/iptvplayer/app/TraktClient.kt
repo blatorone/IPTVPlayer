@@ -99,7 +99,8 @@ internal data class TraktTitleMetadata(
     val title: String,
     val year: Int?,
     val overview: String?,
-    val rating: Double?
+    val rating: Double?,
+    val certification: String? = null
 )
 
 internal class TraktApi(private val clientId: String) {
@@ -313,7 +314,8 @@ internal class TraktApi(private val clientId: String) {
             shownName,
             match.optInt("year", 0).takeIf { it > 0 },
             translated ?: original,
-            match.optDouble("rating").takeIf { it.isFinite() && it > 0 }
+            match.optDouble("rating").takeIf { it.isFinite() && it > 0 },
+            match.optString("certification").takeIf { it.isNotBlank() && it != "null" }
         )
     }
 

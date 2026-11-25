@@ -83,6 +83,6 @@ Abnahme aus `PROJECT_SPEC.md` mit Touch und TV-Fernbedienung durchführen; unter
 
 ## Noch zu entscheiden
 
-Aus der Sichtung der TV-Referenz folgen weitere Funktionspakete für Aufnahmen, Anbieterarchive, Erinnerungen, Kindersicherung, Datensicherung, erweiterte Fernbedienungsbelegung und gerätespezifische Wiedergabe. Für Aufnahmen und Archiv sind getrennte Abnahmekriterien zu Speicherziel, Gerät und unterstützter Quelle erforderlich.
+Aus der Sichtung der TV-Referenz folgen weitere Funktionspakete für Aufnahmen, Anbieterarchive, Erinnerungen, Kindersicherung (Grundfunktion seit 1.0.85 umgesetzt, siehe ARCHITECTURE.md), Datensicherung, erweiterte Fernbedienungsbelegung und gerätespezifische Wiedergabe. Für Aufnahmen und Archiv sind getrennte Abnahmekriterien zu Speicherziel, Gerät und unterstützter Quelle erforderlich.
 
 Konkrete SDK-/Gerätematrix und Versionen; belastbare Länder-Metadaten; Hintergrundverhalten außerhalb der App; QR-Transport und Schutzmodell; Cloud-Anbieter, Datenumfang, KDF-Parameter und Konflikt-UX; automatische nächste Episode. Keine dieser Optionen als fertige Implementierung ausgeben.

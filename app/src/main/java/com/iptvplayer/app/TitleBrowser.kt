@@ -346,6 +346,7 @@ internal fun TitleDetails(
     title: PortalTitle,
     section: PortalSection,
     metadataRating: Double?,
+    ageRating: Int? = null,
     metadataProvider: String?,
     favorite: Boolean,
     saved: Boolean,
@@ -374,6 +375,7 @@ internal fun TitleDetails(
                 maxLines = if (compact) 1 else 2, overflow = TextOverflow.Ellipsis
             )
             vodReleaseYear(title)?.let { Text(stringResource(R.string.title_year, it)) }
+            ageRating?.let { Text(stringResource(R.string.kids_age_value, it), color = MaterialTheme.colorScheme.primary) }
             if (metadataProvider != null) {
                 Text(metadataRating?.let { stringResource(R.string.metadata_rating, metadataProvider, it) }
                     ?: stringResource(R.string.metadata_details_source, metadataProvider),

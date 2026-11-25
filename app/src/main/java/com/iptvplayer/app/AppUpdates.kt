@@ -36,15 +36,27 @@ import org.json.JSONObject
 
 private const val repository = "blatorone/IPTVPlayer-Releases"
 private const val maxApkBytes = 150L * 1024 * 1024
-private val releaseTag = Regex("""v\d+\.\d+\.\d+""")
+/** "v1.2.3" for releases, "v1.2.3-beta.4" for betas (published on GitHub as pre-releases). */
+private val releaseTag = Regex("""v\d+\.\d+\.\d+(-beta\.\d+)?""")
 
-internal data class AppRelease(val tag: String, val code: Long, val notes: String, val digest: String) {
+internal data class AppRelease(
+    val tag: String, val code: Long, val notes: String, val digest: String, val beta: Boolean = false
+) {
     val downloadUrl get() = "https://github.com/$repository/releases/download/$tag/IPTVPlayer-$code.apk"
 }
 
-internal fun parseAppRelease(json: JSONObject, installedCode: Long): AppRelease? {
+/**
+ * Whether a GitHub release is offered: release tags always, betas ("-beta.N", marked as
+ * pre-release) only with the beta switch. A beta tag without the pre-release mark, or the other
+ * way round, is never offered, so a mistake cannot hand a beta to everyone.
+ */
+internal fun offersRelease(tag: String, draft: Boolean, prerelease: Boolean, allowBeta: Boolean): Boolean =
+    releaseTag.matches(tag) && !draft && tag.contains("-beta.") == prerelease && (!prerelease || allowBeta)
+
+internal fun parseAppRelease(json: JSONObject, installedCode: Long, allowBeta: Boolean = false): AppRelease? {
     val tag = json.optString("tag_name")
-    if (!releaseTag.matches(tag) || json.optBoolean("draft") || json.optBoolean("prerelease")) return null
+    val beta = json.optBoolean("prerelease")
+    if (!offersRelease(tag, json.optBoolean("draft"), beta, allowBeta)) return null
     val assets = json.getJSONArray("assets")
     for (index in 0 until assets.length()) {
         val asset = assets.getJSONObject(index)
@@ -54,10 +66,16 @@ internal fun parseAppRelease(json: JSONObject, installedCode: Long): AppRelease?
         if (code <= installedCode) continue
         val digest = asset.optString("digest")
         require(digest.matches(Regex("sha256:[0-9a-f]{64}")))
-        return AppRelease(tag, code, json.optString("body").take(4000), digest.removePrefix("sha256:"))
+        return AppRelease(tag, code, json.optString("body").take(4000), digest.removePrefix("sha256:"), beta)
     }
     return null
 }
+
+/** From a list of releases (newest first, as GitHub returns it): the one with the highest version code. */
+internal fun newestAppRelease(releases: org.json.JSONArray, installedCode: Long, allowBeta: Boolean): AppRelease? =
+    (0 until releases.length()).mapNotNull { index ->
+        runCatching { parseAppRelease(releases.getJSONObject(index), installedCode, allowBeta) }.getOrNull()
+    }.maxByOrNull { it.code }
 
 private fun URL.connection(): HttpsURLConnection = (openConnection() as HttpsURLConnection).apply {
     connectTimeout = 12_000
@@ -70,8 +88,20 @@ private fun android.content.pm.PackageInfo.code(): Long =
     if (android.os.Build.VERSION.SDK_INT >= 28) longVersionCode else versionCode.toLong()
 
 @Suppress("DEPRECATION")
-private suspend fun checkRelease(context: Context): AppRelease? = withContext(Dispatchers.IO) {
+private suspend fun checkRelease(context: Context, beta: Boolean): AppRelease? = withContext(Dispatchers.IO) {
     val installed = context.packageManager.getPackageInfo(context.packageName, 0).code()
+    if (beta) {
+        // "latest" never returns pre-releases; with betas switched on the newest releases are compared.
+        val list = URL("https://api.github.com/repos/$repository/releases?per_page=20").connection()
+        try {
+            list.setRequestProperty("Accept", "application/vnd.github+json")
+            if (list.responseCode == 404) return@withContext null
+            val bytes = list.inputStream.use { it.readNBytesCompat(4_000_000) }
+            return@withContext newestAppRelease(org.json.JSONArray(bytes.decodeToString()), installed, allowBeta = true)
+        } finally {
+            list.disconnect()
+        }
+    }
     val connection = URL("https://api.github.com/repos/$repository/releases/latest").connection()
     try {
         connection.setRequestProperty("Accept", "application/vnd.github+json")
@@ -148,7 +178,9 @@ internal class AppUpdateUi(
     val automatic: Boolean = true,
     val setAutomatic: (Boolean) -> Unit = {},
     val check: () -> Unit = {},
-    val status: String = ""
+    val status: String = "",
+    val beta: Boolean = false,
+    val setBeta: (Boolean) -> Unit = {}
 )
 
 @Composable
@@ -158,6 +190,8 @@ internal fun rememberAppUpdates(): AppUpdateUi {
     val preferences = remember(context) { context.getSharedPreferences("app_updates", Context.MODE_PRIVATE) }
     // Only searches; installing always needs the user's confirmation. Users can switch it off.
     var auto by remember { mutableStateOf(preferences.getBoolean("automatic", true)) }
+    // Betas (GitHub pre-releases) only for those who switch them on; off by default.
+    var beta by remember { mutableStateOf(preferences.getBoolean("beta", false)) }
     var lastCheck by remember { mutableStateOf(preferences.getLong("last_check", 0L)) }
     var result by remember { mutableStateOf<Int?>(null) }
     var release by remember { mutableStateOf<AppRelease?>(null) }
@@ -170,7 +204,7 @@ internal fun rememberAppUpdates(): AppUpdateUi {
         result = null
         scope.launch {
             try {
-                release = checkRelease(context)
+                release = checkRelease(context, beta)
                 if (manual && release != null) dialogOpen = true
                 lastCheck = System.currentTimeMillis()
                 preferences.edit().putLong("last_check", lastCheck).apply()
@@ -219,7 +253,7 @@ internal fun rememberAppUpdates(): AppUpdateUi {
     release?.takeIf { dialogOpen }?.let { available ->
         AlertDialog(
             onDismissRequest = { if (!busy) dialogOpen = false },
-            title = { Text(stringResource(R.string.update_available, available.tag)) },
+            title = { Text(stringResource(R.string.update_available, available.tag) + if (available.beta) " (Beta)" else "") },
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState())) {
                     Text(available.notes.ifBlank { stringResource(R.string.update_confirm_hint) })
@@ -240,7 +274,10 @@ internal fun rememberAppUpdates(): AppUpdateUi {
             .format(java.time.Instant.ofEpochMilli(it))
     }
     val status = listOfNotNull(
-        release?.let { context.getString(R.string.update_available, it.tag) + " – installieren am Gerät unter Einstellungen → App-Updates" },
+        release?.let {
+            context.getString(R.string.update_available, it.tag) + (if (it.beta) " (Beta)" else "") +
+                " – installieren am Gerät unter Einstellungen → App-Updates"
+        },
         if (busy) "Suche läuft …" else null,
         result?.let { context.getString(it) },
         lastCheckText?.let { context.getString(R.string.update_last_check, it) } ?: context.getString(R.string.update_never_checked)
@@ -253,11 +290,18 @@ internal fun rememberAppUpdates(): AppUpdateUi {
             preferences.edit().putBoolean("automatic", value).apply()
         },
         check = { check(manual = false) },
+        beta = beta,
+        setBeta = { value ->
+            beta = value
+            preferences.edit().putBoolean("beta", value).apply()
+            release = null
+            check(manual = false)
+        },
         status = status,
         settings = {
         // The changes of a new version stay in their popup ("Update anzeigen").
         release?.let { available ->
-            Text(stringResource(R.string.update_available, available.tag))
+            Text(stringResource(R.string.update_available, available.tag) + if (available.beta) " (Beta)" else "")
             SettingRow(stringResource(R.string.update_show)) { dialogOpen = true }
         }
         val checked = lastCheck.takeIf { it > 0 }?.let {
@@ -273,6 +317,13 @@ internal fun rememberAppUpdates(): AppUpdateUi {
             auto = !auto
             preferences.edit().putBoolean("automatic", auto).apply()
         }
+        SettingRow(stringResource(R.string.update_beta), selected = beta) {
+            beta = !beta
+            preferences.edit().putBoolean("beta", beta).apply()
+            release = null
+            check(manual = false)
+        }
+        Text(stringResource(R.string.update_beta_hint), style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
         if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         result?.let { Text(stringResource(it)) }
     })

@@ -51,6 +51,8 @@
     <string name="settings_updates">App-Updates</string>
     <string name="update_check">Nach Updates suchen</string>
     <string name="update_show">Update anzeigen</string>
+    <string name="update_beta">Beta-Versionen erhalten</string>
+    <string name="update_beta_hint">Betas sind Vorabversionen zum Ausprobieren und können Fehler enthalten. Ohne diesen Schalter werden nur fertige Versionen angeboten. Nach dem Ausschalten bleibt eine installierte Beta, bis die nächste fertige Version erscheint.</string>
     <string name="update_auto">Beim Start automatisch nach Updates suchen</string>
     <string name="update_current">Du verwendest die aktuelle Version.</string>
     <string name="update_check_failed">Der Update-Kanal ist derzeit nicht erreichbar.</string>
@@ -387,6 +389,7 @@
     <string name="no_movie_bookmarks">Keine Filme auf der Merkliste.</string>
     <string name="episode_watched">Gesehen</string>
     <string name="watched_status">Gesehen-Status</string>
+    <string name="playback_foreign_audio">Dieser Stream hat nur Ton in einer nicht gewählten Sprache. Das nächste Portal wird versucht.</string>
     <string name="playback_no_audio">Dieser Stream hat keinen abspielbaren Ton.</string>
     <string name="player_settings">Einstellungen</string>
     <string name="player_speed">Geschwindigkeit</string>

@@ -57,6 +57,8 @@ Speicheranbieter und Konfliktregeln auswählen; Opt-in, Auswahl der Daten, lokal
 
 Der Workflow und der Update-Client stehen im Projekt. Der Workflow baut und testet auf Pull Requests und auf `master`. Ein Tag `v<versionName>` veröffentlicht die mit dem bisherigen Schlüssel signierte APK mit Prüfsumme und Hinweisen aus `CHANGELOG.md` im öffentlichen Repository `blatorone/IPTVPlayer-Releases`. Dafür braucht der Workflow die Signing-Secrets `RELEASE_KEYSTORE_BASE64`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_PASSWORD`, `RELEASE_KEY_ALIAS` und `UPDATE_RELEASE_TOKEN` mit Schreibzugriff auf Inhalte des Download-Repositorys.
 
+**Beta-Kanal:** Für eine Beta `versionName = "1.2.3-beta.N"` setzen, `versionCode` erhöhen und den Tag `v1.2.3-beta.N` pushen. Der Workflow veröffentlicht sie als Vorabversion (Pre-release) mit den Hinweisen aus `## 1.2.3-beta.N` oder sonst `## 1.2.3`. Die App bietet Betas nur mit „Beta-Versionen erhalten“ (App-Updates, standardmäßig aus) an und wählt dann die höchste Versionsnummer; ohne den Schalter sieht sie nur fertige Releases. Das fertige `1.2.3` braucht einen höheren `versionCode` als seine Betas.
+
 **Abnahme:** CI auf GitHub ausführen, Signing-Secrets und Download-Kanal einrichten, ein signiertes Test-Release veröffentlichen und das Upgrade auf der Shield mit derselben Signatur prüfen. Nach der einmaligen Installation einer Version mit Update-Client kann die App folgende Releases anbieten.
 
 ## 9. Gesamtprüfung

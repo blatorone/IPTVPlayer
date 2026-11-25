@@ -1,5 +1,11 @@
 # Änderungen
 
+## 1.0.91
+
+- Portale: Der Schalter zum Aktivieren/Deaktivieren sitzt jetzt im Rahmen des Portals; „Bevorzugen“ hat rechts daneben einen eigenen Rahmen.
+- Filme und Serien: Beim automatischen Wechsel auf ein anderes Portal werden nur Versionen aus den gewählten Ländern genommen. Hat ein Stream nur Ton in einer Sprache, die zu keinem gewählten Land passt (z. B. Türkisch bei Deutschland), wird das nächste Portal versucht.
+- App-Updates: Neuer Schalter „Beta-Versionen erhalten“ (standardmäßig aus, auch am Handy). Betas sind Vorabversionen zum Ausprobieren; ohne den Schalter werden wie bisher nur fertige Versionen angeboten.
+
 ## 1.0.90
 
 - Bevorzugtes Portal: In der Portalliste (und am Handy) lässt sich ein Portal mit „Bevorzugen“ markieren. Es wird für Live-TV, Filme und Serien zuerst verwendet; klappt es nicht, werden die anderen Portale automatisch versucht.

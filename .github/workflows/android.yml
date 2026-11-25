@@ -47,7 +47,10 @@ jobs:
           metadata=app/build/outputs/apk/release/output-metadata.json
           version=$(jq -er '.elements[0].versionName' "$metadata")
           code=$(jq -er '.elements[0].versionCode' "$metadata")
-          [[ "$GITHUB_REF_NAME" == "v$version" && "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$GITHUB_REF_NAME" == "v$version" && "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+)?$ ]]
+          # Betas (v1.2.3-beta.4) are published as pre-releases: only apps with the beta switch see them.
+          prerelease=()
+          [[ "$version" == *-beta.* ]] && prerelease=(--prerelease)
           output=$(jq -er '.elements[0].outputFile' "$metadata")
 
           keystore=$(mktemp)
@@ -60,11 +63,16 @@ jobs:
             --out "$apk" "app/build/outputs/apk/release/$output"
           "$apksigner" verify "$apk"
           sha256sum "$apk" > "$apk.sha256"
-          awk -v heading="## $version" '
-            $0 == heading { active = 1; next }
-            /^## / && active { exit }
-            active { print }
-          ' CHANGELOG.md > release-notes.md
+          notes() {
+            awk -v heading="## $1" '
+              $0 == heading { active = 1; next }
+              /^## / && active { exit }
+              active { print }
+            ' CHANGELOG.md
+          }
+          # A beta uses its own section if there is one, otherwise that of the coming version.
+          notes "$version" > release-notes.md
+          grep -q '[^[:space:]]' release-notes.md || notes "${version%%-beta.*}" > release-notes.md
           grep -q '[^[:space:]]' release-notes.md
-          gh release create "$GITHUB_REF_NAME" "$apk" "$apk.sha256" \
+          gh release create "$GITHUB_REF_NAME" "$apk" "$apk.sha256" "${prerelease[@]}" \
             --repo blatorone/IPTVPlayer-Releases --title "IPTVPlayer $version" --notes-file release-notes.md

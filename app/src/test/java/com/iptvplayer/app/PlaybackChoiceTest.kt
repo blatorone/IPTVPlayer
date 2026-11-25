@@ -23,4 +23,14 @@ class PlaybackChoiceTest {
         assertTrue(isForcedSubtitle(0, null, "3:Deutsch erzwungen"))
         assertFalse(isForcedSubtitle(C.SELECTION_FLAG_DEFAULT, "Deutsch", "2"))
     }
+
+    @Test
+    fun allowedAudioFollowsTheChosenCountries() {
+        val german = allowedAudioLanguages(listOf("DE", "AT"))
+        assertTrue("de" in german)
+        assertFalse("tr" in german)
+        assertTrue("tr" in allowedAudioLanguages(listOf("TR")))
+        assertTrue(allowedAudioLanguages(emptyList()).isEmpty())
+        assertTrue(allowedAudioLanguages(listOf("unknown")).isEmpty())
+    }
 }

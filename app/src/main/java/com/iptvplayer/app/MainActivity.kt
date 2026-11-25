@@ -473,6 +473,17 @@ private data class PlaybackVariant(
     val resolve: suspend () -> String
 )
 
+/**
+ * Languages spoken in the chosen countries (plus the device language), as ISO 639-1 codes
+ * like Media3 reports them. Empty when no country is chosen, which allows every language.
+ */
+internal fun allowedAudioLanguages(countries: Collection<String>): Set<String> {
+    val chosen = countries.filter { it.length == 2 }.map { it.uppercase() }.toSet()
+    if (chosen.isEmpty()) return emptySet()
+    val spoken = java.util.Locale.getAvailableLocales().filter { it.country in chosen }.map { it.language.lowercase() }
+    return (spoken + java.util.Locale.getDefault().language.lowercase()).filter { it.isNotBlank() }.toSet()
+}
+
 /** Orders items so that the chosen portal comes first, then the preferred one, then the rest unchanged. */
 internal fun <T> List<T>.preferringSource(chosen: String?, preferred: String?, sourceOf: (T) -> String?): List<T> =
     sortedBy { item ->
@@ -3080,6 +3091,13 @@ private fun PlayerHome(
         return categoryCountry(group?.name ?: item.value.categoryName.orEmpty(), group?.country)
     }
 
+    /** Whether a title's provider category belongs to a chosen country (or names none). */
+    fun countryAllowed(section: PortalSection, item: SourceItem<PortalTitle>): Boolean {
+        if (countries.isEmpty()) return true
+        val country = vodVariantCountry(section, item)
+        return country == UNKNOWN_COUNTRY || country in countries
+    }
+
     /**
      * Drops variants from provider categories of countries outside the selection (for
      * example an English or Dutch series version) and orders the rest by country priority.
@@ -3513,7 +3531,7 @@ private fun PlayerHome(
                     val knownTitle = knownBySource[source.identity]?.value
                     val item = knownTitle?.takeIf { it.command != null } ?: run {
                         val found = portal.loadCatalog(section, portal.openSession(), search = displayVodTitle(title))
-                            .titles.filter { it.command != null }
+                            .titles.filter { it.command != null && countryAllowed(section, SourceItem(source, it)) }
                         found.firstOrNull { knownTitle?.id != null && it.id == knownTitle.id }
                             ?: equivalentCatalogueTitle(title, found) ?: error("No equivalent title")
                     }
@@ -4276,7 +4294,20 @@ private fun PlayerHome(
                 if (active.currentMediaItem?.mediaId != attempt.mediaId || active.playbackState != Player.STATE_READY) return
                 if (tracks.groups.isEmpty() || audioCheckedFor == attempt.mediaId) return
                 audioCheckedFor = attempt.mediaId
-                if (tracks.groups.any { it.type == C.TRACK_TYPE_AUDIO && it.isSupported }) return
+                val audio = tracks.groups.filter { it.type == C.TRACK_TYPE_AUDIO && it.isSupported }
+                if (audio.isNotEmpty()) {
+                    val languages = audio.flatMap { group ->
+                        (0 until group.length).mapNotNull { group.getTrackFormat(it).language?.substringBefore('-')?.lowercase() }
+                    }.filter { it.isNotBlank() && it != "und" && it != "mul" && it != "zxx" }
+                    val allowed = allowedAudioLanguages(countries)
+                    // Only decided when the stream names its languages; unnamed tracks are kept.
+                    if (attempt.selection.section == PortalSection.LIVE || languages.isEmpty() || allowed.isEmpty() ||
+                        languages.any { it in allowed } || attempt.index + 1 >= attempt.variants.size
+                    ) return
+                    AppDiagnostics.record(context, "playback_foreign_audio")
+                    scope.launch { failPlayback(attempt, R.string.playback_foreign_audio) }
+                    return
+                }
                 AppDiagnostics.record(context, "playback_without_audio")
                 if (attempt.index + 1 < attempt.variants.size) {
                     scope.launch { failPlayback(attempt, R.string.playback_no_audio) }
@@ -5149,6 +5180,9 @@ private fun PlayerHome(
                 val updates = text(R.string.settings_updates)
                 add(RemoteEntry.Toggle("updateAuto", updates, text(R.string.update_auto), { appUpdates.automatic }) {
                     appUpdates.setAutomatic(it)
+                })
+                add(RemoteEntry.Toggle("updateBeta", updates, text(R.string.update_beta), { appUpdates.beta }) {
+                    appUpdates.setBeta(it)
                 })
                 add(RemoteEntry.Action("updateCheck", updates, appUpdates.status, text(R.string.update_check)) {
                     appUpdates.check()
@@ -7274,7 +7308,17 @@ private fun PlayerHome(
                                 false -> R.string.portal_status_unreachable
                                 null -> R.string.portal_status_unknown
                             }))
-                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                            // The portal's frame: name, counts and its on/off switch belong together.
+                            Surface(
+                                Modifier.weight(1f), shape = RoundedCornerShape(14.dp),
+                                color = MaterialTheme.colorScheme.surfaceContainer,
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                            ) {
+                            Row(Modifier.padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
                                 SettingRow(
                                 listOf(
                                     stringResource(
@@ -7302,17 +7346,19 @@ private fun PlayerHome(
                                     Modifier.padding(start = 10.dp, end = 10.dp),
                                     style = MaterialTheme.typography.labelSmall
                                 )
-                                // The preferred portal is tried first for live TV, movies and series.
-                                val preferred = preferredPortal == source.identity
-                                MenuButton(
-                                    stringResource(if (preferred) R.string.portal_preferred else R.string.portal_prefer),
-                                    Modifier.padding(end = 8.dp), selected = preferred
-                                ) { setPreferredPortal(if (preferred) null else source.identity) }
                                 // The switch on the portal turns it on or off (and refreshes it when turned on).
                                 SettingToggleButton(
                                     source.enabled,
                                     stringResource(if (source.enabled) R.string.disable_portal else R.string.enable_portal)
                                 ) { setPortalEnabled(source, !source.enabled) }
+                            }
+                            }
+                            // "Bevorzugen" has its own frame next to the portal, so it is not taken for the switch.
+                            val preferred = preferredPortal == source.identity
+                            MenuButton(
+                                stringResource(if (preferred) R.string.portal_preferred else R.string.portal_prefer),
+                                Modifier, selected = preferred
+                            ) { setPreferredPortal(if (preferred) null else source.identity) }
                             }
                         }
                         Text(

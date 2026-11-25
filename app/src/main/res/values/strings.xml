@@ -517,4 +517,15 @@
     <string name="category_unlock">Sperre aufheben</string>
     <string name="update_last_check">Letzte Prüfung %1$s</string>
     <string name="update_never_checked">Noch nicht geprüft</string>
+    <string name="remote_access">Per Handy einstellen (QR-Code)</string>
+    <string name="remote_access_hint">Scanne den QR-Code mit dem Handy. Dort kannst du Portale, Länder, Kategorien, die Kindersicherung und die übrigen Einstellungen ändern – zu Hause und unterwegs. Alles ist Ende-zu-Ende verschlüsselt. Der Zugriff endet, wenn du ihn hier beendest, diese Seite oder die App verlässt oder 15 Minuten nichts geändert wird.</string>
+    <string name="remote_access_start">Zugriff per Handy starten</string>
+    <string name="remote_access_end">Zugriff beenden</string>
+    <string name="remote_status_connecting">Verbinde …</string>
+    <string name="remote_status_waiting">Warte auf das Handy – QR-Code scannen</string>
+    <string name="remote_status_connected">Handy verbunden</string>
+    <string name="remote_status_offline">Keine Verbindung zum Internet – neuer Versuch …</string>
+    <string name="remote_status_ended">Zugriff beendet. Der QR-Code ist nicht mehr gültig.</string>
+    <string name="remote_access_remaining">Endet ohne Nutzung in %1$s</string>
+    <string name="remote_qr_description">QR-Code für den Zugriff per Handy</string>
 </resources>

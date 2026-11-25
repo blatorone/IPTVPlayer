@@ -41,6 +41,7 @@ dependencies {
     implementation(libs.media3.ui)
     implementation(libs.zxing.core)
     implementation(libs.gson)
+    implementation(libs.okhttp)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)

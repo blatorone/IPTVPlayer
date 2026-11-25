@@ -35,6 +35,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 
 /**
  * One line of a settings page. With [selected] it is an on/off switch; otherwise it opens or
@@ -80,6 +82,30 @@ internal fun SettingRow(
                 )
                 else -> Text("›", style = MaterialTheme.typography.titleLarge, color = colors.onSurfaceVariant)
             }
+        }
+    }
+}
+
+/**
+ * A switch that is its own focus target, for rows whose main click does something else
+ * (e.g. a portal: the row opens it, the switch turns it on or off).
+ */
+@Composable
+internal fun SettingToggleButton(on: Boolean, label: String, enabled: Boolean = true, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    val colors = MaterialTheme.colorScheme
+    Surface(
+        modifier = Modifier
+            .onFocusChanged { focused = it.isFocused }
+            .focusProperties { canFocus = enabled }
+            .clickable(enabled = enabled, onClickLabel = label, onClick = onClick)
+            .semantics { contentDescription = label },
+        color = if (focused) colors.surfaceContainerHighest else colors.surfaceContainerHigh,
+        shape = RoundedCornerShape(12.dp),
+        border = if (focused) BorderStroke(2.dp, colors.primary) else null
+    ) {
+        Box(Modifier.heightIn(min = 52.dp).padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
+            SettingSwitch(on)
         }
     }
 }

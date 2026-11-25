@@ -1,5 +1,10 @@
 # Änderungen
 
+## 1.0.89
+
+- Neu: Per Handy einstellen (Einstellungen → Allgemein). Das Gerät zeigt einen QR-Code; damit lassen sich im Handy-Browser Portale hinzufügen, aktivieren und entfernen, Länder und Kategorien für Live-TV, Filme und Serien ein- und ausblenden, Kategorien sperren, PIN und Kindersicherung sowie die übrigen Einstellungen ändern – im Heimnetz und unterwegs. Die Verbindung ist Ende-zu-Ende verschlüsselt und endet mit „Zugriff beenden“, beim Verlassen der Seite oder App und nach 15 Minuten ohne Änderung.
+- Portale: Der Schalter direkt an der Portalzeile aktiviert bzw. deaktiviert das Portal; die eigene Zeile dafür entfällt.
+
 ## 1.0.88
 
 - Behoben: Einstellungs-Unterseiten (z. B. „Tasten und Gesten belegen“, EPG, Folgen, TMDB, Programmführer gestalten) schlossen sich beim Öffnen sofort wieder und die Einstellungen sprangen zu „Allgemein“. Die Unterseite öffnet sich jetzt zuverlässig und bekommt den Fokus.

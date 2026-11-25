@@ -397,6 +397,7 @@ private val mainDestinations = Destination.entries.filter {
 }
 private const val EXIT_CONFIRMATION_MS = 3_000L
 private const val SETTINGS_PAGE_FOCUS_GRACE_MS = 800L
+private const val REMOTE_PIN_ATTEMPTS = 5
 
 private fun playerColors(accent: AccentChoice) = darkColorScheme(
     primary = accent.color,
@@ -833,6 +834,8 @@ private fun PlayerHome(
     }
     var controlSettingsOpen by remember { mutableStateOf(false) }
     var settingsPageOpenedAt by remember { mutableStateOf(0L) }
+    var remoteAccessOpen by remember { mutableStateOf(false) }
+    val remotePinFailures = remember { java.util.concurrent.atomic.AtomicInteger() }
     var openedSeries by remember { mutableStateOf<PortalTitle?>(null) }
     var seasons by remember { mutableStateOf<List<PortalSeason>?>(null) }
     var playbackSeasons by remember { mutableStateOf(emptyList<PortalSeason>()) }
@@ -2545,6 +2548,39 @@ private fun PlayerHome(
         save(updated, activate = false)
     }
 
+    /** Removes a saved portal; the last portal stays (it can be turned off instead). */
+    suspend fun removePortal(identity: String): Boolean {
+        val remaining = savedSources.filter { source ->
+            runCatching { source.identity != identity }.getOrDefault(true)
+        }
+        if (remaining.size == savedSources.size || remaining.isEmpty()) return false
+        if (storedSource?.identity == identity) {
+            val fallback = remaining.firstOrNull { it.enabled }
+            storedSource = fallback
+            preferences?.edit()?.putString("active_portal_cache", fallback?.identity)?.apply()
+            liveSession = fallback?.let { StalkerPortal(it.address, it.mac) to null }
+            catalogSession = liveSession
+            channels = fallback?.channels.orEmpty()
+            genres = fallback?.genres.orEmpty()
+            catalogs = fallback?.catalogs.orEmpty()
+            epgChannelIds = fallback?.epgChannelIds.orEmpty()
+            category = null
+            programmeChannel = null
+        }
+        secondarySessions.remove(identity)
+        savedSources = remaining
+        return try {
+            storage?.write(SavedPortals(remaining, storedSource?.identity ?: remaining.first().identity))
+            storageError = null
+            true
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            storageError = R.string.portal_save_failed
+            false
+        }
+    }
+
     fun toggleProgrammeChannel(channel: StalkerChannel) {
         val item = liveVariants[channel]?.firstOrNull() ?: return
         val id = item.value.id ?: return
@@ -3830,6 +3866,21 @@ private fun PlayerHome(
         }
     }
 
+    /** Turns a portal on or off; turning it on refreshes it (TV switch and phone). */
+    fun setPortalEnabled(source: SavedPortal, enabled: Boolean) {
+        scope.launch {
+            try {
+                updatePortalStatus(source.identity, enabled = enabled)
+                if (enabled) refreshPortal(source.address, source.mac, activate = false)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                AppDiagnostics.record(context, "portal_toggle_failed")
+                sourceError = R.string.portal_error
+            }
+        }
+    }
+
     fun importPortal() {
         editing = false
         val firstPortal = storedSource == null
@@ -4296,7 +4347,7 @@ private fun PlayerHome(
     val mainMenuOpen = isMainMenuOpen()
     LaunchedEffect(mainMenuOpen) { if (!mainMenuOpen) lastBack = 0L }
     fun settingsPageOpen() = epgSettingsOpen || episodeSettingsOpen || controlSettingsOpen ||
-        metadataSettingsOpen || guideAppearancePage != null
+        metadataSettingsOpen || guideAppearancePage != null || remoteAccessOpen
     fun openSettingsPage(open: () -> Unit) {
         settingsPageOpenedAt = SystemClock.elapsedRealtime()
         open()
@@ -4308,6 +4359,7 @@ private fun PlayerHome(
         controlSettingsOpen = false
         metadataSettingsOpen = false
         guideAppearancePage = null
+        remoteAccessOpen = false
         return open
     }
     fun openSettingsNow() {
@@ -4635,6 +4687,298 @@ private fun PlayerHome(
         },
         onDismiss = { controlSettingsOpen = false }
     ) }
+    // Remote settings from a phone: reads and changes the same states as the settings on the device.
+    val remoteHandlerNow = object : RemoteHandler {
+        fun text(id: Int) = context.getString(id)
+        /** Label of a "Name: value" string without its value. */
+        fun name(id: Int) = context.getString(id, "").trimEnd(' ', ':')
+        fun <T : Enum<T>> options(values: List<T>, label: (T) -> Int) =
+            values.map { RemoteOption(it.name, text(label(it))) }
+
+        fun entries(): List<RemoteEntry> {
+            val general = text(R.string.settings_general)
+            val library = text(R.string.settings_library)
+            val guide = text(R.string.destination_guide)
+            val appearance = text(R.string.settings_appearance)
+            val playback = text(R.string.settings_playback)
+            val controls = text(R.string.settings_controls)
+            val parentalSection = text(R.string.settings_parental)
+            fun toggle(id: String, section: String, label: String, get: () -> Boolean, key: String, set: (Boolean) -> Unit) =
+                RemoteEntry.Toggle(id, section, label, get) { value ->
+                    set(value)
+                    preferences?.edit()?.putBoolean(key, value)?.apply()
+                }
+            fun number(id: String, section: String, label: String, min: Int, max: Int, step: Int, unit: String,
+                       get: () -> Int, key: String, set: (Int) -> Unit) =
+                RemoteEntry.Number(id, section, label, min, max, step, unit, get) { value ->
+                    set(value)
+                    preferences?.edit()?.putInt(key, value)?.apply()
+                }
+            val vodViews = VodLiveView.entries
+            return buildList {
+                add(toggle("showBack", general, text(R.string.show_touch_back_button), { showSettingsBackButton },
+                    "show_settings_back_button") { showSettingsBackButton = it })
+                add(toggle("keySounds", general, text(R.string.key_sounds), { keySounds }, "key_sounds") { keySounds = it })
+                add(toggle("lastChannel", general, text(R.string.start_last_channel), { playLastChannelAtStartup },
+                    "play_last_channel_at_startup") { playLastChannelAtStartup = it })
+                add(toggle("portalRefresh", library, text(R.string.portal_refresh_at_start), { refreshPortalsAtStartup },
+                    "refresh_portals_at_startup") { refreshPortalsAtStartup = it })
+                add(toggle("autoDisable", library, text(R.string.auto_disable_unavailable_portals),
+                    { autoDisableUnavailablePortals }, "auto_disable_unavailable_portals") { autoDisableUnavailablePortals = it })
+                add(toggle("merge", library, text(R.string.merge_sources), { mergeSources }, "mergeSources") {
+                    if (it != mergeSources) {
+                        mergeSources = it
+                        closeGroup()
+                        closeSeries()
+                        details = null
+                        searchedVariants = emptyMap()
+                        category = null
+                    }
+                })
+                add(toggle("autoCountries", library, text(R.string.auto_country_prompt), { automaticCountries },
+                    "autoCountries") { automaticCountries = it })
+                add(toggle("epgAtStart", guide, "EPG: " + text(R.string.epg_refresh_at_start), { epgAtStartup },
+                    "epg_at_startup") { epgAtStartup = it })
+                add(RemoteEntry.Choice(
+                    "epgRefresh", guide, "EPG automatisch aktualisieren",
+                    listOf(0, 1, 3, 6, 12, 24).map {
+                        RemoteOption(it.toString(), if (it == 0) "Aus" else "alle $it Std.")
+                    }, { epgRefreshHours.toString() }
+                ) {
+                    epgRefreshHours = it.toInt()
+                    preferences?.edit()?.putInt("epg_refresh_hours", epgRefreshHours)?.apply()
+                })
+                add(RemoteEntry.Choice(
+                    "epgHorizon", guide, "EPG-Vorschau",
+                    listOf(6, 12, 24, 48, 72, 168).map {
+                        RemoteOption(it.toString(), if (it < 24) "$it Stunden" else if (it == 24) "1 Tag" else "${it / 24} Tage")
+                    }, { epgHorizonHours.toString() }
+                ) {
+                    epgHorizonHours = it.toInt()
+                    preferences?.edit()?.putInt("epg_horizon_hours", epgHorizonHours)?.apply()
+                    epgRefreshRequest++
+                })
+                add(RemoteEntry.Choice("accent", appearance, name(R.string.accent_color_setting),
+                    options(AccentChoice.entries) { it.label }, { accentChoice.name }
+                ) { value -> AccentChoice.entries.firstOrNull { it.name == value }?.let(onAccentChoiceChange) })
+                add(RemoteEntry.Choice("menuStyle", appearance, name(R.string.menu_style_setting),
+                    options(MainMenuStyle.entries) { it.label }, { mainMenuStyle.name }
+                ) { value ->
+                    mainMenuStyle = MainMenuStyle.valueOf(value)
+                    preferences?.edit()?.putString("main_menu_style", value)?.apply()
+                })
+                add(RemoteEntry.Choice("providerStyle", appearance, name(R.string.provider_category_style_setting),
+                    options(ProviderCategoryStyle.entries) { it.label }, { providerCategoryStyle.name }
+                ) { value ->
+                    providerCategoryStyle = ProviderCategoryStyle.valueOf(value)
+                    preferences?.edit()?.putString("provider_category_style", value)?.apply()
+                })
+                add(toggle("subtitles", playback, text(R.string.subtitles_default_on), { subtitleDefaultEnabled },
+                    "subtitle_default_enabled") { subtitleDefaultEnabled = it })
+                add(toggle("forcedSubtitles", playback, text(R.string.subtitles_forced_auto), { forcedSubtitlesEnabled },
+                    "forced_subtitles_enabled") { forcedSubtitlesEnabled = it })
+                add(RemoteEntry.Choice("vodLive", playback, name(R.string.live_preview_in_vod),
+                    options(vodViews) { it.label }, { vodLiveView.name }
+                ) { value ->
+                    vodLiveView = VodLiveView.valueOf(value)
+                    preferences?.edit()?.putString("vod_live_view", value)?.apply()
+                })
+                for ((section, label) in listOf(
+                    PortalSection.MOVIES to R.string.vod_movies_playback,
+                    PortalSection.SERIES to R.string.vod_series_playback
+                )) add(RemoteEntry.Choice("vodView${section.name}", playback, name(label),
+                    vodViews.map {
+                        RemoteOption(it.name, text(if (it == VodLiveView.HIDDEN) R.string.vod_playback_off else it.label))
+                    }, { vodPlaybackViews.getValue(section).name }
+                ) { value ->
+                    val next = VodLiveView.valueOf(value)
+                    vodPlaybackViews[section] = next
+                    preferences?.edit()?.putString("vod_view_${section.name}", value)?.apply()
+                    if (next == VodLiveView.HIDDEN && vodSection == section) player?.pause()
+                })
+                add(toggle("autoNext", playback, text(R.string.auto_next_episode), { autoNextEpisode },
+                    "auto_next_episode") { autoNextEpisode = it })
+                add(toggle("inactivity", playback, text(R.string.series_inactivity_check), { checkSeriesInactivity },
+                    "check_series_inactivity") { checkSeriesInactivity = it })
+                add(number("inactiveLimit", playback, "Nachfragen nach Folgen ohne Eingabe", 1, 10, 1, "Folgen",
+                    { inactiveEpisodeLimit }, "inactive_episode_limit") { inactiveEpisodeLimit = it })
+                add(toggle("skipIntro", playback, text(R.string.skip_intro_automatically), { autoSkipIntro },
+                    "auto_skip_intro") { autoSkipIntro = it })
+                add(toggle("decodeAudio", playback, text(R.string.decode_audio_for_intro), { decodeAudioForIntro },
+                    "decode_audio_for_intro") { decodeAudioForIntro = it })
+                add(toggle("manualIntro", playback, text(R.string.intro_manual), { manualIntro }, "manual_intro") { manualIntro = it })
+                add(number("introStart", playback, "Intro beginnt nach", 0, 595, 5, "Sek.", { introStartSeconds },
+                    "intro_start_seconds") { introStartSeconds = it.coerceAtMost(introEndSeconds - 5).coerceAtLeast(0) })
+                add(number("introEnd", playback, "Intro endet nach", 5, 600, 5, "Sek.", { introEndSeconds },
+                    "intro_end_seconds") { introEndSeconds = it.coerceAtLeast(introStartSeconds + 5) })
+                add(toggle("manualCredits", playback, text(R.string.credits_manual), { manualCredits },
+                    "manual_credits") { manualCredits = it })
+                add(number("creditsBefore", playback, "Abspann vor dem Ende", 0, 600, 5, "Sek.", { creditsBeforeEndSeconds },
+                    "credits_before_end_seconds") { creditsBeforeEndSeconds = it })
+                add(number("episodeNotice", playback, "Hinweis zur nächsten Folge vorher", 5, 60, 5, "Sek.",
+                    { episodeNoticeSeconds }, "episode_notice_seconds") { episodeNoticeSeconds = it })
+                for (input in GuideInput.entries) add(RemoteEntry.Choice(
+                    "control${input.name}", controls, text(input.label),
+                    options(ControlAction.entries) { it.label },
+                    { (controlBindings[input] ?: ControlAction.DEFAULT).name }
+                ) { value ->
+                    val action = ControlAction.valueOf(value)
+                    controlBindings[input] = action
+                    preferences?.edit()?.putString("control_${input.name}", value)?.apply()
+                })
+                // Parental settings are changed with their own command (some need the PIN).
+                add(RemoteEntry.Toggle("parental.protectSettings", parentalSection, text(R.string.parental_protect_settings),
+                    { parental.protectSettings }) {})
+                add(RemoteEntry.Toggle("parental.lockAdult", parentalSection, text(R.string.parental_lock_adult),
+                    { parental.lockAdult }) {})
+                add(RemoteEntry.Toggle("parental.kidsMode", parentalSection, text(R.string.kids_mode),
+                    { parental.kidsMode }) {})
+                add(RemoteEntry.Choice("parental.kidsAge", parentalSection, name(R.string.kids_age),
+                    KIDS_AGES.map { RemoteOption(it.toString(), context.getString(R.string.kids_age_value, it)) },
+                    { parental.kidsAge.toString() }) {})
+            }
+        }
+
+        fun categories(section: PortalSection): List<RemoteCategory> {
+            val groups = if (section == PortalSection.LIVE) {
+                allLiveCategories.keys.sortedBy { categoryNames.values.indexOf(it) }.map { PortalGroup(it, it) }
+            } else defaultVodCategoryOrder(section)
+            return withCategoryOrder(section, groups) { it.id }.map { group ->
+                val key = categoryKey(section, group.id)
+                RemoteCategory(group.id, group.name, key in hiddenCategories, key in parental.lockedCategories)
+            }
+        }
+
+        fun countryName(code: String) =
+            if (code == UNKNOWN_COUNTRY) "Ohne Länderangabe" else runCatching { countryLabel(code) }.getOrDefault(code)
+
+        override fun remoteState(): RemoteState {
+            val available = (countries + knownCountries).toList()
+            return RemoteState(
+                device = if (isTelevision) "StreamWatch (TV)" else "StreamWatch",
+                settings = entries(),
+                portals = savedSources.mapIndexed { index, source ->
+                    val host = runCatching { java.net.URI(source.address).host }.getOrNull().orEmpty()
+                    RemotePortal(
+                        source.identity, "Portal ${index + 1} · $host", source.address, source.mac,
+                        source.enabled, source.reachable,
+                        source.subscriptionExpiry?.format(DateTimeFormatter.ofPattern("dd.MM.uuuu")),
+                        source.identity == storedSource?.identity
+                    )
+                },
+                categories = PortalSection.entries.associate { it.name to categories(it) },
+                countries = available.sortedWith(compareBy({ it !in countries }, {
+                    if (it in countries) countries.indexOf(it).toString().padStart(4, '0') else countryName(it)
+                })).map { RemoteCountry(it, countryName(it), it in countries) },
+                parental = RemoteParental(parental.hasPin, parental.separateKidsPin, parental.kidsMode),
+                busy = if (connecting) "Portale werden geladen …" else null,
+                error = sourceError?.let(::text)
+            )
+        }
+
+        fun pinOk(pin: String?, check: (String) -> Boolean): Boolean {
+            if (remotePinFailures.get() >= REMOTE_PIN_ATTEMPTS) return false
+            val ok = pin != null && check(pin)
+            if (!ok) remotePinFailures.incrementAndGet() else remotePinFailures.set(0)
+            return ok
+        }
+        val wrongPin get() = RemoteReply(false,
+            if (remotePinFailures.get() >= REMOTE_PIN_ATTEMPTS) "Zu viele falsche PINs. Bitte am Gerät neu starten."
+            else "Die PIN ist falsch.")
+
+        override fun applyRemote(command: RemoteCommand): RemoteReply = when (command) {
+            RemoteCommand.Hello -> RemoteReply(true)
+            is RemoteCommand.Set ->
+                if (command.id.startsWith("parental.")) RemoteReply(false)
+                else if (entries().applyRemoteValue(command.id, command.value)) RemoteReply(true)
+                else RemoteReply(false, "Dieser Wert ist nicht möglich.")
+            is RemoteCommand.Categories -> {
+                setCategoryVisibility(command.section, command.ids, command.hidden)
+                RemoteReply(true)
+            }
+            is RemoteCommand.CategoryLock -> {
+                val key = categoryKey(command.section, command.id)
+                when {
+                    !parental.hasPin -> RemoteReply(false, "Zuerst eine PIN festlegen.")
+                    command.locked == (key in parental.lockedCategories) -> RemoteReply(true)
+                    !command.locked && !pinOk(command.pin, parental::checkPin) -> wrongPin
+                    else -> { parental.toggleLocked(key); RemoteReply(true) }
+                }
+            }
+            is RemoteCommand.Countries -> {
+                val allowed = countries + knownCountries
+                saveCountries(command.codes.filter { it in allowed }.toCollection(LinkedHashSet()))
+                RemoteReply(true)
+            }
+            is RemoteCommand.PortalAdd ->
+                if (connecting) RemoteReply(false, "Es wird gerade ein Portal geladen. Bitte kurz warten.")
+                else {
+                    address = command.address
+                    mac = command.mac
+                    sourceError = null
+                    importPortal()
+                    RemoteReply(true, "Portal wird geladen …")
+                }
+            is RemoteCommand.PortalEnabled -> savedSources.firstOrNull { it.identity == command.id }?.let { source ->
+                if (source.enabled != command.enabled) setPortalEnabled(source, command.enabled)
+                RemoteReply(true)
+            } ?: RemoteReply(false, "Portal nicht gefunden.")
+            is RemoteCommand.PortalRemove ->
+                if (savedSources.size <= 1) RemoteReply(false, "Das letzte Portal kann nicht entfernt werden. Du kannst es deaktivieren.")
+                else {
+                    scope.launch { removePortal(command.id) }
+                    RemoteReply(true, "Portal entfernt.")
+                }
+            is RemoteCommand.Pin ->
+                if (parental.hasPin && !pinOk(command.current, parental::checkPin)) wrongPin
+                else { parental.setPin(command.pin); RemoteReply(true, "PIN gespeichert.") }
+            is RemoteCommand.PinRemove ->
+                if (!parental.hasPin) RemoteReply(true)
+                else if (!pinOk(command.current, parental::checkPin)) wrongPin
+                else { parental.removePin(); RemoteReply(true, "PIN entfernt.") }
+            is RemoteCommand.KidsPin ->
+                if (!parental.hasPin) RemoteReply(false, "Zuerst eine PIN festlegen.")
+                else if (!pinOk(command.current, parental::checkPin)) wrongPin
+                else { parental.setKidsPin(command.pin); RemoteReply(true) }
+            is RemoteCommand.Parental -> {
+                val value = command.value?.takeIf { it.isJsonPrimitive }?.asJsonPrimitive
+                when (command.field) {
+                    "protectSettings" -> when {
+                        value?.isBoolean != true -> RemoteReply(false)
+                        !parental.hasPin -> RemoteReply(false, "Zuerst eine PIN festlegen.")
+                        else -> { parental.updateProtectSettings(value.asBoolean); RemoteReply(true) }
+                    }
+                    "lockAdult" -> when {
+                        value?.isBoolean != true -> RemoteReply(false)
+                        value.asBoolean -> { parental.updateLockAdult(true); RemoteReply(true) }
+                        parental.hasPin && !pinOk(command.pin, parental::checkPin) -> wrongPin
+                        else -> { parental.updateLockAdult(false); RemoteReply(true) }
+                    }
+                    "kidsMode" -> when {
+                        value?.isBoolean != true -> RemoteReply(false)
+                        !parental.hasPin -> RemoteReply(false, "Zuerst eine PIN festlegen.")
+                        value.asBoolean -> { parental.updateKidsMode(true); RemoteReply(true) }
+                        !pinOk(command.pin, parental::checkKidsPin) -> wrongPin
+                        else -> { parental.updateKidsMode(false); RemoteReply(true) }
+                    }
+                    "kidsAge" -> value?.takeIf { it.isString }?.asString?.toIntOrNull()?.takeIf { it in KIDS_AGES }?.let {
+                        parental.updateKidsAge(it); RemoteReply(true)
+                    } ?: RemoteReply(false)
+                    else -> RemoteReply(false)
+                }
+            }
+        }
+    }
+    val remoteHandlerCurrent by rememberUpdatedState(remoteHandlerNow)
+    val remoteHandler = remember {
+        object : RemoteHandler {
+            override fun remoteState() = remoteHandlerCurrent.remoteState()
+            override fun applyRemote(command: RemoteCommand) = remoteHandlerCurrent.applyRemote(command)
+        }
+    }
+    val remoteAccessPage: @Composable () -> Unit = {
+        RemoteAccessPage(remoteHandler, onPinReset = { remotePinFailures.set(0) }) { remoteAccessOpen = false }
+    }
     LaunchedEffect(playbackAttempt, manualIntro, manualCredits) {
         val attempt = playbackAttempt ?: return@LaunchedEffect
         val active = player ?: return@LaunchedEffect
@@ -6237,6 +6581,7 @@ private fun PlayerHome(
                                         epgSettingsOpen -> epgSettingsPage
                                         episodeSettingsOpen -> episodeSettingsPage
                                         controlSettingsOpen -> controlSettingsPage
+                                        remoteAccessOpen -> remoteAccessPage
                                         metadataSettingsOpen -> metadataSettingsPage
                                         else -> guideAppearancePage?.let { page -> { guideAppearanceSettingsPage(page) } }
                                     }
@@ -6244,6 +6589,9 @@ private fun PlayerHome(
                                         androidx.compose.runtime.CompositionLocalProvider(LocalSettingsInline provides true) { subpage() }
                                     } else when (section) {
                                 SettingsSection.GENERAL -> {
+                                    SettingRow(stringResource(R.string.remote_access), Modifier) {
+                                        openSettingsPage { remoteAccessOpen = true }
+                                    }
                                     SettingRow(
                                         stringResource(R.string.show_touch_back_button), Modifier,
                                         selected = showSettingsBackButton
@@ -6524,7 +6872,6 @@ private fun PlayerHome(
                                     } ?: stringResource(R.string.portal_expiry_unknown)
                                 ).joinToString(" · "),
                                 Modifier.weight(1f),
-                                selected = !mergeSources && isActive,
                                 onClick = {
                                     if (mergeSources && !connecting) {
                                         address = source.address
@@ -6536,26 +6883,14 @@ private fun PlayerHome(
                                 val counts = sourceContentCounts[source.identity] ?: PortalContentCounts(0, 0, 0)
                                 Text(
                                     "TV ${counts.tv}  ·  Filme ${counts.movies}  ·  Serien ${counts.series}",
-                                    Modifier.padding(start = 10.dp),
+                                    Modifier.padding(start = 10.dp, end = 10.dp),
                                     style = MaterialTheme.typography.labelSmall
                                 )
-                            }
-                            SettingRow(
-                                stringResource(if (source.enabled) R.string.disable_portal else R.string.enable_portal),
-                                Modifier,
-                                selected = source.enabled
-                            ) {
-                                scope.launch {
-                                    try {
-                                        updatePortalStatus(source.identity, enabled = !source.enabled)
-                                        if (!source.enabled) refreshPortal(source.address, source.mac, activate = false)
-                                    } catch (error: CancellationException) {
-                                        throw error
-                                    } catch (_: Exception) {
-                                        AppDiagnostics.record(context, "portal_toggle_failed")
-                                        sourceError = R.string.portal_error
-                                    }
-                                }
+                                // The switch on the portal turns it on or off (and refreshes it when turned on).
+                                SettingToggleButton(
+                                    source.enabled,
+                                    stringResource(if (source.enabled) R.string.disable_portal else R.string.enable_portal)
+                                ) { setPortalEnabled(source, !source.enabled) }
                             }
                         }
                         Text(

@@ -76,7 +76,7 @@ internal fun TraktSettings(
 }
 
 @Composable
-private fun QrCode(value: String, modifier: Modifier = Modifier) {
+internal fun QrCode(value: String, modifier: Modifier = Modifier) {
     val bitmap = remember(value) {
         runCatching {
             val matrix = QRCodeWriter().encode(

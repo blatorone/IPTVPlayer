@@ -64,6 +64,14 @@ internal class RemoteSessionCrypto private constructor(val secret: ByteArray) {
         return plaintext
     }
 
+    /**
+     * A reconnecting peer starts counting at 1 again. The device then announces a fresh epoch that
+     * every later command must carry, so frames of an earlier connection are still rejected.
+     */
+    fun resetPeer(sender: Role) {
+        lastSeen.remove(sender)
+    }
+
     private fun associatedData(sender: Role, seq: Long) =
         "$AAD_PREFIX|${sender.wire}|$seq".toByteArray(Charsets.UTF_8)
 

@@ -65,6 +65,15 @@ class RemoteSessionCryptoTest {
     }
 
     @Test
+    fun opensFrameSealedByTheWebPage() {
+        // Produced by remote/public/app.js (WebCrypto) for the secret bytes 0..31.
+        val tv = RemoteSessionCrypto.fromEncodedSecret("AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8")!!
+        assertEquals("qq3V-SUcTJBpPFpZZonCzg", tv.roomId)
+        val plain = tv.open(Role.PHONE, "1.1.P5V-lJOHnzlIdT1E.e6X7jpl7A9Y30Dz05MnW5TQfUGDBrEFw0HLbUKjElIkC2VHWhM6Q2ryE")
+        assertEquals("""{"t":"hello","epoch":"e1"}""", plain?.toString(Charsets.UTF_8))
+    }
+
+    @Test
     fun rejectsMalformedSecrets() {
         assertNull(RemoteSessionCrypto.fromEncodedSecret("kurz"))
         assertNull(RemoteSessionCrypto.fromEncodedSecret("!!!"))

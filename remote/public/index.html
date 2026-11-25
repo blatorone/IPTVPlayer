@@ -2,24 +2,85 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="referrer" content="no-referrer">
   <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#0b0b0d">
   <title>StreamWatch Fernverwaltung</title>
-  <style>
-    :root { color-scheme: dark; }
-    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0b0b0d;
-      color: #eee; font: 16px/1.5 system-ui, sans-serif; }
-    main { max-width: 28rem; padding: 2rem; text-align: center; }
-    h1 { font-size: 1.4rem; margin: 0 0 .5rem; }
-    p { color: #aaa; margin: .25rem 0; }
-  </style>
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
 </head>
 <body>
-  <main>
-    <h1>StreamWatch Fernverwaltung</h1>
-    <p>Diese Seite wird gerade aufgebaut.</p>
-    <p>Öffne sie über den QR-Code in den Einstellungen von StreamWatch.</p>
+  <header>
+    <div class="brand"><span class="logo">▶</span> StreamWatch</div>
+    <div id="status" class="status">Verbinde …</div>
+  </header>
+
+  <main id="intro" class="panel">
+    <h1>Fernverwaltung</h1>
+    <p>Öffne diese Seite über den QR-Code unter <b>Einstellungen → Allgemein → Per Handy einstellen</b> in StreamWatch.</p>
   </main>
+
+  <nav id="tabs" hidden>
+    <button data-tab="portals" class="active">Portale</button>
+    <button data-tab="countries">Länder</button>
+    <button data-tab="categories">Kategorien</button>
+    <button data-tab="parental">Kindersicherung</button>
+    <button data-tab="settings">Einstellungen</button>
+  </nav>
+
+  <main id="app" hidden>
+    <section id="tab-portals">
+      <div id="portal-notice"></div>
+      <div id="portal-list"></div>
+      <form id="portal-form" class="card" autocomplete="off">
+        <h2>Portal hinzufügen</h2>
+        <label>Portal-Adresse <input name="address" type="url" inputmode="url" placeholder="http://portal.example:8080/c/" required></label>
+        <label>MAC-Adresse <input name="mac" placeholder="00:1A:79:XX:XX:XX" required autocapitalize="characters"></label>
+        <button type="submit" class="primary">Hinzufügen und laden</button>
+      </form>
+    </section>
+
+    <section id="tab-countries" hidden>
+      <p class="hint">Gewählte Länder werden in dieser Reihenfolge angezeigt. Ohne Auswahl erscheinen alle Länder.</p>
+      <input id="country-search" type="search" placeholder="Land suchen">
+      <div id="country-list"></div>
+    </section>
+
+    <section id="tab-categories" hidden>
+      <div class="segments" id="category-sections">
+        <button data-section="LIVE" class="active">Live-TV</button>
+        <button data-section="MOVIES">Filme</button>
+        <button data-section="SERIES">Serien</button>
+      </div>
+      <input id="category-search" type="search" placeholder="Kategorie suchen">
+      <div class="row-actions">
+        <button id="category-show-all">Alle gezeigten einblenden</button>
+        <button id="category-hide-all">Alle gezeigten ausblenden</button>
+      </div>
+      <div id="category-list"></div>
+    </section>
+
+    <section id="tab-parental" hidden>
+      <div id="parental"></div>
+    </section>
+
+    <section id="tab-settings" hidden>
+      <div id="settings"></div>
+    </section>
+  </main>
+
+  <dialog id="pin-dialog">
+    <form method="dialog">
+      <h2 id="pin-title">PIN</h2>
+      <input id="pin-input" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" minlength="4" maxlength="12">
+      <div class="row-actions">
+        <button value="cancel">Abbrechen</button>
+        <button value="ok" class="primary">OK</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" role="status" aria-live="polite"></div>
 </body>
 </html>

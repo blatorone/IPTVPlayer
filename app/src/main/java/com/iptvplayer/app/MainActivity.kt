@@ -3881,6 +3881,31 @@ private fun PlayerHome(
         }
     }
 
+    /**
+     * Changes address or MAC of a saved portal: the portal is loaded with the new details and the
+     * old entry is removed once the new one was saved (from the phone).
+     */
+    fun editPortal(old: SavedPortal, newAddress: String, newMac: String) {
+        if (connecting) return
+        val wasActive = storedSource?.identity == old.identity
+        connecting = true
+        batchSummary = null
+        sourceError = null
+        scope.launch {
+            try {
+                refreshPortal(newAddress, newMac, activate = wasActive)
+                val newIdentity = runCatching {
+                    SavedPortal(newAddress, newMac, emptyList(), emptyMap(), emptyMap()).identity
+                }.getOrNull()
+                if (newIdentity != null && newIdentity != old.identity &&
+                    savedSources.any { it.identity == newIdentity }
+                ) removePortal(old.identity)
+            } finally {
+                connecting = false
+            }
+        }
+    }
+
     fun importPortal() {
         editing = false
         val firstPortal = storedSource == null
@@ -4375,7 +4400,7 @@ private fun PlayerHome(
         lastBack = 0L
         selected = Destination.SETTINGS
     }
-    fun openSettings() {
+    fun openSettings(after: () -> Unit = {}) {
         if (parental.kidsMode || parental.hasPin && parental.protectSettings) {
             val kids = parental.kidsMode
             if (pinRequest == null) pinRequest = PinRequest(
@@ -4385,10 +4410,17 @@ private fun PlayerHome(
             ) {
                 if (kids) parental.updateKidsMode(false)
                 openSettingsNow()
+                after()
             }
             return
         }
         openSettingsNow()
+        after()
+    }
+    /** Opens "Per Handy einstellen" (e.g. from setting up a portal). */
+    fun openRemoteAccess() {
+        editing = false
+        openSettings { openSettingsPage { remoteAccessOpen = true } }
     }
     fun returnToCategories() {
         lastLiveCategory = category
@@ -4872,6 +4904,7 @@ private fun PlayerHome(
                 })).map { RemoteCountry(it, countryName(it), it in countries) },
                 parental = RemoteParental(parental.hasPin, parental.separateKidsPin, parental.kidsMode),
                 busy = if (connecting) "Portale werden geladen …" else null,
+                askCountries = askForCountries || choosingCountries,
                 error = sourceError?.let(::text)
             )
         }
@@ -4908,8 +4941,24 @@ private fun PlayerHome(
             is RemoteCommand.Countries -> {
                 val allowed = countries + knownCountries
                 saveCountries(command.codes.filter { it in allowed }.toCollection(LinkedHashSet()))
+                if (command.confirm) {
+                    // Confirmed on the phone: the question on the device is answered too.
+                    askForCountries = false
+                    choosingCountries = false
+                    RemoteReply(true, "Länder übernommen.")
+                } else RemoteReply(true)
+            }
+            RemoteCommand.Finish -> RemoteReply(true)
+            RemoteCommand.CountriesLater -> {
+                askForCountries = false
                 RemoteReply(true)
             }
+            is RemoteCommand.PortalEdit -> savedSources.firstOrNull { it.identity == command.id }?.let { source ->
+                when {
+                    connecting -> RemoteReply(false, "Es wird gerade ein Portal geladen. Bitte kurz warten.")
+                    else -> { editPortal(source, command.address, command.mac); RemoteReply(true, "Portal wird geladen …") }
+                }
+            } ?: RemoteReply(false, "Portal nicht gefunden.")
             is RemoteCommand.PortalAdd ->
                 if (connecting) RemoteReply(false, "Es wird gerade ein Portal geladen. Bitte kurz warten.")
                 else {
@@ -4977,7 +5026,18 @@ private fun PlayerHome(
         }
     }
     val remoteAccessPage: @Composable () -> Unit = {
-        RemoteAccessPage(remoteHandler, onPinReset = { remotePinFailures.set(0) }) { remoteAccessOpen = false }
+        RemoteAccessPage(
+            remoteHandler,
+            onPinReset = { remotePinFailures.set(0) },
+            onFinished = {
+                // Finished on the phone: back to Live-TV (or the first available area).
+                remoteAccessOpen = false
+                selected = Destination.LIVE.takeIf { it in visibleDestinations } ?: settingsReturnDestination
+                lastFocused = selected ?: Destination.LIVE
+                guidePanel = GuidePanel.GRID
+                lastBack = 0L
+            }
+        ) { remoteAccessOpen = false }
     }
     LaunchedEffect(playbackAttempt, manualIntro, manualCredits) {
         val attempt = playbackAttempt ?: return@LaunchedEffect
@@ -6020,7 +6080,8 @@ private fun PlayerHome(
         }
     }
     CastLayer()
-    if (askForCountries) {
+    // While the phone is used, the question appears only there; the device shows nothing of it.
+    if (askForCountries && !remoteAccessOpen) {
         AlertDialog(
             onDismissRequest = { askForCountries = false },
             title = { Text(stringResource(R.string.select_countries)) },
@@ -6089,7 +6150,7 @@ private fun PlayerHome(
             }
         )
     }
-    if (choosingCountries) {
+    if (choosingCountries && !remoteAccessOpen) {
         CountryDialog(
             knownCountries, countries,
             onApply = { saveCountries(it); choosingCountries = false },
@@ -6113,13 +6174,19 @@ private fun PlayerHome(
         title = { Text(stringResource(R.string.first_portal_title)) },
         text = { Text(stringResource(R.string.first_portal_message)) },
         confirmButton = {
-            TextButton(onClick = {
-                initialPortalPromptDismissed = true
-                selected = Destination.SOURCES
-                address = ""
-                mac = ""
-                editing = true
-            }) { Text(stringResource(R.string.add_portal)) }
+            Row {
+                TextButton(onClick = {
+                    initialPortalPromptDismissed = true
+                    openRemoteAccess()
+                }) { Text(stringResource(R.string.remote_setup_portal)) }
+                TextButton(onClick = {
+                    initialPortalPromptDismissed = true
+                    selected = Destination.SOURCES
+                    address = ""
+                    mac = ""
+                    editing = true
+                }) { Text(stringResource(R.string.add_portal)) }
+            }
         },
         dismissButton = {
             TextButton(onClick = { initialPortalPromptDismissed = true }) { Text(stringResource(R.string.later)) }
@@ -6915,7 +6982,8 @@ private fun PlayerHome(
                             onMacChange = { mac = it },
                             onSelectExisting = { address = it.address; mac = it.mac },
                             onDismiss = { editing = false },
-                            onSubmit = ::importPortal
+                            onSubmit = ::importPortal,
+                            onRemote = ::openRemoteAccess
                         )
                         if (connecting) {
                             batchProgress?.let { (number, total) ->
@@ -7828,7 +7896,8 @@ private fun PortalEditor(
     onMacChange: (String) -> Unit,
     onSelectExisting: (SavedPortal) -> Unit,
     onDismiss: () -> Unit,
-    onSubmit: () -> Unit
+    onSubmit: () -> Unit,
+    onRemote: (() -> Unit)? = null
 ) {
     var addressMode by remember { mutableStateOf(portalAddressMode(address)) }
     var selectedSavedSource by remember { mutableStateOf<SavedPortal?>(null) }
@@ -8049,6 +8118,7 @@ private fun PortalEditor(
                         enabled = addressReady && macReady,
                         onClick = onSubmit
                     )
+                    onRemote?.let { MenuButton(stringResource(R.string.remote_setup_portal), Modifier.fillMaxWidth(), onClick = it) }
                     MenuButton(stringResource(android.R.string.cancel), Modifier, onClick = onDismiss)
                 }
             }

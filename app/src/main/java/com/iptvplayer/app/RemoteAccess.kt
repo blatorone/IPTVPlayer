@@ -29,11 +29,14 @@ import androidx.lifecycle.LifecycleOwner
 
 /**
  * Settings page "Per Handy einstellen": starts a temporary, end-to-end encrypted session and
- * shows its QR code. The session ends with "Zugriff beenden", when the page or the app is left,
- * after 15 minutes without changes and after one hour at the latest.
+ * shows its QR code (and only the connection status: what is changed on the phone is not shown
+ * here). The session ends with "Zugriff beenden" here or on the phone (then Live-TV opens), when
+ * the page or the app is left and after 15 minutes without any change.
  */
 @Composable
-internal fun RemoteAccessPage(handler: RemoteHandler, onPinReset: () -> Unit, onDismiss: () -> Unit) {
+internal fun RemoteAccessPage(
+    handler: RemoteHandler, onPinReset: () -> Unit, onFinished: () -> Unit, onDismiss: () -> Unit
+) {
     val scope = rememberCoroutineScope()
     var session by remember { mutableStateOf<RemoteSession?>(null) }
     fun stop() {
@@ -67,10 +70,9 @@ internal fun RemoteAccessPage(handler: RemoteHandler, onPinReset: () -> Unit, on
             Text(stringResource(R.string.remote_access_hint), style = MaterialTheme.typography.bodyMedium)
             SettingRow(stringResource(R.string.remote_access_start), Modifier.focusRequester(startFocus)) {
                 onPinReset()
-                session = RemoteSession(scope, handler).also { it.start() }
+                session = RemoteSession(scope, handler, onFinished).also { it.start() }
             }
         } else {
-            val remaining by current.remainingMs.collectAsState()
             Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
                 QrCode(current.pageUrl, Modifier.size(240.dp))
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -85,11 +87,6 @@ internal fun RemoteAccessPage(handler: RemoteHandler, onPinReset: () -> Unit, on
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
-                    val seconds = remaining / 1_000
-                    Text(stringResource(
-                        R.string.remote_access_remaining, "%d:%02d".format(seconds / 60, seconds % 60)
-                    ))
-                    Text(stringResource(R.string.remote_access_hint), style = MaterialTheme.typography.bodySmall)
                     SettingRow(stringResource(R.string.remote_access_end), Modifier.focusRequester(endFocus)) { stop() }
                 }
             }

@@ -45,6 +45,21 @@ class RemoteProtocolTest {
     }
 
     @Test
+    fun parsesCountryConfirmationAndPortalEdit() {
+        assertEquals(
+            RemoteCommand.Countries(listOf("DE"), confirm = true),
+            decode("""{"t":"countries","epoch":"e1","codes":["DE"],"confirm":true}""")
+        )
+        assertEquals(RemoteCommand.CountriesLater, decode("""{"t":"countriesLater","epoch":"e1"}"""))
+        assertEquals(RemoteCommand.Finish, decode("""{"t":"finish","epoch":"e1"}"""))
+        assertEquals(
+            RemoteCommand.PortalEdit("id1", "https://new.example/c/", "00:1A:79:00:00:02"),
+            decode("""{"t":"portalEdit","epoch":"e1","id":"id1","address":"https://new.example/c/","mac":"00:1A:79:00:00:02"}""")
+        )
+        assertNull(decode("""{"t":"portalEdit","epoch":"e1","id":"id1","address":"ftp://x","mac":"00:1A:79:00:00:02"}"""))
+    }
+
+    @Test
     fun ignoresGarbage() {
         assertNull(decode("not json"))
         assertNull(decode("""{"t":"unknown","epoch":"e1"}"""))

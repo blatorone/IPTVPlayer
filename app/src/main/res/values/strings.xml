@@ -528,4 +528,5 @@
     <string name="remote_status_ended">Zugriff beendet. Der QR-Code ist nicht mehr gültig.</string>
     <string name="remote_access_remaining">Endet ohne Nutzung in %1$s</string>
     <string name="remote_qr_description">QR-Code für den Zugriff per Handy</string>
+    <string name="remote_setup_portal">Per Handy einrichten</string>
 </resources>

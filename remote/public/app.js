@@ -91,6 +91,7 @@ function connect() {
     deviceThere = false;
     if (event.code === 4003) {
       setStatus("Zugriff am Gerät beendet", "warn");
+      $("finish").hidden = true;
       notice("Der Zugriff wurde am Gerät beendet oder ist abgelaufen. Starte ihn am Gerät neu und scanne den neuen QR-Code.");
     } else setStatus("Verbindung unterbrochen – verbinde neu …", "warn");
     if (ended) return;
@@ -116,6 +117,7 @@ async function receive(data) {
     state = message;
     deviceThere = true;
     setStatus(`Verbunden mit ${message.device}`, "ok");
+    $("finish").hidden = false;
     show();
     render();
   } else if (message.t === "result") {
@@ -197,6 +199,13 @@ function renderPortals() {
   if (state.busy) notes.push(el("div", { class: "notice" }, state.busy));
   if (state.error) notes.push(el("div", { class: "notice error" }, state.error));
   $("portal-notice").replaceChildren(...notes);
+  const merge = state.settings.find((s) => s.id === "merge");
+  $("portal-merge").replaceChildren(...(merge && state.portals.length > 1
+    ? [settingRow(merge, (value) => send({ t: "set", id: merge.id, value })),
+       el("p", { class: "hint" }, merge.value
+         ? "Alle aktiven Portale werden zu einer Liste zusammengeführt (Duplikate entfernt)."
+         : "Es wird jeweils nur das aktive Portal angezeigt.")]
+    : []));
   if (!state.portals.length) {
     $("portal-list").replaceChildren(el("p", { class: "hint" }, "Noch kein Portal eingerichtet."));
     return;
@@ -212,21 +221,70 @@ function renderPortals() {
     el("div", { class: "row-actions" },
       el("span", { class: "badge " + (p.reachable === true ? "ok" : p.reachable === false ? "bad" : "") },
         p.reachable === true ? "erreichbar" : p.reachable === false ? "nicht erreichbar" : "unbekannt"),
+      el("button", { onclick: () => { editingPortal = editingPortal === p.id ? null : p.id; renderPortals(); } },
+        editingPortal === p.id ? "Schließen" : "Bearbeiten"),
       el("button", { class: "danger", onclick: () => {
         if (confirm(`${p.label} wirklich entfernen?`)) send({ t: "portalRemove", id: p.id });
-      } }, "Entfernen")))));
+      } }, "Entfernen")),
+    editingPortal === p.id ? portalEditForm(p) : null)));
+}
+
+let editingPortal = null;
+function portalEditForm(p) {
+  const address = el("input", { type: "url", inputmode: "url", value: p.address });
+  const mac = el("input", { value: p.mac, autocapitalize: "characters" });
+  return el("form", { class: "edit-form", autocomplete: "off", onsubmit: (e) => {
+    e.preventDefault();
+    const a = address.value.trim();
+    if (!/^https?:\/\//i.test(a)) { toast("Die Adresse muss mit http:// oder https:// beginnen.", true); return; }
+    editingPortal = null;
+    send({ t: "portalEdit", id: p.id, address: a, mac: mac.value.trim() });
+  } },
+  el("label", {}, "Portal-Adresse", address),
+  el("label", {}, "MAC-Adresse", mac),
+  el("button", { type: "submit", class: "primary" }, "Speichern und neu laden"));
+}
+
+// Countries are chosen here first and sent to the device only with "Übernehmen".
+let countryDraft = null;
+let askedBefore = false;
+const savedCountries = () => state.countries.filter((c) => c.selected).map((c) => c.code);
+
+function switchTab(name) {
+  tab = name;
+  for (const b of $("tabs").children) b.classList.toggle("active", b.dataset.tab === name);
+  for (const n of ["portals", "countries", "categories", "parental", "settings"]) $(`tab-${n}`).hidden = n !== name;
+  window.scrollTo(0, 0);
 }
 
 function renderCountries() {
+  // After a portal was loaded the device asks for the countries: answer it here.
+  if (state.askCountries && !askedBefore) {
+    countryDraft = savedCountries();
+    switchTab("countries");
+  }
+  askedBefore = state.askCountries;
+  $("country-ask").replaceChildren(...(state.askCountries ? [el("div", { class: "notice ask" },
+    "Das Portal ist geladen. Wähle die Länder, die angezeigt werden sollen, und tippe auf „Übernehmen“.",
+    el("div", { class: "row-actions" }, el("button", { onclick: () => {
+      countryDraft = null;
+      send({ t: "countriesLater" });
+    } }, "Später")))] : []));
+  const selected = countryDraft ?? savedCountries();
+  const changed = countryDraft !== null && countryDraft.join() !== savedCountries().join();
+  $("country-apply").disabled = !changed && !state.askCountries;
+  $("country-reset").disabled = !changed;
   const query = $("country-search").value.trim().toLowerCase();
-  const selected = state.countries.filter((c) => c.selected).map((c) => c.code);
   const items = state.countries.filter((c) => !query || c.name.toLowerCase().includes(query) || c.code.toLowerCase() === query);
-  $("country-list").replaceChildren(...items.map((c) => el("div", { class: "row" },
-    el("span", { class: "label" }, c.name, c.selected ? el("span", { class: "sub" }, `Position ${selected.indexOf(c.code) + 1}`) : null),
-    switchButton(c.selected, c.name, () => {
-      const next = c.selected ? selected.filter((x) => x !== c.code) : [...selected, c.code];
-      send({ t: "countries", codes: next });
-    }))));
+  $("country-list").replaceChildren(...items.map((c) => {
+    const on = selected.includes(c.code);
+    return el("div", { class: "row" },
+      el("span", { class: "label" }, c.name, on ? el("span", { class: "sub" }, `Position ${selected.indexOf(c.code) + 1}`) : null),
+      switchButton(on, c.name, () => {
+        countryDraft = on ? selected.filter((x) => x !== c.code) : [...selected, c.code];
+        renderCountries();
+      }));
+  }));
   if (!items.length) $("country-list").replaceChildren(el("p", { class: "hint" }, "Keine Länder gefunden."));
 }
 
@@ -326,12 +384,13 @@ function renderSettings() {
 // ---------- events ----------
 $("tabs").addEventListener("click", (e) => {
   const button = e.target.closest("button[data-tab]");
-  if (!button) return;
-  tab = button.dataset.tab;
-  for (const b of $("tabs").children) b.classList.toggle("active", b === button);
-  for (const name of ["portals", "countries", "categories", "parental", "settings"]) $(`tab-${name}`).hidden = name !== tab;
-  window.scrollTo(0, 0);
+  if (button) switchTab(button.dataset.tab);
 });
+$("country-apply").addEventListener("click", () => {
+  send({ t: "countries", codes: countryDraft ?? savedCountries(), confirm: true });
+  countryDraft = null;
+});
+$("country-reset").addEventListener("click", () => { countryDraft = null; renderCountries(); });
 $("category-sections").addEventListener("click", (e) => {
   const button = e.target.closest("button[data-section]");
   if (!button) return;
@@ -379,3 +438,18 @@ $("portal-form").addEventListener("submit", (e) => {
   }
   connect();
 })();
+
+// "Fertig": ends the session on the device, which then returns to Live-TV.
+$("finish").addEventListener("click", async () => {
+  if (!confirm("Alles erledigt? Der Zugriff wird beendet und das Gerät wechselt zu Live-TV.")) return;
+  await send({ t: "finish" });
+  ended = true;
+  sessionStorage.removeItem("sw-secret");
+  $("finish").hidden = true;
+  $("tabs").hidden = true;
+  $("app").hidden = true;
+  $("intro").hidden = false;
+  $("intro").replaceChildren(el("h1", {}, "Fertig"),
+    el("p", {}, "Der Zugriff ist beendet. Für weitere Änderungen am Gerät erneut „Per Handy einstellen“ öffnen und den neuen QR-Code scannen."));
+  setStatus("Zugriff beendet");
+});

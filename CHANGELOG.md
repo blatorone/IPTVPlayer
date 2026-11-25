@@ -4,6 +4,9 @@
 
 - Neu: Per Handy einstellen (Einstellungen → Allgemein). Das Gerät zeigt einen QR-Code; damit lassen sich im Handy-Browser Portale hinzufügen, aktivieren und entfernen, Länder und Kategorien für Live-TV, Filme und Serien ein- und ausblenden, Kategorien sperren, PIN und Kindersicherung sowie die übrigen Einstellungen ändern – im Heimnetz und unterwegs. Die Verbindung ist Ende-zu-Ende verschlüsselt und endet mit „Zugriff beenden“, beim Verlassen der Seite oder App und nach 15 Minuten ohne Änderung.
 - Portale: Der Schalter direkt an der Portalzeile aktiviert bzw. deaktiviert das Portal; die eigene Zeile dafür entfällt.
+- Ohne Portal: Beim Einrichten (Startdialog und Portal-Eingabe) gibt es „Per Handy einrichten“. Nach dem Laden fragt das Handy nach den Ländern; mit „Übernehmen“ wird die Auswahl ans Gerät gesendet. Länder werden am Handy erst gesammelt und dann gemeinsam übernommen.
+- Am Handy lassen sich vorhandene Portale bearbeiten (Adresse, MAC) und „Quellen zusammenführen“ direkt bei den Portalen ein- und ausschalten.
+- Während der Zugriff per Handy läuft, zeigt das Gerät nur QR-Code und Verbindungsstatus; was am Handy eingestellt wird und Fragen wie die Länderauswahl erscheinen nur am Handy. Mit „Fertig – Zugriff beenden“ am Handy endet die Sitzung und das Gerät wechselt zu Live-TV. Die Sitzung endet sonst nur durch Beenden am Gerät, beim Verlassen der App oder nach 15 Minuten ohne Aktivität.
 
 ## 1.0.88
 

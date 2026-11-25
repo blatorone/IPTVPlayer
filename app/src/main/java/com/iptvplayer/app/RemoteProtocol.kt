@@ -91,6 +91,8 @@ internal data class RemoteState(
     val countries: List<RemoteCountry>,
     val parental: RemoteParental,
     val busy: String?,
+    /** The device asks which countries to show (after a portal was loaded). */
+    val askCountries: Boolean = false,
     val error: String?
 )
 
@@ -99,7 +101,11 @@ internal sealed interface RemoteCommand {
     data class Set(val id: String, val value: JsonElement?) : RemoteCommand
     data class Categories(val section: PortalSection, val ids: kotlin.collections.Set<String>, val hidden: Boolean) : RemoteCommand
     data class CategoryLock(val section: PortalSection, val id: String, val locked: Boolean, val pin: String?) : RemoteCommand
-    data class Countries(val codes: List<String>) : RemoteCommand
+    data class Countries(val codes: List<String>, val confirm: Boolean = false) : RemoteCommand
+    data object CountriesLater : RemoteCommand
+    /** The phone is done: the session ends and the device returns to Live-TV. */
+    data object Finish : RemoteCommand
+    data class PortalEdit(val id: String, val address: String, val mac: String) : RemoteCommand
     data class PortalAdd(val address: String, val mac: String) : RemoteCommand
     data class PortalEnabled(val id: String, val enabled: Boolean) : RemoteCommand
     data class PortalRemove(val id: String) : RemoteCommand
@@ -122,6 +128,7 @@ internal object RemoteProtocol {
         addProperty("device", state.device)
         state.busy?.let { addProperty("busy", it) }
         state.error?.let { addProperty("error", it) }
+        addProperty("askCountries", state.askCountries)
         add("settings", JsonArray().apply {
             state.settings.forEach { entry ->
                 add(JsonObject().apply {
@@ -224,7 +231,8 @@ internal object RemoteProtocol {
                 root.flag("locked") ?: return null, root.pin("pin")
             )
             "countries" -> RemoteCommand.Countries(
-                root.ids()?.takeIf { codes -> codes.all(COUNTRY::matches) }?.toList() ?: return null
+                root.ids()?.takeIf { codes -> codes.all(COUNTRY::matches) }?.toList() ?: return null,
+                root.flag("confirm") == true
             )
             "portalAdd" -> {
                 val address = root.text("address")?.trim() ?: return null
@@ -232,6 +240,14 @@ internal object RemoteProtocol {
                 if (!address.startsWith("http://") && !address.startsWith("https://")) return null
                 if (mac.isEmpty()) return null
                 RemoteCommand.PortalAdd(address, mac)
+            }
+            "countriesLater" -> RemoteCommand.CountriesLater
+            "finish" -> RemoteCommand.Finish
+            "portalEdit" -> {
+                val address = root.text("address")?.trim() ?: return null
+                val mac = root.text("mac")?.trim() ?: return null
+                if (!address.startsWith("http://") && !address.startsWith("https://") || mac.isEmpty()) return null
+                RemoteCommand.PortalEdit(root.text("id") ?: return null, address, mac)
             }
             "portalEnabled" -> RemoteCommand.PortalEnabled(root.text("id") ?: return null, root.flag("enabled") ?: return null)
             "portalRemove" -> RemoteCommand.PortalRemove(root.text("id") ?: return null)

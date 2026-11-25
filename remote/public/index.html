@@ -13,7 +13,10 @@
 <body>
   <header>
     <div class="brand"><span class="logo">▶</span> StreamWatch</div>
-    <div id="status" class="status">Verbinde …</div>
+    <div class="header-right">
+      <div id="status" class="status">Verbinde …</div>
+      <button id="finish" class="primary" hidden>Fertig – Zugriff beenden</button>
+    </div>
   </header>
 
   <main id="intro" class="panel">
@@ -32,6 +35,7 @@
   <main id="app" hidden>
     <section id="tab-portals">
       <div id="portal-notice"></div>
+      <div id="portal-merge"></div>
       <div id="portal-list"></div>
       <form id="portal-form" class="card" autocomplete="off">
         <h2>Portal hinzufügen</h2>
@@ -42,9 +46,14 @@
     </section>
 
     <section id="tab-countries" hidden>
+      <div id="country-ask"></div>
       <p class="hint">Gewählte Länder werden in dieser Reihenfolge angezeigt. Ohne Auswahl erscheinen alle Länder.</p>
       <input id="country-search" type="search" placeholder="Land suchen">
       <div id="country-list"></div>
+      <div class="row-actions sticky-actions">
+        <button id="country-apply" class="primary">Übernehmen und an Gerät senden</button>
+        <button id="country-reset">Verwerfen</button>
+      </div>
     </section>
 
     <section id="tab-categories" hidden>

@@ -5,8 +5,8 @@ import { DurableObject } from "cloudflare:workers";
 
 const ROOM_PATH = /^\/v1\/room\/([A-Za-z0-9_-]{22})$/;
 const MAX_FRAME_CHARS = 512 * 1024;
-// Hard upper bound for a room; the device ends sessions much earlier on its own.
-const MAX_ROOM_LIFETIME_MS = 6 * 60 * 60 * 1000;
+// A room closes after this long without any message (the device ends idle sessions much earlier).
+const ROOM_IDLE_LIMIT_MS = 6 * 60 * 60 * 1000;
 const ROLES = ["tv", "phone"];
 
 const other = (role) => (role === "tv" ? "phone" : "tv");
@@ -38,12 +38,12 @@ export class Room extends DurableObject {
     send(server, { relay: "peer", present: peerPresent });
     for (const peer of this.open(other(role))) send(peer, { relay: "peer", present: true });
     if ((await this.ctx.storage.getAlarm()) === null) {
-      await this.ctx.storage.setAlarm(Date.now() + MAX_ROOM_LIFETIME_MS);
+      await this.ctx.storage.setAlarm(Date.now() + ROOM_IDLE_LIMIT_MS);
     }
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  webSocketMessage(socket, message) {
+  async webSocketMessage(socket, message) {
     // Only encrypted frames ("1.<seq>.<nonce>.<ciphertext>") are forwarded.
     if (typeof message !== "string" || message.length > MAX_FRAME_CHARS || !message.startsWith("1.")) {
       close(socket, 4002, "invalid frame");
@@ -53,6 +53,8 @@ export class Room extends DurableObject {
     for (const peer of this.open(other(role))) {
       try { peer.send(message); } catch { /* peer is going away */ }
     }
+    // Active rooms stay open; only idle rooms expire.
+    await this.ctx.storage.setAlarm(Date.now() + ROOM_IDLE_LIMIT_MS);
   }
 
   webSocketClose(socket) { this.left(socket); }

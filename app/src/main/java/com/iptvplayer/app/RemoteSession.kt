@@ -29,8 +29,6 @@ internal const val REMOTE_BASE_URL = "https://streamwatch-remote.streamwatchiptv
 
 /** Ends a session nobody used for this long. */
 internal const val REMOTE_IDLE_LIMIT_MS = 15 * 60 * 1000L
-/** Hard upper bound of one session. */
-internal const val REMOTE_SESSION_LIMIT_MS = 60 * 60 * 1000L
 
 internal enum class RemoteStatus { CONNECTING, WAITING, CONNECTED, OFFLINE, ENDED }
 
@@ -50,6 +48,7 @@ internal data class RemoteReply(val ok: Boolean, val message: String? = null)
 internal class RemoteSession(
     private val scope: CoroutineScope,
     private val handler: RemoteHandler,
+    private val onFinished: () -> Unit = {},
     baseUrl: String = REMOTE_BASE_URL
 ) {
     private val crypto = RemoteSessionCrypto.create()
@@ -59,7 +58,7 @@ internal class RemoteSession(
     private val _status = MutableStateFlow(RemoteStatus.CONNECTING)
     val status: StateFlow<RemoteStatus> = _status
     private val _remainingMs = MutableStateFlow(REMOTE_IDLE_LIMIT_MS)
-    /** Time until the session ends for lack of use (or the hard limit, whichever is earlier). */
+    /** Time until the session ends for lack of use. */
     val remainingMs: StateFlow<Long> = _remainingMs
 
     private val startedAt = SystemClock.elapsedRealtime()
@@ -142,6 +141,12 @@ internal class RemoteSession(
             }?.toString(Charsets.UTF_8) ?: continue
             val command = RemoteProtocol.decodeCommand(plain, epoch) ?: continue
             lastActivity = SystemClock.elapsedRealtime()
+            if (command == RemoteCommand.Finish) {
+                send(RemoteProtocol.encodeResult(true, "Zugriff beendet."))
+                end()
+                onFinished()
+                return
+            }
             if (command == RemoteCommand.Hello) {
                 lastSentState = null
                 publish()
@@ -176,8 +181,8 @@ internal class RemoteSession(
         while (scope.isActive && _status.value != RemoteStatus.ENDED) {
             val now = SystemClock.elapsedRealtime()
             val idleLeft = REMOTE_IDLE_LIMIT_MS - (now - lastActivity)
-            val totalLeft = REMOTE_SESSION_LIMIT_MS - (now - startedAt)
-            val left = minOf(idleLeft, totalLeft)
+
+            val left = idleLeft
             _remainingMs.value = left.coerceAtLeast(0)
             if (left <= 0) {
                 end()

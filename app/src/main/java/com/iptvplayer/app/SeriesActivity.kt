@@ -147,11 +147,32 @@ internal fun recoverEpisodeResume(entry: TrackedSeries, positions: Map<String, *
     return activePosition ?: entry.lastEpisode
 }
 
-internal fun TrackedSeries.observe(episodes: Set<String>, now: Long): TrackedSeries = copy(
-    known = known + episodes,
-    unseen = if (checkedAt == 0L) unseen else unseen + (episodes - known),
-    checkedAt = now
-)
+internal fun TrackedSeries.observe(episodes: Set<String>, now: Long): TrackedSeries {
+    val added = if (checkedAt == 0L) emptySet() else episodes - known - watchedEpisodes
+    return copy(
+        known = known + episodes,
+        unseen = unseen + added,
+        checkedAt = now,
+        // A finished series with new episodes is in progress again ("Weiter schauen").
+        isComplete = if (added.isNotEmpty()) false else isComplete
+    )
+}
+
+/** Shown under "Weiter schauen": unfinished, or finished with episodes added since. */
+internal fun TrackedSeries.continuable(): Boolean =
+    viewed && !hiddenFromHistory && (isComplete != true || unseen.isNotEmpty())
+
+/**
+ * Watched or saved series whose next episode has a known air date today or later,
+ * soonest first ("Bald verfügbar").
+ */
+internal fun upcomingSeries(entries: List<TrackedSeries>, today: java.time.LocalDate): List<Pair<TrackedSeries, java.time.LocalDate>> =
+    entries.filter { (it.viewed || it.saved) && !it.hiddenFromHistory }
+        .mapNotNull { entry ->
+            entry.nextAirDate?.let { runCatching { java.time.LocalDate.parse(it.take(10)) }.getOrNull() }
+                ?.takeIf { !it.isBefore(today) }?.let { entry to it }
+        }
+        .sortedWith(compareBy({ it.second }, { it.first.name }))
 
 internal fun encodeSeriesActivity(entries: List<TrackedSeries>): String = JSONArray().apply {
     entries.forEach { series ->

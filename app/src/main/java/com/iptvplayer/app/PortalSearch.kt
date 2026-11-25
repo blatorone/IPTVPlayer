@@ -75,7 +75,7 @@ internal fun ColumnScope.PortalSearch(
     var selection by remember { mutableStateOf(PortalSection.LIVE) }
     val metadataLimiter = remember { Semaphore(3) }
 
-    val live = remember(channels, term) { channels.filter { it.name.contains(term, ignoreCase = true) } }
+    val live = remember(channels, term) { channels.filter { matchesSearch(it.name, term) } }
     val labels = remember(sources) {
         sources.associate { source ->
             val portal = portalFor(source)
@@ -208,6 +208,7 @@ internal suspend fun searchPortal(
     limiter: Semaphore
 ): PortalResults {
     val local = localResults(source, section, term, countries)
+    val portalTerm = portalSearchTerm(term)
     val ids = if (countries.isEmpty()) listOf(ALL_CATALOG_ITEMS) else {
         source.catalogs[section]?.availableGroups("").orEmpty()
             .filter { it.id != ALL_CATALOG_ITEMS && categoryCountry(it.name, it.country) in countries }
@@ -220,11 +221,12 @@ internal suspend fun searchPortal(
                 try {
                     limiter.withPermit {
                         val page = portal.loadCatalog(
-                            section, portal.openSession(), category = group, search = term
+                            section, portal.openSession(), category = group, search = portalTerm
                         )
+                        // A portal that ignores the search parameter returns unrelated titles.
                         page.takeIf {
                             it.titles.all { title ->
-                                title.name.contains(term, ignoreCase = true) &&
+                                matchesSearch(title.name, portalTerm) &&
                                     (group == ALL_CATALOG_ITEMS || title.categoryId == null || title.categoryId == group)
                             }
                         }
@@ -239,12 +241,22 @@ internal suspend fun searchPortal(
     }
     val available = pages.filterNotNull()
     if (available.isEmpty()) return local
-    val remote = available.flatMap { it.titles }.map { SourceItem(source, it) }
+    // The portal was asked for one word only; all words of the search must match.
+    val remote = available.flatMap { it.titles }.filter { matchesSearch(it.name, term) }.map { SourceItem(source, it) }
     val missing = pages.any { it == null }
+    val titles = (remote + local.titles).distinctBy { "${it.value.id ?: it.value.name}:${it.value.categoryId}" }
+    val morePages = available.any { it.nextPage != null }
+    // The portal total counts the one-word query; it only applies when no narrowing happened.
+    val narrowed = portalTerm != term.trim()
     return PortalResults(
-        (remote + if (missing) local.titles else emptyList()).distinct(),
-        if (missing) null else available.sumOf { it.total ?: it.titles.size },
-        incomplete = missing || available.any { it.nextPage != null }
+        titles,
+        when {
+            missing -> null
+            !narrowed -> available.sumOf { it.total ?: it.titles.size }
+            !morePages -> titles.size
+            else -> null
+        },
+        incomplete = missing || morePages
     )
 }
 
@@ -255,10 +267,36 @@ private fun localResults(
     val groups = catalog?.groups.orEmpty().associateBy { it.id }
     val hits = catalog?.titles.orEmpty().filter {
         val group = groups[it.categoryId]
-        it.name.contains(term, ignoreCase = true) &&
+        matchesSearch(it.name, term) &&
             (countries.isEmpty() || categoryCountry(
                 group?.name ?: it.categoryName ?: it.categoryId.orEmpty(), group?.country
             ) in countries)
     }
     return PortalResults(hits.map { SourceItem(source, it) }, null, incomplete = true)
 }
+
+private val searchSeparators = Regex("""[^\p{L}\p{N}]+""")
+
+private fun searchWords(text: String): List<String> =
+    java.text.Normalizer.normalize(text, java.text.Normalizer.Form.NFKC).lowercase(java.util.Locale.ROOT)
+        .split(searchSeparators).filter(String::isNotEmpty)
+
+/**
+ * Whether [name] matches every word of [term], ignoring case and punctuation, so
+ * "spider-man brand new" and "spiderman" both find "Spider-Man: Brand New Day".
+ */
+internal fun matchesSearch(name: String, term: String): Boolean {
+    val query = searchWords(term)
+    if (query.isEmpty()) return false
+    val words = searchWords(name)
+    val joined = words.joinToString("")
+    return query.all { part -> words.any { it.startsWith(part) } || joined.contains(part) }
+}
+
+/**
+ * Portals usually search for the literal text. The longest word of the search is sent
+ * and the results are narrowed down to all words locally.
+ */
+internal fun portalSearchTerm(term: String): String =
+    term.trim().split(Regex("""\s+""")).maxByOrNull { word -> searchWords(word).sumOf { it.length } }
+        ?.trim { !it.isLetterOrDigit() }?.takeIf { it.isNotEmpty() } ?: term.trim()

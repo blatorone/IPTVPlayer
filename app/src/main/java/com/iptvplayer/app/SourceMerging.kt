@@ -37,9 +37,14 @@ internal fun displayVodTitle(title: PortalTitle): String {
     val cleaned = describeChannel(channel, null).name
         .replace(decorativeLanguage, "").trim()
     val year = titleYear.find(cleaned)
-    return if (year == null) cleaned else cleaned.take(year.range.first).trimEnd(' ', '(', '[')
+    val withoutYear = if (year == null) cleaned else cleaned.take(year.range.first).trimEnd(' ', '(', '[')
         .ifBlank { cleaned }
+    // Portals often name titles "Name - 2026"; without the year a dangling separator would
+    // remain ("Name -") and prevent matching the title with Trakt or TMDB.
+    return withoutYear.trimEnd { it.isWhitespace() || it in trailingSeparators }.ifBlank { withoutYear }
 }
+
+private const val trailingSeparators = "-–—:|·,/"
 
 private data class TitleFingerprint(
     val name: String, val year: Int?, val imdb: String?, val tmdb: Long?, val country: String

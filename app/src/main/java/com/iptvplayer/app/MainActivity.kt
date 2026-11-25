@@ -404,7 +404,7 @@ private data class PlaybackAttempt(
     val liveRestoreKey: String? = null
 )
 
-private enum class SeriesActivityView { CONTINUE, HISTORY, WATCHLIST }
+private enum class SeriesActivityView { CONTINUE, UPCOMING, HISTORY, WATCHLIST }
 private data class PortalContentCounts(val tv: Int, val movies: Int, val series: Int)
 private enum class SettingsSection(val label: Int) {
     GENERAL(R.string.settings_general),
@@ -498,6 +498,8 @@ private fun PlayerHome(
     }
     var seriesActivityView by rememberSaveable { mutableStateOf<SeriesActivityView?>(null) }
     var movieHistoryOpen by rememberSaveable { mutableStateOf(false) }
+    /** The film history shows only started, unfinished films ("Weiter schauen"). */
+    var movieContinueOpen by rememberSaveable { mutableStateOf(false) }
     var movieWatchlistOpen by rememberSaveable { mutableStateOf(false) }
     var movieHistory by remember(progressPreferences) {
         mutableStateOf(decodeMovieHistory(progressPreferences?.getString("movie_history", null)))
@@ -525,6 +527,16 @@ private fun PlayerHome(
         val notice = portalRefreshNotice ?: return@LaunchedEffect
         playbackNoticeHost.showSnackbar(notice)
         portalRefreshNotice = null
+    }
+    var newEpisodesNotice by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(newEpisodesNotice) {
+        val notice = newEpisodesNotice ?: return@LaunchedEffect
+        // Episode checks run one series at a time; collect findings briefly before showing them.
+        delay(3_000)
+        scope.launch {
+            playbackNoticeHost.showSnackbar(notice, duration = androidx.compose.material3.SnackbarDuration.Long)
+        }
+        newEpisodesNotice = null
     }
     var episodeSettingsOpen by remember { mutableStateOf(false) }
     var epgSettingsOpen by remember { mutableStateOf(false) }
@@ -1460,7 +1472,7 @@ private fun PlayerHome(
                 }
                 watchlist = updatedWatchlist
                 movieBookmarks = updatedMovieBookmarks.values.toList()
-                movieHistory = updatedMovieHistory.values.sortedByDescending { it.watchedAt }.take(10)
+                movieHistory = updatedMovieHistory.values.sortedByDescending { it.watchedAt }.take(200)
                 val remoteSeriesKeys = library.seriesHistorySnapshot?.let { snapshot ->
                     traktStatus = context.getString(R.string.trakt_reconcile_series_history)
                     withContext(Dispatchers.Default) {
@@ -1839,6 +1851,7 @@ private fun PlayerHome(
         titleKey(section, title) in watchlist ||
             (section == PortalSection.SERIES && trackedSeries(title)?.saved == true)
 
+
     fun saveSeriesActivity(entries: List<TrackedSeries>) {
         seriesActivity = entries
         progressPreferences?.edit()?.putString("series_activity", encodeSeriesActivity(entries))?.apply()
@@ -1876,6 +1889,25 @@ private fun PlayerHome(
         saveSeriesActivity(if (updated.saved || updated.viewed) remaining + updated else remaining)
     }
 
+    LaunchedEffect(preferences, savedSources.isNotEmpty()) {
+        // Favourites were merged into the watchlist. Earlier favourites move over once (series
+        // also into the series watchlist) and are uploaded to Trakt with the next sync.
+        val earlier = favorites
+        if (earlier.isEmpty() || savedSources.isEmpty()) return@LaunchedEffect
+        watchlist = watchlist + earlier
+        val seriesIds = earlier.filter { ":${PortalSection.SERIES.name}:" in it }
+            .map { it.substringAfter(":${PortalSection.SERIES.name}:") }.toSet()
+        savedSources.flatMap { it.catalogs[PortalSection.SERIES]?.titles.orEmpty() }
+            .filter { (it.id ?: it.name) in seriesIds }
+            .distinctBy { it.id ?: it.name }
+            .forEach { updateTrackedSeries(it, saved = true) }
+        favorites = emptySet()
+        preferences?.edit()?.putStringSet("watchlist", watchlist)?.remove("favorites")?.apply()
+        preferences?.all?.keys?.filter { it.startsWith("trakt_watchlist_dirty:") }?.forEach { key ->
+            preferences.edit().putBoolean(key, true).apply()
+        }
+    }
+
     fun observeEpisodeProvider(
         key: String,
         episodes: Set<String>,
@@ -1888,7 +1920,14 @@ private fun PlayerHome(
                 it.observe(episodes, System.currentTimeMillis()).copy(
                     nextEpisodeName = upcoming?.name,
                     nextAirDate = upcoming?.airDate
-                )
+                ).also { updated ->
+                    val added = updated.unseen.size - it.unseen.size
+                    if (added > 0 && (it.viewed || it.saved) && !it.hiddenFromHistory) {
+                        val entry = context.getString(R.string.new_episodes_entry, it.name, added)
+                        newEpisodesNotice = newEpisodesNotice?.let { pending -> "$pending, $entry" }
+                            ?: context.getString(R.string.new_episodes_available, entry)
+                    }
+                }
             } else it.copy(
                 episodeProvider = provider, known = episodes, checkedAt = System.currentTimeMillis(),
                 nextEpisodeName = upcoming?.name, nextAirDate = upcoming?.airDate
@@ -2951,7 +2990,7 @@ private fun PlayerHome(
                 titleEntries(section, title).mapNotNull { item -> item.value.id?.let { SeriesPortalRef(item.source.identity, it) } },
                 titleSelection(section, title).progressKey, System.currentTimeMillis()
             )) else emptyList()
-            movieHistory = (added + remaining).take(10)
+            movieHistory = (added + remaining).take(200)
             prefs.edit().putString("movie_history", encodeMovieHistory(movieHistory)).apply()
         } else if (episodes.isNotEmpty()) {
             val episodeKeys = episodes.mapTo(linkedSetOf()) { (season, episode) -> seriesEpisodeKey(season, episode) }
@@ -6648,38 +6687,53 @@ private fun PlayerHome(
                         } else if (section == PortalSection.SERIES && seriesActivityView != null) {
                             val showHistory = seriesActivityView == SeriesActivityView.HISTORY
                             val showContinue = seriesActivityView == SeriesActivityView.CONTINUE
-                            val entries = seriesActivity.filter { entry ->
+                            val showUpcoming = seriesActivityView == SeriesActivityView.UPCOMING
+                            fun playable(entry: TrackedSeries) = hasPortalReference(
+                                PortalSection.SERIES,
+                                PortalTitle(entry.name, year = entry.year, imdbId = entry.imdb, tmdbId = entry.tmdb),
+                                entry.refs
+                            )
+                            val airDates = if (showUpcoming) {
+                                upcomingSeries(seriesActivity, java.time.LocalDate.now()).filter { playable(it.first) }
+                            } else emptyList()
+                            val entries = if (showUpcoming) airDates.map { it.first } else seriesActivity.filter { entry ->
                                 (when {
                                     showHistory -> entry.viewed && !entry.hiddenFromHistory
-                                    showContinue -> entry.viewed && !entry.hiddenFromHistory && entry.isComplete != true
+                                    showContinue -> entry.continuable()
                                     else -> entry.saved
-                                }) && hasPortalReference(
-                                    PortalSection.SERIES,
-                                    PortalTitle(entry.name, year = entry.year, imdbId = entry.imdb, tmdbId = entry.tmdb),
-                                    entry.refs
-                                )
+                                }) && playable(entry)
                             }.let { matched ->
                                 if (showHistory || showContinue) matched.sortedByDescending { it.watchedAt }.let {
                                     if (showHistory) it.take(10) else it
                                 } else matched.sortedBy { it.name }
                             }
+                            val airDateLabels = airDates.associate { (entry, date) ->
+                                entry.key to date.format(java.time.format.DateTimeFormatter.ofPattern("EE, dd.MM.yyyy", java.util.Locale.GERMAN))
+                            }
                             MenuButton(stringResource(R.string.back_to_categories), Modifier) { seriesActivityView = null }
                             Text(stringResource(when {
                                 showHistory -> R.string.series_history
                                 showContinue -> R.string.continue_watching
+                                showUpcoming -> R.string.upcoming_series
                                 else -> R.string.watchlist
                             }))
-                            if (entries.isEmpty()) Text(stringResource(R.string.no_tracked_series))
+                            if (entries.isEmpty()) Text(stringResource(if (showUpcoming) R.string.no_upcoming_series else R.string.no_tracked_series))
                             LazyColumn(Modifier.weight(1f)) {
                                 items(entries, key = { it.key }) { entry ->
-                                    val label = if (entry.unseen.isEmpty()) entry.name else
-                                        "${entry.name} · ${stringResource(R.string.new_episode_count, entry.unseen.size)}"
+                                    val baseLabel = airDateLabels[entry.key]?.let { date ->
+                                        stringResource(R.string.upcoming_series_entry, entry.name, date)
+                                    } ?: entry.name
+                                    val label = if (entry.unseen.isEmpty()) baseLabel else
+                                        "$baseLabel · ${stringResource(R.string.new_episode_count, entry.unseen.size)}"
                                     // A Trakt-Watched-Eintrag kann ohne Prozentwert gespeichert sein.
                                     // Die Detailseite berechnet dann aus der letzten gesehenen Folge
                                     // die nächste nicht abgeschlossene Folge.
                                     val resume = resumeFor(entry)
-                                    val canContinue = entry.isComplete != true && resume != null &&
-                                        (entry.isComplete == false || progressPreferences?.getBoolean("completed:${resume.progressKey}", false) != true)
+                                    // New episodes reopen a finished series.
+                                    val reopened = entry.isComplete == true && entry.unseen.isNotEmpty()
+                                    val canContinue = !showUpcoming && (entry.isComplete != true || reopened) && resume != null &&
+                                        (entry.isComplete == false || reopened ||
+                                            progressPreferences?.getBoolean("completed:${resume.progressKey}", false) != true)
                                     Row(
                                         Modifier.fillMaxWidth().background(
                                             MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp)
@@ -6693,6 +6747,13 @@ private fun PlayerHome(
                                         )
                                         Column(Modifier.weight(1f)) {
                                             MenuButton(label, Modifier.fillMaxWidth()) { openTrackedSeries(entry) }
+                                            if (showUpcoming) entry.nextEpisodeName?.takeIf(String::isNotBlank)?.let { episodeName ->
+                                                Text(
+                                                    episodeName,
+                                                    Modifier.padding(start = 10.dp, bottom = 6.dp),
+                                                    style = MaterialTheme.typography.bodySmall
+                                                )
+                                            }
                                             resume?.takeIf { canContinue }?.let { episode ->
                                                 val position = progressPreferences?.getLong(episode.progressKey, 0L) ?: 0L
                                                 Text(
@@ -6750,14 +6811,19 @@ private fun PlayerHome(
                             }
                         } else if (section == PortalSection.MOVIES && movieHistoryOpen) {
                             MenuButton(stringResource(R.string.back_to_categories), Modifier) { movieHistoryOpen = false }
-                            Text(stringResource(R.string.movie_history))
+                            Text(stringResource(if (movieContinueOpen) R.string.continue_watching else R.string.movie_history))
+                            fun unfinished(key: String): Boolean {
+                                val position = progressPreferences?.getLong(key, 0L) ?: 0L
+                                return progressPreferences?.getBoolean("completed:$key", false) != true && position > 0L &&
+                                    (progressPreferences?.getFloat("trakt_percent:$key", 0f) ?: 0f) < 90f
+                            }
                             val entries = movieHistory.filter { entry ->
-                                hasPortalReference(
+                                (!movieContinueOpen || unfinished(entry.progressKey)) && hasPortalReference(
                                     PortalSection.MOVIES,
                                     PortalTitle(entry.name, year = entry.year, imdbId = entry.imdb, tmdbId = entry.tmdb),
                                     entry.refs
                                 )
-                            }.sortedByDescending { it.watchedAt }.take(10)
+                            }.sortedByDescending { it.watchedAt }.take(if (movieContinueOpen) 30 else 10)
                             if (entries.isEmpty()) Text(stringResource(R.string.no_watched_movies))
                             LazyColumn(Modifier.weight(1f)) {
                                 items(entries, key = { it.progressKey }) { entry ->
@@ -6902,13 +6968,26 @@ private fun PlayerHome(
                         ) {
                             categoryMenu = section to null
                         }
-                        if (section == PortalSection.SERIES) MenuButton(
+                        MenuButton(
                             stringResource(R.string.continue_watching), Modifier,
-                            selected = seriesActivityView == SeriesActivityView.CONTINUE
+                            selected = if (section == PortalSection.MOVIES) movieHistoryOpen && movieContinueOpen else
+                                seriesActivityView == SeriesActivityView.CONTINUE
                         ) {
                             closeSeries()
                             details = null
-                            seriesActivityView = SeriesActivityView.CONTINUE
+                            if (section == PortalSection.MOVIES) {
+                                movieWatchlistOpen = false
+                                movieContinueOpen = true
+                                movieHistoryOpen = true
+                            } else seriesActivityView = SeriesActivityView.CONTINUE
+                        }
+                        if (section == PortalSection.SERIES) MenuButton(
+                            stringResource(R.string.upcoming_series), Modifier,
+                            selected = seriesActivityView == SeriesActivityView.UPCOMING
+                        ) {
+                            closeSeries()
+                            details = null
+                            seriesActivityView = SeriesActivityView.UPCOMING
                         }
                         MenuButton(
                             stringResource(R.string.watchlist), Modifier,
@@ -6928,7 +7007,7 @@ private fun PlayerHome(
                         MenuButton(
                             stringResource(if (section == PortalSection.MOVIES) R.string.movie_history else R.string.series_history),
                             Modifier,
-                            selected = if (section == PortalSection.MOVIES) movieHistoryOpen else
+                            selected = if (section == PortalSection.MOVIES) movieHistoryOpen && !movieContinueOpen else
                                 seriesActivityView == SeriesActivityView.HISTORY,
                             count = if (section == PortalSection.SERIES) {
                                 seriesActivity.filter { it.viewed }.sumOf { it.unseen.size }.takeIf { it > 0 }
@@ -6938,6 +7017,7 @@ private fun PlayerHome(
                             details = null
                             if (section == PortalSection.MOVIES) {
                                 movieWatchlistOpen = false
+                                movieContinueOpen = false
                                 movieHistoryOpen = true
                             } else seriesActivityView = SeriesActivityView.HISTORY
                         }

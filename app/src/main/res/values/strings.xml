@@ -301,6 +301,11 @@
     <string name="saved_playback_position">Position %1$s</string>
     <string name="resume_episode_missing">Die zuletzt gesehene Folge wurde in deinen Quellen nicht gefunden.</string>
     <string name="no_tracked_series">Hier sind noch keine Serien gespeichert.</string>
+    <string name="new_episodes_entry">%1$s (%2$d)</string>
+    <string name="new_episodes_available">Neue Folgen verfügbar: %1$s</string>
+    <string name="upcoming_series">Bald verfügbar</string>
+    <string name="upcoming_series_entry">%1$s · %2$s</string>
+    <string name="no_upcoming_series">Für deine Serien ist noch keine nächste Folge angekündigt.</string>
     <string name="new_episode_count">Neue Folgen: %1$d</string>
     <string name="new_episode_entry">Neu · %1$s</string>
     <string name="live_stream_variants">Streamvarianten</string>

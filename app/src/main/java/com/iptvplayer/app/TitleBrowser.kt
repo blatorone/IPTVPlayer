@@ -69,7 +69,6 @@ private enum class TitleSort(val label: Int) {
 
 private enum class TitleFilter(val label: Int) {
     ALL(R.string.all_titles),
-    FAVORITES(R.string.favorites),
     WATCHLIST(R.string.watchlist)
 }
 
@@ -98,7 +97,6 @@ internal fun ColumnScope.TitleGrid(
     val matches = titles.filter {
         (year == null || vodReleaseYear(it) == year) && when (filter) {
             TitleFilter.ALL -> true
-            TitleFilter.FAVORITES -> isFavorite(it)
             TitleFilter.WATCHLIST -> isSaved(it)
         }
     }
@@ -411,9 +409,9 @@ internal fun TitleDetails(
                 if (section == PortalSection.MOVIES && onResume != null) {
                     MenuButton(stringResource(R.string.play_movie), Modifier, onClick = onPlay)
                 }
-                val favoriteModifier = if (section == PortalSection.SERIES && primaryAction == null) leftEdge else Modifier
-                MenuButton(stringResource(R.string.favorites), favoriteModifier, selected = favorite, onClick = onFavorite)
-                MenuButton(stringResource(R.string.watchlist), Modifier, selected = saved, onClick = onWatch)
+                // Favourites and watchlist are one list ("Merkliste"), synchronised with Trakt when connected.
+                val watchlistModifier = if (section == PortalSection.SERIES && primaryAction == null) leftEdge else Modifier
+                MenuButton(stringResource(R.string.watchlist), watchlistModifier, selected = saved, onClick = onWatch)
                 onWatchStatus?.let { MenuButton(stringResource(R.string.watched_status), Modifier, onClick = it) }
             }
             watchProgress?.let { WatchProgress(it) }

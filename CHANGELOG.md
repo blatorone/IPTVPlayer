@@ -1,5 +1,14 @@
 # Änderungen
 
+## 1.0.80
+
+- Portaltitel der Form „Name - 2026“ verlieren den übrig gebliebenen Bindestrich. Dadurch werden sie wieder Trakt und TMDB zugeordnet, etwa für den Gesehen-Status („Spider-Man: Brand New Day“).
+- Filme haben einen eigenen Bereich „Weiter schauen“ mit angefangenen, nicht abgeschlossenen Filmen. Der Filmverlauf speichert dafür bis zu 200 Einträge; angezeigt werden dort weiterhin die letzten zehn.
+- Neue Folgen einer abgeschlossenen Serie bringen sie zurück in „Weiter schauen“ (mit „Neue Folgen“). Findet die regelmäßige Folgenprüfung neue Folgen gesehener oder gemerkter Serien, erscheint die Meldung „Neue Folgen verfügbar“.
+- Neuer Serienbereich „Bald verfügbar“: gesehene und gemerkte Serien mit angekündigter nächster Folge, nach Ausstrahlungsdatum sortiert, mit Datum und Folgentitel.
+- Favoriten und Merkliste sind zusammengelegt. Die Taste und der Filter „Favoriten“ entfallen; bisherige Film- und Serienfavoriten werden einmalig in die Merkliste übernommen und bei verbundenem Trakt-Konto mit der Trakt-Merkliste abgeglichen.
+- Die Suche vergleicht Wörter statt der genauen Zeichenfolge: Groß- und Kleinschreibung, Bindestriche, Doppelpunkte und Satzzeichen spielen keine Rolle mehr („spider-man brand new“ findet „Spider-Man: Brand New Day“). Portale werden nach dem längsten Suchwort gefragt und die Treffer lokal auf alle Wörter eingegrenzt; lokale Treffer bleiben auch erhalten, wenn ein Portal nichts liefert.
+
 ## 1.0.79
 
 - Abspann mit Zusatzszene: Die App lernt den Abspann einer Serie aus den letzten fünf Minuten zweier Folgen. Folgt auf den Abspann noch weiteres Material (etwa bei Rick and Morty), erscheint während des Abspanns „Abspann überspringen“; „Nächste Folge“ kommt erst kurz vor dem tatsächlichen Ende mit der eingestellten Vorlaufzeit. Ohne Zusatzszene bleibt es bei „Nächste Folge“ zu Beginn des Abspanns. Zurück blendet den Hinweis aus; übersprungen wird nie automatisch.

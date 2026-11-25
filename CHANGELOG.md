@@ -1,5 +1,9 @@
 # Änderungen
 
+## 1.0.86
+
+- Behoben: 1.0.85 ließ sich auf Android 11 (z. B. NVIDIA Shield) nicht starten („VerifyError“). Der Hauptbildschirm übergab seine sehr vielen Zustände als Parameter an einzelne Funktionen; ab einer Größe lehnt Android den erzeugten Code ab. Diese Werte liegen jetzt in Feldern (Compiler-Einstellung für Lambdas); der Start wurde auf der Shield mit einem Release-Build geprüft.
+
 ## 1.0.85
 
 - Kindersicherung (neue Rubrik in den Einstellungen): PIN festlegen, Einstellungen per PIN schützen, Erotik-Kategorien automatisch sperren, einzelne Kategorien über „Kategorien verwalten“ sperren, gesperrte Inhalte bis zum Beenden der App freigeben.

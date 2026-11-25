@@ -13,8 +13,8 @@ android {
         applicationId = "com.iptvplayer.app"
         minSdk = 26
         targetSdk = 37
-        versionCode = 86
-        versionName = "1.0.85"
+        versionCode = 87
+        versionName = "1.0.86"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -56,4 +56,15 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
+}
+
+kotlin {
+    compilerOptions {
+        // The main screen's lambdas capture a very large number of states. Compiled as
+        // invokedynamic methods (Kotlin 2 default) every capture becomes a parameter, and
+        // methods with ~250 registers were rejected by the ART verifier on Android 11
+        // ("type Conflict unexpected as arg to if-eqz"). Class-based lambdas keep the
+        // captures in fields.
+        freeCompilerArgs.add("-Xlambdas=class")
+    }
 }

@@ -141,7 +141,15 @@ private suspend fun downloadRelease(context: Context, release: AppRelease): File
 }
 
 /** Update state for the menu badge and the content of the "App-Updates" settings section. */
-internal class AppUpdateUi(val available: Boolean, val settings: @Composable () -> Unit)
+internal class AppUpdateUi(
+    val available: Boolean,
+    val settings: @Composable () -> Unit,
+    /** For the phone remote: automatic search, manual check and a short status line. */
+    val automatic: Boolean = true,
+    val setAutomatic: (Boolean) -> Unit = {},
+    val check: () -> Unit = {},
+    val status: String = ""
+)
 
 @Composable
 internal fun rememberAppUpdates(): AppUpdateUi {
@@ -227,7 +235,26 @@ internal fun rememberAppUpdates(): AppUpdateUi {
             }
         )
     }
-    return AppUpdateUi(release != null) {
+    val lastCheckText = lastCheck.takeIf { it > 0 }?.let {
+        java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy, HH:mm").withZone(java.time.ZoneId.systemDefault())
+            .format(java.time.Instant.ofEpochMilli(it))
+    }
+    val status = listOfNotNull(
+        release?.let { context.getString(R.string.update_available, it.tag) + " – installieren am Gerät unter Einstellungen → App-Updates" },
+        if (busy) "Suche läuft …" else null,
+        result?.let { context.getString(it) },
+        lastCheckText?.let { context.getString(R.string.update_last_check, it) } ?: context.getString(R.string.update_never_checked)
+    ).joinToString("\n")
+    return AppUpdateUi(
+        release != null,
+        automatic = auto,
+        setAutomatic = { value ->
+            auto = value
+            preferences.edit().putBoolean("automatic", value).apply()
+        },
+        check = { check(manual = false) },
+        status = status,
+        settings = {
         // The changes of a new version stay in their popup ("Update anzeigen").
         release?.let { available ->
             Text(stringResource(R.string.update_available, available.tag))
@@ -248,5 +275,5 @@ internal fun rememberAppUpdates(): AppUpdateUi {
         }
         if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         result?.let { Text(stringResource(it)) }
-    }
+    })
 }

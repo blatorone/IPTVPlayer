@@ -12,7 +12,19 @@
 </head>
 <body>
   <header>
-    <div class="brand"><span class="logo">▶</span> StreamWatch</div>
+    <div class="brand" aria-label="StreamWatch">
+      <svg class="mark" viewBox="150 124 260 264" aria-hidden="true">
+        <defs>
+          <linearGradient id="sw-g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#3B82F6"/><stop offset=".55" stop-color="#A855F7"/><stop offset="1" stop-color="#FF4D8D"/>
+          </linearGradient>
+          <mask id="sw-m"><rect x="0" y="0" width="512" height="512" fill="#fff"/>
+            <rect x="150" y="226" width="260" height="16" fill="#000"/><rect x="150" y="272" width="260" height="16" fill="#000"/></mask>
+        </defs>
+        <path d="M196 146 L196 366 L376 256 Z" fill="url(#sw-g)" stroke="url(#sw-g)" stroke-width="44" stroke-linejoin="round" mask="url(#sw-m)"/>
+      </svg>
+      <span class="word">Stream<span class="watch">Watch</span></span>
+    </div>
     <div class="header-right">
       <div id="status" class="status">Verbinde …</div>
       <button id="finish" class="primary" hidden>Fertig – Zugriff beenden</button>

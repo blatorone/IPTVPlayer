@@ -1,5 +1,21 @@
 # Änderungen
 
+## 1.0.90
+
+- Bevorzugtes Portal: In der Portalliste (und am Handy) lässt sich ein Portal mit „Bevorzugen“ markieren. Es wird für Live-TV, Filme und Serien zuerst verwendet; klappt es nicht, werden die anderen Portale automatisch versucht.
+- Filme und Serien: Neben „Gesehen-Status“ gibt es den Knopf „Portal“, wenn der Titel auf mehreren Portalen liegt. Ein Film startet direkt über das gewählte Portal; bei einer Serie gilt die Wahl für die Folgen. Dort lässt sich das Portal auch bevorzugen.
+- Vollbild: Das Zahnrad öffnet ein Menü mit Geschwindigkeit, Tonspur und Portal. So lässt sich laufende Wiedergabe auf ein anderes Portal umschalten; Filme und Folgen machen an derselben Stelle weiter.
+- Kein Ton: Hat ein Stream keinen abspielbaren Ton, startet die App ihn automatisch über das nächste Portal. Gibt es keines mehr, erscheint ein Hinweis.
+- Untertitel: Forced-Untertitel werden jetzt auch bei Filmen und Live-TV automatisch eingeschaltet (vorher nur bei Serien). Erkannt werden auch Spuren, die nur „Forced“ bzw. „erzwungen“ heißen. Die Untertitel-Taste gibt es jetzt auch bei Live-TV.
+- Zurück-Schaltflächen: Alle Zurück-Knöpfe auf dem Bildschirm (auch in der Info im Vollbild und im Programmführer) folgen der Einstellung „Zurück-Schaltfläche auf dem Bildschirm anzeigen“.
+- Live-TV: „Wiedergabe stoppen“ im Programmführer entfällt.
+- Behoben: Zurück aus „Quellen“ oder „Kategorien“ (und in den Einstellungen) konnte die App beenden, weil die App sich fälschlich noch im Programmführer wähnte.
+- Einstellungen: Zurück geht immer einen Schritt zurück – aus einer Unterseite zu den Zeilen der Rubrik, aus den Zeilen zur Rubrikenleiste und von dort zum zuletzt genutzten Bereich (Live-TV, Filme, Serien).
+- App beenden: Neue Einstellung unter Allgemein (auch am Handy). Standard ist eine Abfrage, die man bestätigen muss; wahlweise zweimal Zurück drücken oder ohne Bestätigung.
+- Farben: 20 Akzentfarben statt 5. Unter Darstellung → Akzentfarbe gibt es eine Farbpalette mit einer Beispielansicht daneben; sie zeigt die Farbe, auf der der Fokus steht, OK übernimmt sie. Auf hellen Farben (z. B. Gelb) ist die Schrift dunkel.
+- Handy-Seite: zeigt das StreamWatch-Logo und übernimmt die in der App eingestellte Akzentfarbe; die Farben lassen sich dort als Farbfelder wählen.
+- Per Handy einstellen: Jetzt mit allen Einstellungen des Geräts – EPG-Quelle und eigene XMLTV-Quellen, EPG jetzt aktualisieren, Programmführer und Senderliste gestalten, Sendervarianten innerhalb des Portals zusammenführen, alle Portale aktualisieren, App-Updates, TMDB-Token, Trakt verbinden/synchronisieren/trennen und bevorzugtes Portal. Intro- und Abspannzeiten erscheinen nur bei „Feste Zeit“, die Nachfrage-Anzahl nur bei eingeschalteter Nachfrage. Nur am Gerät bleiben Diagnose sowie Portal-Export und -Import, weil sie Dateien auf dem Gerät brauchen.
+
 ## 1.0.89
 
 - Neu: Per Handy einstellen (Einstellungen → Allgemein). Das Gerät zeigt einen QR-Code; damit lassen sich im Handy-Browser Portale hinzufügen, aktivieren und entfernen, Länder und Kategorien für Live-TV, Filme und Serien ein- und ausblenden, Kategorien sperren, PIN und Kindersicherung sowie die übrigen Einstellungen ändern – im Heimnetz und unterwegs. Die Verbindung ist Ende-zu-Ende verschlüsselt und endet mit „Zugriff beenden“, beim Verlassen der Seite oder App und nach 15 Minuten ohne Änderung.

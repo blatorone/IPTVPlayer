@@ -108,5 +108,53 @@ class RemoteProtocolTest {
         assertTrue(json["settings"].asJsonArray[0].asJsonObject["value"].asBoolean)
         assertTrue(json["categories"].asJsonObject["LIVE"].asJsonArray[0].asJsonObject["locked"].asBoolean)
         assertFalse(json["portals"].asJsonArray[0].asJsonObject.has("reachable"))
+        assertFalse(json["portals"].asJsonArray[0].asJsonObject["preferred"].asBoolean)
+    }
+
+    @Test
+    fun parsesActionsInputsAndPreferredPortal() {
+        assertEquals(RemoteCommand.Action("epgRefreshNow"), decode("""{"t":"action","epoch":"e1","id":"epgRefreshNow"}"""))
+        assertEquals(
+            RemoteCommand.Input("epgAdd", "https://guide.example/epg.xml"),
+            decode("""{"t":"input","epoch":"e1","id":"epgAdd","value":"https://guide.example/epg.xml"}""")
+        )
+        assertNull(decode("""{"t":"input","epoch":"e1","id":"epgAdd","value":5}"""))
+        assertNull(decode("""{"t":"input","epoch":"e1","id":"epgAdd","value":"${"x".repeat(3_000)}"}"""))
+        assertEquals(
+            RemoteCommand.PortalPreferred("id1", true),
+            decode("""{"t":"portalPreferred","epoch":"e1","id":"id1","preferred":true}""")
+        )
+        assertNull(decode("""{"t":"portalPreferred","epoch":"e1","id":"id1"}"""))
+    }
+
+    @Test
+    fun encodesDependentEntriesButNeverInputValues() {
+        var manual = "AUTO"
+        val state = RemoteState(
+            device = "StreamWatch",
+            settings = listOf(
+                RemoteEntry.Choice("introMode", "Folgen", "Intro", listOf(RemoteOption("AUTO", "a"), RemoteOption("TIME", "t")),
+                    { manual }) { manual = it },
+                RemoteEntry.Number("introStart", "Folgen", "Start", 0, 60, 5, "s", { 10 }) {}.shownIf("introMode", "TIME"),
+                RemoteEntry.Input("tmdbToken", "Metadaten", "Token", "Token", true, "Verbinden") { null },
+                RemoteEntry.Action("refresh", "Quellen", "Alle", "Aktualisieren") { null },
+                RemoteEntry.Info("trakt", "Konten", "Trakt", "Nicht verbunden.", "https://trakt.tv/activate")
+            ),
+            portals = emptyList(), categories = emptyMap(), countries = emptyList(),
+            parental = RemoteParental(hasPin = false, separateKidsPin = false, kidsMode = false),
+            busy = null, error = null
+        )
+        val settings = JsonParser.parseString(RemoteProtocol.encodeState(state, epoch)).asJsonObject["settings"].asJsonArray
+        val start = settings[1].asJsonObject
+        assertEquals("introMode", start["showIf"].asJsonObject["id"].asString)
+        assertEquals("TIME", start["showIf"].asJsonObject["value"].asString)
+        assertFalse(settings[0].asJsonObject.has("showIf"))
+        val token = settings[2].asJsonObject
+        assertEquals("input", token["type"].asString)
+        assertTrue(token["secret"].asBoolean)
+        assertFalse(token.has("value"))
+        assertEquals("action", settings[3].asJsonObject["type"].asString)
+        assertEquals("https://trakt.tv/activate", settings[4].asJsonObject["link"].asString)
+        assertFalse(state.settings.applyRemoteValue("refresh", JsonPrimitive(true)))
     }
 }

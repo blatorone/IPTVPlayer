@@ -43,7 +43,7 @@ Transport und Schutzmodell sind festgelegt (siehe `PROJECT_SPEC.md`, Fernverwalt
 1. Verschlüsselung und Rahmenformat mit Tests (`RemoteSessionCrypto`) – umgesetzt.
 2. Nachrichtenformat für Einstellungen mit Tests (`RemoteProtocol`) – umgesetzt.
 3. Sitzung am Gerät (`RemoteSession`, `RemoteAccessPage`, Einstellungen → Allgemein) – umgesetzt, auf der Shield geprüft.
-4. Verwaltungsseite (`remote/public`) – umgesetzt. Nicht abgedeckt: Trakt-/TMDB-Anmeldung, XMLTV-Quellen, Programmführer-Gestaltung, Diagnose (bleiben am Gerät).
+4. Verwaltungsseite (`remote/public`) – umgesetzt, einschließlich Trakt-/TMDB-Anmeldung, XMLTV-Quellen, Programmführer-Gestaltung, App-Updates und bevorzugtem Portal. Einträge können von anderen abhängen (`showIf`), Aktionen und Eingabefelder laufen über eigene Befehle. Nur am Gerät: Diagnose sowie Portal-Export/-Import (Dateiauswahl am Gerät).
 5. Vermittler (`remote/src/index.js`) – veröffentlicht mit `npx wrangler deploy` aus `remote/` unter der Adresse in `REMOTE_BASE_URL`, live geprüft.
 6. Optional: direkte Heimnetz-Verbindung als Notlösung.
 **Fertig:** Ein zweites Gerät kann eine bestätigte Änderung vornehmen; abgelaufene oder ungültige Sitzung scheitert; Dienst endet wie spezifiziert. Geheimnisse werden geschützt und nicht geloggt.

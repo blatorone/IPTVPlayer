@@ -365,7 +365,10 @@ internal fun TitleDetails(
     onWatchStatus: (() -> Unit)?,
     onFavorite: () -> Unit,
     onWatch: () -> Unit,
-    onCast: (() -> Unit)? = null
+    onCast: (() -> Unit)? = null,
+    /** Opens the choice of the portal to play from (shown when the title is on several portals). */
+    portalLabel: String? = null,
+    onPortal: (() -> Unit)? = null
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Poster(title, Modifier.width(if (compact) 72.dp else 116.dp).clip(MaterialTheme.shapes.medium))
@@ -420,6 +423,7 @@ internal fun TitleDetails(
                 MenuButton(stringResource(R.string.watchlist), watchlistModifier, selected = saved, onClick = onWatch)
                 onCast?.let { MenuButton(stringResource(R.string.cast), Modifier, onClick = it) }
                 onWatchStatus?.let { MenuButton(stringResource(R.string.watched_status), Modifier, onClick = it) }
+                onPortal?.let { MenuButton(portalLabel ?: stringResource(R.string.title_portal_auto), Modifier, onClick = it) }
             }
             watchProgress?.let { WatchProgress(it) }
             Text(

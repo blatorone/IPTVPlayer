@@ -115,6 +115,7 @@ async function receive(data) {
   const message = JSON.parse(text);
   if (message.t === "state") {
     state = message;
+    applyAccent(message.accent);
     deviceThere = true;
     setStatus(`Verbunden mit ${message.device}`, "ok");
     $("finish").hidden = false;
@@ -134,6 +135,16 @@ async function send(command) {
 }
 
 // ---------- helpers ----------
+// The page uses the accent colour set in the app.
+function applyAccent(hex) {
+  if (!/^#[0-9A-Fa-f]{6}$/.test(hex || "")) return;
+  const root = document.documentElement.style;
+  root.setProperty("--accent", hex);
+  const n = parseInt(hex.slice(1), 16);
+  const lum = (0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255;
+  root.setProperty("--on-accent", lum > 0.6 ? "#111" : "#fff");
+}
+
 function el(tag, props = {}, ...children) {
   const node = document.createElement(tag);
   for (const [key, value] of Object.entries(props)) {
@@ -221,6 +232,10 @@ function renderPortals() {
     el("div", { class: "row-actions" },
       el("span", { class: "badge " + (p.reachable === true ? "ok" : p.reachable === false ? "bad" : "") },
         p.reachable === true ? "erreichbar" : p.reachable === false ? "nicht erreichbar" : "unbekannt"),
+      el("button", { class: p.preferred ? "preferred" : "", "aria-pressed": String(!!p.preferred),
+        title: "Wird für Live-TV, Filme und Serien zuerst verwendet",
+        onclick: () => send({ t: "portalPreferred", id: p.id, preferred: !p.preferred }) },
+        p.preferred ? "★ Bevorzugt" : "☆ Bevorzugen"),
       el("button", { onclick: () => { editingPortal = editingPortal === p.id ? null : p.id; renderPortals(); } },
         editingPortal === p.id ? "Schließen" : "Bearbeiten"),
       el("button", { class: "danger", onclick: () => {
@@ -310,7 +325,44 @@ function renderCategories() {
   if (!items.length) $("category-list").replaceChildren(el("p", { class: "hint" }, "Keine Kategorien."));
 }
 
+// A setting with "showIf" is shown only while the other setting has that value.
+function visibleSetting(s) {
+  if (!s.showIf) return true;
+  const other = state.settings.find((o) => o.id === s.showIf.id);
+  return !!other && String(other.value) === s.showIf.value;
+}
+
 function settingRow(s, onChange) {
+  if (s.type === "info") {
+    return el("div", { class: "row" }, el("span", { class: "label" }, s.label,
+      el("span", { class: "sub" }, s.text),
+      s.link ? el("a", { class: "sub", href: s.link, target: "_blank", rel: "noopener noreferrer" }, s.link) : null));
+  }
+  if (s.type === "action") {
+    return el("div", { class: "row" }, el("span", { class: "label" }, ...s.label.split("\n").map((line, i) =>
+      i === 0 ? line : el("span", { class: "sub" }, line))),
+      el("button", { onclick: () => send({ t: "action", id: s.id }) }, s.button));
+  }
+  if (s.type === "input") {
+    const input = el("input", { type: s.secret ? "password" : "url", placeholder: s.hint, autocomplete: "off",
+      autocapitalize: "off", spellcheck: "false" });
+    return el("form", { class: "row input-row", autocomplete: "off", onsubmit: (e) => {
+      e.preventDefault();
+      const value = input.value.trim();
+      if (!value) return;
+      input.value = "";
+      input.blur();
+      send({ t: "input", id: s.id, value });
+    } }, el("label", { class: "label" }, s.label, input), el("button", { type: "submit", class: "primary" }, s.button));
+  }
+  if (s.type === "choice" && s.options.some((o) => o.color)) {
+    const current = s.options.find((o) => o.value === s.value);
+    return el("div", { class: "row color-row" },
+      el("span", { class: "label" }, s.label, el("span", { class: "sub" }, current ? current.label : "")),
+      el("div", { class: "swatches" }, s.options.map((o) => el("button", {
+        class: "swatch", style: `background:${o.color}`, title: o.label, "aria-label": o.label,
+        "aria-pressed": String(o.value === s.value), onclick: () => onChange(o.value) }))));
+  }
   let control;
   if (s.type === "toggle") control = switchButton(s.value, s.label, () => onChange(!s.value));
   else if (s.type === "choice") {
@@ -369,9 +421,15 @@ function renderParental() {
 }
 
 function renderSettings() {
+  // Do not rebuild the page while something is being typed; it is redrawn when the field is left.
+  const typing = document.activeElement;
+  if (typing && typing.tagName === "INPUT" && $("settings").contains(typing)) {
+    typing.onblur = () => { typing.onblur = null; setTimeout(renderSettings, 0); };
+    return;
+  }
   const groups = new Map();
   for (const s of state.settings) {
-    if (s.id.startsWith("parental.")) continue;
+    if (s.id.startsWith("parental.") || !visibleSetting(s)) continue;
     if (!groups.has(s.section)) groups.set(s.section, []);
     groups.get(s.section).push(s);
   }

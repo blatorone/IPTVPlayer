@@ -26,13 +26,24 @@ import com.google.gson.JsonPrimitive
  *   {"t":"pinRemove","current":"…"}
  *   {"t":"kidsPin","pin":"…"|null,"current":"…"}      separate PIN for leaving kids mode
  *   {"t":"parental","field":"lockAdult","value":false,"pin":"…"}
+ *   {"t":"portalPreferred","id":"…","preferred":true}
+ *   {"t":"action","id":"…"}                             run an action entry (button)
+ *   {"t":"input","id":"…","value":"…"}                  submit an input entry (text field)
+ * A setting may carry "showIf":{"id":"…","value":"…"}: the phone shows it only while that
+ * other setting has that value (for example intro times only with "Feste Zeit").
  * The format is plain JSON so that the web page and later iOS/Linux builds share it.
  */
 
-internal data class RemoteOption(val value: String, val label: String)
+internal data class RemoteOption(val value: String, val label: String, val color: String? = null)
 
 /** One setting shown on the phone, with the code that reads and changes it on the device. */
 internal sealed class RemoteEntry(val id: String, val section: String, val label: String) {
+    /** Shown on the phone only while the setting [showIf].first has the value [showIf].second. */
+    var showIf: Pair<String, String>? = null
+        private set
+
+    fun shownIf(id: String, value: Any): RemoteEntry = apply { showIf = id to value.toString() }
+
     class Toggle(id: String, section: String, label: String, val get: () -> Boolean, val set: (Boolean) -> Unit) :
         RemoteEntry(id, section, label)
 
@@ -45,6 +56,20 @@ internal sealed class RemoteEntry(val id: String, val section: String, val label
         id: String, section: String, label: String, val min: Int, val max: Int, val step: Int,
         val unit: String, val get: () -> Int, val set: (Int) -> Unit
     ) : RemoteEntry(id, section, label)
+
+    /** A button; [run] returns an optional message for the phone. */
+    class Action(id: String, section: String, label: String, val button: String, val run: () -> String?) :
+        RemoteEntry(id, section, label)
+
+    /** A text field with a button. The entered value is never sent back to the phone. */
+    class Input(
+        id: String, section: String, label: String, val hint: String, val secret: Boolean, val button: String,
+        val submit: (String) -> String?
+    ) : RemoteEntry(id, section, label)
+
+    /** Read-only text, optionally with a link the phone can open. */
+    class Info(id: String, section: String, label: String, val text: String, val link: String? = null) :
+        RemoteEntry(id, section, label)
 }
 
 /** Applies a value from the phone; false when the id is unknown or the value does not fit. */
@@ -62,6 +87,7 @@ internal fun List<RemoteEntry>.applyRemoteValue(id: String, value: JsonElement?)
             if (entry.options.none { it.value == choice }) return false
             entry.set(choice)
         }
+        is RemoteEntry.Action, is RemoteEntry.Input, is RemoteEntry.Info -> return false
         is RemoteEntry.Number -> {
             if (!primitive.isNumber) return false
             val number = primitive.asDouble
@@ -76,7 +102,7 @@ internal fun List<RemoteEntry>.applyRemoteValue(id: String, value: JsonElement?)
 
 internal data class RemotePortal(
     val id: String, val label: String, val address: String, val mac: String, val enabled: Boolean,
-    val reachable: Boolean?, val expiry: String?, val active: Boolean
+    val reachable: Boolean?, val expiry: String?, val active: Boolean, val preferred: Boolean = false
 )
 internal data class RemoteCategory(val id: String, val name: String, val hidden: Boolean, val locked: Boolean)
 internal data class RemoteCountry(val code: String, val name: String, val selected: Boolean)
@@ -93,7 +119,9 @@ internal data class RemoteState(
     val busy: String?,
     /** The device asks which countries to show (after a portal was loaded). */
     val askCountries: Boolean = false,
-    val error: String?
+    val error: String?,
+    /** The app's accent colour ("#RRGGBB"), used by the page. */
+    val accent: String? = null
 )
 
 internal sealed interface RemoteCommand {
@@ -113,6 +141,9 @@ internal sealed interface RemoteCommand {
     data class PinRemove(val current: String?) : RemoteCommand
     data class KidsPin(val pin: String?, val current: String?) : RemoteCommand
     data class Parental(val field: String, val value: JsonElement?, val pin: String?) : RemoteCommand
+    data class PortalPreferred(val id: String, val preferred: Boolean) : RemoteCommand
+    data class Action(val id: String) : RemoteCommand
+    data class Input(val id: String, val value: String) : RemoteCommand
 }
 
 internal object RemoteProtocol {
@@ -129,12 +160,19 @@ internal object RemoteProtocol {
         state.busy?.let { addProperty("busy", it) }
         state.error?.let { addProperty("error", it) }
         addProperty("askCountries", state.askCountries)
+        state.accent?.let { addProperty("accent", it) }
         add("settings", JsonArray().apply {
             state.settings.forEach { entry ->
                 add(JsonObject().apply {
                     addProperty("id", entry.id)
                     addProperty("section", entry.section)
                     addProperty("label", entry.label)
+                    entry.showIf?.let { (id, value) ->
+                        add("showIf", JsonObject().apply {
+                            addProperty("id", id)
+                            addProperty("value", value)
+                        })
+                    }
                     when (entry) {
                         is RemoteEntry.Toggle -> {
                             addProperty("type", "toggle")
@@ -148,6 +186,7 @@ internal object RemoteProtocol {
                                     add(JsonObject().apply {
                                         addProperty("value", option.value)
                                         addProperty("label", option.label)
+                                        option.color?.let { addProperty("color", it) }
                                     })
                                 }
                             })
@@ -159,6 +198,21 @@ internal object RemoteProtocol {
                             addProperty("max", entry.max)
                             addProperty("step", entry.step)
                             addProperty("unit", entry.unit)
+                        }
+                        is RemoteEntry.Action -> {
+                            addProperty("type", "action")
+                            addProperty("button", entry.button)
+                        }
+                        is RemoteEntry.Input -> {
+                            addProperty("type", "input")
+                            addProperty("hint", entry.hint)
+                            addProperty("secret", entry.secret)
+                            addProperty("button", entry.button)
+                        }
+                        is RemoteEntry.Info -> {
+                            addProperty("type", "info")
+                            addProperty("text", entry.text)
+                            entry.link?.let { addProperty("link", it) }
                         }
                     }
                 })
@@ -175,6 +229,7 @@ internal object RemoteProtocol {
                     portal.reachable?.let { addProperty("reachable", it) }
                     portal.expiry?.let { addProperty("expiry", it) }
                     addProperty("active", portal.active)
+                    addProperty("preferred", portal.preferred)
                 })
             }
         })
@@ -251,6 +306,9 @@ internal object RemoteProtocol {
             }
             "portalEnabled" -> RemoteCommand.PortalEnabled(root.text("id") ?: return null, root.flag("enabled") ?: return null)
             "portalRemove" -> RemoteCommand.PortalRemove(root.text("id") ?: return null)
+            "portalPreferred" -> RemoteCommand.PortalPreferred(root.text("id") ?: return null, root.flag("preferred") ?: return null)
+            "action" -> RemoteCommand.Action(root.text("id") ?: return null)
+            "input" -> RemoteCommand.Input(root.text("id") ?: return null, root.text("value") ?: return null)
             "pin" -> RemoteCommand.Pin(root.pin("pin") ?: return null, root.pin("current"))
             "pinRemove" -> RemoteCommand.PinRemove(root.pin("current"))
             "kidsPin" -> {

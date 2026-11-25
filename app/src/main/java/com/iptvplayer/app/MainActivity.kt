@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -92,6 +93,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.focus.FocusRequester
@@ -384,24 +386,54 @@ private enum class VodLiveView(val label: Int) {
     HIDDEN(R.string.vod_live_hidden)
 }
 
-private enum class AccentChoice(val label: Int, val color: Color, val container: Color) {
-    RED(R.string.accent_red, Color(0xFFE50914), Color(0xFF9E0B12)),
-    BLUE(R.string.accent_blue, Color(0xFF1689D4), Color(0xFF0B5A8A)),
-    GREEN(R.string.accent_green, Color(0xFF2EAD68), Color(0xFF17663C)),
-    PURPLE(R.string.accent_purple, Color(0xFF9B59D0), Color(0xFF63338A)),
-    ORANGE(R.string.accent_orange, Color(0xFFFF8A24), Color(0xFF8C4A0D))
+/** Accent colours, saved by name (new colours may be added in any order). */
+internal enum class AccentChoice(val label: Int, val color: Color) {
+    RED(R.string.accent_red, Color(0xFFE50914)),
+    WINE(R.string.accent_wine, Color(0xFFB0123A)),
+    CORAL(R.string.accent_coral, Color(0xFFFF5A4E)),
+    PINK(R.string.accent_pink, Color(0xFFFF4D8D)),
+    MAGENTA(R.string.accent_magenta, Color(0xFFD63AF9)),
+    PURPLE(R.string.accent_purple, Color(0xFF9B59D0)),
+    VIOLET(R.string.accent_violet, Color(0xFF7C4DFF)),
+    INDIGO(R.string.accent_indigo, Color(0xFF5C6BC0)),
+    BLUE(R.string.accent_blue, Color(0xFF1689D4)),
+    SKY(R.string.accent_sky, Color(0xFF29B6F6)),
+    CYAN(R.string.accent_cyan, Color(0xFF00BCD4)),
+    TEAL(R.string.accent_teal, Color(0xFF14A89A)),
+    GREEN(R.string.accent_green, Color(0xFF2EAD68)),
+    LIME(R.string.accent_lime, Color(0xFF8BC34A)),
+    YELLOW(R.string.accent_yellow, Color(0xFFF5C518)),
+    AMBER(R.string.accent_amber, Color(0xFFFFB300)),
+    ORANGE(R.string.accent_orange, Color(0xFFFF8A24)),
+    BRONZE(R.string.accent_bronze, Color(0xFFC8783C)),
+    BROWN(R.string.accent_brown, Color(0xFF8D6E63)),
+    GREY(R.string.accent_grey, Color(0xFF90A4AE));
+
+    /** Darker shade for filled areas such as the selected row. */
+    val container: Color get() = androidx.compose.ui.graphics.lerp(color, Color.Black, 0.35f)
+    /** Text colour on the accent: black on light colours, white otherwise. */
+    val onColor: Color get() = if (color.luminance() > 0.45f) Color(0xFF111111) else Color.White
+    /** "#RRGGBB" for the phone page. */
+    val hex: String get() = "#%06X".format(color.toArgb() and 0xFFFFFF)
 }
 
 private val mainDestinations = Destination.entries.filter {
     it != Destination.SOURCES && it != Destination.CATEGORIES
 }
 private const val EXIT_CONFIRMATION_MS = 3_000L
+
+/** How leaving the app with Back is confirmed. */
+internal enum class ExitConfirmation(val label: Int) {
+    DIALOG(R.string.exit_confirm_dialog),
+    DOUBLE_BACK(R.string.exit_confirm_double_back),
+    NONE(R.string.exit_confirm_none)
+}
 private const val SETTINGS_PAGE_FOCUS_GRACE_MS = 800L
 private const val REMOTE_PIN_ATTEMPTS = 5
 
-private fun playerColors(accent: AccentChoice) = darkColorScheme(
+internal fun playerColors(accent: AccentChoice) = darkColorScheme(
     primary = accent.color,
-    onPrimary = Color(0xFFFFFFFF),
+    onPrimary = accent.onColor,
     primaryContainer = accent.container,
     onPrimaryContainer = Color(0xFFFFDADB),
     secondary = Color(0xFFF5C451),
@@ -436,8 +468,32 @@ private data class PlaybackSelection(
 private data class PlaybackVariant(
     val label: String,
     val timing: EpisodeTiming = EpisodeTiming(),
+    /** Identity of the portal this variant plays from (null when unknown). */
+    val sourceId: String? = null,
     val resolve: suspend () -> String
 )
+
+/** Orders items so that the chosen portal comes first, then the preferred one, then the rest unchanged. */
+internal fun <T> List<T>.preferringSource(chosen: String?, preferred: String?, sourceOf: (T) -> String?): List<T> =
+    sortedBy { item ->
+        val source = sourceOf(item)
+        when {
+            source == null -> 2
+            source == chosen -> 0
+            source == preferred -> 1
+            else -> 2
+        }
+    }
+/** Forced subtitles: flagged as forced in the stream, or only named so by the provider. */
+private fun isForcedSubtitle(format: androidx.media3.common.Format): Boolean =
+    isForcedSubtitle(format.selectionFlags, format.label, format.id)
+
+internal fun isForcedSubtitle(selectionFlags: Int, label: String?, id: String?): Boolean =
+    selectionFlags and C.SELECTION_FLAG_FORCED != 0 ||
+        listOfNotNull(label, id).any { text ->
+            text.contains("forced", ignoreCase = true) || text.contains("erzwungen", ignoreCase = true)
+        }
+
 private data class PreparedLiveVariant(val variant: PlaybackVariant, val url: String, val preparedAt: Long)
 private data class PlaybackAttempt(
     val selection: PlaybackSelection,
@@ -561,6 +617,16 @@ private fun PlayerHome(
     val parental = remember(preferences) { ParentalControls(preferences) }
     var pinRequest by remember { mutableStateOf<PinRequest?>(null) }
     var exitBlockedUntil by remember { mutableStateOf(0L) }
+    var exitConfirmation by remember(preferences) {
+        val saved = preferences?.getString("exit_confirmation", null)
+        mutableStateOf(ExitConfirmation.entries.firstOrNull { it.name == saved } ?: ExitConfirmation.DIALOG)
+    }
+    var exitDialogOpen by remember { mutableStateOf(false) }
+    var accentPaletteOpen by remember { mutableStateOf(false) }
+    // Settings: whether focus is in the rows on the right, and a request to move it there.
+    var settingsContentFocused by remember { mutableStateOf(false) }
+    var settingsContentFocusRequest by remember { mutableIntStateOf(0) }
+    val settingsContentFocus = remember { FocusRequester() }
     val ageRatings = remember { HashMap<String, Int?>() }
     var traktDeviceCode by remember { mutableStateOf<TraktDeviceCode?>(null) }
     var traktBusy by remember { mutableStateOf(false) }
@@ -746,6 +812,17 @@ private fun PlayerHome(
     var mergedIndividualPortals by remember(preferences) {
         mutableStateOf(preferences?.getStringSet("merged_individual_portals", emptySet()).orEmpty().toSet())
     }
+    // Portal tried first for live TV, movies and series; the others remain the automatic fallback.
+    var preferredPortal by remember(preferences) { mutableStateOf(preferences?.getString("preferred_portal", null)) }
+    fun setPreferredPortal(identity: String?) {
+        preferredPortal = identity
+        preferences?.edit()?.apply { if (identity == null) remove("preferred_portal") else putString("preferred_portal", identity) }?.apply()
+    }
+    // Portal chosen on a film's or series' page (title key -> portal), kept while the app runs.
+    val titlePortalChoices = remember { mutableStateMapOf<String, String>() }
+    var portalPickerFor by remember { mutableStateOf<Pair<PortalSection, PortalTitle>?>(null) }
+    // Media item whose sound was already checked at start (a stream without sound switches portal).
+    var audioCheckedFor by remember { mutableStateOf<String?>(null) }
     var categoryMenu by remember { mutableStateOf<Pair<PortalSection, String?>?>(null) }
     val categoryOrders = remember { mutableStateMapOf<String, List<String>>() }
     var details by remember { mutableStateOf<Pair<PortalSection, PortalTitle>?>(null) }
@@ -1812,6 +1889,12 @@ private fun PlayerHome(
             }
         } else secondarySessions.getOrPut(source.identity) { StalkerPortal(source.address, source.mac) }
 
+    fun portalName(source: SavedPortal): String {
+        val index = savedSources.indexOfFirst { it.identity == source.identity }
+        val host = runCatching { java.net.URI(source.address).host }.getOrNull().orEmpty()
+        return resources.getString(R.string.saved_portal_label, index + 1, host)
+    }
+
     fun playbackSourceLabel(source: SavedPortal, portal: StalkerPortal): String {
         val index = savedSources.indexOfFirst { it.identity == source.identity }
         return if (index < 0) portal.sourceLabel else
@@ -2801,6 +2884,16 @@ private fun PlayerHome(
         ))
     }
 
+    /** Plays the current title or channel from another of its portals (chosen in the player settings). */
+    fun switchPlaybackVariant(index: Int) {
+        val attempt = playbackAttempt ?: return
+        if (index == attempt.index || index !in attempt.variants.indices) return
+        savePlaybackPosition()
+        val position = attempt.progressKey?.let { progressPreferences?.getLong(it, attempt.positionMs) } ?: attempt.positionMs
+        val ordered = listOf(attempt.variants[index]) + attempt.variants.filterIndexed { i, _ -> i != index }
+        runPlayback(attempt.copy(variants = ordered, index = 0, positionMs = position, openFullscreenOnStart = false))
+    }
+
     fun playChannel(channel: StalkerChannel, openFullscreenOnStart: Boolean = true) {
         val group = liveGroups[channel] ?: return
         programmeChannel = channel
@@ -2809,13 +2902,13 @@ private fun PlayerHome(
         startPlayback(
             channel,
             selection,
-            group.variants.map { variant ->
+            group.variants.preferringSource(null, preferredPortal) { it.item.source.identity }.map { variant ->
                 val item = variant.item
                 val portal = sessionFor(item.source)
                 val quality = variant.description.qualities.joinToString(" / ")
                 val sourceLabel = playbackSourceLabel(item.source, portal)
                 val label = if (quality.isBlank()) sourceLabel else "$quality · $sourceLabel"
-                PlaybackVariant(label) { portal.resolve(item.value, portal.openSession()) }
+                PlaybackVariant(label, sourceId = item.source.identity) { portal.resolve(item.value, portal.openSession()) }
             },
             openFullscreenOnStart = openFullscreenOnStart,
             liveRestoreKey = programmeKey(channel) ?: group.identity
@@ -2860,9 +2953,11 @@ private fun PlayerHome(
                 startPlayback(
                     channel, PlaybackSelection(cached.selectionSource, PortalSection.LIVE, cached.selectionId),
                     validStreams.map { saved ->
+                        saved to SavedPortal(saved.address, saved.mac, emptyList(), emptyMap(), emptyMap()).identity
+                    }.preferringSource(null, preferredPortal) { it.second }.map { (saved, identity) ->
                         val portal = StalkerPortal(saved.address, saved.mac)
                         val stream = StalkerChannel(cached.name, saved.command, null, null, id = saved.id, direct = saved.direct)
-                        PlaybackVariant(portal.sourceLabel) {
+                        PlaybackVariant(portal.sourceLabel, sourceId = identity) {
                             portal.resolve(stream, if (saved.direct) "" else portal.openSession())
                         }
                     },
@@ -3030,6 +3125,11 @@ private fun PlayerHome(
             countryVariants(section, entries).ifEmpty { entries.take(1) }
         }
     }
+
+    /** Portals offering a film or series, preferred portal first. */
+    fun titlePortals(section: PortalSection, title: PortalTitle): List<SavedPortal> =
+        titleEntries(section, title).map { it.source }.distinctBy { it.identity }
+            .preferringSource(null, preferredPortal) { it.identity }
 
     suspend fun findEquivalent(
         source: SavedPortal, section: PortalSection, title: PortalTitle, sameSource: Boolean = false
@@ -3399,12 +3499,17 @@ private fun PlayerHome(
             val known = if (section == PortalSection.SERIES) episodeVariants[title].orEmpty()
             else titleEntries(section, title)
             val knownBySource = known.distinctBy { it.source.identity }.associateBy { it.source.identity }
-            val owners = if (combine && section == PortalSection.MOVIES) {
+            val chosenPortal = (if (section == PortalSection.SERIES) openedSeries else title)
+                ?.let { titlePortalChoices[titleKey(section, it)] }
+            val owners = (if (combine && section == PortalSection.MOVIES) {
                 knownBySource.values.map { it.source } + sourcesForBrowsing.filter { it.identity !in knownBySource }
-            } else knownBySource.values.map { it.source }
+            } else knownBySource.values.map { it.source }).preferringSource(chosenPortal, preferredPortal) { it.identity }
             val variants = owners.map { source ->
                 val portal = sessionFor(source)
-                PlaybackVariant(playbackSourceLabel(source, portal), knownBySource[source.identity]?.value?.timing ?: EpisodeTiming()) {
+                PlaybackVariant(
+                    playbackSourceLabel(source, portal), knownBySource[source.identity]?.value?.timing ?: EpisodeTiming(),
+                    sourceId = source.identity
+                ) {
                     val knownTitle = knownBySource[source.identity]?.value
                     val item = knownTitle?.takeIf { it.command != null } ?: run {
                         val found = portal.loadCatalog(section, portal.openSession(), search = displayVodTitle(title))
@@ -3489,6 +3594,45 @@ private fun PlayerHome(
                 playbackError = R.string.vod_missing_link
             }
         }
+    }
+
+    // Choice of the portal on a film's or series' page. Films start right away; for a series
+    // the choice applies to the episodes started from its page.
+    portalPickerFor?.let { (section, title) ->
+        val key = titleKey(section, title)
+        val portals = titlePortals(section, title)
+        fun choose(identity: String?) {
+            if (identity == null) titlePortalChoices.remove(key) else titlePortalChoices[key] = identity
+            portalPickerFor = null
+            if (section == PortalSection.MOVIES && identity != null) selectTitle(section, title)
+        }
+        AlertDialog(
+            onDismissRequest = { portalPickerFor = null },
+            title = { Text(stringResource(R.string.title_portal_choose)) },
+            text = {
+                Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(stringResource(
+                        if (section == PortalSection.MOVIES) R.string.title_portal_movie_hint else R.string.title_portal_series_hint
+                    ), style = MaterialTheme.typography.bodySmall)
+                    MenuButton(stringResource(R.string.title_portal_auto), Modifier.fillMaxWidth(), selected = key !in titlePortalChoices) {
+                        choose(null)
+                    }
+                    portals.forEach { source ->
+                        Row(Modifier.fillMaxWidth().focusGroup(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            MenuButton(
+                                portalName(source), Modifier.weight(1f), selected = titlePortalChoices[key] == source.identity
+                            ) { choose(source.identity) }
+                            val preferred = preferredPortal == source.identity
+                            MenuButton(
+                                stringResource(if (preferred) R.string.portal_preferred else R.string.portal_prefer),
+                                Modifier, selected = preferred
+                            ) { setPreferredPortal(if (preferred) null else source.identity) }
+                        }
+                    }
+                }
+            },
+            confirmButton = { MaterialTextButton(onClick = { portalPickerFor = null }) { Text(stringResource(R.string.close)) } }
+        )
     }
 
     LaunchedEffect(details) {
@@ -4124,8 +4268,26 @@ private fun PlayerHome(
                 }
             }
 
+            // A stream without any playable sound (none in the stream or none the device can decode)
+            // counts as a failed start: the next portal is tried.
+            fun checkAudio(tracks: Tracks) {
+                val attempt = playbackAttempt ?: return
+                val active = player ?: return
+                if (active.currentMediaItem?.mediaId != attempt.mediaId || active.playbackState != Player.STATE_READY) return
+                if (tracks.groups.isEmpty() || audioCheckedFor == attempt.mediaId) return
+                audioCheckedFor = attempt.mediaId
+                if (tracks.groups.any { it.type == C.TRACK_TYPE_AUDIO && it.isSupported }) return
+                AppDiagnostics.record(context, "playback_without_audio")
+                if (attempt.index + 1 < attempt.variants.size) {
+                    scope.launch { failPlayback(attempt, R.string.playback_no_audio) }
+                } else android.widget.Toast.makeText(context, R.string.playback_no_audio, android.widget.Toast.LENGTH_LONG).show()
+            }
+
+            override fun onTracksChanged(tracks: Tracks) = checkAudio(tracks)
+
             override fun onPlaybackStateChanged(playbackState: Int) {
                 buffering = playbackState == Player.STATE_BUFFERING
+                if (playbackState == Player.STATE_READY) player?.currentTracks?.let(::checkAudio)
                 val attempt = playbackAttempt ?: return
                 if (playbackState == Player.STATE_READY && player?.currentMediaItem?.mediaId == attempt.mediaId) {
                     val key = attempt.progressKey
@@ -4372,7 +4534,7 @@ private fun PlayerHome(
     val mainMenuOpen = isMainMenuOpen()
     LaunchedEffect(mainMenuOpen) { if (!mainMenuOpen) lastBack = 0L }
     fun settingsPageOpen() = epgSettingsOpen || episodeSettingsOpen || controlSettingsOpen ||
-        metadataSettingsOpen || guideAppearancePage != null || remoteAccessOpen
+        metadataSettingsOpen || guideAppearancePage != null || remoteAccessOpen || accentPaletteOpen
     fun openSettingsPage(open: () -> Unit) {
         settingsPageOpenedAt = SystemClock.elapsedRealtime()
         open()
@@ -4385,6 +4547,7 @@ private fun PlayerHome(
         metadataSettingsOpen = false
         guideAppearancePage = null
         remoteAccessOpen = false
+        accentPaletteOpen = false
         return open
     }
     fun openSettingsNow() {
@@ -4446,7 +4609,7 @@ private fun PlayerHome(
             episodeVariants = playbackEpisodeVariants
         }
         restoreLiveFocus = vodSection == null && (selected == null || selected == Destination.LIVE)
-        if (restoreLiveFocus && inGuide) {
+        if (restoreLiveFocus && selected == Destination.LIVE) {
             playing?.let(::restoreGuideChannel)
         }
         if (vodSection != null && cataloguePlaybackView == VodLiveView.HIDDEN) player?.pause()
@@ -4463,11 +4626,18 @@ private fun PlayerHome(
     fun requestAppExit() {
         val now = SystemClock.elapsedRealtime()
         if (now < exitBlockedUntil) return
-        if (lastBack != 0L && now - lastBack <= EXIT_CONFIRMATION_MS) {
-            savePlaybackPosition()
-            onExit()
-        } else {
-            lastBack = now
+        when (exitConfirmation) {
+            ExitConfirmation.NONE -> {
+                savePlaybackPosition()
+                onExit()
+            }
+            ExitConfirmation.DIALOG -> exitDialogOpen = true
+            ExitConfirmation.DOUBLE_BACK -> if (lastBack != 0L && now - lastBack <= EXIT_CONFIRMATION_MS) {
+                savePlaybackPosition()
+                onExit()
+            } else {
+                lastBack = now
+            }
         }
     }
     fun navigateBack() {
@@ -4498,11 +4668,16 @@ private fun PlayerHome(
             leaveFullscreen()
         } else if (isMainMenuOpen()) {
             requestAppExit()
-        } else if (inGuide) {
+        } else if (selected == Destination.LIVE) {
+            // Read the current destination here: a value captured earlier can be outdated and
+            // made Back from the settings close the app.
             if (guidePanel == GuidePanel.GRID) requestAppExit()
             else guidePanel = GuidePanel.GRID
         } else if (selected == Destination.SETTINGS && closeSettingsPages()) {
-            // Back from a settings page returns to its section first.
+            // Back from a settings page returns to the rows of its section (one step at a time).
+            settingsContentFocusRequest++
+        } else if (selected == Destination.SETTINGS && settingsContentFocused) {
+            // Back from the rows goes to the section bar on the left.
             settingsFocusRequesters[settingsSection]?.let { requester -> runCatching { requester.requestFocus() } }
         } else if (selected == Destination.SETTINGS) {
             exitBlockedUntil = SystemClock.elapsedRealtime() + EXIT_CONFIRMATION_MS
@@ -4543,6 +4718,24 @@ private fun PlayerHome(
         else if (selected == Destination.MOVIES || selected == Destination.SERIES) requestAppExit()
         else openMainMenu()
     }
+    if (exitDialogOpen) AlertDialog(
+        onDismissRequest = { exitDialogOpen = false },
+        title = { Text(stringResource(R.string.exit_dialog_title)) },
+        text = { Text(stringResource(R.string.exit_dialog_message)) },
+        confirmButton = {
+            MenuButton(stringResource(R.string.exit_dialog_confirm), Modifier) {
+                exitDialogOpen = false
+                savePlaybackPosition()
+                onExit()
+            }
+        },
+        dismissButton = {
+            val cancel = remember { FocusRequester() }
+            MenuButton(stringResource(android.R.string.cancel), Modifier.focusRequester(cancel)) { exitDialogOpen = false }
+            // Cancel has focus first, so a further Back or OK press does not close the app by accident.
+            LaunchedEffect(Unit) { runCatching { cancel.requestFocus() } }
+        }
+    )
     var playerControlsRequest by remember { mutableIntStateOf(0) }
     fun changeLiveChannel(step: Int): Boolean {
         val groups = withCategoryOrder(PortalSection.LIVE, liveCategories.keys
@@ -4579,7 +4772,7 @@ private fun PlayerHome(
                 showFullscreenPanel(panel)
                 return true
             }
-            if (inGuide && !fullscreen && panel != GuidePanel.CHANNELS && panel != GuidePanel.DETAILS) {
+            if (selected == Destination.LIVE && !fullscreen && panel != GuidePanel.CHANNELS && panel != GuidePanel.DETAILS) {
                 guidePanel = panel
                 return true
             }
@@ -4751,6 +4944,12 @@ private fun PlayerHome(
                 add(toggle("showBack", general, text(R.string.show_touch_back_button), { showSettingsBackButton },
                     "show_settings_back_button") { showSettingsBackButton = it })
                 add(toggle("keySounds", general, text(R.string.key_sounds), { keySounds }, "key_sounds") { keySounds = it })
+                add(RemoteEntry.Choice("exitConfirmation", general, name(R.string.exit_confirmation_setting),
+                    options(ExitConfirmation.entries) { it.label }, { exitConfirmation.name }
+                ) { value ->
+                    exitConfirmation = ExitConfirmation.valueOf(value)
+                    preferences?.edit()?.putString("exit_confirmation", value)?.apply()
+                })
                 add(toggle("lastChannel", general, text(R.string.start_last_channel), { playLastChannelAtStartup },
                     "play_last_channel_at_startup") { playLastChannelAtStartup = it })
                 add(toggle("portalRefresh", library, text(R.string.portal_refresh_at_start), { refreshPortalsAtStartup },
@@ -4769,6 +4968,40 @@ private fun PlayerHome(
                 })
                 add(toggle("autoCountries", library, text(R.string.auto_country_prompt), { automaticCountries },
                     "autoCountries") { automaticCountries = it })
+                storedSource?.identity?.takeIf { !mergeSources }?.let { activeId ->
+                    add(RemoteEntry.Toggle("mergePortalChannels", library, text(R.string.merge_portal_channels),
+                        { activeId in mergedIndividualPortals }) { value ->
+                        mergedIndividualPortals = if (value) mergedIndividualPortals + activeId else mergedIndividualPortals - activeId
+                        preferences?.edit()?.putStringSet("merged_individual_portals", mergedIndividualPortals)?.apply()
+                        category = null
+                    })
+                }
+                add(RemoteEntry.Action("refreshAll", library, text(R.string.refresh_all_sources), "Aktualisieren") {
+                    if (connecting || restoring) "Portale werden gerade geladen." else if (savedSources.isEmpty()) "Kein Portal vorhanden."
+                    else { refreshSources(savedSources); "Alle Portale werden aktualisiert." }
+                })
+                add(RemoteEntry.Choice("epgSource", guide, "EPG-Quelle", listOf(
+                    RemoteOption("PROVIDER", text(R.string.epg_provider)), RemoteOption("CUSTOM", text(R.string.epg_custom))
+                ), { if (useXmlTv) "CUSTOM" else "PROVIDER" }) {
+                    useXmlTv = it == "CUSTOM"
+                    preferences?.edit()?.putBoolean("xmltv_enabled", useXmlTv)?.apply()
+                })
+                xmlTvSources.forEachIndexed { index, url ->
+                    add(RemoteEntry.Action("epgRemove$index", guide, "${index + 1}. " + (guideSourceUri(url)?.host ?: url),
+                        "Entfernen") {
+                        if (epgSourceSaving) "Bitte kurz warten." else { saveEpgSources(xmlTvSources.filterNot { it == url }); "Quelle entfernt." }
+                    }.shownIf("epgSource", "CUSTOM"))
+                }
+                add(RemoteEntry.Input("epgAdd", guide, text(R.string.epg_add_source), text(R.string.epg_source_url), false,
+                    "Hinzufügen") { value ->
+                    val source = guideSourceUri(value.trim())?.toASCIIString()
+                    when {
+                        source == null -> "Die Adresse ist ungültig."
+                        source in xmlTvSources -> "Diese Quelle ist schon vorhanden."
+                        epgSourceSaving || !xmlTvSourcesLoaded -> "Bitte kurz warten."
+                        else -> { saveEpgSources(xmlTvSources + source); "Quelle hinzugefügt." }
+                    }
+                }.shownIf("epgSource", "CUSTOM"))
                 add(toggle("epgAtStart", guide, "EPG: " + text(R.string.epg_refresh_at_start), { epgAtStartup },
                     "epg_at_startup") { epgAtStartup = it })
                 add(RemoteEntry.Choice(
@@ -4790,8 +5023,54 @@ private fun PlayerHome(
                     preferences?.edit()?.putInt("epg_horizon_hours", epgHorizonHours)?.apply()
                     epgRefreshRequest++
                 })
+                add(RemoteEntry.Action("epgRefreshNow", guide,
+                    when {
+                        epgUpdating -> "EPG wird aktualisiert …"
+                        epgUpdateFailed || epgSourceWriteFailed -> text(R.string.epg_refresh_failed)
+                        else -> "EPG aktualisieren"
+                    }, text(R.string.epg_refresh_now)) {
+                    if (epgUpdating) "Läuft bereits." else if (useXmlTv && xmlTvSources.isEmpty()) "Zuerst eine XMLTV-Quelle hinzufügen."
+                    else { epgRefreshRequest++; "EPG wird aktualisiert." }
+                })
+                // Appearance of the guide and of the fullscreen channel list.
+                fun appearance(change: (GuideAppearance) -> GuideAppearance) {
+                    guideAppearance = change(guideAppearance)
+                    guideAppearance.save(preferences)
+                }
+                val sizes = options(GuideSize.entries) { it.label }
+                val grid = text(R.string.guide_grid_appearance)
+                val list = text(R.string.guide_channel_list_appearance)
+                fun size(id: String, section: String, label: Int, get: (GuideAppearance) -> GuideSize,
+                         set: (GuideAppearance, GuideSize) -> GuideAppearance) =
+                    RemoteEntry.Choice(id, section, text(label), sizes, { get(guideAppearance).name }) { value ->
+                        appearance { set(it, GuideSize.valueOf(value)) }
+                    }
+                fun shown(id: String, section: String, label: Int, get: (GuideAppearance) -> Boolean,
+                          set: (GuideAppearance, Boolean) -> GuideAppearance) =
+                    RemoteEntry.Toggle(id, section, text(label), { get(guideAppearance) }) { value -> appearance { set(it, value) } }
+                add(size("guideRows", grid, R.string.guide_row_size, { it.rowSize }) { a, v -> a.copy(rowSize = v) })
+                add(size("guideText", grid, R.string.guide_text_size, { it.textSize }) { a, v -> a.copy(textSize = v) })
+                add(size("guidePreviewSize", grid, R.string.guide_preview_size, { it.previewSize }) { a, v -> a.copy(previewSize = v) })
+                add(shown("guidePreview", grid, R.string.guide_preview_visible, { it.showPreview }) { a, v -> a.copy(showPreview = v) })
+                add(shown("guideNumbers", grid, R.string.guide_numbers_visible, { it.showNumbers }) { a, v -> a.copy(showNumbers = v) })
+                add(shown("guideLogos", grid, R.string.guide_logos_visible, { it.showLogos }) { a, v -> a.copy(showLogos = v) })
+                add(size("listWidth", list, R.string.guide_list_width, { it.listWidth }) { a, v -> a.copy(listWidth = v) })
+                add(shown("listSchedule", list, R.string.guide_show_schedule, { it.showSchedule }) { a, v -> a.copy(showSchedule = v) })
+                add(shown("listDescription", list, R.string.guide_show_description, { it.showDescription }) { a, v ->
+                    a.copy(showDescription = v, showSchedule = true)
+                })
+                add(shown("listProgress", list, R.string.guide_show_progress, { it.showProgress }) { a, v -> a.copy(showProgress = v) })
+                add(shown("listKeep", list, R.string.guide_keep_list, { it.keepChannelList }) { a, v -> a.copy(keepChannelList = v) })
+                add(RemoteEntry.Choice("listOpacity", list, "Deckkraft der Senderliste",
+                    listOf(60, 70, 80, 90, 100).map { RemoteOption(it.toString(), "$it %") }, { guideAppearance.opacity.toString() }
+                ) { value -> appearance { it.copy(opacity = value.toInt()) } })
+                add(RemoteEntry.Choice("listClose", list, "Liste schließen",
+                    listOf(0, 5, 10, 15, 30, 60).map {
+                        RemoteOption(it.toString(), if (it == 0) text(R.string.guide_manual_close) else context.getString(R.string.guide_seconds, it))
+                    }, { guideAppearance.closeSeconds.toString() }
+                ) { value -> appearance { it.copy(closeSeconds = value.toInt()) } })
                 add(RemoteEntry.Choice("accent", appearance, name(R.string.accent_color_setting),
-                    options(AccentChoice.entries) { it.label }, { accentChoice.name }
+                    AccentChoice.entries.map { RemoteOption(it.name, text(it.label), it.hex) }, { accentChoice.name }
                 ) { value -> AccentChoice.entries.firstOrNull { it.name == value }?.let(onAccentChoiceChange) })
                 add(RemoteEntry.Choice("menuStyle", appearance, name(R.string.menu_style_setting),
                     options(MainMenuStyle.entries) { it.label }, { mainMenuStyle.name }
@@ -4828,26 +5107,35 @@ private fun PlayerHome(
                     preferences?.edit()?.putString("vod_view_${section.name}", value)?.apply()
                     if (next == VodLiveView.HIDDEN && vodSection == section) player?.pause()
                 })
-                add(toggle("autoNext", playback, text(R.string.auto_next_episode), { autoNextEpisode },
+                val episodes = text(R.string.episode_settings)
+                val detection = listOf(RemoteOption("AUTO", "Automatisch erkennen"), RemoteOption("TIME", "Feste Zeit"))
+                add(toggle("autoNext", episodes, text(R.string.auto_next_episode), { autoNextEpisode },
                     "auto_next_episode") { autoNextEpisode = it })
-                add(toggle("inactivity", playback, text(R.string.series_inactivity_check), { checkSeriesInactivity },
+                add(toggle("inactivity", episodes, text(R.string.series_inactivity_check), { checkSeriesInactivity },
                     "check_series_inactivity") { checkSeriesInactivity = it })
-                add(number("inactiveLimit", playback, "Nachfragen nach Folgen ohne Eingabe", 1, 10, 1, "Folgen",
-                    { inactiveEpisodeLimit }, "inactive_episode_limit") { inactiveEpisodeLimit = it })
-                add(toggle("skipIntro", playback, text(R.string.skip_intro_automatically), { autoSkipIntro },
+                add(number("inactiveLimit", episodes, "Nachfragen nach Folgen ohne Eingabe", 1, 10, 1, "Folgen",
+                    { inactiveEpisodeLimit }, "inactive_episode_limit") { inactiveEpisodeLimit = it }.shownIf("inactivity", true))
+                add(toggle("skipIntro", episodes, text(R.string.skip_intro_automatically), { autoSkipIntro },
                     "auto_skip_intro") { autoSkipIntro = it })
-                add(toggle("decodeAudio", playback, text(R.string.decode_audio_for_intro), { decodeAudioForIntro },
+                add(toggle("decodeAudio", episodes, text(R.string.decode_audio_for_intro), { decodeAudioForIntro },
                     "decode_audio_for_intro") { decodeAudioForIntro = it })
-                add(toggle("manualIntro", playback, text(R.string.intro_manual), { manualIntro }, "manual_intro") { manualIntro = it })
-                add(number("introStart", playback, "Intro beginnt nach", 0, 595, 5, "Sek.", { introStartSeconds },
-                    "intro_start_seconds") { introStartSeconds = it.coerceAtMost(introEndSeconds - 5).coerceAtLeast(0) })
-                add(number("introEnd", playback, "Intro endet nach", 5, 600, 5, "Sek.", { introEndSeconds },
-                    "intro_end_seconds") { introEndSeconds = it.coerceAtLeast(introStartSeconds + 5) })
-                add(toggle("manualCredits", playback, text(R.string.credits_manual), { manualCredits },
-                    "manual_credits") { manualCredits = it })
-                add(number("creditsBefore", playback, "Abspann vor dem Ende", 0, 600, 5, "Sek.", { creditsBeforeEndSeconds },
-                    "credits_before_end_seconds") { creditsBeforeEndSeconds = it })
-                add(number("episodeNotice", playback, "Hinweis zur nächsten Folge vorher", 5, 60, 5, "Sek.",
+                add(RemoteEntry.Choice("introMode", episodes, "Intro", detection, { if (manualIntro) "TIME" else "AUTO" }) {
+                    manualIntro = it == "TIME"
+                    preferences?.edit()?.putBoolean("manual_intro", manualIntro)?.apply()
+                })
+                add(number("introStart", episodes, "Intro beginnt nach", 0, 595, 5, "Sek.", { introStartSeconds },
+                    "intro_start_seconds") { introStartSeconds = it.coerceAtMost(introEndSeconds - 5).coerceAtLeast(0) }
+                    .shownIf("introMode", "TIME"))
+                add(number("introEnd", episodes, "Intro endet nach", 5, 600, 5, "Sek.", { introEndSeconds },
+                    "intro_end_seconds") { introEndSeconds = it.coerceAtLeast(introStartSeconds + 5) }
+                    .shownIf("introMode", "TIME"))
+                add(RemoteEntry.Choice("creditsMode", episodes, "Abspann", detection, { if (manualCredits) "TIME" else "AUTO" }) {
+                    manualCredits = it == "TIME"
+                    preferences?.edit()?.putBoolean("manual_credits", manualCredits)?.apply()
+                })
+                add(number("creditsBefore", episodes, "Abspann vor dem Ende", 0, 600, 5, "Sek.", { creditsBeforeEndSeconds },
+                    "credits_before_end_seconds") { creditsBeforeEndSeconds = it }.shownIf("creditsMode", "TIME"))
+                add(number("episodeNotice", episodes, "Hinweis zur nächsten Folge vorher", 5, 60, 5, "Sek.",
                     { episodeNoticeSeconds }, "episode_notice_seconds") { episodeNoticeSeconds = it })
                 for (input in GuideInput.entries) add(RemoteEntry.Choice(
                     "control${input.name}", controls, text(input.label),
@@ -4858,6 +5146,47 @@ private fun PlayerHome(
                     controlBindings[input] = action
                     preferences?.edit()?.putString("control_${input.name}", value)?.apply()
                 })
+                val updates = text(R.string.settings_updates)
+                add(RemoteEntry.Toggle("updateAuto", updates, text(R.string.update_auto), { appUpdates.automatic }) {
+                    appUpdates.setAutomatic(it)
+                })
+                add(RemoteEntry.Action("updateCheck", updates, appUpdates.status, text(R.string.update_check)) {
+                    appUpdates.check()
+                    "Suche nach Updates …"
+                })
+                val metadata = text(R.string.settings_metadata)
+                add(RemoteEntry.Info("tmdbStatus", metadata, "TMDB", when {
+                    metadataBusy -> "Verbindung wird geprüft …"
+                    metadataError -> text(R.string.tmdb_connection_failed)
+                    metadataClient != null -> text(R.string.tmdb_connected)
+                    else -> "Nicht verbunden. Ohne TMDB werden Folgeninfos von TVmaze geladen."
+                }, "https://www.themoviedb.org/settings/api"))
+                add(RemoteEntry.Input("tmdbToken", metadata, text(R.string.tmdb_token), "Token einfügen", true,
+                    text(R.string.tmdb_connect)) { value ->
+                    if (value.isBlank()) "Bitte den Token eingeben." else if (metadataBusy) "Bitte kurz warten."
+                    else { updateMetadataConnection(value.trim()); "Verbindung wird geprüft …" }
+                })
+                if (metadataClient != null) add(RemoteEntry.Action("tmdbDisconnect", metadata, "TMDB-Verbindung",
+                    text(R.string.tmdb_disconnect)) { updateMetadataConnection(null); "TMDB getrennt." })
+                val sync = text(R.string.settings_sync)
+                val trakt = traktSession
+                val code = traktDeviceCode
+                add(RemoteEntry.Info("traktStatus", sync, "Trakt", when {
+                    trakt != null -> context.getString(R.string.trakt_connected_as, trakt.username)
+                    code != null -> context.getString(R.string.trakt_enter_code, code.verificationUrl) + " " + code.userCode
+                    traktBusy -> text(R.string.trakt_connecting)
+                    else -> traktStatus ?: "Nicht verbunden."
+                }, code?.verificationUrl))
+                if (trakt == null && code == null) add(RemoteEntry.Action("traktConnect", sync, "Trakt-Konto",
+                    text(R.string.trakt_connect)) { connectTrakt(); "Code wird angefordert …" })
+                if (trakt != null) {
+                    add(RemoteEntry.Action("traktSync", sync, traktStatus ?: "Verlauf und Merkliste", "Synchronisieren") {
+                        if (traktBusy) "Läuft bereits." else { syncTrakt(forceSeriesHistory = true); text(R.string.trakt_syncing) }
+                    })
+                    add(RemoteEntry.Action("traktDisconnect", sync, "Trakt-Konto", text(R.string.trakt_disconnect)) {
+                        disconnectTrakt(); null
+                    })
+                }
                 // Parental settings are changed with their own command (some need the PIN).
                 add(RemoteEntry.Toggle("parental.protectSettings", parentalSection, text(R.string.parental_protect_settings),
                     { parental.protectSettings }) {})
@@ -4888,6 +5217,7 @@ private fun PlayerHome(
             val available = (countries + knownCountries).toList()
             return RemoteState(
                 device = if (isTelevision) "StreamWatch (TV)" else "StreamWatch",
+                accent = accentChoice.hex,
                 settings = entries(),
                 portals = savedSources.mapIndexed { index, source ->
                     val host = runCatching { java.net.URI(source.address).host }.getOrNull().orEmpty()
@@ -4895,7 +5225,8 @@ private fun PlayerHome(
                         source.identity, "Portal ${index + 1} · $host", source.address, source.mac,
                         source.enabled, source.reachable,
                         source.subscriptionExpiry?.format(DateTimeFormatter.ofPattern("dd.MM.uuuu")),
-                        source.identity == storedSource?.identity
+                        source.identity == storedSource?.identity,
+                        preferred = source.identity == preferredPortal
                     )
                 },
                 categories = PortalSection.entries.associate { it.name to categories(it) },
@@ -4972,6 +5303,14 @@ private fun PlayerHome(
                 if (source.enabled != command.enabled) setPortalEnabled(source, command.enabled)
                 RemoteReply(true)
             } ?: RemoteReply(false, "Portal nicht gefunden.")
+            is RemoteCommand.PortalPreferred -> savedSources.firstOrNull { it.identity == command.id }?.let { source ->
+                setPreferredPortal(if (command.preferred) source.identity else preferredPortal.takeUnless { it == source.identity })
+                RemoteReply(true, if (command.preferred) "Wird zuerst verwendet." else null)
+            } ?: RemoteReply(false, "Portal nicht gefunden.")
+            is RemoteCommand.Action -> (entries().firstOrNull { it.id == command.id } as? RemoteEntry.Action)
+                ?.let { RemoteReply(true, it.run()) } ?: RemoteReply(false, "Diese Aktion ist gerade nicht verfügbar.")
+            is RemoteCommand.Input -> (entries().firstOrNull { it.id == command.id } as? RemoteEntry.Input)
+                ?.let { RemoteReply(true, it.submit(command.value)) } ?: RemoteReply(false, "Diese Eingabe ist gerade nicht verfügbar.")
             is RemoteCommand.PortalRemove ->
                 if (savedSources.size <= 1) RemoteReply(false, "Das letzte Portal kann nicht entfernt werden. Du kannst es deaktivieren.")
                 else {
@@ -5626,7 +5965,10 @@ private fun PlayerHome(
                 } else null,
                 subtitlePlaybackKey = playbackAttempt?.mediaId,
                 subtitlePreferences = progressPreferences,
-                onControlsVisible = { playbackControlsVisible = it }
+                onControlsVisible = { playbackControlsVisible = it },
+                portalChoices = playbackAttempt?.variants?.map { it.label }.orEmpty(),
+                portalIndex = playbackAttempt?.index ?: -1,
+                onPortalChoice = ::switchPlaybackVariant
             )
             if (playbackControlsVisible && vodSection != null) {
                 val episode = playbackEpisode
@@ -5751,7 +6093,10 @@ private fun PlayerHome(
                         color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = guideAppearance.opacity / 100f)
                     ) {
                         Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                            MenuButton(
+                            // The info panel's "Zurück" follows the setting for on-screen back buttons.
+                            if (panel == GuidePanel.DETAILS && !seriesOverlay && !showSettingsBackButton) {
+                                Box(Modifier.size(1.dp).focusRequester(overlayFocus).focusable())
+                            } else MenuButton(
                                 if (seriesOverlay && panel == GuidePanel.CHANNELS) overlaySeason?.title?.name
                                     ?.let { seasonName -> stringResource(R.string.series_overlay_season_episodes, seasonName) }
                                     ?: stringResource(R.string.series_overlay_episodes)
@@ -6571,6 +6916,7 @@ private fun PlayerHome(
                 when (destination) {
                     null -> LiveOverview(
                         player = player,
+                        showBackButton = showSettingsBackButton,
                         groups = liveCategories,
                         loading = liveGroups.isEmpty() && sourcesForBrowsing.any { it.channels.isNotEmpty() },
                         visibleGroups = liveCategories.keys.filter {
@@ -6650,6 +6996,7 @@ private fun PlayerHome(
                                         controlSettingsOpen -> controlSettingsPage
                                         remoteAccessOpen -> remoteAccessPage
                                         metadataSettingsOpen -> metadataSettingsPage
+                                        accentPaletteOpen -> { { AccentPalette(accentChoice, onAccentChoiceChange) } }
                                         else -> guideAppearancePage?.let { page -> { guideAppearanceSettingsPage(page) } }
                                     }
                                     if (subpage != null) {
@@ -6667,6 +7014,12 @@ private fun PlayerHome(
                                         preferences?.edit()?.putBoolean(
                                             "show_settings_back_button", showSettingsBackButton
                                         )?.apply()
+                                    }
+                                    SettingRow(
+                                        stringResource(R.string.exit_confirmation_setting, stringResource(exitConfirmation.label)), Modifier
+                                    ) {
+                                        exitConfirmation = ExitConfirmation.entries[(exitConfirmation.ordinal + 1) % ExitConfirmation.entries.size]
+                                        preferences?.edit()?.putString("exit_confirmation", exitConfirmation.name)?.apply()
                                     }
                                     SettingRow(stringResource(R.string.key_sounds), Modifier, selected = keySounds) {
                                         keySounds = !keySounds
@@ -6715,11 +7068,7 @@ private fun PlayerHome(
                                     SettingRow(
                                 stringResource(R.string.accent_color_setting, stringResource(accentChoice.label)),
                                 Modifier
-                            ) {
-                                onAccentChoiceChange(
-                                    AccentChoice.entries[(accentChoice.ordinal + 1) % AccentChoice.entries.size]
-                                )
-                            }
+                            ) { openSettingsPage { accentPaletteOpen = true } }
                             SettingRow(
                                         stringResource(R.string.menu_style_setting, stringResource(mainMenuStyle.label)),
                                         Modifier
@@ -6953,6 +7302,12 @@ private fun PlayerHome(
                                     Modifier.padding(start = 10.dp, end = 10.dp),
                                     style = MaterialTheme.typography.labelSmall
                                 )
+                                // The preferred portal is tried first for live TV, movies and series.
+                                val preferred = preferredPortal == source.identity
+                                MenuButton(
+                                    stringResource(if (preferred) R.string.portal_preferred else R.string.portal_prefer),
+                                    Modifier.padding(end = 8.dp), selected = preferred
+                                ) { setPreferredPortal(if (preferred) null else source.identity) }
                                 // The switch on the portal turns it on or off (and refreshes it when turned on).
                                 SettingToggleButton(
                                     source.enabled,
@@ -7023,7 +7378,7 @@ private fun PlayerHome(
                                 }
                             )
                         }
-                        SettingRow(
+                        if (showSettingsBackButton) SettingRow(
                             label = stringResource(R.string.back_to_settings),
                             modifier = Modifier,
                             onClick = { selected = Destination.SETTINGS }
@@ -7111,13 +7466,6 @@ private fun PlayerHome(
                                             }
                                         }
                                     }
-                                    if (vodSection == null && (playing != null || starting != null)) {
-                                        MenuButton(
-                                            stringResource(R.string.stop_playback),
-                                            Modifier,
-                                            onClick = ::stopPlayback
-                                        )
-                                    }
                                 }
                             guideState.SaveableStateProvider("programme-guide") {
                                 ProgrammeTimeline(
@@ -7166,9 +7514,11 @@ private fun PlayerHome(
                                         .verticalScroll(rememberScrollState()).padding(14.dp),
                                     verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    MenuButton(stringResource(R.string.navigation_back), Modifier.focusRequester(guidePanelFocus)) {
-                                        navigateGuide(GuideInput.BACK)
-                                    }
+                                    if (showSettingsBackButton) {
+                                        MenuButton(stringResource(R.string.navigation_back), Modifier.focusRequester(guidePanelFocus)) {
+                                            navigateGuide(GuideInput.BACK)
+                                        }
+                                    } else Box(Modifier.size(1.dp).focusRequester(guidePanelFocus).focusable())
                                     channel?.let { Text(it.name, style = MaterialTheme.typography.labelMedium) }
                                     Text(
                                         programme?.title ?: stringResource(R.string.no_guide),
@@ -7396,7 +7746,11 @@ private fun PlayerHome(
                                 onWatch = { toggleSavedTitle(section, title, false) },
                                 onCast = castPreview?.takeIf { it.first == title && it.second.isNotEmpty() }?.let {
                                     { castOf = Triple(section, title, detailMetadata?.id) }
-                                }
+                                },
+                                portalLabel = titlePortalChoices[titleKey(section, title)]
+                                    ?.let { id -> savedSources.firstOrNull { it.identity == id } }
+                                    ?.let { context.getString(R.string.title_portal_chosen, portalName(it)) },
+                                onPortal = { portalPickerFor = section to title }.takeIf { titlePortals(section, title).size > 1 }
                             )
                             }
                             if (section == PortalSection.SERIES) {
@@ -7475,7 +7829,7 @@ private fun PlayerHome(
                             val airDateLabels = airDates.associate { (entry, date) ->
                                 entry.key to date.format(java.time.format.DateTimeFormatter.ofPattern("EE, dd.MM.yyyy", java.util.Locale.GERMAN))
                             }
-                            MenuButton(stringResource(R.string.back_to_categories), Modifier) { seriesActivityView = null }
+                            if (showSettingsBackButton) MenuButton(stringResource(R.string.back_to_categories), Modifier) { seriesActivityView = null }
                             Text(stringResource(when {
                                 showHistory -> R.string.series_history
                                 showContinue -> R.string.continue_watching
@@ -7575,7 +7929,7 @@ private fun PlayerHome(
                                 }
                             }
                         } else if (section == PortalSection.MOVIES && movieHistoryOpen) {
-                            MenuButton(stringResource(R.string.back_to_categories), Modifier) { movieHistoryOpen = false }
+                            if (showSettingsBackButton) MenuButton(stringResource(R.string.back_to_categories), Modifier) { movieHistoryOpen = false }
                             Text(stringResource(if (movieContinueOpen) R.string.continue_watching else R.string.movie_history))
                             fun unfinished(key: String): Boolean {
                                 val position = progressPreferences?.getLong(key, 0L) ?: 0L
@@ -7854,9 +8208,17 @@ private fun PlayerHome(
                             }
                         }
                         Column(
-                            Modifier.weight(0.73f).verticalScroll(contentScroll),
+                            Modifier.weight(0.73f)
+                                .onFocusChanged { settingsContentFocused = it.hasFocus }
+                                .focusRequester(settingsContentFocus).focusGroup()
+                                .verticalScroll(contentScroll),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) { content() }
+                        LaunchedEffect(settingsContentFocusRequest) {
+                            if (settingsContentFocusRequest == 0) return@LaunchedEffect
+                            withFrameNanos { }
+                            runCatching { settingsContentFocus.requestFocus() }
+                        }
                     } else Column(
                         Modifier.weight(1f).then(
                             if (destination == Destination.SEARCH) Modifier else Modifier.verticalScroll(contentScroll)
@@ -8246,6 +8608,7 @@ private fun LiveOverview(
     onHighlight: (StalkerChannel) -> Unit,
     playbackError: Int?,
     onStop: () -> Unit,
+    showBackButton: Boolean = true,
     onSelect: (StalkerChannel) -> Unit
 ) {
     val visibleChannels = groups[category]
@@ -8321,7 +8684,7 @@ private fun LiveOverview(
                 }
             }
         } else {
-            MenuButton(stringResource(R.string.back_to_categories), Modifier.fillMaxWidth()) {
+            if (showBackButton) MenuButton(stringResource(R.string.back_to_categories), Modifier.fillMaxWidth()) {
                 onCategory(null)
             }
             LazyColumn(Modifier.heightIn(max = 320.dp), state = channelScroll) {
@@ -8481,10 +8844,15 @@ internal fun PlayerFrame(
     hasPreviousEpisode: Boolean = false,
     hasNextEpisode: Boolean = false,
     episodeActionVisible: Boolean = false,
-    onControlsVisible: ((Boolean) -> Unit)? = null
+    onControlsVisible: ((Boolean) -> Unit)? = null,
+    /** Portals the current stream can play from; the settings menu offers them. */
+    portalChoices: List<String> = emptyList(),
+    portalIndex: Int = -1,
+    onPortalChoice: ((Int) -> Unit)? = null
 ) {
     val accentArgb = MaterialTheme.colorScheme.primary.toArgb()
     var subtitleDialogOpen by remember(player) { mutableStateOf(false) }
+    var playbackSettingsOpen by remember(player) { mutableStateOf(false) }
     var saveSubtitleChoiceForSeries by remember(player, subtitleSeriesKey) { mutableStateOf(false) }
     var oneTimeSubtitleChoice by remember(player, subtitlePlaybackKey) { mutableStateOf(false) }
     val currentOneTimeSubtitleChoice by rememberUpdatedState(oneTimeSubtitleChoice)
@@ -8533,11 +8901,10 @@ internal fun PlayerFrame(
                 val preferredLanguage = java.util.Locale.getDefault().language
                 val forced = choices.firstOrNull { (group, index) ->
                     val format = group.getTrackFormat(index)
-                    format.selectionFlags and C.SELECTION_FLAG_FORCED != 0 &&
-                        format.language?.substringBefore('-') == preferredLanguage
+                    isForcedSubtitle(format) && format.language?.substringBefore('-') == preferredLanguage
                 } ?: choices.firstOrNull { (group, index) ->
                     val format = group.getTrackFormat(index)
-                    format.selectionFlags and C.SELECTION_FLAG_FORCED != 0 && format.language.isNullOrBlank()
+                    isForcedSubtitle(format) && (format.language.isNullOrBlank() || format.language == "und")
                 }
                 val languageChoice = choices.firstOrNull { (group, index) ->
                     group.getTrackFormat(index).language?.substringBefore('-') == preferredLanguage
@@ -8549,7 +8916,7 @@ internal fun PlayerFrame(
                     "OFF" -> false
                     "FORCED" -> forced != null
                     "ON" -> choices.isNotEmpty()
-                    else -> subtitleDefaultEnabled || (subtitleSeriesKey != null && forcedSubtitlesEnabled && forced != null)
+                    else -> subtitleDefaultEnabled || (forcedSubtitlesEnabled && forced != null)
                 }
                 val chosen = when {
                     !enabled -> null
@@ -8918,6 +9285,7 @@ internal fun PlayerFrame(
                                     }
                                 }
                                 val gear = bar.findViewById<android.view.View>(androidx.media3.ui.R.id.exo_settings)
+                                gear?.setOnClickListener { playbackSettingsOpen = true }
                                 val insertAt = gear?.let { bar.indexOfChild(it) + 1 }?.takeIf { it > 0 } ?: bar.childCount
                                 val size = (48 * context.resources.displayMetrics.density).toInt()
                                 bar.addView(cc, insertAt, LinearLayout.LayoutParams(size, size))
@@ -8982,7 +9350,6 @@ internal fun PlayerFrame(
                     val previousButton = view.findViewWithTag<android.view.View>("previous_episode_action")
                     val nextButton = view.findViewWithTag<android.view.View>("next_episode_action")
                     val subtitlesButton = view.findViewWithTag<android.view.View>("player_subtitles_action")
-                    subtitlesButton?.visibility = if (livePlayback) android.view.View.GONE else android.view.View.VISIBLE
                     val visibleControls = listOfNotNull(previousButton, pause, nextButton, stopButton)
                         .filter { it.visibility == android.view.View.VISIBLE }
                     visibleControls.forEachIndexed { index, control ->
@@ -9027,6 +9394,11 @@ internal fun PlayerFrame(
                     }
                 }
             )
+            if (playbackSettingsOpen) PlaybackSettingsDialog(
+                player, livePlayback, portalChoices, portalIndex,
+                onPortalChoice = { index -> playbackSettingsOpen = false; onPortalChoice?.invoke(index) },
+                onDismiss = { playbackSettingsOpen = false }
+            )
             if (subtitleDialogOpen) {
                 val subtitleChoices = player.currentTracks.groups
                     .filter { it.type == C.TRACK_TYPE_TEXT }
@@ -9066,7 +9438,7 @@ internal fun PlayerFrame(
                     subtitleSeriesKey?.let { key -> subtitlePreferences?.edit()?.remove("subtitle_series:$key")?.apply() }
                     oneTimeSubtitleChoice = false
                     val forced = subtitleChoices.firstOrNull { (group, index, _) ->
-                        group.getTrackFormat(index).selectionFlags and C.SELECTION_FLAG_FORCED != 0
+                        isForcedSubtitle(group.getTrackFormat(index))
                     }
                     val language = java.util.Locale.getDefault().language
                     val preferred = subtitleChoices.firstOrNull { (group, index, _) ->
@@ -9113,7 +9485,7 @@ internal fun PlayerFrame(
                                     selected = savedSeriesMode == "FORCED"
                                 ) {
                                     val forced = subtitleChoices.firstOrNull { (group, index, _) ->
-                                        group.getTrackFormat(index).selectionFlags and C.SELECTION_FLAG_FORCED != 0
+                                        isForcedSubtitle(group.getTrackFormat(index))
                                     }
                                     applySubtitleChoice(
                                         forced?.let { (group, index, _) -> TrackSelectionOverride(group.mediaTrackGroup, listOf(index)) },
@@ -9160,6 +9532,76 @@ internal fun PlayerFrame(
             Text(stringResource(R.string.no_playback))
         }
     }
+}
+
+/** Player settings: speed (not for live TV), sound track and the portal the stream plays from. */
+@Composable
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+private fun PlaybackSettingsDialog(
+    player: ExoPlayer,
+    live: Boolean,
+    portals: List<String>,
+    portalIndex: Int,
+    onPortalChoice: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val audio = player.currentTracks.groups.filter { it.type == C.TRACK_TYPE_AUDIO }.flatMap { group ->
+        (0 until group.length).filter(group::isTrackSupported).map { index ->
+            val format = group.getTrackFormat(index)
+            val language = format.language?.takeUnless { it == "und" }
+                ?.let { java.util.Locale.forLanguageTag(it).getDisplayName(java.util.Locale.GERMAN) }
+            val name = format.label?.takeIf(String::isNotBlank) ?: language ?: "Spur ${index + 1}"
+            val channels = when {
+                format.channelCount > 2 -> " · ${format.channelCount - 1}.1"
+                format.channelCount == 2 -> " · Stereo"
+                else -> ""
+            }
+            Triple(group, index, name + channels)
+        }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.player_settings)) },
+        text = {
+            Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (!live) {
+                    Text(stringResource(R.string.player_speed), style = MaterialTheme.typography.titleSmall)
+                    Row(Modifier.horizontalScroll(rememberScrollState()).focusGroup(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        val current = player.playbackParameters.speed
+                        listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f).forEach { speed ->
+                            MenuButton(
+                                if (speed == 1f) stringResource(R.string.player_speed_normal) else "${speed}x".replace('.', ','),
+                                Modifier, selected = kotlin.math.abs(current - speed) < 0.01f
+                            ) {
+                                player.setPlaybackSpeed(speed)
+                                onDismiss()
+                            }
+                        }
+                    }
+                }
+                Text(stringResource(R.string.player_audio), style = MaterialTheme.typography.titleSmall)
+                if (audio.isEmpty()) Text(stringResource(R.string.playback_no_audio))
+                audio.forEach { (group, index, label) ->
+                    MenuButton(label, Modifier.fillMaxWidth(), selected = group.isTrackSelected(index)) {
+                        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                            .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
+                            .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, listOf(index)))
+                            .build()
+                        onDismiss()
+                    }
+                }
+                if (portals.isNotEmpty()) {
+                    Text(stringResource(R.string.player_portal), style = MaterialTheme.typography.titleSmall)
+                    portals.forEachIndexed { index, label ->
+                        MenuButton(label, Modifier.fillMaxWidth(), selected = index == portalIndex) {
+                            if (index == portalIndex) onDismiss() else onPortalChoice(index)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { MaterialTextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) } }
+    )
 }
 
 @Composable

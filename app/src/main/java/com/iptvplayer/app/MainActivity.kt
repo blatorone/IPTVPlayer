@@ -76,6 +76,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -292,6 +293,15 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 }
+
+/** Where "Zurück" leads after opening a title from an actor's filmography. */
+private class CastReturn(
+    val destination: Destination?,
+    val details: Pair<PortalSection, PortalTitle>?,
+    val castOf: Triple<PortalSection, PortalTitle, Int?>?,
+    val person: CastMember,
+    val opened: Pair<PortalSection, PortalTitle>
+)
 
 private enum class Destination(val label: Int, val icon: Int? = null) {
     LIVE(R.string.destination_live, R.drawable.ic_menu_live),
@@ -555,6 +565,7 @@ private fun PlayerHome(
     }
     var newEpisodesNotice by remember { mutableStateOf<String?>(null) }
     var castOf by remember { mutableStateOf<Triple<PortalSection, PortalTitle, Int?>?>(null) }
+    val castReturns = remember { mutableStateListOf<CastReturn>() }
     var castPerson by remember { mutableStateOf<CastMember?>(null) }
     /** Cast found for the open details title; the "Besetzung" button only appears when it is not empty. */
     var castPreview by remember { mutableStateOf<Pair<PortalTitle, List<CastMember>>?>(null) }
@@ -4214,7 +4225,18 @@ private fun PlayerHome(
     fun isMainMenuOpen() = selected == Destination.LIVE && guidePanel == GuidePanel.MENU && !fullscreen
     val mainMenuOpen = isMainMenuOpen()
     LaunchedEffect(mainMenuOpen) { if (!mainMenuOpen) lastBack = 0L }
+    fun closeSettingsPages(): Boolean {
+        val open = epgSettingsOpen || episodeSettingsOpen || controlSettingsOpen || metadataSettingsOpen ||
+            guideAppearancePage != null
+        epgSettingsOpen = false
+        episodeSettingsOpen = false
+        controlSettingsOpen = false
+        metadataSettingsOpen = false
+        guideAppearancePage = null
+        return open
+    }
     fun openSettings() {
+        closeSettingsPages()
         val current = if (isMainMenuOpen()) lastFocused else selected ?: lastFocused
         settingsReturnDestination = current.takeUnless {
             it == Destination.SETTINGS || it == Destination.SOURCES || it == Destination.CATEGORIES
@@ -4304,6 +4326,9 @@ private fun PlayerHome(
         } else if (inGuide) {
             if (guidePanel == GuidePanel.GRID) requestAppExit()
             else guidePanel = GuidePanel.GRID
+        } else if (selected == Destination.SETTINGS && closeSettingsPages()) {
+            // Back from a settings page returns to its section first.
+            settingsFocusRequesters[settingsSection]?.let { requester -> runCatching { requester.requestFocus() } }
         } else if (selected == Destination.SETTINGS) {
             selected = settingsReturnDestination
             guidePanel = GuidePanel.GRID
@@ -4311,6 +4336,17 @@ private fun PlayerHome(
             if (selected == Destination.LIVE) restoreGuideEntryFocus()
         } else if (selected == null && category != null) returnToCategories()
         else if (selected == Destination.SERIES && openedSeason != null) openedSeason = null
+        else if (details != null && castReturns.lastOrNull()?.opened == details) {
+            // One step back: from a title opened via the cast to the actor's filmography,
+            // from there to the cast list and finally to the original title.
+            val back = castReturns.removeAt(castReturns.lastIndex)
+            closeSeries()
+            selected = back.destination
+            back.destination?.let { lastFocused = it }
+            details = back.details
+            castOf = back.castOf
+            castPerson = back.person
+        }
         else if (selected == Destination.SERIES && openedSeries != null) {
             closeSeries()
             details = null
@@ -4464,13 +4500,13 @@ private fun PlayerHome(
         confirmButton = { MenuButton(stringResource(R.string.play_next_episode), Modifier) { advanceEpisode(confirmed = true) } },
         dismissButton = { MenuButton(stringResource(R.string.stop_playback), Modifier, onClick = ::stopPlayback) }
     )
-    guideAppearancePage?.let { page ->
+    val guideAppearanceSettingsPage: @Composable (GuideAppearancePage) -> Unit = { page ->
         GuideAppearanceDialog(page, guideAppearance, onChange = {
             guideAppearance = it
             it.save(preferences)
         }, onDismiss = { guideAppearancePage = null })
     }
-    if (controlSettingsOpen) ControlMappingDialog(
+    val controlSettingsPage: @Composable () -> Unit = { ControlMappingDialog(
         bindings = controlBindings,
         onChange = { input, action ->
             controlBindings[input] = action
@@ -4483,7 +4519,7 @@ private fun PlayerHome(
             }?.apply()
         },
         onDismiss = { controlSettingsOpen = false }
-    )
+    ) }
     LaunchedEffect(playbackAttempt, manualIntro, manualCredits) {
         val attempt = playbackAttempt ?: return@LaunchedEffect
         val active = player ?: return@LaunchedEffect
@@ -5507,9 +5543,17 @@ private fun PlayerHome(
                         lookup = { source, kind, reference -> findEquivalent(source, kind, reference) }
                     )
                 },
+                isSaved = ::isTitleSaved,
                 onOpen = { kind, title ->
+                    castReturns += CastReturn(selected, details, castOf, person, kind to title)
                     castPerson = null
                     castOf = null
+                    // A film is shown under "Filme", a series under "Serien".
+                    val target = if (kind == PortalSection.MOVIES) Destination.MOVIES else Destination.SERIES
+                    if (selected != target) {
+                        selected = target
+                        lastFocused = target
+                    }
                     showTitle(kind, title)
                 },
                 onDismiss = { castPerson = null }
@@ -5593,7 +5637,7 @@ private fun PlayerHome(
             onDismiss = { choosingCountries = false }
         )
     }
-    if (metadataSettingsOpen) {
+    val metadataSettingsPage: @Composable () -> Unit = {
         MetadataSettings(
             connected = metadataClient != null,
             busy = metadataBusy,
@@ -5622,31 +5666,22 @@ private fun PlayerHome(
             TextButton(onClick = { initialPortalPromptDismissed = true }) { Text(stringResource(R.string.later)) }
         }
     )
-    if (epgSettingsOpen) AlertDialog(
-        onDismissRequest = { epgSettingsOpen = false },
-        title = { Text(stringResource(R.string.epg_settings)) },
-        text = {
-            Column(
-                Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                MenuButton(stringResource(R.string.epg_provider), Modifier, selected = !useXmlTv) {
+    val epgSettingsPage: @Composable () -> Unit = {
+        SettingsDialog(stringResource(R.string.epg_settings), { epgSettingsOpen = false }) {
+                SettingRow(stringResource(R.string.epg_provider), Modifier, selected = !useXmlTv) {
                     useXmlTv = false
                     preferences?.edit()?.putBoolean("xmltv_enabled", false)?.apply()
                 }
-                MenuButton(stringResource(R.string.epg_custom), Modifier, selected = useXmlTv) {
+                SettingRow(stringResource(R.string.epg_custom), Modifier, selected = useXmlTv) {
                     useXmlTv = true
                     preferences?.edit()?.putBoolean("xmltv_enabled", true)?.apply()
                 }
                 if (useXmlTv) {
                     xmlTvSources.forEachIndexed { index, url ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("${index + 1}. ${guideSourceUri(url)?.host.orEmpty()}", Modifier.weight(1f))
-                            TextButton(
-                                enabled = !epgSourceSaving,
-                                onClick = { saveEpgSources(xmlTvSources.filterNot { it == url }) }
-                            ) { Text(stringResource(R.string.epg_remove_source)) }
-                        }
+                        SettingRow(
+                            "${index + 1}. ${guideSourceUri(url)?.host.orEmpty()}: " + stringResource(R.string.epg_remove_source),
+                            enabled = !epgSourceSaving
+                        ) { saveEpgSources(xmlTvSources.filterNot { it == url }) }
                     }
                     OutlinedTextField(
                         value = epgSourceDraft, onValueChange = { if (it.length <= 2_048) epgSourceDraft = it },
@@ -5654,18 +5689,15 @@ private fun PlayerHome(
                         singleLine = true, modifier = Modifier.fillMaxWidth()
                     )
                     val source = guideSourceUri(epgSourceDraft)?.toASCIIString()
-                    TextButton(
-                        enabled = source != null && source !in xmlTvSources && !epgSourceSaving && xmlTvSourcesLoaded,
-                        onClick = { source?.let { saveEpgSources(xmlTvSources + it) } }
-                    ) { Text(stringResource(R.string.epg_add_source)) }
+                    SettingRow(stringResource(R.string.epg_add_source), enabled = source != null && source !in xmlTvSources && !epgSourceSaving && xmlTvSourcesLoaded) { source?.let { saveEpgSources(xmlTvSources + it) } }
                 }
-                MenuButton(stringResource(R.string.epg_refresh_at_start), Modifier, selected = epgAtStartup) {
+                SettingRow(stringResource(R.string.epg_refresh_at_start), Modifier, selected = epgAtStartup) {
                     epgAtStartup = !epgAtStartup
                     preferences?.edit()?.putBoolean("epg_at_startup", epgAtStartup)?.apply()
                 }
                 val refreshLabel = if (epgRefreshHours == 0) stringResource(R.string.epg_refresh_off)
                     else stringResource(R.string.epg_refresh_hours, epgRefreshHours)
-                MenuButton(refreshLabel, Modifier) {
+                SettingRow(refreshLabel, Modifier) {
                     val intervals = listOf(0, 1, 3, 6, 12, 24)
                     epgRefreshHours = intervals[(intervals.indexOf(epgRefreshHours) + 1) % intervals.size]
                     preferences?.edit()?.putInt("epg_refresh_hours", epgRefreshHours)?.apply()
@@ -5673,36 +5705,26 @@ private fun PlayerHome(
                 val horizon = if (epgHorizonHours < 24) stringResource(R.string.epg_schedule_hours, epgHorizonHours)
                     else if (epgHorizonHours == 24) stringResource(R.string.epg_schedule_day)
                     else stringResource(R.string.epg_schedule_days, epgHorizonHours / 24)
-                MenuButton(horizon, Modifier) {
+                SettingRow(horizon, Modifier) {
                     val windows = listOf(6, 12, 24, 48, 72, 168)
                     epgHorizonHours = windows[(windows.indexOf(epgHorizonHours) + 1) % windows.size]
                     preferences?.edit()?.putInt("epg_horizon_hours", epgHorizonHours)?.apply()
                     epgRefreshRequest++
                 }
-                TextButton(
-                    enabled = !epgUpdating && (!useXmlTv || xmlTvSources.isNotEmpty()),
-                    onClick = { epgRefreshRequest++ }
-                ) { Text(stringResource(R.string.epg_refresh_now)) }
+                SettingRow(stringResource(R.string.epg_refresh_now), enabled = !epgUpdating && (!useXmlTv || xmlTvSources.isNotEmpty())) { epgRefreshRequest++ }
                 if (epgUpdating) LinearProgressIndicator(Modifier.fillMaxWidth())
                 if (epgUpdateFailed || epgSourceWriteFailed) {
                     Text(stringResource(R.string.epg_refresh_failed), color = MaterialTheme.colorScheme.error)
                 }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { epgSettingsOpen = false }) { Text(stringResource(android.R.string.ok)) }
         }
-    )
-    if (episodeSettingsOpen) AlertDialog(
-        onDismissRequest = { episodeSettingsOpen = false },
-        title = { Text(stringResource(R.string.episode_settings)) },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState())) {
-                MenuButton(stringResource(R.string.auto_next_episode), Modifier, selected = autoNextEpisode) {
+    }
+    val episodeSettingsPage: @Composable () -> Unit = {
+        SettingsDialog(stringResource(R.string.episode_settings), { episodeSettingsOpen = false }) {
+                SettingRow(stringResource(R.string.auto_next_episode), Modifier, selected = autoNextEpisode) {
                     autoNextEpisode = !autoNextEpisode
                     preferences?.edit()?.putBoolean("auto_next_episode", autoNextEpisode)?.apply()
                 }
-                MenuButton(
+                SettingRow(
                     stringResource(R.string.series_inactivity_check), Modifier, selected = checkSeriesInactivity
                 ) {
                     checkSeriesInactivity = !checkSeriesInactivity
@@ -5721,16 +5743,16 @@ private fun PlayerHome(
                         }
                     }
                 }
-                MenuButton(stringResource(R.string.skip_intro_automatically), Modifier, selected = autoSkipIntro) {
+                SettingRow(stringResource(R.string.skip_intro_automatically), Modifier, selected = autoSkipIntro) {
                     autoSkipIntro = !autoSkipIntro
                     preferences?.edit()?.putBoolean("auto_skip_intro", autoSkipIntro)?.apply()
                 }
-                MenuButton(stringResource(R.string.decode_audio_for_intro), Modifier, selected = decodeAudioForIntro) {
+                SettingRow(stringResource(R.string.decode_audio_for_intro), Modifier, selected = decodeAudioForIntro) {
                     decodeAudioForIntro = !decodeAudioForIntro
                     preferences?.edit()?.putBoolean("decode_audio_for_intro", decodeAudioForIntro)?.apply()
                 }
                 Text(stringResource(R.string.decode_audio_for_intro_hint), style = MaterialTheme.typography.bodySmall)
-                MenuButton(
+                SettingRow(
                     stringResource(if (manualIntro) R.string.intro_manual else R.string.intro_automatic),
                     Modifier
                 ) {
@@ -5753,7 +5775,7 @@ private fun PlayerHome(
                         preferences?.edit()?.putInt("intro_end_seconds", it)?.apply()
                     }
                 }
-                MenuButton(
+                SettingRow(
                     stringResource(if (manualCredits) R.string.credits_manual else R.string.credits_automatic),
                     Modifier
                 ) {
@@ -5780,12 +5802,8 @@ private fun PlayerHome(
                         preferences?.edit()?.putInt("episode_notice_seconds", episodeNoticeSeconds)?.apply()
                     }
                 }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { episodeSettingsOpen = false }) { Text(stringResource(android.R.string.ok)) }
         }
-    )
+    }
     Scaffold(
         modifier = Modifier.fillMaxSize().then(if (selected == Destination.SEARCH) Modifier.imePadding() else Modifier),
         containerColor = MaterialTheme.colorScheme.surface,
@@ -6107,7 +6125,18 @@ private fun PlayerHome(
                                         ) { navigateBack() }
                                     }
                                     androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                                    when (section) {
+                                    // A page opened from a row ("›") replaces the rows on the right;
+                                    // "Zurück" returns to the section.
+                                    val subpage: (@Composable () -> Unit)? = when {
+                                        epgSettingsOpen -> epgSettingsPage
+                                        episodeSettingsOpen -> episodeSettingsPage
+                                        controlSettingsOpen -> controlSettingsPage
+                                        metadataSettingsOpen -> metadataSettingsPage
+                                        else -> guideAppearancePage?.let { page -> { guideAppearanceSettingsPage(page) } }
+                                    }
+                                    if (subpage != null) {
+                                        androidx.compose.runtime.CompositionLocalProvider(LocalSettingsInline provides true) { subpage() }
+                                    } else when (section) {
                                 SettingsSection.GENERAL -> {
                                     SettingRow(
                                         stringResource(R.string.show_touch_back_button), Modifier,
@@ -7286,7 +7315,13 @@ private fun PlayerHome(
                                     selected = settingsSection == item,
                                     badge = 1.takeIf { item == SettingsSection.UPDATES && appUpdates.available },
                                     modifier = Modifier.focusRequester(settingsFocusRequesters.getValue(item))
-                                        .onFocusChanged { if (it.isFocused) { lastSettingsSection = item; settingsSection = item } }
+                                        .onFocusChanged {
+                                            if (it.isFocused && settingsSection != item) {
+                                                closeSettingsPages()
+                                                lastSettingsSection = item
+                                                settingsSection = item
+                                            }
+                                        }
                                 ) {
                                     lastSettingsSection = item
                                     settingsSection = item
@@ -8211,11 +8246,19 @@ internal fun PlayerFrame(
                                         val bottom = bottomTargets.firstOrNull {
                                             it.visibility == android.view.View.VISIBLE && it.isEnabled && it.isFocusable
                                         }
+                                        // Live streams cannot seek: Media3 disables the time bar, so the
+                                        // route between the play controls and the bottom row skips it.
+                                        val progressUsable = progress != null && progress.isShown && progress.isEnabled
                                         val moved = when {
                                             event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN && focused === progress ->
                                                 bottom?.requestFocus() == true
+                                            event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN && !progressUsable &&
+                                                focused !in bottomTargets -> bottom?.requestFocus() == true
                                             event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP && bottom != null &&
-                                            focused in bottomTargets -> progress?.requestFocus() == true
+                                            focused in bottomTargets -> if (progressUsable) progress?.requestFocus() == true else
+                                                (findViewById<android.view.View>(androidx.media3.ui.R.id.exo_play_pause)
+                                                    ?.takeIf { it.isShown } ?: findViewWithTag<android.view.View>("stop_playback_action"))
+                                                    ?.requestFocus() == true
                                             else -> false
                                         }
                                         if (moved) return true
@@ -8700,34 +8743,27 @@ private fun ControlMappingDialog(
     onReset: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.control_settings)) },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState())) {
-                for (input in GuideInput.entries.filter { it != GuideInput.BACK }) {
-                    var expanded by remember(input) { mutableStateOf(false) }
-                    Text(stringResource(input.label), style = MaterialTheme.typography.labelLarge)
-                    Box {
-                        MenuButton(
-                            stringResource((bindings[input] ?: ControlAction.DEFAULT).label),
-                            Modifier.fillMaxWidth()
-                        ) { expanded = true }
-                        DropdownMenu(expanded, onDismissRequest = { expanded = false }) {
-                            for (action in ControlAction.entries) {
-                                DropdownMenuItem(text = { Text(stringResource(action.label)) }, onClick = {
-                                    onChange(input, action)
-                                    expanded = false
-                                })
-                            }
-                        }
+    SettingsDialog(
+        stringResource(R.string.control_settings), onDismiss,
+        buttons = { SettingRow(stringResource(R.string.control_reset), onClick = onReset) }
+    ) {
+        for (input in GuideInput.entries.filter { it != GuideInput.BACK }) {
+            var expanded by remember(input) { mutableStateOf(false) }
+            Box {
+                SettingRow(
+                    stringResource(input.label) + ": " + stringResource((bindings[input] ?: ControlAction.DEFAULT).label)
+                ) { expanded = true }
+                DropdownMenu(expanded, onDismissRequest = { expanded = false }) {
+                    for (action in ControlAction.entries) {
+                        DropdownMenuItem(text = { Text(stringResource(action.label)) }, onClick = {
+                            onChange(input, action)
+                            expanded = false
+                        })
                     }
                 }
             }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(android.R.string.ok)) } },
-        dismissButton = { TextButton(onClick = onReset) { Text(stringResource(R.string.control_reset)) } }
-    )
+        }
+    }
 }
 
 @Composable

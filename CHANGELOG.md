@@ -1,5 +1,13 @@
 # Änderungen
 
+## 1.0.85
+
+- Einstellungen: Unterseiten (Programmführer gestalten, Senderliste, EPG, Folgen, Steuerung, TMDB) öffnen sich nicht mehr als Popup, sondern ersetzen rechts die Zeilen der Rubrik – im selben Stil mit Schaltern und Werten. Zurück führt erst zur Rubrik, dann zum zuletzt genutzten Bereich (Live-TV, Filme oder Serien).
+- Besetzung: Filme aus der Filmografie eines Schauspielers öffnen sich jetzt (vorher sprang die App zurück). Zurück geht immer genau einen Schritt: Titel → Filmografie → Besetzung → ursprünglicher Titel.
+- Filmografie mit denselben Filtern wie die Film- und Serienlisten: Sortierung, Merkliste und Jahre.
+- Vollbild Live-TV: Mit „nach unten“ erreicht man aus den Wiedergabeknöpfen wieder das Einstellungs-Zahnrad (die Zeitleiste ist bei Live gesperrt und blockierte den Weg).
+- Programmführer: Zeitleiste zeigt Wochentag, Uhrzeit und Datum mit Jahr (z. B. „Mi., 03:12 · 25.11.2026“).
+
 ## 1.0.84
 
 - Vollbild: Das Vollbild öffnete sich seit 1.0.82 nicht mehr (Start, langes Zurück, laufenden Sender wählen), weil der normale Bildschirm darübergezeichnet wurde. Behoben.

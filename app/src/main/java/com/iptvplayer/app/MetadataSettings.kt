@@ -39,45 +39,29 @@ internal fun MetadataSettings(
     onDismiss: () -> Unit
 ) {
     var token by remember { mutableStateOf("") }
-    AlertDialog(
-        onDismissRequest = { if (!busy) onDismiss() },
-        title = { Text(stringResource(R.string.tmdb_settings)) },
-        text = {
-            Column(
-                Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Text(stringResource(R.string.tmdb_token_help))
-                if (connected) Text(stringResource(R.string.tmdb_connected))
-                OutlinedTextField(
-                    value = token,
-                    onValueChange = { token = it },
-                    label = { Text(stringResource(R.string.tmdb_token)) },
-                    singleLine = true,
-                    enabled = !busy,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    visualTransformation = PasswordVisualTransformation(),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-                if (error) Text(stringResource(R.string.tmdb_connection_failed), color = MaterialTheme.colorScheme.error)
-                if (connected) {
-                    TmdbAttribution()
-                    TextButton(onClick = onDisconnect, enabled = !busy) {
-                        Text(stringResource(R.string.tmdb_disconnect))
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { onConnect(token.trim()) }, enabled = token.isNotBlank() && !busy) {
-                Text(stringResource(R.string.tmdb_connect))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !busy) { Text(stringResource(android.R.string.cancel)) }
+    SettingsDialog(
+        stringResource(R.string.tmdb_settings), { if (!busy) onDismiss() },
+        buttons = {
+            SettingRow(stringResource(R.string.tmdb_connect), enabled = token.isNotBlank() && !busy) { onConnect(token.trim()) }
+            if (connected) SettingRow(stringResource(R.string.tmdb_disconnect), enabled = !busy, onClick = onDisconnect)
         }
-    )
+    ) {
+        Text(stringResource(R.string.tmdb_token_help))
+        if (connected) Text(stringResource(R.string.tmdb_connected))
+        OutlinedTextField(
+            value = token,
+            onValueChange = { token = it },
+            label = { Text(stringResource(R.string.tmdb_token)) },
+            singleLine = true,
+            enabled = !busy,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            visualTransformation = PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth()
+        )
+        if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+        if (error) Text(stringResource(R.string.tmdb_connection_failed), color = MaterialTheme.colorScheme.error)
+        if (connected) TmdbAttribution()
+    }
 }
 
 @Composable

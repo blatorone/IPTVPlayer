@@ -27,6 +27,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -141,4 +145,54 @@ internal fun SettingsNavItem(
 @Composable
 internal fun SettingsPage(content: @Composable () -> Unit) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) { content() }
+}
+
+/** True inside the right-hand settings panel: settings pages render there instead of as a popup. */
+internal val LocalSettingsInline = androidx.compose.runtime.staticCompositionLocalOf { false }
+
+/**
+ * A settings page. In the settings panel it replaces the rows of the section (title, rows,
+ * buttons below; "Zurück" returns to the section); elsewhere it is a dialog.
+ */
+@Composable
+internal fun SettingsDialog(
+    title: String,
+    onDismiss: () -> Unit,
+    buttons: @Composable () -> Unit = {},
+    content: @Composable () -> Unit
+) {
+    if (LocalSettingsInline.current) {
+        val entry = remember { androidx.compose.ui.focus.FocusRequester() }
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            androidx.compose.runtime.withFrameNanos { }
+            runCatching { entry.requestFocus() }
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+            Column(
+                Modifier.fillMaxWidth().focusRequester(entry).focusGroup(),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                content()
+                buttons()
+            }
+        }
+    } else androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(
+                Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) { content() }
+        },
+        confirmButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                buttons()
+                androidx.compose.material3.TextButton(onClick = onDismiss) {
+                    Text(stringResource(android.R.string.ok))
+                }
+            }
+        }
+    )
 }

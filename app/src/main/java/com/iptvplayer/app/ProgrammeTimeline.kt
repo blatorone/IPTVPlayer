@@ -203,7 +203,7 @@ internal fun ProgrammeTimeline(
     ) {
         // As in a classic TV guide the ruler carries the date where the channel column starts.
         Text(
-            guideDate(start), Modifier.weight(1.25f).padding(start = 8.dp),
+            guideDate(start, now), Modifier.weight(1.25f).padding(start = 8.dp),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.primary
         )
@@ -530,5 +530,12 @@ private fun TextStyle.scaled(factor: Float): TextStyle =
 internal fun guideTime(seconds: Long): String =
     DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault()).format(Instant.ofEpochSecond(seconds))
 
-private fun guideDate(seconds: Long): String =
-    DateTimeFormatter.ofPattern("EEE, dd.MM.").withZone(ZoneId.systemDefault()).format(Instant.ofEpochSecond(seconds))
+
+/** "Mi., 03:12 · 25.11.2026": weekday and date of the shown window, current clock time. */
+private fun guideDate(windowStart: Long, now: Long): String {
+    val zone = ZoneId.systemDefault()
+    val day = DateTimeFormatter.ofPattern("EEE.,").withZone(zone).format(Instant.ofEpochSecond(windowStart)).replace("..", ".")
+    val clock = DateTimeFormatter.ofPattern("HH:mm").withZone(zone).format(Instant.ofEpochSecond(now))
+    val date = DateTimeFormatter.ofPattern("dd.MM.yyyy").withZone(zone).format(Instant.ofEpochSecond(windowStart))
+    return "$day $clock · $date"
+}

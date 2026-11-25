@@ -73,11 +73,7 @@ internal fun GuideAppearanceDialog(
     onChange: (GuideAppearance) -> Unit,
     onDismiss: () -> Unit
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(page.label)) },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState())) {
+    SettingsDialog(stringResource(page.label), onDismiss) {
                 if (page == GuideAppearancePage.GRID) {
                     AppearanceSize(R.string.guide_row_size, appearance.rowSize) { onChange(appearance.copy(rowSize = it)) }
                     AppearanceSize(R.string.guide_text_size, appearance.textSize) { onChange(appearance.copy(textSize = it)) }
@@ -105,32 +101,28 @@ internal fun GuideAppearanceDialog(
                     AppearanceToggle(R.string.guide_keep_list, appearance.keepChannelList) {
                         onChange(appearance.copy(keepChannelList = !appearance.keepChannelList))
                     }
-                    MenuButton(stringResource(R.string.guide_opacity, appearance.opacity), Modifier.fillMaxWidth()) {
+                    SettingRow(stringResource(R.string.guide_opacity, appearance.opacity)) {
                         val steps = listOf(60, 70, 80, 90, 100)
                         onChange(appearance.copy(opacity = steps[(steps.indexOf(appearance.opacity) + 1) % steps.size]))
                     }
                     val timeout = if (appearance.closeSeconds == 0) stringResource(R.string.guide_manual_close)
                         else stringResource(R.string.guide_seconds, appearance.closeSeconds)
-                    MenuButton(stringResource(R.string.guide_auto_close, timeout), Modifier.fillMaxWidth()) {
+                    SettingRow(stringResource(R.string.guide_auto_close, timeout)) {
                         val steps = listOf(0, 5, 10, 15, 30, 60)
                         onChange(appearance.copy(closeSeconds = steps[(steps.indexOf(appearance.closeSeconds) + 1) % steps.size]))
                     }
                 }
-            }
-        },
-        confirmButton = { MenuButton(stringResource(android.R.string.ok), Modifier, onClick = onDismiss) }
-    )
+    }
 }
 
 @Composable
 private fun AppearanceSize(label: Int, size: GuideSize, onChange: (GuideSize) -> Unit) {
-    MenuButton(
-        stringResource(R.string.guide_setting_value, stringResource(label), stringResource(size.label)),
-        Modifier.fillMaxWidth()
-    ) { onChange(size.next()) }
+    SettingRow(stringResource(R.string.guide_setting_value, stringResource(label), stringResource(size.label))) {
+        onChange(size.next())
+    }
 }
 
 @Composable
 private fun AppearanceToggle(label: Int, enabled: Boolean, onClick: () -> Unit) {
-    MenuButton(stringResource(label), Modifier.fillMaxWidth(), selected = enabled, onClick = onClick)
+    SettingRow(stringResource(label), selected = enabled, onClick = onClick)
 }

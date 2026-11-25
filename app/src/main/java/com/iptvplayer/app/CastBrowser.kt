@@ -26,6 +26,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -226,6 +229,7 @@ internal fun CastDialog(
 internal fun PersonDialog(
     person: CastMember,
     load: suspend () -> List<Pair<PortalSection, PortalTitle>>,
+    isSaved: (PortalSection, PortalTitle) -> Boolean,
     onOpen: (PortalSection, PortalTitle) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -238,8 +242,17 @@ internal fun PersonDialog(
             emptyList()
         }
     }
-    var section by remember { mutableStateOf(PortalSection.MOVIES) }
-    var span by remember { mutableStateOf<YearSpan?>(null) }
+    // Filmography view: movies or series, sorting and filters like the catalogue lists.
+    var section by rememberSaveable(person.name) { mutableStateOf(PortalSection.MOVIES) }
+    var yearFrom by rememberSaveable(person.name) { mutableStateOf<Int?>(null) }
+    var yearTo by rememberSaveable(person.name) { mutableStateOf<Int?>(null) }
+    val span = yearFrom?.let { YearSpan(it, yearTo ?: it) }
+    fun setSpan(value: YearSpan?) {
+        yearFrom = value?.from
+        yearTo = value?.to
+    }
+    var sort by rememberSaveable(person.name) { mutableStateOf(TitleSort.YEAR) }
+    var filter by rememberSaveable(person.name) { mutableStateOf(TitleFilter.ALL) }
     ScreenDialog(onDismiss) {
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
@@ -265,21 +278,26 @@ internal fun PersonDialog(
         val series = all.filter { it.first == PortalSection.SERIES }
         val shown = (if (section == PortalSection.MOVIES) movies else series)
         val years = shown.mapNotNull { vodReleaseYear(it.second) }.distinct().sortedDescending()
-        val filtered = shown.filter { span == null || span?.contains(vodReleaseYear(it.second)) == true }
+        val filtered = sortTitles(shown.filter { (kind, title) ->
+            (span == null || span.contains(vodReleaseYear(title))) &&
+                (filter == TitleFilter.ALL || isSaved(kind, title))
+        }, sort) { it.second }
         val firstTab = remember { FocusRequester() }
         LaunchedEffect(Unit) { runCatching { firstTab.requestFocus() } }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             MenuButton(stringResource(R.string.person_movies, movies.size), Modifier.focusRequester(firstTab),
                 selected = section == PortalSection.MOVIES) {
                 section = PortalSection.MOVIES
-                span = null
+                setSpan(null)
             }
             MenuButton(stringResource(R.string.person_series, series.size), Modifier,
                 selected = section == PortalSection.SERIES) {
                 section = PortalSection.SERIES
-                span = null
+                setSpan(null)
             }
-            if (years.isNotEmpty()) YearFilterButton(years, span) { span = it }
+            TitleSortButton(sort) { sort = it }
+            TitleFilterButton(filter) { filter = it }
+            if (years.isNotEmpty()) YearFilterButton(years, span, ::setSpan)
         }
         if (filtered.isEmpty()) Text(stringResource(R.string.person_empty))
         LazyVerticalGrid(GridCells.Adaptive(140.dp), horizontalArrangement = Arrangement.spacedBy(12.dp),

@@ -60,16 +60,57 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private enum class TitleSort(val label: Int) {
+internal enum class TitleSort(val label: Int) {
     NAME(R.string.sort_title),
     YEAR(R.string.sort_year),
     UPLOADED(R.string.sort_uploaded),
     POPULARITY(R.string.vod_category_popular)
 }
 
-private enum class TitleFilter(val label: Int) {
+internal enum class TitleFilter(val label: Int) {
     ALL(R.string.all_titles),
     WATCHLIST(R.string.watchlist)
+}
+
+/** Sorting shared by catalogue lists and a person's filmography. */
+internal fun <T> sortTitles(items: List<T>, sort: TitleSort, title: (T) -> PortalTitle): List<T> {
+    val names = items.associateWith { displayVodTitle(title(it)).lowercase(Locale.ROOT) }
+    val byName = compareBy<T> { names.getValue(it) }
+    return when (sort) {
+        TitleSort.NAME -> items.sortedWith(byName)
+        TitleSort.YEAR -> {
+            val years = items.associateWith { vodReleaseYear(title(it)) }
+            items.sortedWith(compareByDescending<T> { years[it] ?: Int.MIN_VALUE }.then(byName))
+        }
+        TitleSort.UPLOADED -> items.sortedWith(compareByDescending<T> { title(it).addedAt ?: Long.MIN_VALUE }.then(byName))
+        TitleSort.POPULARITY -> items.sortedByDescending { title(it).popularity ?: Double.NEGATIVE_INFINITY }
+    }
+}
+
+@Composable
+internal fun TitleSortButton(sort: TitleSort, onChange: (TitleSort) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        MenuButton(stringResource(R.string.sort_by, stringResource(sort.label)), Modifier) { open = true }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            TitleSort.entries.forEach {
+                DropdownMenuItem(text = { Text(stringResource(it.label)) }, onClick = { onChange(it); open = false })
+            }
+        }
+    }
+}
+
+@Composable
+internal fun TitleFilterButton(filter: TitleFilter, onChange: (TitleFilter) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        MenuButton(stringResource(filter.label), Modifier) { open = true }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            TitleFilter.entries.forEach {
+                DropdownMenuItem(text = { Text(stringResource(it.label)) }, onClick = { onChange(it); open = false })
+            }
+        }
+    }
 }
 
 @Composable
@@ -92,8 +133,6 @@ internal fun ColumnScope.TitleGrid(
     var yearFrom by rememberSaveable { mutableStateOf<Int?>(null) }
     var yearTo by rememberSaveable { mutableStateOf<Int?>(null) }
     val yearSpan = yearFrom?.let { from -> YearSpan(from, yearTo ?: from) }
-    var sorting by remember { mutableStateOf(false) }
-    var filtering by remember { mutableStateOf(false) }
     val years = remember(titles) { titles.mapNotNull(::vodReleaseYear).distinct().sortedDescending() }
     val matches = titles.filter {
         (yearSpan == null || yearSpan.contains(vodReleaseYear(it))) && when (filter) {
@@ -101,36 +140,10 @@ internal fun ColumnScope.TitleGrid(
             TitleFilter.WATCHLIST -> isSaved(it)
         }
     }
-    val sorted = remember(matches, sort) {
-        val names = matches.associateWith { displayVodTitle(it).lowercase(Locale.ROOT) }
-        val byName = compareBy<PortalTitle> { names.getValue(it) }
-        when (sort) {
-            TitleSort.NAME -> matches.sortedWith(byName)
-            TitleSort.YEAR -> {
-                val years = matches.associateWith { vodReleaseYear(it) }
-                matches.sortedWith(compareByDescending<PortalTitle> { years[it] ?: Int.MIN_VALUE }.then(byName))
-            }
-            TitleSort.UPLOADED -> matches.sortedWith(compareByDescending<PortalTitle> { it.addedAt ?: Long.MIN_VALUE }.then(byName))
-            TitleSort.POPULARITY -> matches.sortedByDescending { it.popularity ?: Double.NEGATIVE_INFINITY }
-        }
-    }
+    val sorted = remember(matches, sort) { sortTitles(matches, sort) { it } }
     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Box {
-            MenuButton(stringResource(R.string.sort_by, stringResource(sort.label)), Modifier) { sorting = true }
-            DropdownMenu(expanded = sorting, onDismissRequest = { sorting = false }) {
-                TitleSort.entries.forEach {
-                    DropdownMenuItem(text = { Text(stringResource(it.label)) }, onClick = { sort = it; sorting = false })
-                }
-            }
-        }
-        Box {
-            MenuButton(stringResource(filter.label), Modifier) { filtering = true }
-            DropdownMenu(expanded = filtering, onDismissRequest = { filtering = false }) {
-                TitleFilter.entries.forEach {
-                    DropdownMenuItem(text = { Text(stringResource(it.label)) }, onClick = { filter = it; filtering = false })
-                }
-            }
-        }
+        TitleSortButton(sort) { sort = it }
+        TitleFilterButton(filter) { filter = it }
         if (years.isNotEmpty()) YearFilterButton(years, yearSpan) { span ->
             yearFrom = span?.from
             yearTo = span?.to

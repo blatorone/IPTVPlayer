@@ -102,9 +102,13 @@ internal class TmdbClient(private val token: String) {
                     else -> today.minusYears(1).withDayOfYear(1)
                 }
                 val last = if (category == VodCategory.CINEMA_LAST_YEAR) today.withDayOfYear(1).minusDays(1) else today
+                // Year categories use the original release date, so re-releases (for example an
+                // anniversary screening of an old film) do not count as films of that year. The
+                // film must still have had a theatrical release in the region.
+                val dateField = if (category == VodCategory.CINEMA) "release_date" else "primary_release_date"
                 params += mapOf(
-                    "region" to region, "release_date.gte" to first.toString(),
-                    "release_date.lte" to last.toString(), "with_release_type" to "3|2"
+                    "region" to region, "$dateField.gte" to first.toString(),
+                    "$dateField.lte" to last.toString(), "with_release_type" to "3|2"
                 )
                 "discover/movie"
             }

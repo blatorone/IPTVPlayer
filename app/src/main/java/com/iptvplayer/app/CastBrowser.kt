@@ -39,6 +39,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.sync.withPermit
 
 /** An actor or actress of a film or series. IDs are kept to load their other work. */
 internal data class CastMember(
@@ -84,6 +87,48 @@ internal fun matchPersonCredits(
         }
         allowed(credit.section, found).firstOrNull()?.let { credit.section to it.value }
     }.distinctBy { (section, title) -> "$section:${normalizedLabel(displayVodTitle(title))}:${vodReleaseYear(title)}" }
+}
+
+/**
+ * Checks the person's work (from TMDB or Trakt) against the portals: first the stored
+ * catalogues, then, because those only hold the pages loaded so far, a targeted portal
+ * lookup for each remaining title (bounded in number and concurrency).
+ */
+internal suspend fun resolvePersonCredits(
+    credits: List<PersonCredit>,
+    sources: List<SavedPortal>,
+    allowed: (PortalSection, List<SourceItem<PortalTitle>>) -> List<SourceItem<PortalTitle>>,
+    lookup: suspend (SavedPortal, PortalSection, PortalTitle) -> PortalTitle?,
+    maxLookups: Int = 60
+): List<Pair<PortalSection, PortalTitle>> = kotlinx.coroutines.coroutineScope {
+    val local = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+        matchPersonCredits(credits, sources, allowed)
+    }
+    val found = local.map { (section, title) -> section to normalizedLabel(displayVodTitle(title)) }.toSet()
+    val missing = credits.sortedByDescending { it.year ?: 0 }
+        .filter { (it.section to normalizedLabel(it.title)) !in found }
+        .distinctBy { "${it.section}:${normalizedLabel(it.title)}:${it.year}" }
+        .take(maxLookups)
+    val limiter = kotlinx.coroutines.sync.Semaphore(4)
+    val remote = missing.map { credit ->
+        async {
+            val reference = PortalTitle(credit.title, year = credit.year, imdbId = credit.imdbId, tmdbId = credit.tmdbId)
+            val hits = sources.mapNotNull { source ->
+                try {
+                    limiter.withPermit { lookup(source, credit.section, reference) }?.let { SourceItem(source, it) }
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Exception) {
+                    null
+                }
+            }
+            allowed(credit.section, hits).firstOrNull()?.let { credit to (credit.section to it.value) }
+        }
+    }.mapNotNull { it.await() }
+    val order = credits.withIndex().associate { (index, credit) -> credit to index }
+    (local + remote.sortedBy { order[it.first] ?: Int.MAX_VALUE }.map { it.second })
+        .distinctBy { (section, title) -> "$section:${normalizedLabel(displayVodTitle(title))}:${vodReleaseYear(title)}" }
+        .sortedByDescending { vodReleaseYear(it.second) ?: 0 }
 }
 
 @Composable

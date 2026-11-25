@@ -69,7 +69,9 @@ internal data class TraktLibrary(
     val playback: List<TraktMedia> = emptyList(),
     val watchedEpisodes: List<TraktMedia> = emptyList(),
     val seriesProgress: List<TraktSeriesProgress> = emptyList(),
-    val seriesHistorySnapshot: List<TraktMedia>? = null
+    val seriesHistorySnapshot: List<TraktMedia>? = null,
+    /** Identity keys of all watched films, for the watched status; null when not loaded. */
+    val watchedMovieKeys: Set<String>? = null
 )
 
 /** Changed Trakt sections. A null baseline deliberately means a first/full sync. */
@@ -419,9 +421,11 @@ internal class TraktApi(private val clientId: String) {
         onProgress: suspend (String) -> Unit = {},
         previousActivities: String? = null,
         currentActivities: String? = null,
-        reconcileSeriesHistory: Boolean = false
+        reconcileSeriesHistory: Boolean = false,
+        loadAllWatchedMovies: Boolean = false
     ): TraktLibrary = withContext(Dispatchers.IO) {
         val delta = activityDelta(previousActivities, currentActivities)
+        val loadWatchedMovies = delta.full || delta.watchedMovies || loadAllWatchedMovies
         val loadSeriesHistory = reconcileSeriesHistory || delta.full || delta.watchedEpisodes || delta.playbackEpisodes
         // These endpoints are independent. Fetch them concurrently, but keep a
         // small cap so TV devices and Trakt's API are not flooded with requests.
@@ -439,8 +443,10 @@ internal class TraktApi(private val clientId: String) {
                     } else emptyList()
                 }
                 val watchedMovies = async {
-                    if (delta.full || delta.watchedMovies) limited {
-                        loadItems("/sync/watched/movies", PortalSection.MOVIES, accessToken, onProgress, maxItems = 10)
+                    // All watched films: their keys give the watched status; only the newest ten are
+                    // imported into the visible film history (which may search the portals).
+                    if (loadWatchedMovies) limited {
+                        loadItems("/sync/watched/movies", PortalSection.MOVIES, accessToken, onProgress, maxItems = 20_000)
                     } else emptyList()
                 }
                 val watchedShows = async {
@@ -473,7 +479,8 @@ internal class TraktApi(private val clientId: String) {
                 if (watchedShows.isEmpty()) emptyList() else loadRecentEpisodeHistory(accessToken, onProgress)
             }
         } else emptyList()
-        val watched = watchedMovies + if (delta.full) watchedShows else emptyList()
+        val recentMovies = watchedMovies.sortedByDescending { it.watchedAtMillis ?: 0L }.take(10)
+        val watched = recentMovies + if (delta.full) watchedShows else emptyList()
         val changedPlayback = playback.filter { it.section != PortalSection.SERIES || delta.full || delta.playbackEpisodes }
         TraktLibrary(
             watchlist.distinctBy(::mediaIdentity), watched.distinctBy(::mediaIdentity),
@@ -481,7 +488,8 @@ internal class TraktApi(private val clientId: String) {
             watchedEpisodes.distinctBy { "${mediaIdentity(it)}:${it.seasonNumber}:${it.episodeNumber}:${it.watchedAtMillis}" },
             seriesProgress.takeIf { delta.full || delta.watchedEpisodes }.orEmpty(),
             if (loadSeriesHistory) (watchedShows + playback.filter { it.section == PortalSection.SERIES })
-                .distinctBy(::mediaIdentity) else null
+                .distinctBy(::mediaIdentity) else null,
+            if (loadWatchedMovies) watchedMovies.flatMapTo(hashSetOf()) { movieIdentityKeys(it.name, it.year, it.imdbId, it.tmdbId) } else null
         )
     }
 
@@ -847,3 +855,10 @@ internal class TraktApiException(
     val apiCode: String?,
     message: String
 ) : IllegalStateException(message)
+
+/** Keys that identify a film across Trakt, TMDB and portal titles. */
+internal fun movieIdentityKeys(name: String, year: Int?, imdbId: String?, tmdbId: String?): Set<String> = buildSet {
+    imdbId?.takeIf { it.startsWith("tt") }?.let { add("imdb:${it.lowercase()}") }
+    tmdbId?.toLongOrNull()?.takeIf { it > 0 }?.let { add("tmdb:$it") }
+    normalizedLabel(displayVodTitle(PortalTitle(name))).takeIf { it.isNotBlank() && year != null }?.let { add("title:$it:$year") }
+}

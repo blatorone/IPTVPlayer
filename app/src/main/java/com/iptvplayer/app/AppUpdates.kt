@@ -140,8 +140,11 @@ private suspend fun downloadRelease(context: Context, release: AppRelease): File
     }
 }
 
+/** Update state for the menu badge and the content of the "App-Updates" settings section. */
+internal class AppUpdateUi(val available: Boolean, val settings: @Composable () -> Unit)
+
 @Composable
-internal fun rememberAppUpdateSettings(showDialog: Boolean): @Composable () -> Unit {
+internal fun rememberAppUpdates(): AppUpdateUi {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val preferences = remember(context) { context.getSharedPreferences("app_updates", Context.MODE_PRIVATE) }
@@ -149,13 +152,16 @@ internal fun rememberAppUpdateSettings(showDialog: Boolean): @Composable () -> U
     var result by remember { mutableStateOf<Int?>(null) }
     var release by remember { mutableStateOf<AppRelease?>(null) }
     var busy by remember { mutableStateOf(false) }
-    fun check() {
+    // Automatic checks only mark the update; the dialog opens on request.
+    var dialogOpen by remember { mutableStateOf(false) }
+    fun check(manual: Boolean) {
         if (busy) return
         busy = true
         result = null
         scope.launch {
             try {
                 release = checkRelease(context)
+                if (manual && release != null) dialogOpen = true
                 preferences.edit().putLong("last_check", System.currentTimeMillis()).apply()
                 if (release == null) result = R.string.update_current
             } catch (error: CancellationException) {
@@ -169,13 +175,14 @@ internal fun rememberAppUpdateSettings(showDialog: Boolean): @Composable () -> U
     }
     LaunchedEffect(auto) {
         val now = System.currentTimeMillis()
-        if (auto && now - preferences.getLong("last_check", 0L) >= 86_400_000L) {
-            check()
+        // Every start, at most once an hour.
+        if (auto && now - preferences.getLong("last_check", 0L) >= 3_600_000L) {
+            check(manual = false)
         }
     }
-    release?.takeIf { showDialog }?.let { available ->
+    release?.takeIf { dialogOpen }?.let { available ->
         AlertDialog(
-            onDismissRequest = { if (!busy) release = null },
+            onDismissRequest = { if (!busy) dialogOpen = false },
             title = { Text(stringResource(R.string.update_available, available.tag)) },
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState())) {
@@ -212,17 +219,20 @@ internal fun rememberAppUpdateSettings(showDialog: Boolean): @Composable () -> U
                 }
             },
             dismissButton = {
-                if (!busy) MenuButton(stringResource(android.R.string.cancel), Modifier) { release = null }
+                if (!busy) MenuButton(stringResource(android.R.string.cancel), Modifier) { dialogOpen = false }
             }
         )
     }
-    return {
-        MenuButton(stringResource(R.string.update_check), Modifier.fillMaxWidth()) { check() }
+    return AppUpdateUi(release != null) {
+        release?.let { available ->
+            Text(stringResource(R.string.update_available, available.tag))
+            MenuButton(stringResource(R.string.update_show), Modifier.fillMaxWidth()) { dialogOpen = true }
+        }
+        MenuButton(stringResource(R.string.update_check), Modifier.fillMaxWidth()) { check(manual = true) }
         MenuButton(stringResource(R.string.update_auto), Modifier.fillMaxWidth(), selected = auto) {
             auto = !auto
             preferences.edit().putBoolean("automatic", auto).apply()
         }
-        release?.let { Text(stringResource(R.string.update_available, it.tag)) }
         if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
         result?.let { Text(stringResource(it)) }
     }

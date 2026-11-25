@@ -32,6 +32,25 @@ class CastBrowserTest {
     }
 
     @Test
+    fun asksThePortalForTitlesMissingFromTheStoredCatalogue() = kotlinx.coroutines.runBlocking {
+        val credits = listOf(
+            PersonCredit(PortalSection.SERIES, "Stranger Things", null, 2016, null, "66732"),
+            PersonCredit(PortalSection.MOVIES, "Dune", null, 2021, null, null),
+            PersonCredit(PortalSection.MOVIES, "Unbekannt", null, 2020, null, null)
+        )
+        val asked = mutableListOf<String>()
+        val resolved = resolvePersonCredits(credits, listOf(portal), { _, items -> items }, lookup = { _, section, reference ->
+            asked += reference.name
+            if (section == PortalSection.SERIES && reference.name == "Stranger Things") {
+                PortalTitle("Stranger Things", id = "st", year = 2016)
+            } else null
+        })
+        assertEquals(listOf("3", "st"), resolved.map { it.second.id })
+        // Titles already in the stored catalogue are not looked up again.
+        assertEquals(listOf("Stranger Things", "Unbekannt"), asked.sorted())
+    }
+
+    @Test
     fun appliesTheCountryFilter() {
         val credits = listOf(PersonCredit(PortalSection.MOVIES, "Dune", null, 2021, null, null))
         assertEquals(emptyList<Pair<PortalSection, PortalTitle>>(),

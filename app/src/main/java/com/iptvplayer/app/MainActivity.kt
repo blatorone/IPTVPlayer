@@ -143,6 +143,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -533,6 +535,10 @@ private fun PlayerHome(
     var castPerson by remember { mutableStateOf<CastMember?>(null) }
     /** Cast found for the open details title; the "Besetzung" button only appears when it is not empty. */
     var castPreview by remember { mutableStateOf<Pair<PortalTitle, List<CastMember>>?>(null) }
+    /** Keys of all films watched according to Trakt (null until the first full import). */
+    var traktWatchedMovieKeys by remember(progressPreferences) {
+        mutableStateOf(progressPreferences?.getStringSet("trakt_watched_movie_keys", null)?.toSet())
+    }
     LaunchedEffect(newEpisodesNotice) {
         val notice = newEpisodesNotice ?: return@LaunchedEffect
         // Episode checks run one series at a time; collect findings briefly before showing them.
@@ -730,7 +736,7 @@ private fun PlayerHome(
     var epgChannelIds by remember { mutableStateOf(emptySet<String>()) }
     var starting by remember { mutableStateOf<StalkerChannel?>(null) }
     var fullscreen by remember { mutableStateOf(false) }
-    val updateSettings = rememberAppUpdateSettings(selected == Destination.SETTINGS && !fullscreen)
+    val appUpdates = rememberAppUpdates()
     var lastBack by remember { mutableStateOf(0L) }
     var triedHls by remember { mutableStateOf(false) }
     var connecting by remember { mutableStateOf(false) }
@@ -1114,7 +1120,7 @@ private fun PlayerHome(
                     val historyReconcileKey = "trakt_series_history_reconciled:${session.username.lowercase()}"
                     val reconcileSeriesHistory = forceSeriesHistory ||
                         preferences?.getBoolean(historyReconcileKey, false) != true
-                    if (cachedActivities == activities && !watchlistDirty && !reconcileSeriesHistory) {
+                    if (cachedActivities == activities && !watchlistDirty && !reconcileSeriesHistory && traktWatchedMovieKeys != null) {
                         withContext(Dispatchers.Main) {
                             traktStatus = context.getString(R.string.trakt_cache_current)
                         }
@@ -1128,7 +1134,9 @@ private fun PlayerHome(
                         onProgress = { progress -> withContext(Dispatchers.Main) { traktStatus = progress } },
                         previousActivities = cachedActivities,
                         currentActivities = activities,
-                        reconcileSeriesHistory = reconcileSeriesHistory
+                        reconcileSeriesHistory = reconcileSeriesHistory,
+                        // All watched films are loaded once, then again whenever they change.
+                        loadAllWatchedMovies = traktWatchedMovieKeys == null
                     )
                     if (watchlistDirty) {
                         localSaved.forEachIndexed { index, item ->
@@ -1499,6 +1507,10 @@ private fun PlayerHome(
                 watchlist = updatedWatchlist
                 movieBookmarks = updatedMovieBookmarks.values.toList()
                 movieHistory = updatedMovieHistory.values.sortedByDescending { it.watchedAt }.take(200)
+                library.watchedMovieKeys?.let { keys ->
+                    traktWatchedMovieKeys = keys
+                    progressPreferences?.edit()?.putStringSet("trakt_watched_movie_keys", keys)?.apply()
+                }
                 val remoteSeriesKeys = library.seriesHistorySnapshot?.let { snapshot ->
                     traktStatus = context.getString(R.string.trakt_reconcile_series_history)
                     withContext(Dispatchers.Default) {
@@ -2079,14 +2091,24 @@ private fun PlayerHome(
             groupLoading = true
             groupJob = scope.launch {
                 try {
-                    val result = loadTmdbPortalShelf(
-                        client, section, category, pages, sourcesForBrowsing, countries, ::sessionFor
-                    )
-                    metadataTitles = previous + result.titles
-                    groupVariants = metadataTitles.values.toMap()
-                    metadataNextPages = result.nextPages
-                    groupError = result.incomplete
-                    groupCatalog = PortalCatalog(groupVariants.keys.toList(), null, 1.takeIf { metadataNextPages.isNotEmpty() })
+                    // Only titles found in the portals are shown, so one TMDB page may yield just a
+                    // few. Further pages are loaded until enough titles were found or TMDB has no more.
+                    var requested = pages
+                    var rounds = 0
+                    var incomplete = false
+                    do {
+                        val result = loadTmdbPortalShelf(
+                            client, section, category, requested, sourcesForBrowsing, countries, ::sessionFor
+                        )
+                        metadataTitles = metadataTitles + result.titles
+                        groupVariants = metadataTitles.values.toMap()
+                        metadataNextPages = result.nextPages
+                        incomplete = incomplete || result.incomplete
+                        groupCatalog = PortalCatalog(groupVariants.keys.toList(), null, 1.takeIf { metadataNextPages.isNotEmpty() })
+                        requested = result.nextPages
+                        rounds++
+                    } while (requested.isNotEmpty() && metadataTitles.size - previous.size < 24 && rounds < 8)
+                    groupError = incomplete
                 } catch (error: CancellationException) {
                     throw error
                 } catch (_: Exception) {
@@ -4842,7 +4864,9 @@ private fun PlayerHome(
         }
     }
     // Kept in its own composable method: the JVM limits a single method to 64 KB.
+    // Not skippable: it reads values of the surrounding screen that are not observable state.
     @Composable
+    @androidx.compose.runtime.NonSkippableComposable
     fun FullscreenLayer() {
     if (fullscreen) {
         val episodeActionFocus = remember { FocusRequester() }
@@ -5231,6 +5255,7 @@ private fun PlayerHome(
                                         MenuButton(
                                             stringResource(destination.label), Modifier.fillMaxWidth(),
                                             leadingIcon = destination.icon.takeUnless { mainMenuStyle == MainMenuStyle.TEXT },
+                                            count = 1.takeIf { destination == Destination.SETTINGS && appUpdates.available },
                                             iconOnly = mainMenuStyle == MainMenuStyle.ICONS
                                         ) {
                                             fullscreen = false
@@ -5365,23 +5390,37 @@ private fun PlayerHome(
     FullscreenLayer()
     suspend fun loadCast(section: PortalSection, title: PortalTitle, tmdbId: Int?): List<CastMember> {
         val client = metadataClient
-        return when {
-            client != null && tmdbId != null -> client.cast(section, tmdbId)
-            traktSession != null -> withTraktSession { api, session -> api.cast(section, title, session.accessToken) }
-            else -> emptyList()
+        if (client != null && tmdbId != null) {
+            val fromTmdb = try {
+                client.cast(section, tmdbId)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                emptyList()
+            }
+            if (fromTmdb.isNotEmpty()) return fromTmdb
         }
+        if (traktSession == null) return emptyList()
+        // The TMDB ID lets Trakt find a localized portal title reliably.
+        val lookup = title.copy(tmdbId = title.tmdbId ?: tmdbId?.toString())
+        return withTraktSession { api, session -> api.cast(section, lookup, session.accessToken) }
     }
     // Cast and filmography dialogs, in their own composable method (JVM method size limit).
     @Composable
+    @androidx.compose.runtime.NonSkippableComposable
     fun CastLayer() {
         // The cast of the open title is looked up in the background; "Besetzung" is only
         // offered when TMDB or Trakt know actors for it.
         val openTitle = details?.takeIf { it.first != PortalSection.LIVE }
-        val tmdbForDetails = detailMetadata?.id
-        LaunchedEffect(openTitle, tmdbForDetails, metadataClient, traktSession?.username) {
+        LaunchedEffect(openTitle, metadataClient, traktSession?.username) {
             castPreview = null
             val (section, title) = openTitle ?: return@LaunchedEffect
             if (metadataClient == null && traktSession == null) return@LaunchedEffect
+            // The TMDB match of the details arrives shortly after opening; wait for it briefly
+            // instead of answering with an incomplete lookup.
+            val tmdbForDetails = if (metadataClient == null) null else withTimeoutOrNull(6_000) {
+                snapshotFlow { detailMetadata?.id }.filterNotNull().first()
+            }
             val members = try {
                 loadCast(section, title, tmdbForDetails)
             } catch (error: CancellationException) {
@@ -5415,10 +5454,12 @@ private fun PlayerHome(
                         }
                         else -> emptyList()
                     }
-                    val sources = sourcesForBrowsing
-                    withContext(Dispatchers.Default) {
-                        matchPersonCredits(credits, sources) { kind, items -> countryVariants(kind, items) }
-                    }
+                    // TMDB or Trakt list the work; the portals are only asked whether they have it.
+                    resolvePersonCredits(
+                        credits, sourcesForBrowsing,
+                        allowed = { kind, items -> countryVariants(kind, items) },
+                        lookup = { source, kind, reference -> findEquivalent(source, kind, reference) }
+                    )
                 },
                 onOpen = { kind, title ->
                     castPerson = null
@@ -5789,6 +5830,7 @@ private fun PlayerHome(
                     MenuButton(
                         label = stringResource(item.label),
                         leadingIcon = item.icon.takeUnless { mainMenuStyle == MainMenuStyle.TEXT },
+                        count = 1.takeIf { item == Destination.SETTINGS && appUpdates.available },
                         iconOnly = mainMenuStyle == MainMenuStyle.ICONS,
                         modifier = Modifier.fillMaxWidth()
                             .focusRequester(destinationFocusRequester(item))
@@ -5847,6 +5889,7 @@ private fun PlayerHome(
                                         right = destinationFocusRequesters.getValue(next)
                                     },
                                 leadingIcon = item.icon.takeUnless { mainMenuStyle == MainMenuStyle.TEXT },
+                                count = 1.takeIf { item == Destination.SETTINGS && appUpdates.available },
                                 iconOnly = mainMenuStyle == MainMenuStyle.ICONS,
                                 selected = item == (destination ?: Destination.LIVE) ||
                                     item == Destination.SETTINGS && destination in setOf(
@@ -5977,7 +6020,8 @@ private fun PlayerHome(
                             SettingsSection.entries.forEach { item ->
                                 MenuButton(
                                     stringResource(item.label),
-                                    Modifier.focusRequester(settingsFocusRequesters.getValue(item))
+                                    Modifier.focusRequester(settingsFocusRequesters.getValue(item)),
+                                    count = 1.takeIf { item == SettingsSection.UPDATES && appUpdates.available }
                                 ) {
                                     lastSettingsSection = item
                                     settingsSection = item
@@ -6138,7 +6182,7 @@ private fun PlayerHome(
                                 }
                                 SettingsSection.CONTROLS ->
                                     MenuButton(stringResource(R.string.control_settings), Modifier) { controlSettingsOpen = true }
-                                SettingsSection.UPDATES -> updateSettings()
+                                SettingsSection.UPDATES -> appUpdates.settings()
                                 SettingsSection.ABOUT -> {
                                     AboutSettings()
                                     Text(stringResource(R.string.diagnostics_description))
@@ -6647,7 +6691,14 @@ private fun PlayerHome(
                                 val key = movieResumeKey ?: titleSelection(section, title).progressKey
                                 val position = progressPreferences?.getLong(key, 0L) ?: 0L
                                 val duration = progressPreferences?.getLong("duration:$key", 0L) ?: 0L
-                                EpisodeCardProgress(isPlaybackCompleted(key), position, duration)
+                                // Films watched according to Trakt count as watched unless marked otherwise here.
+                                val watchedOnTrakt = traktWatchedMovieKeys?.let { keys ->
+                                    movieIdentityKeys(
+                                        displayVodTitle(title), vodReleaseYear(title), title.imdbId,
+                                        title.tmdbId ?: detailMetadata?.id?.toString()
+                                    ).any { it in keys }
+                                } == true
+                                EpisodeCardProgress(isPlaybackCompleted(key, fallback = watchedOnTrakt), position, duration)
                             } else null
                             val resumePosition = resumeKey?.let { progressPreferences?.getLong(it, 0L) ?: 0L }
                             val resumePercent = resumeKey?.let {
@@ -6964,7 +7015,7 @@ private fun PlayerHome(
                             val uncategorizedSelected = !combine && group?.id == ALL_CATALOG_ITEMS
                             if (group != null) {
                                 Text(group.name, style = MaterialTheme.typography.titleSmall)
-                                if (groupUsesTmdb) Text(stringResource(R.string.tmdb_catalogue_source))
+
                                 guideState.SaveableStateProvider("vod-${section.name}-${group.id}") {
                                     CatalogOverview(
                                     modifier = Modifier.weight(1f),
@@ -7141,7 +7192,8 @@ private fun PlayerHome(
                                 SettingsSection.entries.forEach { item ->
                                     MenuButton(
                                         stringResource(item.label), Modifier,
-                                        selected = settingsSection == item
+                                        selected = settingsSection == item,
+                                        count = 1.takeIf { item == SettingsSection.UPDATES && appUpdates.available }
                                     ) {
                                         lastSettingsSection = item
                                         settingsSection = item

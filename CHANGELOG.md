@@ -1,5 +1,13 @@
 # Änderungen
 
+## 1.0.83
+
+- Behebt, dass das Vollbild nach dem ersten Mal nicht mehr öffnete (langes Zurück, Auswahl des laufenden Senders): Die seit 1.0.81 ausgelagerte Vollbildsteuerung wird wieder bei jeder Aktualisierung der Oberfläche neu aufgebaut.
+- App-Updates: Die automatische Suche läuft bei jedem Start (höchstens stündlich) und öffnet kein Fenster mehr. Ein verfügbares Update zeigt einen Hinweis „1“ bei Einstellungen und App-Updates; „Update anzeigen“ öffnet das Update-Fenster.
+- Kinokategorien nach Jahr verwenden das ursprüngliche Erscheinungsjahr: Wiederaufführungen (etwa „Zurück in die Zukunft“ 2025) zählen nicht mehr. Die Liste lädt automatisch weitere TMDB-Seiten, bis genug Titel in den Portalen gefunden sind. Der Hinweis „Katalogdaten von TMDB“ über der Kategorie entfällt.
+- Gesehen-Status von Filmen: Der Trakt-Abgleich lädt alle gesehenen Filme statt nur der letzten zehn; Filme gelten als gesehen, wenn Trakt sie kennt (über Titel, Jahr, IMDb- oder TMDB-ID), sofern sie nicht in der App als ungesehen markiert wurden. Der Filmverlauf zeigt weiter die letzten zehn.
+- Besetzung: Die Abfrage wartet kurz auf die TMDB-Zuordnung und fällt sonst auf Trakt zurück, damit „Besetzung“ zuverlässig erscheint. Schauspielerseiten prüfen Titel, die im gespeicherten Katalog fehlen, gezielt im Portal, sodass vorhandene Filme und Serien gefunden werden.
+
 ## 1.0.82
 
 - „Besetzung“ erscheint nur noch, wenn TMDB oder Trakt für den Titel Schauspieler kennen. Die Besetzung wird beim Öffnen der Details im Hintergrund abgefragt und danach ohne erneutes Laden angezeigt; ohne TMDB- und Trakt-Zugang gibt es den Punkt nicht.

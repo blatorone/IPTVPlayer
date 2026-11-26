@@ -1,5 +1,9 @@
 # Änderungen
 
+## 1.0.95
+
+- Kinderkonto: „Trakt für <Name>“ nutzt die Trakt-Kennung des Admins, auch wenn dessen Konto noch mit der früher eingebauten Kennung verbunden ist; eine eigene API muss dann nicht eingegeben werden.
+
 ## 1.0.94
 
 - Kinderkonto: „Trakt für <Name>“ öffnet sich wieder (lag hinter der Kinderschutz-Seite) und erscheint nur, wenn beim Admin ein Trakt-Konto verbunden ist. Das Kinderkonto nutzt dieselbe Trakt-API; ist keine gespeichert, wird sie einmal eingegeben.

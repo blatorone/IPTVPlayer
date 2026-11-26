@@ -1340,7 +1340,9 @@ private fun PlayerHome(
 
     fun connectTrakt() {
         if (ui.traktBusy) return
-        val app = traktApp
+        // The kids account uses the Trakt API of the admin: the saved one, or the one the admin's
+        // account was connected with (earlier versions had it built in).
+        val app = traktApp ?: traktSession?.takeIf { ui.traktForKids }?.let { TraktApp(it.clientId, it.clientSecret) }
         if (app == null) {
             traktStatus = context.getString(R.string.trakt_app_missing)
             return
@@ -7642,7 +7644,7 @@ private fun PlayerHome(
                                             ) {
                                                 TraktSettings(
                                                     accountName = if (ui.traktForKids) ui.kidsTraktName else traktSession?.username,
-                                                    app = traktApp,
+                                                    app = traktApp ?: traktSession?.takeIf { ui.traktForKids }?.let { TraktApp(it.clientId, it.clientSecret) },
                                                     onSaveApp = ::saveTraktApp,
                                                     deviceCode = traktDeviceCode,
                                                     busy = ui.traktBusy,

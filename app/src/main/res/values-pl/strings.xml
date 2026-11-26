@@ -882,4 +882,10 @@
     <string name="diagnostics_save_downloads">Zapisz raport diagnostyczny w folderze „Download”</string>
     <string name="diagnostics_saved_downloads">Zapisano w folderze „Download”: %1$s</string>
     <string name="trakt_app_change">Zmień API Trakt</string>
+    <string name="recent_searches">Ostatnie wyszukiwania</string>
+    <string name="clear_search_history">Wyczyść historię wyszukiwania</string>
+    <string name="search_history_hint">OK wyszukuje ponownie, długie naciśnięcie OK usuwa wpis.</string>
+    <string name="search_history_setting">Zapisuj historię wyszukiwania</string>
+    <string name="search_history_size">Wpisy w historii wyszukiwania: %1$d</string>
+    <string name="search_history_cleared">Historia wyszukiwania wyczyszczona.</string>
 </resources>

@@ -872,4 +872,10 @@
     <string name="diagnostics_save_downloads">Tanılama raporunu “Download” klasörüne kaydet</string>
     <string name="diagnostics_saved_downloads">“Download” klasörüne kaydedildi: %1$s</string>
     <string name="trakt_app_change">Trakt API\'sini değiştir</string>
+    <string name="recent_searches">Son aramalar</string>
+    <string name="clear_search_history">Arama geçmişini temizle</string>
+    <string name="search_history_hint">OK tekrar arar, OK\'a uzun basmak girişi kaldırır.</string>
+    <string name="search_history_setting">Arama geçmişini kaydet</string>
+    <string name="search_history_size">Arama geçmişindeki girişler: %1$d</string>
+    <string name="search_history_cleared">Arama geçmişi temizlendi.</string>
 </resources>

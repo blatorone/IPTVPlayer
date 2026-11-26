@@ -882,4 +882,10 @@
     <string name="diagnostics_save_downloads">Сохранить диагностический отчёт в «Download»</string>
     <string name="diagnostics_saved_downloads">Сохранено в папке «Download»: %1$s</string>
     <string name="trakt_app_change">Изменить API Trakt</string>
+    <string name="recent_searches">Недавние запросы</string>
+    <string name="clear_search_history">Очистить историю поиска</string>
+    <string name="search_history_hint">OK ищет снова, долгое нажатие OK удаляет запись.</string>
+    <string name="search_history_setting">Сохранять историю поиска</string>
+    <string name="search_history_size">Записей в истории поиска: %1$d</string>
+    <string name="search_history_cleared">История поиска очищена.</string>
 </resources>

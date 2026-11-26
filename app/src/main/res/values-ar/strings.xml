@@ -892,4 +892,10 @@
     <string name="diagnostics_save_downloads">حفظ تقرير التشخيص في مجلد \"Download\"</string>
     <string name="diagnostics_saved_downloads">تم الحفظ في مجلد \"Download\": %1$s</string>
     <string name="trakt_app_change">تغيير واجهة Trakt API</string>
+    <string name="recent_searches">عمليات البحث الأخيرة</string>
+    <string name="clear_search_history">مسح سجل البحث</string>
+    <string name="search_history_hint">يبحث OK مرة أخرى، والضغط المطوّل على OK يحذف الإدخال.</string>
+    <string name="search_history_setting">حفظ سجل البحث</string>
+    <string name="search_history_size">عدد عناصر سجل البحث: %1$d</string>
+    <string name="search_history_cleared">تم مسح سجل البحث.</string>
 </resources>

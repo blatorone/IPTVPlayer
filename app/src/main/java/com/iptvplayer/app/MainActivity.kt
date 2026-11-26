@@ -7831,6 +7831,7 @@ private fun PlayerHome(
                                         exitConfirmation = ExitConfirmation.entries[(exitConfirmation.ordinal + 1) % ExitConfirmation.entries.size]
                                         preferences?.edit()?.putString("exit_confirmation", exitConfirmation.name)?.apply()
                                     }
+                                    SearchHistorySettings()
                                     SettingRow(stringResource(R.string.key_sounds), Modifier, selected = keySounds) {
                                         keySounds = !keySounds
                                         preferences?.edit()?.putBoolean("key_sounds", keySounds)?.apply()
@@ -8482,6 +8483,7 @@ private fun PlayerHome(
                         portalFor = ::sessionFor,
                         countries = countries,
                         combine = combine,
+                        historyKey = userDataKey("search_history"),
                         onChannel = { channel ->
                             programmeChannel = channel
                             category = liveCategories.entries.firstOrNull { channel in it.value }?.key

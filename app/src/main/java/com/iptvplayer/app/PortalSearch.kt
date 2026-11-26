@@ -40,6 +40,86 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 
 private val searchedSections = listOf(PortalSection.MOVIES, PortalSection.SERIES)
+internal const val SEARCH_HISTORY_DEFAULT_SIZE = 10
+internal val SEARCH_HISTORY_SIZES = listOf(5, 10, 15, 20, 30)
+private const val SEARCH_HISTORY_ENABLED = "search_history_enabled"
+private const val SEARCH_HISTORY_SIZE = "search_history_size"
+/** Admin and kids account each keep their own list; settings act on both. */
+private val SEARCH_HISTORY_KEYS = listOf("search_history", "kids:search_history")
+
+/** The newest term first, without duplicates (ignoring case); very short terms are not kept. */
+internal fun updatedSearchHistory(entries: List<String>, term: String, max: Int = SEARCH_HISTORY_DEFAULT_SIZE): List<String> {
+    val cleaned = term.trim().replace(Regex("\\s+"), " ")
+    if (cleaned.length < 2) return entries
+    return (listOf(cleaned) + entries.filterNot { it.equals(cleaned, ignoreCase = true) }).take(max)
+}
+
+/** Recent search terms, kept on this device (the kids account has its own list). */
+internal class SearchHistory(private val preferences: android.content.SharedPreferences?, private val key: String) {
+    /** Off in the settings: nothing is kept or shown. */
+    val enabled = preferences?.getBoolean(SEARCH_HISTORY_ENABLED, true) ?: true
+    private val size = preferences?.getInt(SEARCH_HISTORY_SIZE, SEARCH_HISTORY_DEFAULT_SIZE) ?: SEARCH_HISTORY_DEFAULT_SIZE
+    var entries by mutableStateOf(if (enabled) load().take(size) else emptyList())
+        private set
+
+    private fun load(): List<String> = runCatching {
+        val data = org.json.JSONArray(preferences?.getString(key, null) ?: "[]")
+        List(data.length()) { data.getString(it) }
+    }.getOrDefault(emptyList())
+
+    private fun save() {
+        preferences?.edit()?.putString(key, org.json.JSONArray(entries).toString())?.apply()
+    }
+
+    fun add(term: String) {
+        if (!enabled) return
+        val next = updatedSearchHistory(entries, term, size)
+        if (next != entries) { entries = next; save() }
+    }
+    fun remove(term: String) { entries = entries - term; save() }
+    fun clear() { entries = emptyList(); save() }
+}
+
+/** Settings rows: keep the search history (off also deletes it), how many entries, delete it. */
+@Composable
+internal fun SearchHistorySettings() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val preferences = remember(context) {
+        context.getSharedPreferences("catalog_visibility", android.content.Context.MODE_PRIVATE)
+    }
+    var enabled by remember { mutableStateOf(preferences.getBoolean(SEARCH_HISTORY_ENABLED, true)) }
+    var size by remember { mutableStateOf(preferences.getInt(SEARCH_HISTORY_SIZE, SEARCH_HISTORY_DEFAULT_SIZE)) }
+    var cleared by remember { mutableStateOf(false) }
+    fun clearAll() {
+        preferences.edit().apply { SEARCH_HISTORY_KEYS.forEach(::remove) }.apply()
+    }
+    SettingRow(stringResource(R.string.search_history_setting), selected = enabled) {
+        enabled = !enabled
+        preferences.edit().putBoolean(SEARCH_HISTORY_ENABLED, enabled).apply()
+        if (!enabled) clearAll()
+    }
+    if (enabled) {
+        SettingRow(stringResource(R.string.search_history_size, size)) {
+            size = SEARCH_HISTORY_SIZES[(SEARCH_HISTORY_SIZES.indexOf(size) + 1) % SEARCH_HISTORY_SIZES.size]
+            preferences.edit().putInt(SEARCH_HISTORY_SIZE, size).apply()
+            // A smaller number shortens the saved lists right away.
+            preferences.edit().apply {
+                SEARCH_HISTORY_KEYS.forEach { key ->
+                    val kept = runCatching {
+                        val data = org.json.JSONArray(preferences.getString(key, null) ?: return@forEach)
+                        List(data.length()) { data.getString(it) }.take(size)
+                    }.getOrNull() ?: return@forEach
+                    putString(key, org.json.JSONArray(kept).toString())
+                }
+            }.apply()
+        }
+        SettingRow(stringResource(R.string.clear_search_history)) {
+            clearAll()
+            cleared = true
+        }
+        if (cleared) Text(stringResource(R.string.search_history_cleared), color = MaterialTheme.colorScheme.primary)
+    }
+}
 internal data class PortalResults(
     val titles: List<SourceItem<PortalTitle>>,
     val total: Int?,
@@ -60,18 +140,46 @@ internal fun ColumnScope.PortalSearch(
     portalFor: (SavedPortal) -> StalkerPortal,
     countries: Set<String>,
     combine: Boolean,
+    historyKey: String,
     onChannel: (StalkerChannel) -> Unit,
     onTitle: (PortalSection, List<SourceItem<PortalTitle>>) -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val history = remember(historyKey) {
+        SearchHistory(context.getSharedPreferences("catalog_visibility", android.content.Context.MODE_PRIVATE), historyKey)
+    }
     OutlinedTextField(
         value = query,
         onValueChange = onQueryChange,
         label = { Text(stringResource(R.string.search)) },
         modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
-        singleLine = true
+        singleLine = true,
+        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+            imeAction = androidx.compose.ui.text.input.ImeAction.Search
+        ),
+        keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { history.add(query) })
     )
     val term = query.trim()
-    if (term.isEmpty() || sources.isEmpty()) return
+    if (term.isEmpty()) {
+        // Recent searches: OK searches again, a long press removes the entry.
+        if (history.enabled && history.entries.isNotEmpty()) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Text(stringResource(R.string.recent_searches), Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+                MenuButton(stringResource(R.string.clear_search_history), Modifier) { history.clear() }
+            }
+            Text(stringResource(R.string.search_history_hint), style = MaterialTheme.typography.bodySmall)
+            LazyColumn(Modifier.weight(1f)) {
+                items(history.entries, key = { it }) { entry ->
+                    MenuButton(
+                        entry, Modifier.fillMaxWidth(), leadingIcon = R.drawable.ic_menu_search,
+                        onLongPress = { history.remove(entry) }
+                    ) { onQueryChange(entry) }
+                }
+            }
+        }
+        return
+    }
+    if (sources.isEmpty()) return
     var selection by remember { mutableStateOf(PortalSection.LIVE) }
     val metadataLimiter = remember { Semaphore(3) }
 
@@ -136,7 +244,10 @@ internal fun ColumnScope.PortalSearch(
                     MenuButton(
                         channel.name, Modifier.fillMaxWidth(), logo = channel.logo,
                         onFocused = { onHighlightChannel(channel) }
-                    ) { onChannel(channel) }
+                    ) {
+                        history.add(term)
+                        onChannel(channel)
+                    }
                     val info = listOfNotNull(liveProgramme(channel), origin.takeIf { it.isNotBlank() })
                     if (info.isNotEmpty()) Text(
                         info.joinToString(" · "), Modifier.padding(start = 10.dp, bottom = 6.dp),
@@ -177,7 +288,10 @@ internal fun ColumnScope.PortalSearch(
                     color = if (focused) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainer,
                     shape = MaterialTheme.shapes.medium,
                     modifier = Modifier.onFocusChanged { focused = it.isFocused }
-                        .clickable { onTitle(selection, items) }
+                        .clickable {
+                            history.add(term)
+                            onTitle(selection, items)
+                        }
                 ) {
                     Column {
                         Poster(title, Modifier.fillMaxWidth())

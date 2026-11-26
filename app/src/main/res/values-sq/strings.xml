@@ -872,4 +872,10 @@
     <string name="diagnostics_save_downloads">Ruaj raportin diagnostikues te „Download“</string>
     <string name="diagnostics_saved_downloads">U ruajt në dosjen „Download“: %1$s</string>
     <string name="trakt_app_change">Ndrysho API-n e Trakt</string>
+    <string name="recent_searches">Kërkimet e fundit</string>
+    <string name="clear_search_history">Fshi historikun e kërkimit</string>
+    <string name="search_history_hint">OK kërkon përsëri, shtypja e gjatë e OK heq hyrjen.</string>
+    <string name="search_history_setting">Ruaj historikun e kërkimit</string>
+    <string name="search_history_size">Hyrje në historikun e kërkimit: %1$d</string>
+    <string name="search_history_cleared">Historiku i kërkimit u fshi.</string>
 </resources>

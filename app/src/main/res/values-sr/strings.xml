@@ -877,4 +877,10 @@
     <string name="diagnostics_save_downloads">Сачувај дијагностички извештај у „Download”</string>
     <string name="diagnostics_saved_downloads">Сачувано у фасцикли „Download”: %1$s</string>
     <string name="trakt_app_change">Промени Trakt API</string>
+    <string name="recent_searches">Недавне претраге</string>
+    <string name="clear_search_history">Обриши историју претраге</string>
+    <string name="search_history_hint">OK поново претражује, дуги притисак на OK уклања унос.</string>
+    <string name="search_history_setting">Чувај историју претраге</string>
+    <string name="search_history_size">Ставки у историји претраге: %1$d</string>
+    <string name="search_history_cleared">Историја претраге обрисана.</string>
 </resources>

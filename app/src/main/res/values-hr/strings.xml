@@ -877,4 +877,10 @@
     <string name="diagnostics_save_downloads">Spremi dijagnostičko izvješće u „Download”</string>
     <string name="diagnostics_saved_downloads">Spremljeno u mapu „Download”: %1$s</string>
     <string name="trakt_app_change">Promijeni Trakt API</string>
+    <string name="recent_searches">Nedavna pretraživanja</string>
+    <string name="clear_search_history">Obriši povijest pretraživanja</string>
+    <string name="search_history_hint">OK ponovno pretražuje, dugi pritisak na OK uklanja unos.</string>
+    <string name="search_history_setting">Spremaj povijest pretraživanja</string>
+    <string name="search_history_size">Unosa u povijesti pretraživanja: %1$d</string>
+    <string name="search_history_cleared">Povijest pretraživanja obrisana.</string>
 </resources>

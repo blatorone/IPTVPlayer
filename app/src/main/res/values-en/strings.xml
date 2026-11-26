@@ -872,4 +872,10 @@
     <string name="diagnostics_save_downloads">Save diagnostic report to “Download”</string>
     <string name="diagnostics_saved_downloads">Saved in the “Download” folder: %1$s</string>
     <string name="trakt_app_change">Change Trakt API</string>
+    <string name="recent_searches">Recent searches</string>
+    <string name="clear_search_history">Clear search history</string>
+    <string name="search_history_hint">OK searches again, a long press on OK removes the entry.</string>
+    <string name="search_history_setting">Save search history</string>
+    <string name="search_history_size">Search history entries: %1$d</string>
+    <string name="search_history_cleared">Search history cleared.</string>
 </resources>

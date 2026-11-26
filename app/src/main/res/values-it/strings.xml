@@ -877,4 +877,10 @@
     <string name="diagnostics_save_downloads">Salva il rapporto diagnostico in «Download»</string>
     <string name="diagnostics_saved_downloads">Salvato nella cartella «Download»: %1$s</string>
     <string name="trakt_app_change">Cambia API Trakt</string>
+    <string name="recent_searches">Ricerche recenti</string>
+    <string name="clear_search_history">Cancella cronologia di ricerca</string>
+    <string name="search_history_hint">OK cerca di nuovo, una pressione lunga su OK rimuove la voce.</string>
+    <string name="search_history_setting">Salva cronologia di ricerca</string>
+    <string name="search_history_size">Voci nella cronologia: %1$d</string>
+    <string name="search_history_cleared">Cronologia di ricerca cancellata.</string>
 </resources>

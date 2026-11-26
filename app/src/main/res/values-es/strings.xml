@@ -877,4 +877,10 @@
     <string name="diagnostics_save_downloads">Guardar el informe de diagnóstico en «Download»</string>
     <string name="diagnostics_saved_downloads">Guardado en la carpeta «Download»: %1$s</string>
     <string name="trakt_app_change">Cambiar la API de Trakt</string>
+    <string name="recent_searches">Búsquedas recientes</string>
+    <string name="clear_search_history">Borrar historial de búsqueda</string>
+    <string name="search_history_hint">OK vuelve a buscar; mantener pulsado OK elimina la entrada.</string>
+    <string name="search_history_setting">Guardar historial de búsqueda</string>
+    <string name="search_history_size">Entradas del historial: %1$d</string>
+    <string name="search_history_cleared">Historial de búsqueda borrado.</string>
 </resources>

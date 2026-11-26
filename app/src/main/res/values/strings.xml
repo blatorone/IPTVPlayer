@@ -872,4 +872,10 @@
     <string name="diagnostics_save_downloads">Diagnosebericht in „Download“ speichern</string>
     <string name="diagnostics_saved_downloads">Gespeichert im Ordner „Download“: %1$s</string>
     <string name="trakt_app_change">Trakt-API ändern</string>
+    <string name="recent_searches">Letzte Suchen</string>
+    <string name="clear_search_history">Suchverlauf löschen</string>
+    <string name="search_history_hint">OK sucht erneut, langes Drücken auf OK entfernt den Eintrag.</string>
+    <string name="search_history_setting">Suchverlauf speichern</string>
+    <string name="search_history_size">Einträge im Suchverlauf: %1$d</string>
+    <string name="search_history_cleared">Suchverlauf gelöscht.</string>
 </resources>

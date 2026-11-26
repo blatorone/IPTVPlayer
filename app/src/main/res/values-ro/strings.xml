@@ -877,4 +877,10 @@
     <string name="diagnostics_save_downloads">Salvează raportul de diagnosticare în „Download”</string>
     <string name="diagnostics_saved_downloads">Salvat în folderul „Download”: %1$s</string>
     <string name="trakt_app_change">Schimbă API-ul Trakt</string>
+    <string name="recent_searches">Căutări recente</string>
+    <string name="clear_search_history">Șterge istoricul căutărilor</string>
+    <string name="search_history_hint">OK caută din nou, o apăsare lungă pe OK elimină intrarea.</string>
+    <string name="search_history_setting">Salvează istoricul căutărilor</string>
+    <string name="search_history_size">Intrări în istoricul căutărilor: %1$d</string>
+    <string name="search_history_cleared">Istoricul căutărilor a fost șters.</string>
 </resources>

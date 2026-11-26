@@ -3149,8 +3149,8 @@ private fun PlayerHome(
             scope.launch {
                 delay(14_000)
                 val result = SmoothSwitch.measure()
-                AppDiagnostics.record(context, result?.let { (lag, score) ->
-                    "smooth_measure lag_ms:$lag score:${"%.2f".format(java.util.Locale.ROOT, score)}"
+                AppDiagnostics.record(context, result?.let {
+                    "smooth_measure source:${it.source} lag_ms:${it.lagMs} score:${"%.2f".format(java.util.Locale.ROOT, it.score)}"
                 } ?: "smooth_measure none")
             }
         }
@@ -6745,6 +6745,16 @@ private fun PlayerHome(
             onDispose { registerPromptInput(null) }
         }
         val overlayFocus = remember { FocusRequester() }
+        // Experimental smooth switch: picture brightness 5 times per second (for Dolby passthrough,
+        // where the app cannot hear the sound).
+        LaunchedEffect(fullscreenVideoSurface, vodSection) {
+            val surface = fullscreenVideoSurface ?: return@LaunchedEffect
+            if (vodSection != null) return@LaunchedEffect
+            while (true) {
+                if (SmoothSwitch.enabled) pictureBrightness(surface)?.let(SmoothSwitch::acceptVideo)
+                delay(200)
+            }
+        }
         // Started straight in fullscreen, the player did not get the focus: the remote's keys
         // (switching channels) only worked after leaving and reopening fullscreen. Whenever the
         // stream starts or changes and nothing else is open, the player takes the focus.

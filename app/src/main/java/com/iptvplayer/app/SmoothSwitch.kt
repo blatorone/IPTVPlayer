@@ -75,6 +75,28 @@ internal object SmoothSwitch {
         }
     }
 
+    // Picture brightness, 5 values per second, last 60 s: used when the sound is not available
+    // to the app (Dolby passed through to the TV or receiver).
+    private val videoTimes = LongArray(300)
+    private val videoValues = DoubleArray(300)
+    private var videoCount = 0
+    private var videoNext = 0
+
+    fun acceptVideo(brightness: Double) {
+        if (!enabled) return
+        synchronized(this) {
+            videoTimes[videoNext] = timeshiftNow()
+            videoValues[videoNext] = brightness
+            videoNext = (videoNext + 1) % videoTimes.size
+            if (videoCount < videoTimes.size) videoCount++
+        }
+    }
+
+    private fun videoRange(from: Long, to: Long): List<Double> = synchronized(this) {
+        (0 until videoCount).map { (videoNext - videoCount + it + videoTimes.size) % videoTimes.size }
+            .filter { videoTimes[it] in from until to }.map { videoValues[it] }
+    }
+
     fun markSwitch() {
         if (enabled) switchedAt = timeshiftNow()
     }
@@ -89,23 +111,29 @@ internal object SmoothSwitch {
      * ms (positive: the new portal is behind and repeats what was already played) and how well it
      * matched (0..1), or null when there is not enough sound.
      */
-    fun measure(): Pair<Long, Double>? {
+    fun measure(): Measurement? {
         val at = switchedAt.takeIf { it != Long.MIN_VALUE } ?: return null
         switchedAt = Long.MIN_VALUE
         val before = range(at - 45_000, at).map { it.second }
         val after = range(at + 1_000, at + 13_000).map { it.second }
-        return bestLag(before, after)?.let { (lagSteps, score) -> lagSteps * STEP_MS to score }
+        bestLag(before, after)?.let { (steps, score) -> return Measurement("audio", steps * STEP_MS, score) }
+        // No sound to compare (e.g. Dolby passthrough): the picture brightness instead.
+        val videoBefore = videoRange(at - 45_000, at)
+        val videoAfter = videoRange(at + 1_000, at + 13_000)
+        return bestLag(videoBefore, videoAfter, minOverlap = 20)?.let { (steps, score) -> Measurement("video", steps * 200L, score) }
     }
 }
+
+internal data class Measurement(val source: String, val lagMs: Long, val score: Double)
+
 
 /**
  * Finds where [probe] fits best into [history] (both 10 values per second), by normalised
  * correlation. Returns how many steps before the end of the history the probe starts, and the score.
  */
-internal fun bestLag(history: List<Double>, probe: List<Double>): Pair<Int, Double>? {
+internal fun bestLag(history: List<Double>, probe: List<Double>, minOverlap: Int = 30): Pair<Int, Double>? {
     // The new portal may be only a few seconds behind: then only the start of the probe overlaps
-    // the end of the history. At least 3 s must overlap.
-    val minOverlap = 30
+    // the end of the history. At least minOverlap values (3 s of sound, 4 s of picture) must overlap.
     if (probe.size < minOverlap || history.size < minOverlap) return null
     fun normalise(values: List<Double>): DoubleArray {
         val mean = values.average()
@@ -128,4 +156,30 @@ internal fun bestLag(history: List<Double>, probe: List<Double>): Pair<Int, Doub
     }
     if (bestStart < 0) return null
     return (history.size - bestStart) to best
+}
+
+/**
+ * Brightness of the current picture from a tiny 32 x 18 copy of [surface] (scaled on the GPU),
+ * or null when the copy failed (e.g. protected video). Called on the main thread.
+ */
+internal suspend fun pictureBrightness(surface: android.view.SurfaceView): Double? {
+    if (!surface.holder.surface.isValid) return null
+    val bitmap = android.graphics.Bitmap.createBitmap(32, 18, android.graphics.Bitmap.Config.ARGB_8888)
+    return try {
+        val ok = kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
+            android.view.PixelCopy.request(surface, bitmap, { result ->
+                if (continuation.isActive) continuation.resumeWith(Result.success(result == android.view.PixelCopy.SUCCESS))
+            }, android.os.Handler(android.os.Looper.getMainLooper()))
+        }
+        if (!ok) null else {
+            val pixels = IntArray(32 * 18).also { bitmap.getPixels(it, 0, 32, 0, 0, 32, 18) }
+            pixels.sumOf { (0.299 * (it shr 16 and 0xFF) + 0.587 * (it shr 8 and 0xFF) + 0.114 * (it and 0xFF)) } / pixels.size
+        }
+    } catch (error: kotlinx.coroutines.CancellationException) {
+        throw error
+    } catch (_: Exception) {
+        null
+    } finally {
+        bitmap.recycle()
+    }
 }

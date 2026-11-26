@@ -191,7 +191,10 @@ internal class AppUpdateUi(
     val check: () -> Unit = {},
     val status: String = "",
     val beta: Boolean = false,
-    val setBeta: (Boolean) -> Unit = {}
+    val setBeta: (Boolean) -> Unit = {},
+    /** Tag of the offered update (null without one) and opening its window directly. */
+    val tag: String? = null,
+    val showUpdate: () -> Unit = {}
 )
 
 @Composable
@@ -304,6 +307,8 @@ internal fun rememberAppUpdates(): AppUpdateUi {
     ).joinToString("\n")
     return AppUpdateUi(
         release != null,
+        tag = release?.tag,
+        showUpdate = { if (release != null) dialogOpen = true },
         automatic = auto,
         setAutomatic = { value ->
             auto = value

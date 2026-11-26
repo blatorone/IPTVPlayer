@@ -4886,6 +4886,14 @@ private fun PlayerHome(
         guidePanel = GuidePanel.GRID
         lastBack = 0L
         selected = Destination.SETTINGS
+        // A new update opens its window once (per version); later the settings open as usual.
+        val updateTag = appUpdates.tag
+        if (appUpdates.available && updateTag != null && preferences?.getString("update_window_shown", null) != updateTag) {
+            preferences?.edit()?.putString("update_window_shown", updateTag)?.apply()
+            settingsSection = SettingsSection.UPDATES
+            lastSettingsSection = SettingsSection.UPDATES
+            appUpdates.showUpdate()
+        }
     }
     /** Runs [action] right away, or after the settings PIN when [flag] protects it (Einstellungsschutz). */
     fun withSettingsPin(flag: Boolean, unlock: Boolean = true, action: () -> Unit) {

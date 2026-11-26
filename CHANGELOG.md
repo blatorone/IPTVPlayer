@@ -15,7 +15,7 @@
 - App-Sprache: Unter Allgemein → App-Sprache lässt sich die Sprache der Oberfläche wählen (Standard: Systemsprache, sonst Englisch). Verfügbar: Deutsch, Englisch, Türkisch, Polnisch, Russisch, Arabisch, Rumänisch, Kroatisch, Bosnisch, Serbisch (kyrillisch und lateinisch), Spanisch, Französisch, Italienisch, Portugiesisch (Brasilien), Albanisch und Ukrainisch; weitere folgen. Bei Arabisch wird gefragt, ob die Oberfläche gespiegelt werden soll. Neue Installationen fragen beim ersten Start zuerst nach der Sprache, danach kommen die Nutzungsbedingungen in dieser Sprache. Auch Status- und Fehlermeldungen (z. B. beim Trakt-Abgleich) sind übersetzt; die Handy-Seite ist noch deutsch.
 - Kinderschutz: Erotik- und Kinderkategorien werden auch in Portal-Listen anderer Sprachen erkannt (z. B. Türkisch, Polnisch, Russisch, Arabisch).
 - PIN-Eingabe: Die Zifferntasten der Fernbedienung tippen die PIN direkt ein. Neu: „Mit dem Handy eingeben“ zeigt einen QR-Code – die PIN wird dann verdeckt am Handy getippt und verschlüsselt übertragen, am Fernseher sieht sie niemand.
-- App-Updates: Die Änderungen im Update-Hinweis lassen sich mit der Fernbedienung durchscrollen (vom Knopf nach oben).
+- App-Updates: Die Änderungen im Update-Hinweis lassen sich mit der Fernbedienung durchscrollen (vom Knopf nach oben). Ist ein neues Update da, öffnen sich die Einstellungen einmal direkt mit dem Update-Fenster.
 - Download: Die APK heißt jetzt StreamWatch-<Nummer>.apk. Übergangsweise liegt sie zusätzlich unter dem alten Namen bei, damit ältere Versionen das Update finden.
 - Neue Installationen zeigen beim ersten Start die Nutzungsbedingungen, die akzeptiert werden müssen.
 

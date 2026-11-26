@@ -1981,11 +1981,9 @@ private fun PlayerHome(
         try {
             val started = SystemClock.elapsedRealtime()
             val descriptionFile = java.io.File(context.cacheDir, "channel-descriptions")
-            val descriptionVersion = runCatching {
-                androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(
-                    context.packageManager.getPackageInfo(context.packageName, 0)
-                ).toString()
-            }.getOrDefault("0")
+            // Only a change of how channel names are read drops the saved file, not every app update
+            // (that cost ~45 s on the Fire TV Stick after each update).
+            val descriptionVersion = CHANNEL_DESCRIPTION_RULES
             val groups = withContext(Dispatchers.Default) {
                 loadChannelDescriptions(descriptionFile, descriptionVersion)
                 buildLiveChannelGroups(sourcesForBrowsing, combine, mergePortalChannels, countries)
@@ -2443,6 +2441,24 @@ private fun PlayerHome(
                 category, countries, java.util.Locale.getDefault().country
             ).associateWith { 1 }
             if (pages.isEmpty()) return
+            // Opened before in this session: shown at once instead of searching all portals again.
+            val shelfKey = listOf(
+                section.name, category.id, pages.keys.sorted().joinToString(","), countries.sorted().joinToString(","),
+                sourcesForBrowsing.map { it.identity }.sorted().joinToString(",")
+            ).joinToString("|")
+            if (!next) TmdbShelfCache.get(shelfKey)?.let { cached ->
+                groupJob?.cancel()
+                selectedGroup = section to group
+                metadataTitles = cached.titles
+                metadataNextPages = cached.nextPages
+                groupVariants = cached.titles.values.toMap()
+                groupCatalog = PortalCatalog(groupVariants.keys.toList(), null, 1.takeIf { cached.nextPages.isNotEmpty() })
+                ui.groupUsesTmdb = true
+                ui.groupError = cached.incomplete
+                ui.groupLoading = false
+                AppDiagnostics.record(context, "vod_group_tmdb_cached ${section.name} titles:${cached.titles.size}")
+                return
+            }
             val previous = if (next) metadataTitles else emptyMap()
             metadataNextPages = pages
             metadataTitles = previous
@@ -2474,6 +2490,7 @@ private fun PlayerHome(
                     } while (requested.isNotEmpty() && metadataTitles.size - previous.size < 24 && rounds < 8)
                     AppDiagnostics.record(context,
                         "vod_group_tmdb ${section.name} ms:${SystemClock.elapsedRealtime() - started} rounds:$rounds titles:${metadataTitles.size}")
+                    if (!next) TmdbShelfCache.put(shelfKey, TmdbShelfResult(metadataTitles, metadataNextPages, incomplete))
                     ui.groupError = incomplete
                 } catch (error: CancellationException) {
                     throw error

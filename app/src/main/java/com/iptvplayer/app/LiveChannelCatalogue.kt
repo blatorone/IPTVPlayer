@@ -112,6 +112,9 @@ internal fun describeChannel(channel: StalkerChannel, providerCategory: String?)
  */
 private const val DESCRIPTION_FILE_FORMAT = "channel-descriptions 1"
 
+/** Raise when parseChannelDescription changes its results: saved descriptions are then rebuilt. */
+internal const val CHANNEL_DESCRIPTION_RULES = "1"
+
 internal fun loadChannelDescriptions(file: java.io.File, version: String) {
     if (descriptionCache.isNotEmpty() || !file.exists()) return
     runCatching {

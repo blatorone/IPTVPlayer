@@ -28,6 +28,36 @@ internal fun tmdbShelfRegions(
     else listOf(fallback.takeIf { it.matches(Regex("[A-Z]{2}")) } ?: "DE")
 }
 
+/*
+ * A portal catalogue indexed by normalised title, built once per catalogue. Before, every TMDB
+ * title was compared with every catalogue entry (tens of thousands) of every portal.
+ */
+private class TitleIndex(val titles: List<PortalTitle>, val byName: Map<String, List<PortalTitle>>)
+private val titleIndexes = ArrayDeque<TitleIndex>()
+
+private fun titleIndex(titles: List<PortalTitle>): Map<String, List<PortalTitle>> = synchronized(titleIndexes) {
+    titleIndexes.firstOrNull { it.titles === titles }?.byName ?: titles.groupBy { normalizedLabel(displayVodTitle(it)) }.also {
+        titleIndexes.addFirst(TitleIndex(titles, it))
+        while (titleIndexes.size > 12) titleIndexes.removeLast()
+    }
+}
+
+/** Shelves already loaded in this session: opening the category again shows them at once. */
+internal object TmdbShelfCache {
+    private const val MAX_AGE_MS = 6 * 60 * 60 * 1000L
+    private class Entry(val result: TmdbShelfResult, val savedAt: Long)
+    private val entries = HashMap<String, Entry>()
+
+    fun get(key: String): TmdbShelfResult? = synchronized(entries) {
+        entries[key]?.takeIf { System.currentTimeMillis() - it.savedAt < MAX_AGE_MS }?.result
+    }
+
+    fun put(key: String, result: TmdbShelfResult) = synchronized(entries) {
+        entries[key] = Entry(result, System.currentTimeMillis())
+        if (entries.size > 40) entries.remove(entries.minByOrNull { it.value.savedAt }?.key)
+    }
+}
+
 internal suspend fun loadTmdbPortalShelf(
     client: TmdbClient,
     section: PortalSection,
@@ -36,8 +66,10 @@ internal suspend fun loadTmdbPortalShelf(
     sources: List<SavedPortal>,
     countries: Set<String>,
     portalFor: (SavedPortal) -> StalkerPortal
-): TmdbShelfResult {
+): TmdbShelfResult = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
     val limiter = Semaphore(4)
+    // Searches run per portal (3 at a time each) instead of 4 for all portals together.
+    val searchLimits = sources.associateWith { Semaphore(3) }
     val references = coroutineScope {
         regionPages.map { (region, page) ->
             async {
@@ -62,7 +94,7 @@ internal suspend fun loadTmdbPortalShelf(
                 group?.name ?: title.categoryName ?: title.categoryId.orEmpty(), group?.country
             ) in countries
         }
-        catalog?.titles.orEmpty().filter(::allowed) to { title: PortalTitle -> allowed(title) }
+        titleIndex(catalog?.titles.orEmpty()) to { title: PortalTitle -> allowed(title) }
     }
 
     val matched = coroutineScope {
@@ -70,11 +102,13 @@ internal suspend fun loadTmdbPortalShelf(
             async {
                 val hits = sources.map { source ->
                     async sourceLookup@ {
-                        val (cached, allowed) = bySource.getValue(source)
+                        val (index, allowed) = bySource.getValue(source)
+                        val cached = setOf(item.title, item.originalTitle).filterNotNull().map(::normalizedLabel)
+                            .flatMap { index[it].orEmpty() }.distinct().filter(allowed)
                         val known = matchTmdbTitle(item, cached, requireVerifiedIdentity = section == PortalSection.SERIES)
                         if (known != null) return@sourceLookup SourceItem(source, known)
                         try {
-                            val found = limiter.withPermit {
+                            val found = searchLimits.getValue(source).withPermit {
                                 val portal = portalFor(source)
                                 portal.loadCatalog(section, portal.openSession(), search = item.title)
                             }
@@ -94,7 +128,7 @@ internal suspend fun loadTmdbPortalShelf(
     val next = references.mapNotNull { (region, page) ->
         (if (page == null) regionPages[region] else page.nextPage)?.let { region to it }
     }.toMap()
-    return TmdbShelfResult(matched.toMap(), next, references.any { it.second == null })
+    TmdbShelfResult(matched.toMap(), next, references.any { it.second == null })
 }
 
 internal fun matchTmdbTitle(

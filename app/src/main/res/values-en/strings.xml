@@ -864,4 +864,9 @@
     <string name="pin_phone">Enter on phone</string>
     <string name="pin_phone_close">Close QR code</string>
     <string name="pin_phone_hint">Scan the code with your phone and enter the PIN there – nobody can see it on the TV.</string>
+    <string name="my_area">My Area</string>
+    <string name="my_area_empty">Titles you can continue, have on your watchlist or watched recently appear here.</string>
+    <string name="recently_watched">Recently watched</string>
+    <string name="start_destination_setting">Start page: %1$s</string>
+    <string name="start_in_fullscreen">Start last channel in fullscreen</string>
 </resources>

@@ -869,4 +869,9 @@
     <string name="pin_phone">Introdu pe telefon</string>
     <string name="pin_phone_close">Închide codul QR</string>
     <string name="pin_phone_hint">Scanează codul cu telefonul și introdu PIN-ul acolo – nimeni nu îl vede la televizor.</string>
+    <string name="my_area">Zona mea</string>
+    <string name="my_area_empty">Aici apar titlurile pe care le poți continua, cele din lista de urmărit și cele văzute recent.</string>
+    <string name="recently_watched">Văzute recent</string>
+    <string name="start_destination_setting">Pagina de start: %1$s</string>
+    <string name="start_in_fullscreen">Pornește ultimul canal pe tot ecranul</string>
 </resources>

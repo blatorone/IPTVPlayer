@@ -874,4 +874,9 @@
     <string name="pin_phone">Wpisz na telefonie</string>
     <string name="pin_phone_close">Zamknij kod QR</string>
     <string name="pin_phone_hint">Zeskanuj kod telefonem i wpisz tam PIN – nikt nie zobaczy go na telewizorze.</string>
+    <string name="my_area">Mój obszar</string>
+    <string name="my_area_empty">Tutaj pojawią się tytuły do dokończenia, z listy do obejrzenia i ostatnio oglądane.</string>
+    <string name="recently_watched">Ostatnio oglądane</string>
+    <string name="start_destination_setting">Strona startowa: %1$s</string>
+    <string name="start_in_fullscreen">Uruchamiaj ostatni kanał na pełnym ekranie</string>
 </resources>

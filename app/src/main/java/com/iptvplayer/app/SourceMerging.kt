@@ -5,9 +5,11 @@ import java.util.Locale
 
 internal data class SourceItem<T>(val source: SavedPortal, val value: T)
 
+private val labelWhitespace = Regex("\\s+")
+
 internal fun normalizedLabel(value: String): String =
     Normalizer.normalize(value, Normalizer.Form.NFKC).trim()
-        .replace(Regex("\\s+"), " ").lowercase(Locale.ROOT)
+        .replace(labelWhitespace, " ").lowercase(Locale.ROOT)
 
 internal fun channelIdentity(channel: StalkerChannel): String? =
     channel.epgIdentity?.let(::normalizedLabel)

@@ -869,4 +869,9 @@
     <string name="pin_phone">Unesi na mobitelu</string>
     <string name="pin_phone_close">Zatvori QR kod</string>
     <string name="pin_phone_hint">Skeniraj kod mobitelom i tamo unesi PIN – na televizoru ga niko ne vidi.</string>
+    <string name="my_area">Moj prostor</string>
+    <string name="my_area_empty">Ovdje se prikazuju naslovi koje možeš nastaviti gledati, oni s liste za gledanje i nedavno gledani.</string>
+    <string name="recently_watched">Nedavno gledano</string>
+    <string name="start_destination_setting">Početna stranica: %1$s</string>
+    <string name="start_in_fullscreen">Pokreni zadnji kanal preko cijelog ekrana</string>
 </resources>

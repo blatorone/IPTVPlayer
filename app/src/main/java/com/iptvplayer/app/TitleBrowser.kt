@@ -289,12 +289,13 @@ private fun posterShelfKey(title: PortalTitle): String = listOfNotNull(
 ).joinToString("|")
 
 @Composable
-private fun PosterShelfCard(
+internal fun PosterShelfCard(
     title: PortalTitle,
     width: androidx.compose.ui.unit.Dp,
     unseen: Int,
     modifier: Modifier = Modifier,
     onFocused: (() -> Unit)? = null,
+    caption: String? = null,
     onSelect: () -> Unit
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -325,6 +326,12 @@ private fun PosterShelfCard(
             Text(
                 displayVodTitle(title), Modifier.fillMaxWidth().padding(horizontal = 7.dp, vertical = 6.dp),
                 style = MaterialTheme.typography.labelMedium, maxLines = 2, overflow = TextOverflow.Ellipsis
+            )
+            // For example the resume position or the air date of the next episode.
+            if (caption != null) Text(
+                caption, Modifier.fillMaxWidth().padding(start = 7.dp, end = 7.dp, bottom = 6.dp),
+                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary,
+                maxLines = 1, overflow = TextOverflow.Ellipsis
             )
         }
     }

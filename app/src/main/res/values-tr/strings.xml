@@ -864,4 +864,9 @@
     <string name="pin_phone">Telefonla gir</string>
     <string name="pin_phone_close">QR kodu kapat</string>
     <string name="pin_phone_hint">Kodu telefonunla tara ve PIN\'i orada gir – televizyonda kimse göremez.</string>
+    <string name="my_area">Alanım</string>
+    <string name="my_area_empty">Devam edebileceğin, izleme listende olan veya son izlediğin içerikler burada görünür.</string>
+    <string name="recently_watched">Son izlenenler</string>
+    <string name="start_destination_setting">Başlangıç sayfası: %1$s</string>
+    <string name="start_in_fullscreen">Son kanalı tam ekranda başlat</string>
 </resources>

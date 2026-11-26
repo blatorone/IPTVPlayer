@@ -864,4 +864,9 @@
     <string name="pin_phone">Mit dem Handy eingeben</string>
     <string name="pin_phone_close">QR-Code schließen</string>
     <string name="pin_phone_hint">Scanne den Code mit deinem Handy und gib die PIN dort ein – am Fernseher sieht sie niemand.</string>
+    <string name="my_area">Mein Bereich</string>
+    <string name="my_area_empty">Hier erscheinen Titel, die du weiterschauen kannst, auf der Merkliste hast oder zuletzt gesehen hast.</string>
+    <string name="recently_watched">Zuletzt gesehen</string>
+    <string name="start_destination_setting">Startseite: %1$s</string>
+    <string name="start_in_fullscreen">Letzten Sender im Vollbild starten</string>
 </resources>

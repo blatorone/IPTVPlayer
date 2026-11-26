@@ -49,6 +49,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -57,6 +58,7 @@ import androidx.compose.runtime.key
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -482,6 +484,14 @@ internal enum class AccentChoice(val label: Int, val color: Color) {
     val hex: String get() = "#%06X".format(color.toArgb() and 0xFFFFFF)
 }
 
+/** Pages the app can open with. */
+private val START_DESTINATIONS = listOf(Destination.LIVE, Destination.MOVIES, Destination.SERIES)
+
+private fun savedStartDestination(preferences: android.content.SharedPreferences?): Destination {
+    val saved = preferences?.getString("start_destination", null)
+    return START_DESTINATIONS.firstOrNull { it.name == saved } ?: Destination.LIVE
+}
+
 private val mainDestinations = Destination.entries.filter {
     it != Destination.SOURCES && it != Destination.CATEGORIES
 }
@@ -603,6 +613,16 @@ private data class PlaybackAttempt(
 )
 
 private enum class SeriesActivityView { CONTINUE, UPCOMING, HISTORY, WATCHLIST }
+
+/** One poster in a row of "Mein Bereich". */
+private class MyAreaCard(
+    val key: String,
+    val title: PortalTitle,
+    val refs: List<SeriesPortalRef>,
+    val caption: String?,
+    val unseen: Int,
+    val open: () -> Unit
+)
 private data class PortalContentCounts(val tv: Int, val movies: Int, val series: Int)
 private enum class SettingsSection(val label: Int, val icon: Int) {
     GENERAL(R.string.settings_general, R.drawable.settings_general),
@@ -719,15 +739,6 @@ private fun PlayerHome(
     canPlay: () -> Boolean = { false }
 ) {
     val ui = remember { PlayerHomeFlags() }
-    var selected by remember { mutableStateOf<Destination?>(Destination.LIVE) }
-    var pendingVodCategory by rememberSaveable { mutableStateOf<Destination?>(null) }
-    var lastFocused by rememberSaveable { mutableStateOf(Destination.LIVE) }
-    var settingsReturnDestination by rememberSaveable { mutableStateOf(Destination.LIVE) }
-    var lastSettingsSection by rememberSaveable { mutableStateOf(SettingsSection.GENERAL) }
-    val initialFocus = remember { FocusRequester() }
-    val settingsFocusRequesters = remember {
-        SettingsSection.entries.associateWith { FocusRequester() }
-    }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val resources = LocalResources.current
@@ -735,6 +746,21 @@ private fun PlayerHome(
     val preview = LocalInspectionMode.current
     val preferences = remember(context, preview) {
         if (preview) null else context.getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE)
+    }
+    /** The page the app opens with (Live-TV, Filme or Serien). */
+    var startDestination by remember(preferences) { mutableStateOf(savedStartDestination(preferences)) }
+    var selected by remember { mutableStateOf<Destination?>(startDestination) }
+    // Films or series as the start page open their first category.
+    var pendingVodCategory by rememberSaveable {
+        mutableStateOf(startDestination.takeIf { it == Destination.MOVIES || it == Destination.SERIES })
+    }
+    var startupFirstCategory by rememberSaveable { mutableStateOf(pendingVodCategory != null) }
+    var lastFocused by rememberSaveable { mutableStateOf(startDestination) }
+    var settingsReturnDestination by rememberSaveable { mutableStateOf(startDestination) }
+    var lastSettingsSection by rememberSaveable { mutableStateOf(SettingsSection.GENERAL) }
+    val initialFocus = remember { FocusRequester() }
+    val settingsFocusRequesters = remember {
+        SettingsSection.entries.associateWith { FocusRequester() }
     }
     val isTelevision = remember(context) {
         context.packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK)
@@ -772,6 +798,8 @@ private fun PlayerHome(
     /** The film history shows only started, unfinished films ("Weiter schauen"). */
     var movieContinueOpen by rememberSaveable { mutableStateOf(false) }
     var movieWatchlistOpen by rememberSaveable { mutableStateOf(false) }
+    /** "Mein Bereich" of films or series: continue watching, watchlist and recently watched. */
+    var myAreaSection by rememberSaveable { mutableStateOf<PortalSection?>(null) }
     var movieHistory by remember(progressPreferences) {
         mutableStateOf(decodeMovieHistory(progressPreferences?.getString("movie_history", null)))
     }
@@ -857,6 +885,10 @@ private fun PlayerHome(
     }
     var playLastChannelAtStartup by remember(preferences) {
         mutableStateOf(preferences?.getBoolean("play_last_channel_at_startup", true) ?: true)
+    }
+    /** The last channel starts straight in fullscreen instead of the guide. */
+    var startInFullscreen by remember(preferences) {
+        mutableStateOf(preferences?.getBoolean("start_in_fullscreen", true) ?: true)
     }
     var epgRefreshHours by remember(preferences) { mutableStateOf(preferences?.getInt("epg_refresh_hours", 6) ?: 6) }
     var epgHorizonHours by remember(preferences) { mutableStateOf(preferences?.getInt("epg_horizon_hours", 24) ?: 24) }
@@ -1014,7 +1046,15 @@ private fun PlayerHome(
     var programmeChannel by remember { mutableStateOf<StalkerChannel?>(null) }
     var epgChannelIds by remember { mutableStateOf(emptySet<String>()) }
     var starting by remember { mutableStateOf<StalkerChannel?>(null) }
-    var fullscreen by remember { mutableStateOf(false) }
+    // Starting the last channel in fullscreen shows black (and the channel info) at once,
+    // instead of the guide until the stream is ready.
+    val fullscreenAtStart = remember {
+        startDestination == Destination.LIVE && playLastChannelAtStartup && startInFullscreen &&
+            preferences?.getString("last_live_channel", null) != null
+    }
+    var fullscreen by remember { mutableStateOf(fullscreenAtStart) }
+    /** The channel info at the top left, shown once when the app starts in fullscreen. */
+    var startupInfoVisible by remember { mutableStateOf(fullscreenAtStart) }
     val appUpdates = rememberAppUpdates()
     var lastBack by remember { mutableStateOf(0L) }
     var triedHls by remember { mutableStateOf(false) }
@@ -3028,13 +3068,14 @@ private fun PlayerHome(
         variants: List<PlaybackVariant>,
         progressKey: String? = null,
         openFullscreenOnStart: Boolean = true,
-        liveRestoreKey: String? = null
+        liveRestoreKey: String? = null,
+        stayInGuide: Boolean = false
     ) {
         if (player == null || variants.isEmpty() || reopenPlayback(selection, openFullscreen = openFullscreenOnStart)) return
         // VOD stays on its detail page while the stream resolves and buffers.
         // The player listener opens fullscreen only once playback actually starts.
         // Live TV still opens immediately; automatic episode transitions stay fullscreen.
-        val remainFullscreen = selection.section == PortalSection.LIVE ||
+        val remainFullscreen = selection.section == PortalSection.LIVE && !stayInGuide ||
             fullscreen && selection.section == PortalSection.SERIES && advancingEpisode
         stopPlayback()
         fullscreen = remainFullscreen
@@ -3086,7 +3127,7 @@ private fun PlayerHome(
         runPlayback(attempt.copy(variants = ordered, index = 0, positionMs = position, openFullscreenOnStart = false))
     }
 
-    fun playChannel(channel: StalkerChannel, openFullscreenOnStart: Boolean = true) {
+    fun playChannel(channel: StalkerChannel, openFullscreenOnStart: Boolean = true, stayInGuide: Boolean = false) {
         val group = liveGroups[channel] ?: return
         programmeChannel = channel
         val selection = liveSelection(channel, group, combine)
@@ -3106,7 +3147,8 @@ private fun PlayerHome(
                 PlaybackVariant(label, sourceId = item.source.identity) { portal.resolve(item.value, portal.openSession()) }
             },
             openFullscreenOnStart = openFullscreenOnStart,
-            liveRestoreKey = channelKey
+            liveRestoreKey = channelKey,
+            stayInGuide = stayInGuide
         )
     }
 
@@ -3157,7 +3199,9 @@ private fun PlayerHome(
                             portal.resolve(stream, if (saved.direct) "" else portal.openSession())
                         }
                     },
-                    liveRestoreKey = cached.key
+                    openFullscreenOnStart = startInFullscreen,
+                    liveRestoreKey = cached.key,
+                    stayInGuide = !startInFullscreen
                 )
             }
         }
@@ -3197,7 +3241,9 @@ private fun PlayerHome(
         val retryFromCatalogue = ui.cachedStartupAttempt && playbackError != null
         if (ui.cachedStartupAttempt && !retryFromCatalogue && playbackSelection != null) return@LaunchedEffect
         ui.restoredLastLiveChannel = true
-        if (selected != Destination.LIVE || playbackSelection != null && !retryFromCatalogue) return@LaunchedEffect
+        // With films or series as the start page the guide is still prepared (category and
+        // channel of the last session), only nothing is played.
+        if (playbackSelection != null && !retryFromCatalogue) return@LaunchedEffect
         val orderedCategories = liveCategories.keys
             .filter { visibleCategory(PortalSection.LIVE, it, it) }
             .sortedBy { categoryNames.values.indexOf(it) }
@@ -3222,12 +3268,40 @@ private fun PlayerHome(
                 guideScroll.requestScrollToItem(index)
                 programmeChannel = visibleChannels[index]
                 restoreLiveFocus = true
-                if (playLastChannelAtStartup) playChannel(visibleChannels[index])
+                if (playLastChannelAtStartup && selected == Destination.LIVE) playChannel(
+                    visibleChannels[index], openFullscreenOnStart = startInFullscreen, stayInGuide = !startInFullscreen
+                )
             } else {
                 guideScroll.requestScrollToItem(0)
                 programmeChannel = visibleChannels.firstOrNull()
             }
         }
+    }
+
+    // Started in fullscreen but no channel could be started (none saved any more, no portal):
+    // back to the guide instead of a black screen.
+    LaunchedEffect(Unit) {
+        if (!fullscreenAtStart) return@LaunchedEffect
+        withTimeoutOrNull(30_000L) {
+            snapshotFlow {
+                !restoring && startupSnapshotChecked && (playbackSelection != null || ui.restoredLastLiveChannel)
+            }.first { it }
+        }
+        if (playbackSelection == null && fullscreen) {
+            fullscreen = false
+            startupInfoVisible = false
+        }
+    }
+    LaunchedEffect(startupInfoVisible, fullscreen, starting, playing, playbackError, vodSection) {
+        if (!startupInfoVisible) return@LaunchedEffect
+        if (!fullscreen || playbackError != null || vodSection != null) {
+            startupInfoVisible = false
+            return@LaunchedEffect
+        }
+        // Visible while the stream starts, then a few more seconds.
+        if (starting != null || playbackSelection == null) return@LaunchedEffect
+        delay(6_000L)
+        startupInfoVisible = false
     }
 
     fun closeSeries() {
@@ -3362,8 +3436,9 @@ private fun PlayerHome(
     // Keep multi-portal season requests bounded; a catalog can contain thousands
     // of episodes and must not open one network request per source at once.
     val episodeCatalogRequests = remember { Semaphore(2) }
+    /** A history entry stores no poster: it comes from the portal (looked up once). */
     @Composable
-    fun HistoryArtwork(section: PortalSection, title: PortalTitle, refs: List<SeriesPortalRef>) {
+    fun historyArtwork(section: PortalSection, title: PortalTitle, refs: List<SeriesPortalRef>): PortalTitle {
         val artwork by produceState<PortalTitle?>(null, section, title, refs, savedSources) {
             value = null
             for (ref in refs) {
@@ -3386,7 +3461,12 @@ private fun PlayerHome(
                 }
             }
         }
-        Poster(artwork ?: title, Modifier.width(104.dp).padding(end = 10.dp))
+        return artwork ?: title
+    }
+
+    @Composable
+    fun HistoryArtwork(section: PortalSection, title: PortalTitle, refs: List<SeriesPortalRef>) {
+        Poster(historyArtwork(section, title, refs), Modifier.width(104.dp).padding(end = 10.dp))
     }
 
     fun titleSelection(
@@ -4777,6 +4857,7 @@ private fun PlayerHome(
             movieHistoryOpen = false
             movieWatchlistOpen = false
             seriesActivityView = null
+            myAreaSection = null
         }
         pendingVodCategory = null
         lastBack = 0L
@@ -4986,6 +5067,21 @@ private fun PlayerHome(
             }
         }
     }
+    /** Back from the top level of a page: to the start page, and from there out of the app. */
+    fun leaveToStartPage() {
+        val start = startDestination.takeIf { it in visibleDestinations }
+            ?: visibleDestinations.firstOrNull { it in START_DESTINATIONS } ?: Destination.LIVE
+        if (selected == start) {
+            requestAppExit()
+            return
+        }
+        lastFocused = start
+        guidePanel = GuidePanel.GRID
+        lastBack = 0L
+        if (start == Destination.LIVE) restoreGuideEntryFocus()
+        pendingVodCategory = start.takeIf { it == Destination.MOVIES || it == Destination.SERIES }
+        selected = start
+    }
     fun navigateBack() {
         if (fullscreen) {
             if (watchingPrompt) {
@@ -5017,7 +5113,7 @@ private fun PlayerHome(
         } else if (selected == Destination.LIVE) {
             // Read the current destination here: a value captured earlier can be outdated and
             // made Back from the settings close the app.
-            if (guidePanel == GuidePanel.GRID) requestAppExit()
+            if (guidePanel == GuidePanel.GRID) leaveToStartPage()
             else guidePanel = GuidePanel.GRID
         } else if (selected == Destination.SETTINGS && closeSettingsPages()) {
             // Back from a settings page returns to the rows of its section (one step at a time).
@@ -5058,10 +5154,9 @@ private fun PlayerHome(
         else if (selected == Destination.MOVIES && movieHistoryOpen) movieHistoryOpen = false
         else if (selected == Destination.MOVIES && movieWatchlistOpen) movieWatchlistOpen = false
         else if (selected == Destination.SOURCES || selected == Destination.CATEGORIES) selected = Destination.SETTINGS
-        else if ((selected == Destination.MOVIES && selectedGroup?.first == PortalSection.MOVIES) ||
-            (selected == Destination.SERIES && selectedGroup?.first == PortalSection.SERIES)
-        ) closeGroup()
-        else if (selected == Destination.MOVIES || selected == Destination.SERIES) requestAppExit()
+        // Films and series always keep a category (or "Mein Bereich") open: closing it only
+        // left an empty, black area. Back goes to the start page or leaves the app instead.
+        else if (selected == Destination.MOVIES || selected == Destination.SERIES) leaveToStartPage()
         else openMainMenu()
     }
     portalCategoriesFor?.let { source ->
@@ -5466,8 +5561,19 @@ private fun PlayerHome(
                     exitConfirmation = ExitConfirmation.valueOf(value)
                     preferences?.edit()?.putString("exit_confirmation", value)?.apply()
                 })
-                add(toggle("lastChannel", general, text(R.string.start_last_channel), { playLastChannelAtStartup },
-                    "play_last_channel_at_startup") { playLastChannelAtStartup = it })
+                add(RemoteEntry.Choice("startPage", general, name(R.string.start_destination_setting),
+                    options(START_DESTINATIONS) { it.label }, { startDestination.name }
+                ) { value ->
+                    startDestination = START_DESTINATIONS.firstOrNull { it.name == value } ?: Destination.LIVE
+                    preferences?.edit()?.putString("start_destination", startDestination.name)?.apply()
+                })
+                // Playing the last channel (and fullscreen) only exists with Live-TV as the start page.
+                if (startDestination == Destination.LIVE) {
+                    add(toggle("lastChannel", general, text(R.string.start_last_channel), { playLastChannelAtStartup },
+                        "play_last_channel_at_startup") { playLastChannelAtStartup = it })
+                    if (playLastChannelAtStartup) add(toggle("startFullscreen", general, text(R.string.start_in_fullscreen),
+                        { startInFullscreen }, "start_in_fullscreen") { startInFullscreen = it })
+                }
                 add(toggle("portalRefresh", library, text(R.string.portal_refresh_at_start), { refreshPortalsAtStartup },
                     "refresh_portals_at_startup") { refreshPortalsAtStartup = it })
                 add(RemoteEntry.Choice("expiryLead", library, text(R.string.expiry_lead_title),
@@ -6608,8 +6714,10 @@ private fun PlayerHome(
                     }
                 }
             }
-            if (playbackControlsVisible && live) {
-                val channel = playing
+            if (live && (playbackControlsVisible ||
+                    startupInfoVisible && fullscreenGuidePanel == GuidePanel.GRID && episodeAction == 0)
+            ) {
+                val channel = playing ?: starting
                 val nowSeconds = System.currentTimeMillis() / 1_000L
                 val programme = channel?.let(::effectiveProgrammes).orEmpty().firstOrNull { item ->
                     val from = item.startSeconds ?: return@firstOrNull false
@@ -7340,6 +7448,7 @@ private fun PlayerHome(
                 movieHistoryOpen = false
                 movieWatchlistOpen = false
                 seriesActivityView = null
+                myAreaSection = null
                 if (!combine && group.id == ALL_CATALOG_ITEMS) {
                     closeGroup()
                     selectedGroup = section to group
@@ -7362,6 +7471,7 @@ private fun PlayerHome(
                         leadingIcon = item.icon.takeUnless { mainMenuStyle == MainMenuStyle.TEXT },
                         badge = 1.takeIf { item == Destination.SETTINGS && appUpdates.available },
                         iconOnly = mainMenuStyle == MainMenuStyle.ICONS,
+                        tintSelection = true,
                         modifier = Modifier.fillMaxWidth()
                             .focusRequester(destinationFocusRequester(item))
                             .focusProperties {
@@ -7418,6 +7528,7 @@ private fun PlayerHome(
                                 leadingIcon = item.icon.takeUnless { mainMenuStyle == MainMenuStyle.TEXT },
                                 badge = 1.takeIf { item == Destination.SETTINGS && appUpdates.available },
                                 iconOnly = mainMenuStyle == MainMenuStyle.ICONS,
+                                tintSelection = true,
                                 selected = item == (destination ?: Destination.LIVE) ||
                                     item == Destination.SETTINGS && destination in setOf(
                                         Destination.SOURCES, Destination.CATEGORIES
@@ -7720,12 +7831,30 @@ private fun PlayerHome(
                                         preferences?.edit()?.putBoolean("key_sounds", keySounds)?.apply()
                                     }
                                     SettingRow(
-                                        stringResource(R.string.start_last_channel),
-                                        Modifier,
-                                        selected = playLastChannelAtStartup
+                                        stringResource(R.string.start_destination_setting, stringResource(startDestination.label)),
+                                        Modifier
                                     ) {
-                                        playLastChannelAtStartup = !playLastChannelAtStartup
-                                        preferences?.edit()?.putBoolean("play_last_channel_at_startup", playLastChannelAtStartup)?.apply()
+                                        startDestination = START_DESTINATIONS[
+                                            (START_DESTINATIONS.indexOf(startDestination) + 1) % START_DESTINATIONS.size
+                                        ]
+                                        preferences?.edit()?.putString("start_destination", startDestination.name)?.apply()
+                                    }
+                                    // Playing the last channel (and fullscreen) only exists with Live-TV as the start page.
+                                    if (startDestination == Destination.LIVE) {
+                                        SettingRow(
+                                            stringResource(R.string.start_last_channel),
+                                            Modifier,
+                                            selected = playLastChannelAtStartup
+                                        ) {
+                                            playLastChannelAtStartup = !playLastChannelAtStartup
+                                            preferences?.edit()?.putBoolean("play_last_channel_at_startup", playLastChannelAtStartup)?.apply()
+                                        }
+                                        if (playLastChannelAtStartup) SettingRow(
+                                            stringResource(R.string.start_in_fullscreen), Modifier, selected = startInFullscreen
+                                        ) {
+                                            startInFullscreen = !startInFullscreen
+                                            preferences?.edit()?.putBoolean("start_in_fullscreen", startInFullscreen)?.apply()
+                                        }
                                     }
                                 }
                                 SettingsSection.SOURCES -> {
@@ -8357,10 +8486,14 @@ private fun PlayerHome(
                         }
                         LaunchedEffect(pendingVodCategory, destination, visibleVodGroups, restoring) {
                             if (restoring || pendingVodCategory != destination || visibleVodGroups.isEmpty()) return@LaunchedEffect
-                            val previous = preferences?.getString(recentCategoryKey, null)
+                            // The start page begins with the first category; later visits reopen the last one.
+                            val previous = preferences?.getString(recentCategoryKey, null).takeUnless { startupFirstCategory }
                             pendingVodCategory = null
+                            startupFirstCategory = false
                             val group = visibleVodGroups.firstOrNull { it.id == previous } ?: visibleVodGroups.first()
-                            if (selectedGroup?.first != section || selectedGroup?.second?.id != group.id) openVodCategory(group)
+                            if (myAreaSection != section &&
+                                (selectedGroup?.first != section || selectedGroup?.second?.id != group.id)
+                            ) openVodCategory(group)
                         }
                         if (vodSection == section) {
                             PlaybackFeedback(starting, playbackError)
@@ -8734,6 +8867,107 @@ private fun PlayerHome(
                                     }
                                 }
                             }
+                        } else if (myAreaSection == section) {
+                            // Like the "My Netflix" page: one row each for continue watching,
+                            // the watchlist, (for series) announced episodes and recently watched.
+                            val movieSection = section == PortalSection.MOVIES
+                            fun reference(name: String, year: Int?, imdb: String?, tmdb: String?) =
+                                PortalTitle(name, year = year, imdbId = imdb, tmdbId = tmdb)
+                            val continueLabel = stringResource(R.string.continue_watching)
+                            val watchlistLabel = stringResource(R.string.watchlist)
+                            val upcomingLabel = stringResource(R.string.upcoming_series)
+                            val recentLabel = stringResource(R.string.recently_watched)
+                            val shelves: List<Pair<String, List<MyAreaCard>>> = if (movieSection) {
+                                fun unfinished(key: String): Boolean {
+                                    val position = progressPreferences?.getLong(key, 0L) ?: 0L
+                                    return progressPreferences?.getBoolean("completed:$key", false) != true && position > 0L &&
+                                        (progressPreferences?.getFloat("trakt_percent:$key", 0f) ?: 0f) < 90f
+                                }
+                                fun movieReference(entry: WatchedMovie) = reference(entry.name, entry.year, entry.imdb, entry.tmdb)
+                                val watched = movieHistory.filter {
+                                    hasPortalReference(PortalSection.MOVIES, movieReference(it), it.refs)
+                                }.sortedByDescending { it.watchedAt }
+                                val continuing = watched.filter { unfinished(it.progressKey) }.take(30).map { entry ->
+                                    val position = progressPreferences?.getLong(entry.progressKey, 0L) ?: 0L
+                                    MyAreaCard(
+                                        "c:${entry.progressKey}", movieReference(entry), entry.refs,
+                                        resources.getString(R.string.saved_playback_position, playbackTime(position)), 0
+                                    ) { openWatchedMovie(entry, resume = true) }
+                                }
+                                val bookmarks = movieBookmarks.filter { entry ->
+                                    entry.progressKey in watchlist &&
+                                        hasPortalReference(PortalSection.MOVIES, movieReference(entry), entry.refs)
+                                }
+                                val bookmarkKeys = movieBookmarks.map { it.progressKey }.toSet()
+                                // Older watchlist entries are only known as catalogue titles.
+                                val legacy = (catalogs[section]?.titles.orEmpty() + groupCatalog?.titles.orEmpty())
+                                    .distinctBy { titleKey(section, it) }
+                                    .filter { titleKey(section, it) in watchlist && titleKey(section, it) !in bookmarkKeys }
+                                listOf(
+                                    continueLabel to continuing,
+                                    watchlistLabel to bookmarks.map { entry ->
+                                        MyAreaCard("w:${entry.progressKey}", movieReference(entry), entry.refs, null, 0) {
+                                            openWatchedMovie(entry, resume = false)
+                                        }
+                                    } + legacy.map { title ->
+                                        MyAreaCard("l:${titleKey(section, title)}", title, emptyList(), null, 0) {
+                                            showTitle(section, title)
+                                        }
+                                    },
+                                    recentLabel to watched.take(20).map { entry ->
+                                        MyAreaCard("r:${entry.progressKey}", movieReference(entry), entry.refs, null, 0) {
+                                            openWatchedMovie(entry, resume = false)
+                                        }
+                                    }
+                                )
+                            } else {
+                                fun seriesReference(entry: TrackedSeries) = reference(entry.name, entry.year, entry.imdb, entry.tmdb)
+                                fun card(prefix: String, entry: TrackedSeries, caption: String?) = MyAreaCard(
+                                    "$prefix:${entry.key}", seriesReference(entry), entry.refs, caption, entry.unseen.size
+                                ) { openTrackedSeries(entry) }
+                                val playable = seriesActivity.filter {
+                                    hasPortalReference(PortalSection.SERIES, seriesReference(it), it.refs)
+                                }
+                                val dateFormat = java.time.format.DateTimeFormatter.ofPattern(
+                                    "EE, dd.MM.", resources.configuration.locales[0]
+                                )
+                                listOf(
+                                    continueLabel to playable.filter { it.continuable() }.sortedByDescending { it.watchedAt }
+                                        .map { entry ->
+                                            card("c", entry, resumeFor(entry)?.let { episode ->
+                                                episodeResumeLabel(episode, progressPreferences?.getLong(episode.progressKey, 0L) ?: 0L)
+                                            })
+                                        },
+                                    watchlistLabel to playable.filter { it.saved }.sortedBy { it.name }.map { card("w", it, null) },
+                                    upcomingLabel to upcomingSeries(playable, java.time.LocalDate.now()).map { (entry, date) ->
+                                        card("u", entry, date.format(dateFormat))
+                                    },
+                                    recentLabel to playable.filter { it.viewed && !it.hiddenFromHistory }
+                                        .sortedByDescending { it.watchedAt }.take(20).map { card("r", it, null) }
+                                )
+                            }
+                            Text(stringResource(R.string.my_area), style = MaterialTheme.typography.titleMedium)
+                            val filled = shelves.filter { it.second.isNotEmpty() }
+                            if (filled.isEmpty()) Text(stringResource(R.string.my_area_empty))
+                            val cardWidth = 118.dp
+                            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                                items(filled, key = { it.first }) { (label, cards) ->
+                                    Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                                        Text(label, style = MaterialTheme.typography.titleSmall)
+                                        LazyRow(
+                                            Modifier.fillMaxWidth().height(cardWidth * 1.5f + 72.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                        ) {
+                                            items(cards, key = { it.key }) { card ->
+                                                PosterShelfCard(
+                                                    historyArtwork(section, card.title, card.refs), cardWidth, card.unseen,
+                                                    caption = card.caption
+                                                ) { card.open() }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         } else {
                             val group = selectedGroup?.takeIf { it.first == section }?.second
                             val baseCatalog = catalogs[section]
@@ -8822,6 +9056,22 @@ private fun PlayerHome(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
+                        // Continue watching, watchlist, upcoming episodes and history in one place.
+                        MenuButton(
+                            stringResource(R.string.my_area), Modifier,
+                            selected = myAreaSection == section && !movieHistoryOpen && !movieWatchlistOpen &&
+                                seriesActivityView == null,
+                            count = if (section == PortalSection.SERIES) {
+                                seriesActivity.filter { it.saved || it.viewed }.sumOf { it.unseen.size }.takeIf { it > 0 }
+                            } else null
+                        ) {
+                            closeSeries()
+                            details = null
+                            movieHistoryOpen = false
+                            movieWatchlistOpen = false
+                            seriesActivityView = null
+                            myAreaSection = section
+                        }
                             visibleVodGroups.forEach { group ->
                                 MenuButton(
                                     group.name,
@@ -8836,7 +9086,8 @@ private fun PlayerHome(
                                     providerMarkOnly = providerCategoryStyle == ProviderCategoryStyle.SYMBOLS &&
                                         serviceCategory(group.name) != null,
                                     selected = selectedGroup?.first == section && selectedGroup?.second?.id == group.id &&
-                                        !movieHistoryOpen && !movieWatchlistOpen && seriesActivityView == null,
+                                        !movieHistoryOpen && !movieWatchlistOpen && seriesActivityView == null &&
+                                        myAreaSection != section,
                                     hiddenIndicator = categoryKey(section, group.id) in hiddenCategories,
                                     onLongPress = { categoryMenu = section to group.id }
                                 ) { openVodCategory(group) }
@@ -8846,69 +9097,6 @@ private fun PlayerHome(
                             Modifier
                         ) {
                             categoryMenu = section to null
-                        }
-                        MenuButton(
-                            stringResource(R.string.continue_watching), Modifier,
-                            selected = if (section == PortalSection.MOVIES) movieHistoryOpen && movieContinueOpen else
-                                seriesActivityView == SeriesActivityView.CONTINUE
-                        ) {
-                            closeSeries()
-                            details = null
-                            if (section == PortalSection.MOVIES) {
-                                movieWatchlistOpen = false
-                                movieContinueOpen = true
-                                movieHistoryOpen = true
-                            } else seriesActivityView = SeriesActivityView.CONTINUE
-                        }
-                        // "Bald verfügbar" only appears when a followed series really has an announced episode.
-                        val hasUpcoming = section == PortalSection.SERIES && remember(seriesActivity, savedSources) {
-                            upcomingSeries(seriesActivity, java.time.LocalDate.now()).any { (entry, _) ->
-                                hasPortalReference(
-                                    PortalSection.SERIES,
-                                    PortalTitle(entry.name, year = entry.year, imdbId = entry.imdb, tmdbId = entry.tmdb),
-                                    entry.refs
-                                )
-                            }
-                        }
-                        if (hasUpcoming) MenuButton(
-                            stringResource(R.string.upcoming_series), Modifier,
-                            selected = seriesActivityView == SeriesActivityView.UPCOMING
-                        ) {
-                            closeSeries()
-                            details = null
-                            seriesActivityView = SeriesActivityView.UPCOMING
-                        }
-                        MenuButton(
-                            stringResource(R.string.watchlist), Modifier,
-                            selected = if (section == PortalSection.MOVIES) movieWatchlistOpen else
-                                seriesActivityView == SeriesActivityView.WATCHLIST,
-                            count = if (section == PortalSection.SERIES) {
-                                seriesActivity.filter { it.saved }.sumOf { it.unseen.size }.takeIf { it > 0 }
-                            } else null
-                        ) {
-                            closeSeries()
-                            details = null
-                            if (section == PortalSection.MOVIES) {
-                                movieHistoryOpen = false
-                                movieWatchlistOpen = true
-                            } else seriesActivityView = SeriesActivityView.WATCHLIST
-                        }
-                        MenuButton(
-                            stringResource(if (section == PortalSection.MOVIES) R.string.movie_history else R.string.series_history),
-                            Modifier,
-                            selected = if (section == PortalSection.MOVIES) movieHistoryOpen && !movieContinueOpen else
-                                seriesActivityView == SeriesActivityView.HISTORY,
-                            count = if (section == PortalSection.SERIES) {
-                                seriesActivity.filter { it.viewed }.sumOf { it.unseen.size }.takeIf { it > 0 }
-                            } else null
-                        ) {
-                            closeSeries()
-                            details = null
-                            if (section == PortalSection.MOVIES) {
-                                movieWatchlistOpen = false
-                                movieContinueOpen = false
-                                movieHistoryOpen = true
-                            } else seriesActivityView = SeriesActivityView.HISTORY
                         }
                     }
                     if (restoring || connecting || ui.liveGroupsLoading || ui.traktBusy || startupPortalRefresh != null || startupPortalCheck != null ||
@@ -10530,6 +10718,8 @@ internal fun MenuButton(
     providerIcon: Int? = null,
     providerMarkOnly: Boolean = false,
     iconOnly: Boolean = false,
+    /** Selection shown in the accent colour (symbol, or the text without symbol) instead of a stripe. */
+    tintSelection: Boolean = false,
     enabled: Boolean = true,
     onFocused: (() -> Unit)? = null,
     onLongPress: (() -> Unit)? = null,
@@ -10568,7 +10758,7 @@ internal fun MenuButton(
             modifier = Modifier.heightIn(min = 48.dp).padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (selected) {
+            if (selected && !tintSelection) {
                 Box(Modifier.padding(end = 8.dp).width(3.dp).height(18.dp)
                     .background(accentBrush()))
             }
@@ -10607,7 +10797,8 @@ internal fun MenuButton(
                 Icon(
                     painterResource(icon),
                     contentDescription = label.takeIf { iconOnly },
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(20.dp),
+                    tint = if (selected && tintSelection) colors.primary else LocalContentColor.current
                 )
                 if (!iconOnly) Box(Modifier.width(9.dp))
             }
@@ -10618,6 +10809,7 @@ internal fun MenuButton(
             if ((!iconOnly || leadingIcon == null) && !providerMarkOnly) Text(
                 label,
                 modifier = if (count == null) Modifier else Modifier.weight(1f),
+                color = if (selected && tintSelection && leadingIcon == null) colors.primary else Color.Unspecified,
                 style = MaterialTheme.typography.labelLarge,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis

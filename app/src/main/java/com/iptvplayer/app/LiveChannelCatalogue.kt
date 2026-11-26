@@ -32,7 +32,8 @@ internal data class ChannelDescription(
     val category: LiveCategory,
     val qualities: List<String>
 ) {
-    val normalizedName: String get() = normalizedLabel(name)
+    // Read several times per channel while grouping and in the guide; computed once.
+    val normalizedName: String by lazy(LazyThreadSafetyMode.PUBLICATION) { normalizedLabel(name) }
 }
 
 internal data class LiveStreamVariant(
@@ -41,8 +42,9 @@ internal data class LiveStreamVariant(
 )
 
 internal data class LiveChannelGroup(val variants: List<LiveStreamVariant>) {
-    val description: ChannelDescription
-        get() {
+    // The guide reads description and identity for every channel on each pass (categories,
+    // last channel, EPG keys); both depend only on the fixed variants and are kept.
+    val description: ChannelDescription by lazy(LazyThreadSafetyMode.PUBLICATION) {
             val first = variants.first().description
             val category = if (variants.any { generalStation.matches(it.description.name) }) {
                 LiveCategory.GENERAL
@@ -50,11 +52,15 @@ internal data class LiveChannelGroup(val variants: List<LiveStreamVariant>) {
                 variants.firstOrNull { it.description.category != LiveCategory.GENERAL }
                     ?.description?.category ?: LiveCategory.GENERAL
             }
-            return first.copy(category = category)
+            first.copy(category = category)
         }
-    val identity: String? get() = comparisonName(description) ?: channelIdentity(variants.first().item.value)
+    val identity: String? by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        comparisonName(description) ?: channelIdentity(variants.first().item.value)
+    }
 }
 
+private val whitespaceRun = Regex("\\s+")
+private val editionSuffix = Regex("\\+\\s*\\d*$")
 private val separatorSegments = Regex("\\s*[|¦┃│]\\s*")
 private val leftMarker = Regex("^\\s*(?:[\\[({<【]([^\\])}>】]+)[\\])}>】]|[|¦┃│]\\s*([^|¦┃│]+?)\\s*[|¦┃│])\\s*")
 private val rightMarker = Regex("\\s*[\\[({<【]([^\\])}>】]+)[\\])}>】]\\s*$")
@@ -145,7 +151,7 @@ private fun parseChannelDescription(channel: StalkerChannel, providerCategory: S
             }
         }
     }
-    name = name.replace(Regex("\\s+"), " ").trim().ifBlank { channel.name.trim() }
+    name = name.replace(whitespaceRun, " ").trim().ifBlank { channel.name.trim() }
     val category = if (generalStation.matches(name)) LiveCategory.GENERAL
     else LiveCategory.entries.drop(1).firstOrNull { it.words.containsMatchIn(name) }
         ?: LiveCategory.entries.firstOrNull { it.words.containsMatchIn(providerLabel) }
@@ -216,7 +222,7 @@ internal fun buildLiveChannelGroups(
         val description = item.description
         val name = comparisonName(description)
         val epg = channelIdentity(item.item.value)?.let {
-            val edition = Regex("\\+\\s*\\d*$").find(description.normalizedName)?.value.orEmpty()
+            val edition = editionSuffix.find(description.normalizedName)?.value.orEmpty()
             "$it:${description.country}:${description.normalizedName}:$edition"
         }
         for (key in listOfNotNull(name, epg)) {

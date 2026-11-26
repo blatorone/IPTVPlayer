@@ -869,4 +869,9 @@
     <string name="pin_phone">Digitar no celular</string>
     <string name="pin_phone_close">Fechar código QR</string>
     <string name="pin_phone_hint">Escaneie o código com o celular e digite o PIN lá – ninguém vê na TV.</string>
+    <string name="my_area">Minha área</string>
+    <string name="my_area_empty">Aqui aparecem os títulos para continuar, os da Minha lista e os assistidos recentemente.</string>
+    <string name="recently_watched">Assistidos recentemente</string>
+    <string name="start_destination_setting">Página inicial: %1$s</string>
+    <string name="start_in_fullscreen">Iniciar o último canal em tela cheia</string>
 </resources>

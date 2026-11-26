@@ -864,4 +864,9 @@
     <string name="pin_phone">Fute në telefon</string>
     <string name="pin_phone_close">Mbyll kodin QR</string>
     <string name="pin_phone_hint">Skano kodin me telefonin dhe fut PIN-in atje – askush nuk e sheh në televizor.</string>
+    <string name="my_area">Hapësira ime</string>
+    <string name="my_area_empty">Këtu shfaqen titujt që mund t\'i vazhdosh, ata në listën për t\'u parë dhe ata të parë së fundi.</string>
+    <string name="recently_watched">Parë së fundi</string>
+    <string name="start_destination_setting">Faqja e nisjes: %1$s</string>
+    <string name="start_in_fullscreen">Nis kanalin e fundit në ekran të plotë</string>
 </resources>

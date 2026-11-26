@@ -1,5 +1,14 @@
 # Änderungen
 
+## 1.0.97
+
+- Filme und Serien: „Mein Bereich“ ersetzt Weiter schauen, Bald verfügbar, Merkliste und Verlauf. Er steht vorne in der Kategorie-Leiste und zeigt Reihen mit Postern: Weiter schauen, Merkliste, (bei Serien) Bald verfügbar und Zuletzt gesehen.
+- Startseite: Unter Allgemein lässt sich wählen, ob die App mit Live-TV, Filmen oder Serien startet. Filme und Serien öffnen die erste Kategorie; „Letzten Sender beim Start abspielen“ gibt es dann nicht, es wird nichts abgespielt.
+- Neu: „Letzten Sender im Vollbild starten“. Die App startet dann sofort im Vollbild (ohne kurz den Guide zu zeigen) und blendet oben links einmal die Senderinfo ein. Ausgeschaltet läuft der Sender im Guide-Vorschaubild.
+- Zurück-Taste: In Filmen und Serien bleibt immer eine Kategorie offen (vorher wurde der untere Bereich schwarz). Zurück führt zur Startseite und von dort aus der App.
+- Obere Leiste: Die aktuelle Seite zeigt das Symbol in der Akzentfarbe (ohne Symbole die Schrift) statt des Strichs.
+- Live-TV: Senderliste wird beim Start etwas schneller aufbereitet.
+
 ## 1.0.96
 
 - App-Updates: Die Markierung für ein neues Update steht wieder als kleine „1“ oben rechts neben „Einstellungen“ (in 1.0.95 ersetzte sie den Text).

@@ -1,5 +1,9 @@
 # Änderungen
 
+## 1.0.98
+
+- Diagnose: Beim Umschalten im Vollbild werden Messwerte (nur Zahlen, keine Sendernamen) im Diagnosebericht festgehalten, um den Fehler nach dem Vollbildstart zu finden.
+
 ## 1.0.97
 
 - Filme und Serien: „Mein Bereich“ ersetzt Weiter schauen, Bald verfügbar, Merkliste und Verlauf. Er steht vorne in der Kategorie-Leiste und zeigt Reihen mit Postern: Weiter schauen, Merkliste, (bei Serien) Bald verfügbar und Zuletzt gesehen.

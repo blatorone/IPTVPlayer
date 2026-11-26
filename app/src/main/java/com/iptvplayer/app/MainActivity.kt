@@ -3062,7 +3062,12 @@ private fun PlayerHome(
         liveRestoreKey: String? = null,
         stayInGuide: Boolean = false
     ) {
-        if (player == null || variants.isEmpty() || reopenPlayback(selection, openFullscreen = openFullscreenOnStart)) return
+        if (player == null || variants.isEmpty() || reopenPlayback(selection, openFullscreen = openFullscreenOnStart)) {
+            if (selection.section == PortalSection.LIVE) {
+                AppDiagnostics.record(context, "zap_not_started player:${player != null} variants:${variants.size}")
+            }
+            return
+        }
         // VOD stays on its detail page while the stream resolves and buffers.
         // The player listener opens fullscreen only once playback actually starts.
         // Live TV still opens immediately; automatic episode transitions stay fullscreen.
@@ -5266,8 +5271,13 @@ private fun PlayerHome(
         val currentChannel = if (vodSection == null) listedLiveChannel(starting ?: playing) else null
         val group = guideChannelCategory(category, groups, liveCategories, currentChannel)
         val channels = liveCategories[group].orEmpty()
-        if (channels.isEmpty()) return false
         val index = channels.indexOf(currentChannel)
+        // Only numbers and yes/no (no channel names): to find why switching failed after a fullscreen start.
+        AppDiagnostics.record(context,
+            "zap step:$step groups:${groups.size} size:${channels.size} index:$index starting:${starting != null} " +
+                "playing:${playing != null} listed:${currentChannel in liveGroups} cached:${ui.cachedStartupAttempt} " +
+                "catIn:${category in groups}")
+        if (channels.isEmpty()) return false
         val next = if (index < 0) {
             if (step > 0) channels.first() else channels.last()
         } else channels[Math.floorMod(index + step, channels.size)]
@@ -6632,8 +6642,12 @@ private fun PlayerHome(
                 if (selected != episodeActionSelection) requestEpisodeActionFocus(selected)
                 return
             }
-            if (runMappedControl(input)) return
+            if (runMappedControl(input)) {
+                if (input.vertical) AppDiagnostics.record(context, "zap_mapped")
+                return
+            }
             if (input.vertical) {
+                AppDiagnostics.record(context, "zap_input live:$live grid:${fullscreenGuidePanel == GuidePanel.GRID}")
                 if (live && fullscreenGuidePanel == GuidePanel.GRID) {
                     changeLiveChannel(if (input == GuideInput.REMOTE_UP || input == GuideInput.SWIPE_UP) 1 else -1)
                 }

@@ -914,4 +914,12 @@
     <string name="backup_imported_restart">Backup imported – the app restarts.</string>
     <string name="backup_via_phone">Download or upload via the phone</string>
     <string name="remote_gradient_none">No gradient</string>
+    <string name="buffer_setting">Buffer</string>
+    <string name="buffer_size_setting">Buffer size: %1$s</string>
+    <string name="buffer_small">Small (2 s)</string>
+    <string name="buffer_medium">Medium (4 s, recommended)</string>
+    <string name="buffer_large">Large (8 s)</string>
+    <string name="buffer_very_large">Very large (15 s)</string>
+    <string name="buffer_hint">A buffer starts a little later but stutters less on unsteady streams. Recommended: Medium.</string>
+    <string name="buffer_restart_hint">Applies from the next start of the app.</string>
 </resources>

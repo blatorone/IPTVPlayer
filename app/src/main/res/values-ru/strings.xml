@@ -924,4 +924,12 @@
     <string name="backup_imported_restart">Копия импортирована – приложение перезапускается.</string>
     <string name="backup_via_phone">Скачать или загрузить через телефон</string>
     <string name="remote_gradient_none">Без градиента</string>
+    <string name="buffer_setting">Буфер</string>
+    <string name="buffer_size_setting">Размер буфера: %1$s</string>
+    <string name="buffer_small">Маленький (2 с)</string>
+    <string name="buffer_medium">Средний (4 с, рекомендуется)</string>
+    <string name="buffer_large">Большой (8 с)</string>
+    <string name="buffer_very_large">Очень большой (15 с)</string>
+    <string name="buffer_hint">С буфером воспроизведение начинается чуть позже, но реже подтормаживает на нестабильных потоках. Рекомендуется: средний.</string>
+    <string name="buffer_restart_hint">Действует со следующего запуска приложения.</string>
 </resources>

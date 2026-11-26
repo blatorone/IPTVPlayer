@@ -914,4 +914,12 @@
     <string name="backup_imported_restart">Backup importiert – die App startet neu.</string>
     <string name="backup_via_phone">Über das Handy herunterladen oder hochladen</string>
     <string name="remote_gradient_none">Kein Farbverlauf</string>
+    <string name="buffer_setting">Puffer</string>
+    <string name="buffer_size_setting">Puffergröße: %1$s</string>
+    <string name="buffer_small">Klein (2 s)</string>
+    <string name="buffer_medium">Mittel (4 s, empfohlen)</string>
+    <string name="buffer_large">Groß (8 s)</string>
+    <string name="buffer_very_large">Sehr groß (15 s)</string>
+    <string name="buffer_hint">Ein Puffer startet etwas später, stockt aber seltener bei wackligen Streams. Empfohlen: Mittel.</string>
+    <string name="buffer_restart_hint">Gilt ab dem nächsten Start der App.</string>
 </resources>

@@ -919,4 +919,12 @@
     <string name="backup_imported_restart">Backup importato: l\'app si riavvia.</string>
     <string name="backup_via_phone">Scarica o carica tramite il telefono</string>
     <string name="remote_gradient_none">Nessuna sfumatura</string>
+    <string name="buffer_setting">Buffer</string>
+    <string name="buffer_size_setting">Dimensione buffer: %1$s</string>
+    <string name="buffer_small">Piccolo (2 s)</string>
+    <string name="buffer_medium">Medio (4 s, consigliato)</string>
+    <string name="buffer_large">Grande (8 s)</string>
+    <string name="buffer_very_large">Molto grande (15 s)</string>
+    <string name="buffer_hint">Con il buffer la riproduzione parte un po\' più tardi ma si blocca meno con stream instabili. Consigliato: medio.</string>
+    <string name="buffer_restart_hint">Vale dal prossimo avvio dell\'app.</string>
 </resources>

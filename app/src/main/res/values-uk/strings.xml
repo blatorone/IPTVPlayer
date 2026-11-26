@@ -924,4 +924,12 @@
     <string name="backup_imported_restart">Копію імпортовано – застосунок перезапускається.</string>
     <string name="backup_via_phone">Завантажити або надіслати через телефон</string>
     <string name="remote_gradient_none">Без градієнта</string>
+    <string name="buffer_setting">Буфер</string>
+    <string name="buffer_size_setting">Розмір буфера: %1$s</string>
+    <string name="buffer_small">Малий (2 с)</string>
+    <string name="buffer_medium">Середній (4 с, рекомендовано)</string>
+    <string name="buffer_large">Великий (8 с)</string>
+    <string name="buffer_very_large">Дуже великий (15 с)</string>
+    <string name="buffer_hint">З буфером відтворення починається трохи пізніше, але рідше зависає на нестабільних потоках. Рекомендовано: середній.</string>
+    <string name="buffer_restart_hint">Діє з наступного запуску застосунку.</string>
 </resources>

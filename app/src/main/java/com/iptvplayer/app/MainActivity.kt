@@ -245,7 +245,8 @@ class MainActivity : ComponentActivity() {
                 super.buildAudioSink(context, enableFloatOutput, enableAudioOutputPlaybackParams)
                     ?.let { EpisodeAudioTapSink(it, decodeEncoded = decodeAudioForIntro) }
         }
-        player = ExoPlayer.Builder(this, renderers).build().also { activePlayer ->
+        // Optional buffer (Wiedergabe → Puffer); off keeps the player's usual values.
+        player = ExoPlayer.Builder(this, renderers).setLoadControl(bufferLoadControl(chosenBuffer(this))).build().also { activePlayer ->
             activePlayer.trackSelectionParameters = activePlayer.trackSelectionParameters
                 .buildUpon()
                 .setPreferredAudioLanguage(java.util.Locale.getDefault().language)
@@ -5279,6 +5280,9 @@ private fun PlayerHome(
         category = group
         selected = Destination.LIVE
         playChannel(next, openFullscreenOnStart = fullscreen)
+        // Every switch in fullscreen shows the channel info at the top left (it takes no focus,
+        // so up/down keep switching while it is visible).
+        if (fullscreen) startupInfoVisible = true
         return true
     }
     fun runMappedControl(input: GuideInput): Boolean {
@@ -8000,6 +8004,7 @@ private fun PlayerHome(
                                     }
                                 }
                                 SettingsSection.PLAYBACK -> {
+                                    BufferSettings()
                                     SettingRow(stringResource(R.string.episode_settings), Modifier) { openSettingsPage { ui.episodeSettingsOpen = true } }
                                     SettingRow(
                                         stringResource(

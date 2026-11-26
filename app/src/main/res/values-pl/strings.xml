@@ -924,4 +924,12 @@
     <string name="backup_imported_restart">Kopia zaimportowana – aplikacja uruchamia się ponownie.</string>
     <string name="backup_via_phone">Pobierz lub wyślij przez telefon</string>
     <string name="remote_gradient_none">Bez gradientu</string>
+    <string name="buffer_setting">Bufor</string>
+    <string name="buffer_size_setting">Rozmiar bufora: %1$s</string>
+    <string name="buffer_small">Mały (2 s)</string>
+    <string name="buffer_medium">Średni (4 s, zalecany)</string>
+    <string name="buffer_large">Duży (8 s)</string>
+    <string name="buffer_very_large">Bardzo duży (15 s)</string>
+    <string name="buffer_hint">Bufor startuje nieco później, ale rzadziej się zacina przy niestabilnych strumieniach. Zalecany: średni.</string>
+    <string name="buffer_restart_hint">Obowiązuje od następnego uruchomienia aplikacji.</string>
 </resources>

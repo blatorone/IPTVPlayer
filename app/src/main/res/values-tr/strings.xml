@@ -914,4 +914,12 @@
     <string name="backup_imported_restart">Yedek içe aktarıldı – uygulama yeniden başlıyor.</string>
     <string name="backup_via_phone">Telefonla indir veya yükle</string>
     <string name="remote_gradient_none">Renk geçişi yok</string>
+    <string name="buffer_setting">Arabellek</string>
+    <string name="buffer_size_setting">Arabellek boyutu: %1$s</string>
+    <string name="buffer_small">Küçük (2 sn)</string>
+    <string name="buffer_medium">Orta (4 sn, önerilen)</string>
+    <string name="buffer_large">Büyük (8 sn)</string>
+    <string name="buffer_very_large">Çok büyük (15 sn)</string>
+    <string name="buffer_hint">Arabellek biraz daha geç başlar ama dengesiz yayınlarda daha az takılır. Önerilen: Orta.</string>
+    <string name="buffer_restart_hint">Uygulamanın bir sonraki açılışından itibaren geçerli.</string>
 </resources>

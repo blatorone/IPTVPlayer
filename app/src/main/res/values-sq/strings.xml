@@ -914,4 +914,12 @@
     <string name="backup_imported_restart">Kopja u importua – aplikacioni po rinis.</string>
     <string name="backup_via_phone">Shkarko ose ngarko përmes telefonit</string>
     <string name="remote_gradient_none">Pa gradient</string>
+    <string name="buffer_setting">Buferi</string>
+    <string name="buffer_size_setting">Madhësia e buferit: %1$s</string>
+    <string name="buffer_small">I vogël (2 s)</string>
+    <string name="buffer_medium">Mesatar (4 s, i rekomanduar)</string>
+    <string name="buffer_large">I madh (8 s)</string>
+    <string name="buffer_very_large">Shumë i madh (15 s)</string>
+    <string name="buffer_hint">Me buferin luajtja nis pak më vonë, por ngec më rrallë te transmetimet e paqëndrueshme. I rekomanduar: mesatar.</string>
+    <string name="buffer_restart_hint">Vlen nga nisja e ardhshme e aplikacionit.</string>
 </resources>

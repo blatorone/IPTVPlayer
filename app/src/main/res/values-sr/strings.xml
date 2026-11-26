@@ -919,4 +919,12 @@
     <string name="backup_imported_restart">Копија увезена – апликација се поново покреће.</string>
     <string name="backup_via_phone">Преузми или отпреми преко телефона</string>
     <string name="remote_gradient_none">Без прелаза боја</string>
+    <string name="buffer_setting">Бафер</string>
+    <string name="buffer_size_setting">Величина бафера: %1$s</string>
+    <string name="buffer_small">Мали (2 с)</string>
+    <string name="buffer_medium">Средњи (4 с, препоручено)</string>
+    <string name="buffer_large">Велики (8 с)</string>
+    <string name="buffer_very_large">Веома велики (15 с)</string>
+    <string name="buffer_hint">Са бафером репродукција креће мало касније, али ређе застаје код нестабилних стримова. Препоручено: средњи.</string>
+    <string name="buffer_restart_hint">Важи од следећег покретања апликације.</string>
 </resources>

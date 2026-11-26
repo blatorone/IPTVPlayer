@@ -919,4 +919,12 @@
     <string name="backup_imported_restart">Kopija uvezena – aplikacija se ponovno pokreće.</string>
     <string name="backup_via_phone">Preuzmi ili učitaj putem mobitela</string>
     <string name="remote_gradient_none">Bez prijelaza boja</string>
+    <string name="buffer_setting">Međuspremnik</string>
+    <string name="buffer_size_setting">Veličina međuspremnika: %1$s</string>
+    <string name="buffer_small">Mali (2 s)</string>
+    <string name="buffer_medium">Srednji (4 s, preporučeno)</string>
+    <string name="buffer_large">Veliki (8 s)</string>
+    <string name="buffer_very_large">Vrlo veliki (15 s)</string>
+    <string name="buffer_hint">S međuspremnikom reprodukcija kreće malo kasnije, ali rjeđe zastajkuje kod nestabilnih streamova. Preporučeno: srednji.</string>
+    <string name="buffer_restart_hint">Vrijedi od sljedećeg pokretanja aplikacije.</string>
 </resources>

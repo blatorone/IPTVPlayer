@@ -919,4 +919,12 @@
     <string name="backup_imported_restart">Copia importada: la app se reinicia.</string>
     <string name="backup_via_phone">Descargar o subir con el móvil</string>
     <string name="remote_gradient_none">Sin degradado</string>
+    <string name="buffer_setting">Búfer</string>
+    <string name="buffer_size_setting">Tamaño del búfer: %1$s</string>
+    <string name="buffer_small">Pequeño (2 s)</string>
+    <string name="buffer_medium">Medio (4 s, recomendado)</string>
+    <string name="buffer_large">Grande (8 s)</string>
+    <string name="buffer_very_large">Muy grande (15 s)</string>
+    <string name="buffer_hint">Con búfer la reproducción empieza un poco más tarde, pero se corta menos en streams inestables. Recomendado: medio.</string>
+    <string name="buffer_restart_hint">Se aplica a partir del próximo inicio de la app.</string>
 </resources>

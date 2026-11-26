@@ -934,4 +934,12 @@
     <string name="backup_imported_restart">تم استيراد النسخة – يُعاد تشغيل التطبيق.</string>
     <string name="backup_via_phone">التنزيل أو الرفع عبر الهاتف</string>
     <string name="remote_gradient_none">بدون تدرج لوني</string>
+    <string name="buffer_setting">التخزين المؤقت</string>
+    <string name="buffer_size_setting">حجم التخزين المؤقت: %1$s</string>
+    <string name="buffer_small">صغير (2 ث)</string>
+    <string name="buffer_medium">متوسط (4 ث، موصى به)</string>
+    <string name="buffer_large">كبير (8 ث)</string>
+    <string name="buffer_very_large">كبير جدًا (15 ث)</string>
+    <string name="buffer_hint">يبدأ التشغيل مع التخزين المؤقت متأخرًا قليلًا لكنه يتقطع أقل مع البث غير المستقر. الموصى به: متوسط.</string>
+    <string name="buffer_restart_hint">يسري من التشغيل التالي للتطبيق.</string>
 </resources>

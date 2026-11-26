@@ -114,7 +114,16 @@ internal data class TraktTitleMetadata(
     val certification: String? = null
 )
 
-internal class TraktApi(private val clientId: String, private val clientSecret: String? = null) {
+/** Resolves a string resource (the client has no Context of its own). */
+internal fun interface TraktText {
+    fun get(id: Int, vararg args: Any): String
+}
+
+internal class TraktApi(
+    private val clientId: String,
+    private val clientSecret: String? = null,
+    private val strings: TraktText
+) {
     private data class Response(val status: Int, val body: String, val pageCount: Int?)
 
     init {
@@ -123,8 +132,8 @@ internal class TraktApi(private val clientId: String, private val clientSecret: 
 
     suspend fun beginDeviceAuthorization(): TraktDeviceCode {
         val json = request("/oauth/device/code", "POST", JSONObject().put("client_id", clientId)).jsonObject()
-        val code = json.optString("device_code").takeIf(String::isNotBlank) ?: error("Trakt hat keinen Gerätecode geliefert.")
-        val userCode = json.optString("user_code").takeIf(String::isNotBlank) ?: error("Trakt hat keinen Bestätigungscode geliefert.")
+        val code = json.optString("device_code").takeIf(String::isNotBlank) ?: error(strings.get(R.string.trakt_error_no_device_code))
+        val userCode = json.optString("user_code").takeIf(String::isNotBlank) ?: error(strings.get(R.string.trakt_error_no_user_code))
         val completeFromApi = json.optString("verification_url_complete")
         val verify = sequenceOf(
             json.optString("verification_url"), completeFromApi.substringBefore('?')
@@ -152,9 +161,9 @@ internal class TraktApi(private val clientId: String, private val clientSecret: 
             error.status == 400 || error.apiCode == "authorization_pending" -> TraktDevicePoll.Pending
             error.status == 429 || error.apiCode == "slow_down" -> TraktDevicePoll.SlowDown
             error.status == 410 || error.apiCode == "expired_token" ->
-                throw TraktApiException(error.status, error.apiCode, "Der Trakt-Bestätigungscode ist abgelaufen. Bitte erneut verbinden.")
+                throw TraktApiException(error.status, error.apiCode, strings.get(R.string.trakt_error_code_expired))
             error.status == 418 || error.apiCode == "access_denied" ->
-                throw TraktApiException(error.status, error.apiCode, "Die Trakt-Verknüpfung wurde abgelehnt.")
+                throw TraktApiException(error.status, error.apiCode, strings.get(R.string.trakt_error_denied))
             else -> throw error
         }
     }
@@ -534,12 +543,12 @@ internal class TraktApi(private val clientId: String, private val clientSecret: 
         var pageCount: Int? = null
         var hasMore = true
         do {
-            val kindLabel = if (section == PortalSection.MOVIES) "Filme" else "Folgen"
-            onProgress("Lade Trakt-Wiedergabestände ($kindLabel)…")
+            val kindLabel = strings.get(if (section == PortalSection.MOVIES) R.string.destination_movies else R.string.series_overlay_episodes)
+            onProgress(strings.get(R.string.trakt_progress_playback_start, kindLabel))
             val response = request("$path?page=$page&limit=100", "GET", token = token)
             val array = response.jsonArray()
             pageCount = response.pageCount ?: pageCount
-            onProgress("Lade Wiedergabestände ($kindLabel): Seite $page${pageCount?.let { " von $it" } ?: ""}")
+            onProgress(strings.get(R.string.trakt_progress_playback_page, kindLabel, pageText(page, pageCount)))
             hasMore = array.length() == 100
             for (index in 0 until array.length()) {
                 val row = array.optJSONObject(index) ?: continue
@@ -560,21 +569,21 @@ internal class TraktApi(private val clientId: String, private val clientSecret: 
                 if (model.name.isNotBlank()) result += model
             }
             page++
-            if (page > 1_000) error("Trakt hat ungewöhnlich viele Wiedergabestände geliefert; der Import wurde begrenzt.")
+            if (page > 1_000) error(strings.get(R.string.trakt_error_too_many_playback))
         } while (pageCount?.let { page <= it } ?: hasMore)
         return result
     }
 
     suspend fun scrobble(action: String, item: TraktMedia, accessToken: String, progress: Float) {
         require(action in setOf("start", "pause", "stop"))
-        require(item.ids().length() > 0) { "Für diesen Titel fehlen Trakt-, IMDb- oder TMDB-IDs." }
+        require(item.ids().length() > 0) { strings.get(R.string.trakt_error_scrobble_ids) }
         val media = JSONObject().put("title", item.name).put("ids", item.ids())
         val body = JSONObject().put("progress", progress.coerceIn(0f, 100f))
         if (item.section == PortalSection.MOVIES) {
             body.put("movie", media)
         } else {
             require((item.seasonNumber ?: 0) >= 0 && (item.episodeNumber ?: 0) > 0) {
-                "Für diese Folge fehlen Staffel- oder Folgennummer."
+                strings.get(R.string.trakt_error_episode_numbers)
             }
             body.put("show", media).put(
                 "episode", JSONObject().put("season", item.seasonNumber).put("number", item.episodeNumber)
@@ -584,7 +593,7 @@ internal class TraktApi(private val clientId: String, private val clientSecret: 
     }
 
     suspend fun setWatchlistItem(accessToken: String, item: TraktMedia, saved: Boolean) {
-        require(item.ids().length() > 0) { "Für diesen Titel fehlen IMDb-, TMDB- und Trakt-ID." }
+        require(item.ids().length() > 0) { strings.get(R.string.trakt_error_watchlist_ids) }
         val collection = JSONObject().put(
             if (item.section == PortalSection.MOVIES) "movies" else "shows",
             JSONArray().put(JSONObject().put("ids", item.ids()))
@@ -629,11 +638,11 @@ internal class TraktApi(private val clientId: String, private val clientSecret: 
             val array = response.jsonArray()
             pageCount = response.pageCount ?: pageCount
             val label = when (path) {
-                "/sync/watchlist/movies", "/sync/watchlist/shows" -> "Merkliste"
-                "/sync/watched/movies", "/sync/watched/shows" -> "Gesehene Titel"
-                else -> "Trakt-Daten"
+                "/sync/watchlist/movies", "/sync/watchlist/shows" -> strings.get(R.string.trakt_label_watchlist)
+                "/sync/watched/movies", "/sync/watched/shows" -> strings.get(R.string.trakt_label_watched)
+                else -> strings.get(R.string.trakt_label_data)
             }
-            onProgress("Lade $label: Seite $page${pageCount?.let { " von $it" } ?: ""}")
+            onProgress(strings.get(R.string.trakt_progress_items, label, pageText(page, pageCount)))
             for (entry in 0 until array.length()) {
                 val row = array.optJSONObject(entry) ?: continue
                 val media = row.optJSONObject(if (section == PortalSection.MOVIES) "movie" else "show")
@@ -655,7 +664,7 @@ internal class TraktApi(private val clientId: String, private val clientSecret: 
                 ).takeIf { it.name.isNotBlank() } ?: continue
             }
             page++
-            if (page > 1_000) error("Trakt hat ungewöhnlich viele Ergebnisse geliefert; der Import wurde begrenzt.")
+            if (page > 1_000) error(strings.get(R.string.trakt_error_too_many_results))
         } while ((pageCount?.let { page <= it } ?: (array.length() == 100)) &&
             (maxItems == null || result.size < maxItems))
         return result
@@ -676,7 +685,7 @@ internal class TraktApi(private val clientId: String, private val clientSecret: 
             val response = request("/sync/watched/shows?page=$page&limit=100&extended=progress", "GET", token = token)
             val rows = response.jsonArray()
             pageCount = response.pageCount ?: pageCount
-            onProgress("Lade gesehene Serien: Seite $page${pageCount?.let { " von $it" } ?: ""}")
+            onProgress(strings.get(R.string.trakt_progress_watched_page, pageText(page, pageCount)))
             for (index in 0 until rows.length()) {
                 val row = rows.optJSONObject(index) ?: continue
                 val show = row.optJSONObject("show") ?: continue
@@ -717,7 +726,7 @@ internal class TraktApi(private val clientId: String, private val clientSecret: 
                 if (aired > 0) progress += TraktSeriesProgress(showMedia, completedEpisodes, aired)
             }
             page++
-            if (page > 1_000) error("Trakt hat ungewöhnlich viele Serien geliefert; der Import wurde begrenzt.")
+            if (page > 1_000) error(strings.get(R.string.trakt_error_too_many_series))
         } while (pageCount?.let { page <= it } ?: (rows.length() == 100))
         return Triple(shows, episodes, progress)
     }
@@ -744,7 +753,7 @@ internal class TraktApi(private val clientId: String, private val clientSecret: 
                         )
                     }.getOrNull()
                     val done = completed.incrementAndGet()
-                    if (done % 10 == 0 || done == unique.size) onProgress("Prüfe Serienfortschritt: $done / ${unique.size}")
+                    if (done % 10 == 0 || done == unique.size) onProgress(strings.get(R.string.trakt_progress_series_progress, done, unique.size))
                     result
                 }
             }
@@ -759,7 +768,7 @@ internal class TraktApi(private val clientId: String, private val clientSecret: 
         val recentShows = linkedSetOf<String>()
         val response = request("/sync/history/episodes?page=1&limit=100", "GET", token = token)
         val rows = response.jsonArray()
-        onProgress("Prüfe die letzten Trakt-Folgen")
+        onProgress(strings.get(R.string.trakt_progress_recent_episodes))
         for (index in 0 until rows.length()) {
             val row = rows.optJSONObject(index) ?: continue
             val show = row.optJSONObject("show") ?: continue
@@ -829,19 +838,22 @@ internal class TraktApi(private val clientId: String, private val clientSecret: 
             } catch (error: TraktApiException) {
                 throw error
             } catch (error: Exception) {
-                throw TraktApiException(null, null, "Trakt ist momentan nicht erreichbar: ${error.message.orEmpty()}")
+                throw TraktApiException(null, null, strings.get(R.string.trakt_error_unreachable, error.message.orEmpty()))
             } finally {
                 connection?.disconnect()
             }
         }
-        error("Trakt-Anfrage fehlgeschlagen.")
+        error(strings.get(R.string.trakt_error_request_failed))
     }
+
+    private fun pageText(page: Int, pageCount: Int?): String =
+        if (pageCount != null) strings.get(R.string.trakt_page_of, page, pageCount) else strings.get(R.string.trakt_page, page)
 
     private fun JSONObject.withSecret(): JSONObject = apply { clientSecret?.let { put("client_secret", it) } }
 
     private fun JSONObject.session(clientId: String, username: String = "Trakt"): TraktSession {
-        val access = optString("access_token").takeIf(String::isNotBlank) ?: error("Trakt hat kein Zugriffstoken geliefert.")
-        val refresh = optString("refresh_token").takeIf(String::isNotBlank) ?: error("Trakt hat kein Erneuerungstoken geliefert.")
+        val access = optString("access_token").takeIf(String::isNotBlank) ?: error(strings.get(R.string.trakt_error_no_access_token))
+        val refresh = optString("refresh_token").takeIf(String::isNotBlank) ?: error(strings.get(R.string.trakt_error_no_refresh_token))
         return TraktSession(
             clientId, access, refresh,
             System.currentTimeMillis() + optLong("expires_in", 0).coerceAtLeast(0) * 1_000L,

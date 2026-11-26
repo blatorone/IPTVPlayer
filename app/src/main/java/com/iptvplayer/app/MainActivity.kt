@@ -1316,7 +1316,7 @@ private fun PlayerHome(
         var session = storage?.readTraktSession(separateKidsData) ?: traktSession
             ?: error(context.getString(R.string.trakt_not_connected))
         // A connected account keeps the API app it was connected with.
-        val api = TraktApi(session.clientId, session.clientSecret)
+        val api = TraktApi(session.clientId, session.clientSecret) { id, args -> context.getString(id, *args) }
         if (session.expiresAtMillis <= System.currentTimeMillis() + 60_000L) {
             session = api.refresh(session)
             storage?.writeTraktSession(session, separateKidsData)
@@ -1349,7 +1349,7 @@ private fun PlayerHome(
         traktStatus = null
         scope.launch {
             try {
-                val api = TraktApi(app.clientId, app.clientSecret)
+                val api = TraktApi(app.clientId, app.clientSecret) { id, args -> context.getString(id, *args) }
                 val code = api.beginDeviceAuthorization()
                 traktDeviceCode = code
                 var interval = code.intervalSeconds
@@ -1625,7 +1625,7 @@ private fun PlayerHome(
                         )).copy(saved = true, refs = (existing?.refs.orEmpty() + refs).distinct())
                         updatedSeries[keyForSeries] = tracked
                     }
-                    reportImportProgress("Importiere Merkliste", index, library.watchlist.size)
+                    reportImportProgress(context.getString(R.string.trakt_import_watchlist), index, library.watchlist.size)
                 }
                 for ((index, media) in library.watched.withIndex()) {
                     val entries = localMatches(media, searchPortalIfMissing = true)
@@ -1650,7 +1650,7 @@ private fun PlayerHome(
                         )).copy(viewed = true, watchedAt = media.watchedAtMillis ?: System.currentTimeMillis(), refs = (existing?.refs.orEmpty() + refs).distinct())
                         updatedSeries[key] = tracked
                     }
-                    reportImportProgress("Importiere gesehene Titel", index, library.watched.size)
+                    reportImportProgress(context.getString(R.string.trakt_import_watched), index, library.watched.size)
                 }
                 val sortedWatchedEpisodes = library.watchedEpisodes.sortedBy { it.watchedAtMillis ?: 0L }
                 if (sortedWatchedEpisodes.isNotEmpty()) {
@@ -1675,7 +1675,7 @@ private fun PlayerHome(
                     }
                     if (episodesToApply.isEmpty()) {
                         processedWatchedEpisodes += episodes.size
-                        reportImportProgress("Prüfe gesehene Folgen", processedWatchedEpisodes - 1, sortedWatchedEpisodes.size)
+                        reportImportProgress(context.getString(R.string.trakt_import_check_episodes), processedWatchedEpisodes - 1, sortedWatchedEpisodes.size)
                         continue
                     }
                     val entries = if (cachedSeries == null) {
@@ -1749,7 +1749,7 @@ private fun PlayerHome(
                     updatedSeries[trackedKey] = tracked
                     matched += watchedKeys.size
                     processedWatchedEpisodes += episodes.size
-                    reportImportProgress("Markiere gesehene Folgen", processedWatchedEpisodes - 1, sortedWatchedEpisodes.size)
+                    reportImportProgress(context.getString(R.string.trakt_import_mark_episodes), processedWatchedEpisodes - 1, sortedWatchedEpisodes.size)
                 }
                 for ((index, media) in library.playback.withIndex()) {
                     val percent = media.progressPercent?.takeIf { it > 0f } ?: continue
@@ -1800,7 +1800,7 @@ private fun PlayerHome(
                         updatedSeries[trackedKey] = tracked
                     }
                     matched++
-                    reportImportProgress("Importiere Wiedergabestände", index, library.playback.size)
+                    reportImportProgress(context.getString(R.string.trakt_import_playback), index, library.playback.size)
                 }
                 for ((index, progress) in library.seriesProgress.withIndex()) {
                     val media = progress.show
@@ -1820,7 +1820,7 @@ private fun PlayerHome(
                         watchedAt = maxOf(old?.watchedAt ?: 0L, media.watchedAtMillis ?: 0L),
                         isComplete = progress.isComplete
                     )
-                    reportImportProgress("Prüfe Serienfortschritt", index, library.seriesProgress.size)
+                    reportImportProgress(context.getString(R.string.trakt_import_series_progress), index, library.seriesProgress.size)
                 }
                 watchlist = updatedWatchlist
                 movieBookmarks = updatedMovieBookmarks.values.toList()
@@ -5485,11 +5485,11 @@ private fun PlayerHome(
                         category = null
                     })
                 }
-                add(RemoteEntry.Action("refreshAll", library, text(R.string.refresh_all_sources), "Aktualisieren") {
-                    if (connecting || restoring) "Portale werden gerade geladen." else if (savedSources.isEmpty()) "Kein Portal vorhanden."
-                    else { refreshSources(savedSources); "Alle Portale werden aktualisiert." }
+                add(RemoteEntry.Action("refreshAll", library, text(R.string.refresh_all_sources), text(R.string.remote_action_refresh)) {
+                    if (connecting || restoring) text(R.string.remote_msg_portals_loading_now) else if (savedSources.isEmpty()) text(R.string.remote_msg_no_portal)
+                    else { refreshSources(savedSources); text(R.string.remote_msg_all_refreshing) }
                 })
-                add(RemoteEntry.Choice("epgSource", guide, "EPG-Quelle", listOf(
+                add(RemoteEntry.Choice("epgSource", guide, text(R.string.remote_epg_source), listOf(
                     RemoteOption("PROVIDER", text(R.string.epg_provider)), RemoteOption("CUSTOM", text(R.string.epg_custom))
                 ), { if (useXmlTv) "CUSTOM" else "PROVIDER" }) {
                     useXmlTv = it == "CUSTOM"
@@ -5497,35 +5497,35 @@ private fun PlayerHome(
                 })
                 xmlTvSources.forEachIndexed { index, url ->
                     add(RemoteEntry.Action("epgRemove$index", guide, "${index + 1}. " + (guideSourceUri(url)?.host ?: url),
-                        "Entfernen") {
-                        if (ui.epgSourceSaving) "Bitte kurz warten." else { saveEpgSources(xmlTvSources.filterNot { it == url }); "Quelle entfernt." }
+                        text(R.string.epg_remove_source)) {
+                        if (ui.epgSourceSaving) text(R.string.remote_msg_wait) else { saveEpgSources(xmlTvSources.filterNot { it == url }); text(R.string.remote_msg_source_removed) }
                     }.shownIf("epgSource", "CUSTOM"))
                 }
                 add(RemoteEntry.Input("epgAdd", guide, text(R.string.epg_add_source), text(R.string.epg_source_url), false,
-                    "Hinzufügen") { value ->
+                    text(R.string.remote_action_add)) { value ->
                     val source = guideSourceUri(value.trim())?.toASCIIString()
                     when {
-                        source == null -> "Die Adresse ist ungültig."
-                        source in xmlTvSources -> "Diese Quelle ist schon vorhanden."
-                        ui.epgSourceSaving || !xmlTvSourcesLoaded -> "Bitte kurz warten."
-                        else -> { saveEpgSources(xmlTvSources + source); "Quelle hinzugefügt." }
+                        source == null -> text(R.string.remote_msg_address_invalid)
+                        source in xmlTvSources -> text(R.string.remote_msg_source_exists)
+                        ui.epgSourceSaving || !xmlTvSourcesLoaded -> text(R.string.remote_msg_wait)
+                        else -> { saveEpgSources(xmlTvSources + source); text(R.string.remote_msg_source_added) }
                     }
                 }.shownIf("epgSource", "CUSTOM"))
                 add(toggle("epgAtStart", guide, "EPG: " + text(R.string.epg_refresh_at_start), { epgAtStartup },
                     "epg_at_startup") { epgAtStartup = it })
                 add(RemoteEntry.Choice(
-                    "epgRefresh", guide, "EPG automatisch aktualisieren",
+                    "epgRefresh", guide, text(R.string.remote_epg_refresh_auto),
                     listOf(0, 1, 3, 6, 12, 24).map {
-                        RemoteOption(it.toString(), if (it == 0) "Aus" else "alle $it Std.")
+                        RemoteOption(it.toString(), if (it == 0) text(R.string.subtitle_off) else context.getString(R.string.remote_epg_every_hours, it))
                     }, { epgRefreshHours.toString() }
                 ) {
                     epgRefreshHours = it.toInt()
                     preferences?.edit()?.putInt("epg_refresh_hours", epgRefreshHours)?.apply()
                 })
                 add(RemoteEntry.Choice(
-                    "epgHorizon", guide, "EPG-Vorschau",
+                    "epgHorizon", guide, text(R.string.remote_epg_horizon),
                     listOf(6, 12, 24, 48, 72, 168).map {
-                        RemoteOption(it.toString(), if (it < 24) "$it Stunden" else if (it == 24) "1 Tag" else "${it / 24} Tage")
+                        RemoteOption(it.toString(), if (it < 24) context.getString(R.string.remote_epg_hours, it) else if (it == 24) text(R.string.remote_epg_one_day) else context.getString(R.string.remote_epg_days, it / 24))
                     }, { epgHorizonHours.toString() }
                 ) {
                     epgHorizonHours = it.toInt()
@@ -5534,12 +5534,12 @@ private fun PlayerHome(
                 })
                 add(RemoteEntry.Action("epgRefreshNow", guide,
                     when {
-                        ui.epgUpdating -> "EPG wird aktualisiert …"
+                        ui.epgUpdating -> text(R.string.remote_epg_updating)
                         ui.epgUpdateFailed || ui.epgSourceWriteFailed -> text(R.string.epg_refresh_failed)
-                        else -> "EPG aktualisieren"
+                        else -> text(R.string.remote_epg_update)
                     }, text(R.string.epg_refresh_now)) {
-                    if (ui.epgUpdating) "Läuft bereits." else if (useXmlTv && xmlTvSources.isEmpty()) "Zuerst eine XMLTV-Quelle hinzufügen."
-                    else { epgRefreshRequest++; "EPG wird aktualisiert." }
+                    if (ui.epgUpdating) text(R.string.remote_msg_already_running) else if (useXmlTv && xmlTvSources.isEmpty()) text(R.string.remote_msg_add_xmltv_first)
+                    else { epgRefreshRequest++; text(R.string.remote_msg_epg_updating) }
                 })
                 // Appearance of the guide and of the fullscreen channel list.
                 fun appearance(change: (GuideAppearance) -> GuideAppearance) {
@@ -5570,10 +5570,10 @@ private fun PlayerHome(
                 })
                 add(shown("listProgress", list, R.string.guide_show_progress, { it.showProgress }) { a, v -> a.copy(showProgress = v) })
                 add(shown("listKeep", list, R.string.guide_keep_list, { it.keepChannelList }) { a, v -> a.copy(keepChannelList = v) })
-                add(RemoteEntry.Choice("listOpacity", list, "Deckkraft der Senderliste",
+                add(RemoteEntry.Choice("listOpacity", list, text(R.string.remote_list_opacity),
                     listOf(60, 70, 80, 90, 100).map { RemoteOption(it.toString(), "$it %") }, { guideAppearance.opacity.toString() }
                 ) { value -> appearance { it.copy(opacity = value.toInt()) } })
-                add(RemoteEntry.Choice("listClose", list, "Liste schließen",
+                add(RemoteEntry.Choice("listClose", list, text(R.string.remote_list_close),
                     listOf(0, 5, 10, 15, 30, 60).map {
                         RemoteOption(it.toString(), if (it == 0) text(R.string.guide_manual_close) else context.getString(R.string.guide_seconds, it))
                     }, { guideAppearance.closeSeconds.toString() }
@@ -5617,34 +5617,34 @@ private fun PlayerHome(
                     if (next == VodLiveView.HIDDEN && vodSection == section) player?.pause()
                 })
                 val episodes = text(R.string.episode_settings)
-                val detection = listOf(RemoteOption("AUTO", "Automatisch erkennen"), RemoteOption("TIME", "Feste Zeit"))
+                val detection = listOf(RemoteOption("AUTO", text(R.string.remote_detection_auto)), RemoteOption("TIME", text(R.string.remote_detection_time)))
                 add(toggle("autoNext", episodes, text(R.string.auto_next_episode), { autoNextEpisode },
                     "auto_next_episode") { autoNextEpisode = it })
                 add(toggle("inactivity", episodes, text(R.string.series_inactivity_check), { checkSeriesInactivity },
                     "check_series_inactivity") { checkSeriesInactivity = it })
-                add(number("inactiveLimit", episodes, "Nachfragen nach Folgen ohne Eingabe", 1, 10, 1, "Folgen",
+                add(number("inactiveLimit", episodes, text(R.string.remote_inactive_limit), 1, 10, 1, text(R.string.series_overlay_episodes),
                     { inactiveEpisodeLimit }, "inactive_episode_limit") { inactiveEpisodeLimit = it }.shownIf("inactivity", true))
                 add(toggle("skipIntro", episodes, text(R.string.skip_intro_automatically), { autoSkipIntro },
                     "auto_skip_intro") { autoSkipIntro = it })
                 add(toggle("decodeAudio", episodes, text(R.string.decode_audio_for_intro), { decodeAudioForIntro },
                     "decode_audio_for_intro") { decodeAudioForIntro = it })
-                add(RemoteEntry.Choice("introMode", episodes, "Intro", detection, { if (manualIntro) "TIME" else "AUTO" }) {
+                add(RemoteEntry.Choice("introMode", episodes, text(R.string.remote_intro), detection, { if (manualIntro) "TIME" else "AUTO" }) {
                     manualIntro = it == "TIME"
                     preferences?.edit()?.putBoolean("manual_intro", manualIntro)?.apply()
                 })
-                add(number("introStart", episodes, "Intro beginnt nach", 0, 595, 5, "Sek.", { introStartSeconds },
+                add(number("introStart", episodes, text(R.string.remote_intro_start), 0, 595, 5, text(R.string.remote_unit_seconds), { introStartSeconds },
                     "intro_start_seconds") { introStartSeconds = it.coerceAtMost(introEndSeconds - 5).coerceAtLeast(0) }
                     .shownIf("introMode", "TIME"))
-                add(number("introEnd", episodes, "Intro endet nach", 5, 600, 5, "Sek.", { introEndSeconds },
+                add(number("introEnd", episodes, text(R.string.remote_intro_end), 5, 600, 5, text(R.string.remote_unit_seconds), { introEndSeconds },
                     "intro_end_seconds") { introEndSeconds = it.coerceAtLeast(introStartSeconds + 5) }
                     .shownIf("introMode", "TIME"))
-                add(RemoteEntry.Choice("creditsMode", episodes, "Abspann", detection, { if (manualCredits) "TIME" else "AUTO" }) {
+                add(RemoteEntry.Choice("creditsMode", episodes, text(R.string.remote_credits), detection, { if (manualCredits) "TIME" else "AUTO" }) {
                     manualCredits = it == "TIME"
                     preferences?.edit()?.putBoolean("manual_credits", manualCredits)?.apply()
                 })
-                add(number("creditsBefore", episodes, "Abspann vor dem Ende", 0, 600, 5, "Sek.", { creditsBeforeEndSeconds },
+                add(number("creditsBefore", episodes, text(R.string.remote_credits_before), 0, 600, 5, text(R.string.remote_unit_seconds), { creditsBeforeEndSeconds },
                     "credits_before_end_seconds") { creditsBeforeEndSeconds = it }.shownIf("creditsMode", "TIME"))
-                add(number("episodeNotice", episodes, "Hinweis zur nächsten Folge vorher", 5, 60, 5, "Sek.",
+                add(number("episodeNotice", episodes, text(R.string.remote_episode_notice), 5, 60, 5, text(R.string.remote_unit_seconds),
                     { episodeNoticeSeconds }, "episode_notice_seconds") { episodeNoticeSeconds = it })
                 for (input in GuideInput.entries) add(RemoteEntry.Choice(
                     "control${input.name}", controls, text(input.label),
@@ -5664,22 +5664,22 @@ private fun PlayerHome(
                 })
                 add(RemoteEntry.Action("updateCheck", updates, appUpdates.status, text(R.string.update_check)) {
                     appUpdates.check()
-                    "Suche nach Updates …"
+                    text(R.string.remote_msg_searching_updates)
                 })
                 val metadata = text(R.string.settings_metadata)
                 add(RemoteEntry.Info("tmdbStatus", metadata, "TMDB", when {
-                    ui.metadataBusy -> "Verbindung wird geprüft …"
+                    ui.metadataBusy -> text(R.string.remote_tmdb_checking)
                     ui.metadataError -> text(R.string.tmdb_connection_failed)
                     metadataClient != null -> text(R.string.tmdb_connected)
-                    else -> "Nicht verbunden. Ohne TMDB werden Folgeninfos von TVmaze geladen."
+                    else -> text(R.string.remote_tmdb_not_connected)
                 }, "https://www.themoviedb.org/settings/api"))
-                add(RemoteEntry.Input("tmdbToken", metadata, text(R.string.tmdb_token), "Token einfügen", true,
+                add(RemoteEntry.Input("tmdbToken", metadata, text(R.string.tmdb_token), text(R.string.remote_tmdb_token_hint), true,
                     text(R.string.tmdb_connect)) { value ->
-                    if (value.isBlank()) "Bitte den Token eingeben." else if (ui.metadataBusy) "Bitte kurz warten."
-                    else { updateMetadataConnection(value.trim()); "Verbindung wird geprüft …" }
+                    if (value.isBlank()) text(R.string.remote_msg_enter_token) else if (ui.metadataBusy) text(R.string.remote_msg_wait)
+                    else { updateMetadataConnection(value.trim()); text(R.string.remote_tmdb_checking) }
                 })
-                if (metadataClient != null) add(RemoteEntry.Action("tmdbDisconnect", metadata, "TMDB-Verbindung",
-                    text(R.string.tmdb_disconnect)) { updateMetadataConnection(null); "TMDB getrennt." })
+                if (metadataClient != null) add(RemoteEntry.Action("tmdbDisconnect", metadata, text(R.string.remote_tmdb_connection),
+                    text(R.string.tmdb_disconnect)) { updateMetadataConnection(null); text(R.string.remote_msg_tmdb_disconnected) })
                 val sync = text(R.string.settings_sync)
                 val trakt = traktSession
                 val code = traktDeviceCode
@@ -5687,26 +5687,26 @@ private fun PlayerHome(
                     trakt != null -> context.getString(R.string.trakt_connected_as, trakt.username)
                     code != null -> context.getString(R.string.trakt_enter_code, code.verificationUrl) + " " + code.userCode
                     ui.traktBusy -> text(R.string.trakt_connecting)
-                    else -> traktStatus ?: "Nicht verbunden."
+                    else -> traktStatus ?: text(R.string.remote_trakt_not_connected)
                 }, code?.verificationUrl))
                 if (trakt == null) {
                     add(RemoteEntry.Info("traktAppInfo", sync, text(R.string.trakt_app_title),
                         text(if (traktApp == null) R.string.trakt_app_help else R.string.trakt_app_saved),
                         "https://trakt.tv/oauth/applications"))
-                    add(RemoteEntry.Input("traktClientId", sync, "Client ID", "Client ID einfügen", true,
-                        text(R.string.trakt_app_save)) { value -> saveTraktApp(value, null) ?: "Client ID gespeichert." })
-                    add(RemoteEntry.Input("traktClientSecret", sync, "Client Secret", "Client Secret einfügen", true,
+                    add(RemoteEntry.Input("traktClientId", sync, "Client ID", text(R.string.remote_trakt_client_id_hint), true,
+                        text(R.string.trakt_app_save)) { value -> saveTraktApp(value, null) ?: text(R.string.remote_msg_client_id_saved) })
+                    add(RemoteEntry.Input("traktClientSecret", sync, "Client Secret", text(R.string.remote_trakt_client_secret_hint), true,
                         text(R.string.trakt_app_save)) { value ->
-                        if (traktApp == null) "Bitte zuerst die Client ID eingeben." else saveTraktApp(null, value) ?: "Client Secret gespeichert."
+                        if (traktApp == null) text(R.string.remote_msg_client_id_first) else saveTraktApp(null, value) ?: text(R.string.remote_msg_client_secret_saved)
                     })
                 }
-                if (trakt == null && code == null && traktApp != null) add(RemoteEntry.Action("traktConnect", sync, "Trakt-Konto",
-                    text(R.string.trakt_connect)) { connectTrakt(); "Code wird angefordert …" })
+                if (trakt == null && code == null && traktApp != null) add(RemoteEntry.Action("traktConnect", sync, text(R.string.remote_trakt_account),
+                    text(R.string.trakt_connect)) { connectTrakt(); text(R.string.remote_msg_code_requested) })
                 if (trakt != null) {
-                    add(RemoteEntry.Action("traktSync", sync, traktStatus ?: "Verlauf und Merkliste", "Synchronisieren") {
-                        if (ui.traktBusy) "Läuft bereits." else { syncTrakt(forceSeriesHistory = true); text(R.string.trakt_syncing) }
+                    add(RemoteEntry.Action("traktSync", sync, traktStatus ?: text(R.string.remote_trakt_history_watchlist), text(R.string.remote_action_sync)) {
+                        if (ui.traktBusy) text(R.string.remote_msg_already_running) else { syncTrakt(forceSeriesHistory = true); text(R.string.trakt_syncing) }
                     })
-                    add(RemoteEntry.Action("traktDisconnect", sync, "Trakt-Konto", text(R.string.trakt_disconnect)) {
+                    add(RemoteEntry.Action("traktDisconnect", sync, text(R.string.remote_trakt_account), text(R.string.trakt_disconnect)) {
                         disconnectTrakt(); null
                     })
                 }
@@ -5740,7 +5740,7 @@ private fun PlayerHome(
                         }
                     add(RemoteEntry.Toggle("parental.kidsShare", parentalSection,
                         context.getString(R.string.kids_profile_share, kids), { profiles.kidsShareData }) {})
-                    add(RemoteEntry.Choice("parental.startProfile", parentalSection, "Beim Start",
+                    add(RemoteEntry.Choice("parental.startProfile", parentalSection, text(R.string.remote_start_profile),
                         StartProfile.entries.map { RemoteOption(it.name, if (it == StartProfile.KIDS) kids else text(it.label)) },
                         { profiles.startProfile.name }) {})
                 }
@@ -5758,7 +5758,7 @@ private fun PlayerHome(
         }
 
         fun countryName(code: String) =
-            if (code == UNKNOWN_COUNTRY) "Ohne Länderangabe" else runCatching { countryLabel(code) }.getOrDefault(code)
+            if (code == UNKNOWN_COUNTRY) text(R.string.remote_country_unspecified) else runCatching { countryLabel(code) }.getOrDefault(code)
 
         override fun remoteState(): RemoteState {
             val available = (countries + knownCountries).toList()
@@ -5769,7 +5769,7 @@ private fun PlayerHome(
                 portals = savedSources.mapIndexed { index, source ->
                     val host = runCatching { java.net.URI(source.address).host }.getOrNull().orEmpty()
                     RemotePortal(
-                        source.identity, "Portal ${index + 1} · $host", source.address, source.mac,
+                        source.identity, context.getString(R.string.remote_portal_label, index + 1, host), source.address, source.mac,
                         source.enabled, source.reachable,
                         source.subscriptionExpiry?.format(DateTimeFormatter.ofPattern("dd.MM.uuuu")),
                         source.identity == storedSource?.identity,
@@ -5784,7 +5784,7 @@ private fun PlayerHome(
                     parental.hasPin, parental.separateKidsPin, parental.kidsMode,
                     hasSettingsPin = parental.hasSettingsPin, kidsAccount = profiles.kidsName
                 ),
-                busy = if (connecting) "Portale werden geladen …" else null,
+                busy = if (connecting) text(R.string.remote_busy_portals) else null,
                 askCountries = ui.askForCountries || ui.choosingCountries,
                 error = sourceError?.let(::text)
             )
@@ -5797,15 +5797,15 @@ private fun PlayerHome(
             return ok
         }
         val wrongPin get() = RemoteReply(false,
-            if (remotePinFailures.get() >= REMOTE_PIN_ATTEMPTS) "Zu viele falsche PINs. Bitte am Gerät neu starten."
-            else "Die PIN ist falsch.")
+            if (remotePinFailures.get() >= REMOTE_PIN_ATTEMPTS) text(R.string.remote_msg_pin_too_many)
+            else text(R.string.remote_msg_pin_wrong))
 
         override fun applyRemote(command: RemoteCommand): RemoteReply = when (command) {
             RemoteCommand.Hello -> RemoteReply(true)
             is RemoteCommand.Set ->
                 if (command.id.startsWith("parental.")) RemoteReply(false)
                 else if (entries().applyRemoteValue(command.id, command.value)) RemoteReply(true)
-                else RemoteReply(false, "Dieser Wert ist nicht möglich.")
+                else RemoteReply(false, text(R.string.remote_msg_value_invalid))
             is RemoteCommand.Categories -> {
                 setCategoryVisibility(command.section, command.ids, command.hidden)
                 RemoteReply(true)
@@ -5813,7 +5813,7 @@ private fun PlayerHome(
             is RemoteCommand.CategoryLock -> {
                 val key = categoryKey(command.section, command.id)
                 when {
-                    !parental.hasPin -> RemoteReply(false, "Zuerst eine PIN festlegen.")
+                    !parental.hasPin -> RemoteReply(false, text(R.string.remote_msg_pin_first))
                     command.locked == (key in parental.lockedCategories) -> RemoteReply(true)
                     !command.locked && !pinOk(command.pin, parental::checkPin) -> wrongPin
                     else -> { parental.toggleLocked(key); RemoteReply(true) }
@@ -5826,7 +5826,7 @@ private fun PlayerHome(
                     // Confirmed on the phone: the question on the device is answered too.
                     ui.askForCountries = false
                     ui.choosingCountries = false
-                    RemoteReply(true, "Länder übernommen.")
+                    RemoteReply(true, text(R.string.remote_msg_countries_saved))
                 } else RemoteReply(true)
             }
             RemoteCommand.Finish -> RemoteReply(true)
@@ -5836,49 +5836,49 @@ private fun PlayerHome(
             }
             is RemoteCommand.PortalEdit -> savedSources.firstOrNull { it.identity == command.id }?.let { source ->
                 when {
-                    connecting -> RemoteReply(false, "Es wird gerade ein Portal geladen. Bitte kurz warten.")
-                    else -> { editPortal(source, command.address, command.mac); RemoteReply(true, "Portal wird geladen …") }
+                    connecting -> RemoteReply(false, text(R.string.remote_msg_portal_loading_wait))
+                    else -> { editPortal(source, command.address, command.mac); RemoteReply(true, text(R.string.remote_msg_portal_loading)) }
                 }
-            } ?: RemoteReply(false, "Portal nicht gefunden.")
+            } ?: RemoteReply(false, text(R.string.remote_msg_portal_not_found))
             is RemoteCommand.PortalAdd ->
-                if (connecting) RemoteReply(false, "Es wird gerade ein Portal geladen. Bitte kurz warten.")
+                if (connecting) RemoteReply(false, text(R.string.remote_msg_portal_loading_wait))
                 else {
                     address = command.address
                     mac = command.mac
                     sourceError = null
                     importPortal()
-                    RemoteReply(true, "Portal wird geladen …")
+                    RemoteReply(true, text(R.string.remote_msg_portal_loading))
                 }
             is RemoteCommand.PortalEnabled -> savedSources.firstOrNull { it.identity == command.id }?.let { source ->
                 if (source.enabled != command.enabled) setPortalEnabled(source, command.enabled)
                 RemoteReply(true)
-            } ?: RemoteReply(false, "Portal nicht gefunden.")
+            } ?: RemoteReply(false, text(R.string.remote_msg_portal_not_found))
             is RemoteCommand.PortalPreferred -> savedSources.firstOrNull { it.identity == command.id }?.let { source ->
                 setPreferredPortal(if (command.preferred) source.identity else preferredPortal.takeUnless { it == source.identity })
-                RemoteReply(true, if (command.preferred) "Wird zuerst verwendet." else null)
-            } ?: RemoteReply(false, "Portal nicht gefunden.")
+                RemoteReply(true, if (command.preferred) text(R.string.remote_msg_portal_preferred) else null)
+            } ?: RemoteReply(false, text(R.string.remote_msg_portal_not_found))
             is RemoteCommand.PortalCategories -> savedSources.firstOrNull { it.identity == command.id }?.let { source ->
-                RemoteReply(true, data = encodeProviderCategories(source.identity, portalName(source), providerCategories(source)))
-            } ?: RemoteReply(false, "Portal nicht gefunden.")
+                RemoteReply(true, data = encodeProviderCategories(source.identity, portalName(source), providerCategories(source), text(R.string.country_none)))
+            } ?: RemoteReply(false, text(R.string.remote_msg_portal_not_found))
             is RemoteCommand.Action -> (entries().firstOrNull { it.id == command.id } as? RemoteEntry.Action)
-                ?.let { RemoteReply(true, it.run()) } ?: RemoteReply(false, "Diese Aktion ist gerade nicht verfügbar.")
+                ?.let { RemoteReply(true, it.run()) } ?: RemoteReply(false, text(R.string.remote_msg_action_unavailable))
             is RemoteCommand.Input -> (entries().firstOrNull { it.id == command.id } as? RemoteEntry.Input)
-                ?.let { RemoteReply(true, it.submit(command.value)) } ?: RemoteReply(false, "Diese Eingabe ist gerade nicht verfügbar.")
+                ?.let { RemoteReply(true, it.submit(command.value)) } ?: RemoteReply(false, text(R.string.remote_msg_input_unavailable))
             is RemoteCommand.PortalRemove ->
-                if (savedSources.size <= 1) RemoteReply(false, "Das letzte Portal kann nicht entfernt werden. Du kannst es deaktivieren.")
+                if (savedSources.size <= 1) RemoteReply(false, text(R.string.remote_msg_last_portal))
                 else {
                     scope.launch { removePortal(command.id) }
-                    RemoteReply(true, "Portal entfernt.")
+                    RemoteReply(true, text(R.string.remote_msg_portal_removed))
                 }
             is RemoteCommand.Pin ->
                 if (parental.hasPin && !pinOk(command.current, parental::checkPin)) wrongPin
-                else { parental.setPin(command.pin); RemoteReply(true, "PIN gespeichert.") }
+                else { parental.setPin(command.pin); RemoteReply(true, text(R.string.remote_msg_pin_saved)) }
             is RemoteCommand.PinRemove ->
                 if (!parental.hasPin) RemoteReply(true)
                 else if (!pinOk(command.current, parental::checkPin)) wrongPin
-                else { parental.removePin(); RemoteReply(true, "PIN entfernt.") }
+                else { parental.removePin(); RemoteReply(true, text(R.string.remote_msg_pin_removed)) }
             is RemoteCommand.KidsPin ->
-                if (!parental.hasPin) RemoteReply(false, "Zuerst eine PIN festlegen.")
+                if (!parental.hasPin) RemoteReply(false, text(R.string.remote_msg_pin_first))
                 else if (!pinOk(command.current, parental::checkPin)) wrongPin
                 else { parental.setKidsPin(command.pin); RemoteReply(true) }
             is RemoteCommand.Parental -> {
@@ -5886,7 +5886,7 @@ private fun PlayerHome(
                 when (command.field) {
                     "protectSettings" -> when {
                         value?.isBoolean != true -> RemoteReply(false)
-                        !parental.hasSettingsPin -> RemoteReply(false, "Zuerst am Gerät unter Einstellungsschutz eine PIN festlegen.")
+                        !parental.hasSettingsPin -> RemoteReply(false, text(R.string.remote_msg_settings_pin_first))
                         !value.asBoolean && !pinOk(command.pin, parental::checkSettingsPin) -> wrongPin
                         else -> { parental.updateProtectSettings(value.asBoolean); RemoteReply(true) }
                     }
@@ -5898,7 +5898,7 @@ private fun PlayerHome(
                     }
                     "kidsMode" -> when {
                         value?.isBoolean != true -> RemoteReply(false)
-                        !parental.hasPin -> RemoteReply(false, "Zuerst eine PIN festlegen.")
+                        !parental.hasPin -> RemoteReply(false, text(R.string.remote_msg_pin_first))
                         value.asBoolean -> { parental.updateKidsMode(true); RemoteReply(true) }
                         !pinOk(command.pin, parental::checkKidsPin) -> wrongPin
                         else -> { parental.updateKidsMode(false); RemoteReply(true) }
@@ -5916,14 +5916,14 @@ private fun PlayerHome(
                         else -> RemoteReply(false, context.getString(R.string.settings_area_last))
                     }
                     "kidsName" -> when {
-                        !parental.hasPin -> RemoteReply(false, "Zuerst eine PIN festlegen.")
-                        value?.isString != true || value.asString.isBlank() -> RemoteReply(false, "Bitte einen Namen eingeben.")
+                        !parental.hasPin -> RemoteReply(false, text(R.string.remote_msg_pin_first))
+                        value?.isString != true || value.asString.isBlank() -> RemoteReply(false, text(R.string.remote_msg_name_required))
                         else -> { profiles.createKids(value.asString.trim().take(UserProfiles.MAX_NAME)); RemoteReply(true) }
                     }
                     "kidsRemove" -> when {
                         !profiles.hasKids -> RemoteReply(false)
                         !pinOk(command.pin, parental::checkPin) -> wrongPin
-                        else -> { profiles.removeKids(); RemoteReply(true, "Kinderkonto entfernt.") }
+                        else -> { profiles.removeKids(); RemoteReply(true, text(R.string.remote_msg_kids_removed)) }
                     }
                     "kidsShare" -> if (value?.isBoolean == true && profiles.hasKids) {
                         profiles.updateKidsShareData(value.asBoolean); RemoteReply(true)
@@ -7446,11 +7446,11 @@ private fun PlayerHome(
                     if (ui.liveGroupsLoading) add(stringResource(R.string.live_groups_loading))
                     portalRefreshText?.let(::add)
                     portalCheckText?.let(::add)
-                    batchProgress?.let { (number, total) -> add("Portal-Import: $number / $total") }
+                    batchProgress?.let { (number, total) -> add(stringResource(R.string.portal_import_progress, number, total)) }
                     if (ui.traktBusy) traktStatus?.let(::add)
                     importStatuses.forEach { (section, status) ->
                         when (status) {
-                            ImportStatus.Loading -> add(stringResource(section.label) + " wird geladen …")
+                            ImportStatus.Loading -> add(stringResource(R.string.section_loading, stringResource(section.label)))
                             is ImportStatus.Progress -> add(
                                 "${stringResource(section.label)}: ${status.loaded}" + (status.total?.let { " / $it" } ?: "")
                             )
@@ -7749,7 +7749,7 @@ private fun PlayerHome(
                                     SettingRow(stringResource(R.string.epg_settings), Modifier) { openSettingsPage { ui.epgSettingsOpen = true } }
                                 SettingsSection.APPEARANCE -> {
                                     SettingRow(
-                                stringResource(R.string.accent_color_setting, accentGradient?.label ?: stringResource(accentChoice.label)),
+                                stringResource(R.string.accent_color_setting, stringResource(accentGradient?.label ?: accentChoice.label)),
                                 Modifier
                             ) { openSettingsPage { ui.accentPaletteOpen = true } }
                             SettingRow(
@@ -7884,7 +7884,7 @@ private fun PlayerHome(
                                     SettingRow(stringResource(R.string.tmdb_settings), Modifier) {
                                         openSettingsPage { ui.metadataSettingsOpen = true }
                                     }
-                                    Text("Aktive Quelle für Folgeninfos: $activeEpisodeProvider")
+                                    Text(stringResource(R.string.episode_provider_active, activeEpisodeProvider))
                                     if (activeEpisodeProvider == "TVmaze") {
                                         SettingRow(stringResource(R.string.tvmaze_credit), Modifier) {
                                             uriHandler.openUri("https://www.tvmaze.com/")
@@ -8034,7 +8034,7 @@ private fun PlayerHome(
                                 )
                                 val counts = sourceContentCounts[source.identity] ?: PortalContentCounts(0, 0, 0)
                                 Text(
-                                    "TV ${counts.tv}  ·  Filme ${counts.movies}  ·  Serien ${counts.series}",
+                                    stringResource(R.string.portal_content_counts, counts.tv, counts.movies, counts.series),
                                     Modifier.padding(start = 10.dp, end = 10.dp),
                                     style = MaterialTheme.typography.labelSmall
                                 )
@@ -8057,7 +8057,10 @@ private fun PlayerHome(
                             }
                         }
                         Text(
-                            "Zusammengeführt (Duplikate entfernt): TV ${combinedContentCounts.tv}  ·  Filme ${combinedContentCounts.movies}  ·  Serien ${combinedContentCounts.series}",
+                            stringResource(
+                                R.string.portal_content_counts_merged,
+                                combinedContentCounts.tv, combinedContentCounts.movies, combinedContentCounts.series
+                            ),
                             Modifier.fillMaxWidth().padding(vertical = 12.dp),
                             style = MaterialTheme.typography.titleSmall
                         )
@@ -9473,7 +9476,7 @@ private fun LiveOverview(
                             .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(50))
                     )
                     Text(
-                        if (playing != null) "JETZT LIVE" else "LIVE-TV",
+                        stringResource(if (playing != null) R.string.live_now_caps else R.string.live_tv_caps),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -10262,7 +10265,11 @@ internal fun PlayerFrame(
                                 )
                             } else subtitleChoices.forEach { (group, index, label) ->
                                 MenuButton(
-                                    "${if (saveSubtitleChoiceForSeries && subtitleSeriesKey != null) "Serie" else "Diese Folge"}: $label",
+                                    stringResource(
+                                        if (saveSubtitleChoiceForSeries && subtitleSeriesKey != null) R.string.subtitle_choice_series
+                                        else R.string.subtitle_choice_episode,
+                                        label
+                                    ),
                                     Modifier.fillMaxWidth(),
                                     selected = group.isTrackSelected(index) && !subtitlesDisabled
                                 ) {

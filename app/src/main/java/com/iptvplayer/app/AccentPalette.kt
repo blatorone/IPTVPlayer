@@ -151,7 +151,7 @@ private fun AccentPreview(modifier: Modifier) {
                     contentAlignment = Alignment.Center
                 ) { Text("▶", color = colors.onPrimaryContainer) }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("TV Sender", style = MaterialTheme.typography.titleSmall, color = Color.White)
+                    Text(stringResource(R.string.accent_palette_example_channel), style = MaterialTheme.typography.titleSmall, color = Color.White)
                     LinearProgressIndicator(
                         progress = { 0.62f }, modifier = Modifier.fillMaxWidth(),
                         color = colors.primary, trackColor = Color(0xFF2C2C33)
@@ -222,7 +222,7 @@ private fun GradientPalette(
         AccentGradient.entries.drop(besidePreview.size).forEach { swatch(it) }
     }
     Text(
-        preview.label + if (preview == current) " · " + stringResource(R.string.accent_palette_active) else "",
+        stringResource(preview.label) + if (preview == current) " · " + stringResource(R.string.accent_palette_active) else "",
         style = MaterialTheme.typography.titleSmall
     )
 }
@@ -231,6 +231,7 @@ private fun GradientPalette(
 private fun GradientSwatch(
     choice: AccentGradient, selected: Boolean, onFocus: () -> Unit, modifier: Modifier = Modifier, onClick: () -> Unit
 ) {
+    val description = stringResource(choice.label)
     var focused by remember { mutableStateOf(false) }
     Box(
         modifier
@@ -241,7 +242,7 @@ private fun GradientSwatch(
             .background(choice.brush)
             .onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocus() }
             .clickable(onClick = onClick)
-            .semantics { contentDescription = choice.label; this.selected = selected },
+            .semantics { contentDescription = description; this.selected = selected },
         contentAlignment = Alignment.Center
     ) {
         if (selected) Text("✓", color = choice.onColor, style = MaterialTheme.typography.titleMedium)

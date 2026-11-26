@@ -294,10 +294,11 @@ internal fun rememberAppUpdates(): AppUpdateUi {
     }
     val status = listOfNotNull(
         release?.let {
-            context.getString(R.string.update_available, it.tag) + (if (it.beta) " (Beta)" else "") +
-                " – installieren am Gerät unter Einstellungen → App-Updates"
+            context.getString(R.string.update_available, it.tag) +
+                (if (it.beta) " " + context.getString(R.string.update_beta_tag) else "") +
+                " – " + context.getString(R.string.update_install_on_device)
         },
-        if (busy) "Suche läuft …" else null,
+        if (busy) context.getString(R.string.update_searching) else null,
         result?.let { context.getString(it) },
         lastCheckText?.let { context.getString(R.string.update_last_check, it) } ?: context.getString(R.string.update_never_checked)
     ).joinToString("\n")

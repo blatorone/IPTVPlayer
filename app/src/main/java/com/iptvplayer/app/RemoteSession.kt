@@ -49,6 +49,8 @@ internal data class RemoteReply(val ok: Boolean, val message: String? = null, va
 internal class RemoteSession(
     private val scope: CoroutineScope,
     private val handler: RemoteHandler,
+    private val endedMessage: String,
+    private val failedMessage: String,
     private val onFinished: () -> Unit = {},
     baseUrl: String = REMOTE_BASE_URL
 ) {
@@ -143,7 +145,7 @@ internal class RemoteSession(
             val command = RemoteProtocol.decodeCommand(plain, epoch) ?: continue
             lastActivity = SystemClock.elapsedRealtime()
             if (command == RemoteCommand.Finish) {
-                send(RemoteProtocol.encodeResult(true, "Zugriff beendet."))
+                send(RemoteProtocol.encodeResult(true, endedMessage))
                 end()
                 onFinished()
                 return
@@ -154,7 +156,7 @@ internal class RemoteSession(
                 continue
             }
             val reply = runCatching { handler.applyRemote(command) }
-                .getOrElse { RemoteReply(false, "Die Änderung ist fehlgeschlagen.") }
+                .getOrElse { RemoteReply(false, failedMessage) }
             send(RemoteProtocol.encodeResult(reply.ok, reply.message, reply.data))
             lastSentState = null
             publish()

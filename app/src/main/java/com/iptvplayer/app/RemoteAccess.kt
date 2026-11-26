@@ -50,6 +50,8 @@ internal fun RemoteAccessPage(
         onDispose { lifecycle?.removeObserver(observer) }
     }
     val current = session
+    val endedMessage = stringResource(R.string.remote_msg_ended)
+    val failedMessage = stringResource(R.string.remote_msg_change_failed)
     val startFocus = remember { FocusRequester() }
     val endFocus = remember { FocusRequester() }
     val running = current != null && current.status.collectAsState().value != RemoteStatus.ENDED
@@ -70,7 +72,7 @@ internal fun RemoteAccessPage(
             Text(stringResource(R.string.remote_access_hint), style = MaterialTheme.typography.bodyMedium)
             SettingRow(stringResource(R.string.remote_access_start), Modifier.focusRequester(startFocus)) {
                 onPinReset()
-                session = RemoteSession(scope, handler, onFinished).also { it.start() }
+                session = RemoteSession(scope, handler, endedMessage, failedMessage, onFinished).also { it.start() }
             }
         } else {
             Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {

@@ -52,7 +52,7 @@ internal object AppDiagnostics {
         val document = DocumentsContract.buildDocumentUriUsingTree(tree, directory)
         val name = "StreamWatch-Diagnose-${System.currentTimeMillis()}.txt"
         val target = DocumentsContract.createDocument(resolver, document, "text/plain", name)
-            ?: error("Die Diagnose-Datei konnte im gewählten Ordner nicht angelegt werden.")
+            ?: error(context.getString(R.string.diagnostics_file_create_failed))
         writeReport(context, target)
         return target
     }
@@ -72,7 +72,7 @@ internal object AppDiagnostics {
     private fun writeReport(context: Context, target: Uri) {
         context.contentResolver.openOutputStream(target, "w")?.bufferedWriter(Charsets.UTF_8)?.use { writer ->
             writeReportText(context, writer)
-        } ?: error("Die Diagnose-Datei konnte nicht geschrieben werden.")
+        } ?: error(context.getString(R.string.diagnostics_file_write_failed))
     }
 
     /**

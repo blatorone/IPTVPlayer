@@ -58,11 +58,13 @@ internal fun countrySummary(categories: List<ProviderCategory>, label: (String) 
         .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { label(it.key) })
         .joinToString(" · ") { (country, count) -> "${label(country)} $count" }
 
-internal fun countryName(code: String): String =
-    if (code == UNKNOWN_COUNTRY) "Ohne Land" else runCatching { countryLabel(code) }.getOrDefault(code)
+internal fun countryName(code: String, unknown: String): String =
+    if (code == UNKNOWN_COUNTRY) unknown else runCatching { countryLabel(code) }.getOrDefault(code)
 
 /** For the phone: {"id":…,"sections":{"LIVE":[{"name":…,"country":…,"count":…}],…}}. */
-internal fun encodeProviderCategories(id: String, label: String, categories: Map<PortalSection, List<ProviderCategory>>) =
+internal fun encodeProviderCategories(
+    id: String, label: String, categories: Map<PortalSection, List<ProviderCategory>>, unknownCountry: String = ""
+) =
     JsonObject().apply {
         addProperty("id", id)
         addProperty("label", label)
@@ -72,7 +74,7 @@ internal fun encodeProviderCategories(id: String, label: String, categories: Map
                     list.forEach { category ->
                         add(JsonObject().apply {
                             addProperty("name", category.name)
-                            addProperty("country", countryName(category.country))
+                            addProperty("country", countryName(category.country, unknownCountry))
                             category.count?.let { addProperty("count", it) }
                         })
                     }
@@ -87,6 +89,7 @@ internal fun PortalCategoriesDialog(title: String, source: SavedPortal, onDismis
     val categories = remember(source) { providerCategories(source) }
     var section by remember { mutableStateOf(PortalSection.LIVE) }
     val list = categories[section].orEmpty()
+    val unknownCountry = stringResource(R.string.country_none)
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
@@ -107,7 +110,7 @@ internal fun PortalCategoriesDialog(title: String, source: SavedPortal, onDismis
                 if (list.isEmpty()) Text(stringResource(R.string.portal_categories_empty))
                 else {
                     Text(
-                        countrySummary(list, ::countryName),
+                        countrySummary(list) { countryName(it, unknownCountry) },
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary
                     )
                     LazyColumn(Modifier.fillMaxWidth().heightIn(max = 360.dp)) {
@@ -119,7 +122,7 @@ internal fun PortalCategoriesDialog(title: String, source: SavedPortal, onDismis
                             ) {
                                 Text(category.name, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                                 Text(
-                                    listOfNotNull(countryName(category.country), category.count?.toString()).joinToString(" · "),
+                                    listOfNotNull(countryName(category.country, unknownCountry), category.count?.toString()).joinToString(" · "),
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )

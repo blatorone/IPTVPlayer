@@ -933,4 +933,7 @@
     <string name="buffer_hint">З буфером відтворення починається трохи пізніше, але рідше зависає на нестабільних потоках. Рекомендовано: середній.</string>
     <string name="buffer_restart_hint">Діє з наступного запуску застосунку.</string>
     <string name="playback_foreign_audio_only">Цей потік має звук лише невибраною мовою – іншої версії немає.</string>
+    <string name="timeshift_setting">Timeshift (пауза й перемотування ефіру)</string>
+    <string name="timeshift_duration_setting">Тривалість timeshift: %1$d хв</string>
+    <string name="timeshift_hint">Поточний канал записується в пам\'ять застосунку (приблизно до 3 ГБ, старі частини постійно видаляються). Тоді ефір можна ставити на паузу й перемотувати смугою відтворення. Діє з наступного ввімкнення каналу.</string>
 </resources>

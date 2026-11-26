@@ -2,6 +2,7 @@
 
 ## 1.0.99
 
+- Neu unter Wiedergabe: Timeshift (standardmäßig aus). Der laufende Sender wird im App-Speicher mitgeschnitten (15, 30 oder 60 Minuten); Live-TV lässt sich dann pausieren und mit der Wiedergabeleiste zurück- und vorspulen.
 - Filme und Serien: Kategorien wie „Beliebt“ oder „Im Kino“ laden deutlich schneller; einmal geöffnet erscheinen sie beim nächsten Mal sofort.
 - Live-TV: Die gespeicherte Senderliste bleibt nach App-Updates erhalten (kein langes Neuaufbereiten mehr nach jedem Update).
 - Wiedergabeleiste: alle Knöpfe einheitlich gestaltet und mit links/rechts erreichbar; nicht nutzbare Knöpfe (z. B. Spulen bei Live-TV, nicht vorhandene Folgen) werden ausgeblendet.

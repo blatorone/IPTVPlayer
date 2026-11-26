@@ -928,4 +928,7 @@
     <string name="buffer_hint">Avec un tampon, la lecture démarre un peu plus tard mais saccade moins sur les flux instables. Recommandé : moyen.</string>
     <string name="buffer_restart_hint">S\'applique au prochain démarrage de l\'app.</string>
     <string name="playback_foreign_audio_only">Ce flux n\'a de son que dans une langue non choisie – il n\'existe pas d\'autre version.</string>
+    <string name="timeshift_setting">Timeshift (mettre en pause et revenir en arrière en direct)</string>
+    <string name="timeshift_duration_setting">Durée du timeshift : %1$d min</string>
+    <string name="timeshift_hint">La chaîne en cours est enregistrée dans la mémoire de l\'app (jusqu\'à environ 3 Go, les parties anciennes sont supprimées en continu). Le direct peut alors être mis en pause et parcouru avec la barre de lecture. S\'applique au prochain lancement de chaîne.</string>
 </resources>

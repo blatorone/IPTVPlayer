@@ -2993,6 +2993,7 @@ private fun PlayerHome(
         if (!advancingEpisode) silentEpisodes = 0
         player?.stop()
         player?.clearMediaItems()
+        Timeshift.stop()
         playing = null
         playbackSelection = null
         starting = null
@@ -3068,8 +3069,15 @@ private fun PlayerHome(
                     if (playbackAttempt !== attempt) return@launch
                     playing = attempt.channel
                     val media = MediaItem.Builder().setUri(stream).setMediaId(attempt.mediaId).build()
-                    if (attempt.progressKey == null) activePlayer.setMediaItem(media)
-                    else activePlayer.setMediaItem(media, attempt.positionMs)
+                    // Timeshift (optional): Live-TV plays from a recording, so pausing and seeking work.
+                    val shiftMinutes = timeshiftMinutes(context)
+                        ?.takeIf { attempt.selection.section == PortalSection.LIVE && !stream.substringBefore('?').endsWith(".m3u8", true) }
+                    if (shiftMinutes != null) Timeshift.play(context, activePlayer, stream, media, shiftMinutes)
+                    else {
+                        Timeshift.stop()
+                        if (attempt.progressKey == null) activePlayer.setMediaItem(media)
+                        else activePlayer.setMediaItem(media, attempt.positionMs)
+                    }
                     activePlayer.prepare()
                     activePlayer.playWhenReady = canPlay()
                     if (!canPlay()) starting = null
@@ -4678,6 +4686,7 @@ private fun PlayerHome(
                     triedHls = true
                     scope.launch {
                         if (starting === startingChannel && player.currentMediaItem == item) {
+                            Timeshift.stop()
                             val hls = item.buildUpon().setMimeType(MimeTypes.APPLICATION_M3U8).build()
                             if (attempt.progressKey == null) player.setMediaItem(hls)
                             else player.setMediaItem(hls, attempt.positionMs)
@@ -8042,6 +8051,7 @@ private fun PlayerHome(
                                 }
                                 SettingsSection.PLAYBACK -> {
                                     BufferSettings()
+                                    TimeshiftSettings()
                                     SettingRow(stringResource(R.string.episode_settings), Modifier) { openSettingsPage { ui.episodeSettingsOpen = true } }
                                     SettingRow(
                                         stringResource(
@@ -10106,7 +10116,8 @@ internal fun PlayerFrame(
      * left/right reach every visible one in on-screen order; down leads to the time bar.
      */
     fun arrangePlayerButtons(view: PlayerView) {
-        val seekable = !livePlayback && view.player?.isCurrentMediaItemSeekable == true
+        // Live-TV can be seeked only with a running timeshift recording.
+        val seekable = (!livePlayback || Timeshift.recorder != null) && view.player?.isCurrentMediaItemSeekable == true
         // Media3's playlist buttons are not used (episodes have their own buttons).
         view.setShowPreviousButton(false)
         view.setShowNextButton(false)
@@ -10492,7 +10503,8 @@ internal fun PlayerFrame(
                             setTag(R.string.subtitle_tracks, listener)
                         }
                         configureBottomFocus(this)
-                        this.player = player
+                        // The controls see a timeline over the timeshift recording (when it runs).
+                        this.player = Timeshift.controls(player)
                         if (fullscreen) post { if (allowControls) requestFocus() }
                     }
                 },

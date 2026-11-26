@@ -928,4 +928,7 @@
     <string name="buffer_hint">Cu buffer redarea pornește puțin mai târziu, dar se blochează mai rar la fluxuri instabile. Recomandat: mediu.</string>
     <string name="buffer_restart_hint">Se aplică de la următoarea pornire a aplicației.</string>
     <string name="playback_foreign_audio_only">Acest flux are sunet doar într-o limbă neselectată – nu există altă versiune.</string>
+    <string name="timeshift_setting">Timeshift (pauză și derulare TV live)</string>
+    <string name="timeshift_duration_setting">Durată timeshift: %1$d min</string>
+    <string name="timeshift_hint">Canalul curent este înregistrat în memoria aplicației (până la circa 3 GB, părțile vechi se șterg continuu). Astfel TV-ul live poate fi pus pe pauză și derulat cu bara de redare. Se aplică de la următoarea pornire a canalului.</string>
 </resources>

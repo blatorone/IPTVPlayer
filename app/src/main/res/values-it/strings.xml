@@ -928,4 +928,7 @@
     <string name="buffer_hint">Con il buffer la riproduzione parte un po\' più tardi ma si blocca meno con stream instabili. Consigliato: medio.</string>
     <string name="buffer_restart_hint">Vale dal prossimo avvio dell\'app.</string>
     <string name="playback_foreign_audio_only">Questo stream ha l\'audio solo in una lingua non scelta: non c\'è un\'altra versione.</string>
+    <string name="timeshift_setting">Timeshift (metti in pausa e riavvolgi la TV in diretta)</string>
+    <string name="timeshift_duration_setting">Durata timeshift: %1$d min</string>
+    <string name="timeshift_hint">Il canale in corso viene registrato nella memoria dell\'app (fino a circa 3 GB, le parti vecchie vengono eliminate di continuo). Così la diretta si può mettere in pausa e scorrere con la barra di riproduzione. Vale dal prossimo avvio di un canale.</string>
 </resources>

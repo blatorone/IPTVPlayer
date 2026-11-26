@@ -65,3 +65,22 @@ internal fun BufferSettings() {
         color = if (changed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
     )
 }
+
+/** Settings rows under Wiedergabe: timeshift on/off and how long it keeps. */
+@Composable
+internal fun TimeshiftSettings() {
+    val context = LocalContext.current
+    val preferences = remember(context) { context.getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE) }
+    var enabled by remember { mutableStateOf(preferences.getBoolean("timeshift_enabled", false)) }
+    var minutes by remember { mutableStateOf(preferences.getInt("timeshift_minutes", 30).takeIf { it in TIMESHIFT_DURATIONS } ?: 30) }
+    SettingRow(stringResource(R.string.timeshift_setting), selected = enabled) {
+        enabled = !enabled
+        preferences.edit().putBoolean("timeshift_enabled", enabled).apply()
+    }
+    if (enabled) SettingRow(stringResource(R.string.timeshift_duration_setting, minutes)) {
+        minutes = TIMESHIFT_DURATIONS[(TIMESHIFT_DURATIONS.indexOf(minutes) + 1) % TIMESHIFT_DURATIONS.size]
+        preferences.edit().putInt("timeshift_minutes", minutes).apply()
+    }
+    Text(stringResource(R.string.timeshift_hint), style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant)
+}

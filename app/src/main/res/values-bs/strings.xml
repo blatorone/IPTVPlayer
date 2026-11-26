@@ -928,4 +928,7 @@
     <string name="buffer_hint">S baferom reprodukcija kreće malo kasnije, ali rjeđe zastajkuje kod nestabilnih streamova. Preporučeno: srednji.</string>
     <string name="buffer_restart_hint">Važi od sljedećeg pokretanja aplikacije.</string>
     <string name="playback_foreign_audio_only">Ovaj stream ima zvuk samo na neodabranom jeziku – druge verzije nema.</string>
+    <string name="timeshift_setting">Timeshift (pauziranje i premotavanje TV-a uživo)</string>
+    <string name="timeshift_duration_setting">Trajanje timeshifta: %1$d min</string>
+    <string name="timeshift_hint">Trenutni kanal snima se u memoriju aplikacije (do oko 3 GB, stariji dijelovi stalno se brišu). Tada se TV uživo može pauzirati i premotavati trakom reprodukcije. Važi od sljedećeg pokretanja kanala.</string>
 </resources>

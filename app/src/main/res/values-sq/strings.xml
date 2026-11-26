@@ -923,4 +923,7 @@
     <string name="buffer_hint">Me buferin luajtja nis pak më vonë, por ngec më rrallë te transmetimet e paqëndrueshme. I rekomanduar: mesatar.</string>
     <string name="buffer_restart_hint">Vlen nga nisja e ardhshme e aplikacionit.</string>
     <string name="playback_foreign_audio_only">Ky transmetim ka zë vetëm në një gjuhë të pazgjedhur – nuk ka version tjetër.</string>
+    <string name="timeshift_setting">Timeshift (ndal dhe kthe mbrapsht TV-në live)</string>
+    <string name="timeshift_duration_setting">Kohëzgjatja e timeshift: %1$d min</string>
+    <string name="timeshift_hint">Kanali aktual regjistrohet në memorien e aplikacionit (deri në rreth 3 GB, pjesët e vjetra fshihen vazhdimisht). Kështu TV live mund të ndalet dhe të lëvizet me shiritin e luajtjes. Vlen nga nisja e ardhshme e kanalit.</string>
 </resources>

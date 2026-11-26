@@ -557,7 +557,7 @@
     <string name="portal_pick_saved">Gespeichertes Portal verwenden</string>
     <string name="portal_address_http">HTTP-Portaladresse</string>
     <string name="portal_address_https">HTTPS-Portaladresse</string>
-    <string name="portal_address_manual">VollstÃ¤ndige Adresse manuell eingeben</string>
+    <string name="portal_address_manual">Vollständige Adresse manuell eingeben</string>
     <string name="portal_address_host">Serveradresse</string>
     <string name="portal_address_saved">Gespeichertes Portal auswählen</string>
     <string name="portal_mac_prefix">MAC-Adressbereich</string>
@@ -589,6 +589,11 @@
     <string name="settings_parental">Kindersicherung</string>
     <string name="settings_locks">Sperren</string>
     <string name="logout">Abmelden</string>
+    <string name="app_language">App-Sprache</string>
+    <string name="app_language_setting">App-Sprache: %1$s</string>
+    <string name="app_language_system_short">Systemsprache</string>
+    <string name="app_language_system">Systemsprache (%1$s)</string>
+    <string name="app_language_hint">Sprache der Bedienoberfläche. „Systemsprache“ folgt der Sprache des Geräts; ist sie nicht übersetzt, wird Englisch verwendet.</string>
     <string name="accent_palette_plain">Farben</string>
     <string name="accent_palette_gradients">Farbverläufe</string>
     <string name="profile_admin">Admin</string>
@@ -686,4 +691,12 @@
     <string name="remote_access_remaining">Endet ohne Nutzung in %1$s</string>
     <string name="remote_qr_description">QR-Code für den Zugriff per Handy</string>
     <string name="remote_setup_portal">Per Handy einrichten</string>
+    <string name="mirror_title">Oberfläche spiegeln?</string>
+    <string name="mirror_text">%1$s wird von rechts nach links gelesen. Soll die ganze Oberfläche gespiegelt werden (Menü rechts), oder bleibt der Aufbau wie gewohnt und nur die Texte werden in Leserichtung angezeigt?</string>
+    <string name="mirror_yes">Spiegeln</string>
+    <string name="mirror_no">Aufbau beibehalten</string>
+    <string name="mirror_setting">Oberfläche spiegeln</string>
+    <string name="first_language_question">Die App verwendet %1$s. Möchtest du die Sprache ändern?</string>
+    <string name="first_language_keep">Weiter mit %1$s</string>
+    <string name="first_language_change">Sprache ändern</string>
 </resources>

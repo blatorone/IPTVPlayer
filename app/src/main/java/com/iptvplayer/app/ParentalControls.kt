@@ -45,11 +45,12 @@ internal val MAIN_AREAS = listOf("LIVE", "MOVIES", "SERIES")
 /** Age levels of the kids mode (German FSK steps). */
 internal val KIDS_AGES = listOf(0, 6, 12, 16, 18)
 
+// Category names of IPTV portals come in many languages (independent of the app language).
 private val ADULT_CATEGORY = Regex(
-    """(?i)(erotik|erotic|adult|xxx|porn|\bsex\b|\+18\b|\b18\+|for adults|nur für erwachsene)"""
+    """(?iu)(erotik|erotic|érotique|erótic|erotyk|erotiek|erotika|erotikus|ερωτικ|эротик|еротик|adult|xxx|porn|порн|\bsex\b|\+\s?18\b|\b18\s?\+|\b18\s?plus\b|for adults|nur für erwachsene|yetişkin|dla dorosłych|para adultos|pour adultes|per adulti|pentru adulți|za odrasle|за одрасле|për të rritur|для взрослых|для дорослих|за възрастни|felnőtt|pro dospělé|pre dospelých|voor volwassenen|för vuxna|for voksne|aikuis|ενηλίκων|للكبار|للبالغين|למבוגרים|成人)"""
 )
 private val KIDS_CATEGORY = Regex(
-    """(?i)(kinder|\bkids?\b|family|familie|cartoon|\btoons?\b|junior|kika|nick(elodeon)?|disney|\bbaby\b|jugend|kinderfilm|zeichentrick)"""
+    """(?iu)(kinder|\bkids?\b|family|familie|famille|familia|família|famiglia|rodzin|cartoon|\btoons?\b|junior|kika|nick(elodeon)?|disney|\bbaby\b|jugend|kinderfilm|zeichentrick|çocuk|dzieci|bajki|детск|дитяч|мульт|enfants|jeunesse|niños|infantil|bambini|ragazzi|copii|desene|bdjecab|bdecab|dječ|dečij|fëmij|vizatimor|kinderen|bbarnb|lapset|gyerek|dětsk|bdetib|παιδ|أطفال|كرتون|ילדים|儿童|少儿|动画)"""
 )
 
 internal fun isAdultCategory(name: String): Boolean = ADULT_CATEGORY.containsMatchIn(name)

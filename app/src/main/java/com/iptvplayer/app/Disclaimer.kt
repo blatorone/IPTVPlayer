@@ -57,7 +57,9 @@ private const val DISCLAIMER_KEY = "disclaimer_accepted_version"
 internal fun disclaimerAccepted(context: Context): Boolean {
     val preferences = context.getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE)
     if (preferences.contains(DISCLAIMER_KEY)) return preferences.getInt(DISCLAIMER_KEY, 0) >= DISCLAIMER_VERSION
-    val existingInstall = preferences.all.isNotEmpty() ||
+    // The first-start language choice is not a sign of an earlier install.
+    val firstStartKeys = setOf("app_language", "mirror_rtl", "first_language_chosen")
+    val existingInstall = preferences.all.keys.any { it !in firstStartKeys } ||
         listOf("portal-library.v2", "stalker-source.v1", "stalker-source.v1.migrated")
             .any { File(context.noBackupFilesDir, it).exists() }
     if (existingInstall) {
@@ -133,3 +135,52 @@ internal fun RemoteScrollText(text: String, modifier: Modifier = Modifier, focus
         style = MaterialTheme.typography.bodyMedium
     )
 }
+
+/** Whether the language was chosen on the first start (installs before this count as done). */
+internal fun firstLanguageChosen(context: Context): Boolean =
+    context.getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE).getBoolean("first_language_chosen", false)
+
+internal fun markFirstLanguageChosen(context: Context) {
+    context.getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE).edit().putBoolean("first_language_chosen", true).apply()
+}
+
+/**
+ * First start, before the terms: the interface language (System first). Arabic and Hebrew ask
+ * whether the layout is mirrored. The terms then appear in the chosen language.
+ */
+@Composable
+internal fun FirstLanguageScreen(onChosen: (String?, Boolean) -> Unit, onExit: () -> Unit) {
+    BackHandler(onBack = onExit)
+    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background), contentAlignment = Alignment.Center) {
+        Surface(
+            Modifier.widthIn(max = 900.dp).padding(32.dp),
+            shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainer
+        ) {
+            Column(Modifier.padding(28.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                StreamWatchLogo(28.dp)
+                Text("🌐  " + stringResource(R.string.app_language), style = MaterialTheme.typography.headlineSmall)
+                // First only the question (in the device language); the list opens on "Sprache ändern".
+                var choosing by remember { mutableStateOf(false) }
+                if (choosing) AppLanguageSettings(null, false, onChosen) else {
+                    val deviceLanguage = APP_LANGUAGES.firstOrNull {
+                        it.tag == effectiveLanguage(null, android.content.res.Resources.getSystem().configuration.locales[0] ?: java.util.Locale.ENGLISH)
+                    }
+                    val current = deviceLanguage?.name ?: "English"
+                    // Keeping a right-to-left device language also asks whether to mirror the layout.
+                    var askMirror by remember { mutableStateOf(false) }
+                    if (askMirror && deviceLanguage != null) MirrorQuestion(deviceLanguage, { askMirror = false }) { onChosen(null, it) }
+                    Text(stringResource(R.string.first_language_question, current), style = MaterialTheme.typography.bodyLarge)
+                    val keep = remember { FocusRequester() }
+                    LaunchedEffect(Unit) { runCatching { keep.requestFocus() } }
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        MenuButton(stringResource(R.string.first_language_keep, current), Modifier.focusRequester(keep)) {
+                            if (deviceLanguage?.tag in RTL_LANGUAGES) askMirror = true else onChosen(null, false)
+                        }
+                        MenuButton(stringResource(R.string.first_language_change), Modifier) { choosing = true }
+                    }
+                }
+            }
+        }
+    }
+}
+

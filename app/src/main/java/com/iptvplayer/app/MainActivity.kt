@@ -166,6 +166,11 @@ import kotlinx.coroutines.yield
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class MainActivity : ComponentActivity() {
+    // The interface language (chosen in the settings, otherwise the device language or English).
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(localizedContext(newBase))
+    }
+
     private lateinit var player: ExoPlayer
     private val storage by lazy { PortalStorage(applicationContext) }
     private var longBackAction: (() -> Boolean)? = null
@@ -263,7 +268,16 @@ class MainActivity : ComponentActivity() {
             }
             MaterialTheme(colorScheme = accentGradient?.let(::playerColors) ?: playerColors(accentChoice)) {
             androidx.compose.runtime.CompositionLocalProvider(LocalAccentGradient provides accentGradient) {
-                if (!termsAccepted) DisclaimerScreen(
+                // New installs: language first, then the terms in that language.
+                if (!termsAccepted && !firstLanguageChosen(this@MainActivity)) FirstLanguageScreen(
+                    onChosen = { tag, mirror ->
+                        saveLanguage(this@MainActivity, tag)
+                        saveMirrorLayout(this@MainActivity, mirror)
+                        markFirstLanguageChosen(this@MainActivity)
+                        recreate()
+                    },
+                    onExit = ::finish
+                ) else if (!termsAccepted) DisclaimerScreen(
                     onAccept = { acceptDisclaimer(this@MainActivity); termsAccepted = true },
                     onExit = ::finish
                 ) else PlayerHome(
@@ -638,6 +652,7 @@ private class PlayerHomeFlags {
     var traktSettingsOpen by mutableStateOf<Boolean>(false)
     var kidsProtectionOpen by mutableStateOf<Boolean>(false)
     var termsOpen by mutableStateOf<Boolean>(false)
+    var languageOpen by mutableStateOf<Boolean>(false)
     var profilePickerOpen by mutableStateOf<Boolean>(false)
     var profileStartChecked by mutableStateOf<Boolean>(false)
     var kidsNameDialog by mutableStateOf<Boolean>(false)
@@ -4830,7 +4845,7 @@ private fun PlayerHome(
     val mainMenuOpen = isMainMenuOpen()
     LaunchedEffect(mainMenuOpen) { if (!mainMenuOpen) lastBack = 0L }
     fun settingsPageOpen() = ui.epgSettingsOpen || ui.episodeSettingsOpen || ui.controlSettingsOpen ||
-        ui.metadataSettingsOpen || ui.traktSettingsOpen || ui.kidsProtectionOpen || ui.termsOpen || guideAppearancePage != null || ui.remoteAccessOpen || ui.accentPaletteOpen
+        ui.metadataSettingsOpen || ui.traktSettingsOpen || ui.kidsProtectionOpen || ui.termsOpen || ui.languageOpen || guideAppearancePage != null || ui.remoteAccessOpen || ui.accentPaletteOpen
     fun openSettingsPage(open: () -> Unit) {
         ui.settingsPageOpenedAt = SystemClock.elapsedRealtime()
         open()
@@ -4853,6 +4868,7 @@ private fun PlayerHome(
         ui.traktSettingsOpen = false
         ui.kidsProtectionOpen = false
         ui.termsOpen = false
+        ui.languageOpen = false
         guideAppearancePage = null
         ui.remoteAccessOpen = false
         ui.accentPaletteOpen = false
@@ -7550,7 +7566,7 @@ private fun PlayerHome(
                                         )
                                         Column(Modifier.weight(1f)) {
                                             Text(
-                                                "EINSTELLUNGEN",
+                                                stringResource(R.string.destination_settings).uppercase(),
                                                 style = MaterialTheme.typography.labelSmall,
                                                 color = MaterialTheme.colorScheme.primary
                                             )
@@ -7570,6 +7586,16 @@ private fun PlayerHome(
                                         ui.controlSettingsOpen -> controlSettingsPage
                                         ui.remoteAccessOpen -> remoteAccessPage
                                         ui.metadataSettingsOpen -> metadataSettingsPage
+                                        ui.languageOpen -> { {
+                                            SettingsDialog(stringResource(R.string.app_language), { ui.languageOpen = false }) {
+                                                AppLanguageSettings(remember { chosenLanguage(context) }, remember { mirrorLayout(context) }) { tag, mirror ->
+                                                    // The new language applies at once: the screen is built again.
+                                                    saveLanguage(context, tag)
+                                                    saveMirrorLayout(context, mirror)
+                                                    (context as? android.app.Activity)?.recreate()
+                                                }
+                                            }
+                                        } }
                                         ui.termsOpen -> { {
                                             SettingsDialog(stringResource(R.string.disclaimer_title), { ui.termsOpen = false }) { DisclaimerText() }
                                         } }
@@ -7648,6 +7674,12 @@ private fun PlayerHome(
                                         androidx.compose.runtime.CompositionLocalProvider(LocalSettingsInline provides true) { subpage() }
                                     } else when (section) {
                                 SettingsSection.GENERAL -> {
+                                    SettingRow(
+                                        stringResource(R.string.app_language_setting,
+                                            chosenLanguage(context)?.let { tag -> APP_LANGUAGES.firstOrNull { it.tag == tag }?.name }
+                                                ?: stringResource(R.string.app_language_system_short)),
+                                        Modifier
+                                    ) { openSettingsPage { ui.languageOpen = true } }
                                     SettingRow(stringResource(R.string.remote_access), Modifier) {
                                         // The phone can change portals and categories: it needs the PIN when they are protected.
                                         withSettingsPin(parental.lockPortals || parental.lockCategories) {

@@ -25,6 +25,15 @@ class ParentalControlsTest {
         assertTrue(isKidsCategory("DE| KINDER"))
         assertTrue(isKidsCategory("Family & Kids"))
         assertFalse(isKidsCategory("DE| SPORT"))
+        // Portals in other languages
+        assertTrue(isAdultCategory("TR| YETİŞKİN"))
+        assertTrue(isAdultCategory("PL| Dla dorosłych"))
+        assertTrue(isAdultCategory("RU| ЭРОТИКА"))
+        assertTrue(isAdultCategory("AR| للكبار فقط"))
+        assertTrue(isAdultCategory("FR| Pour adultes +18"))
+        assertTrue(isKidsCategory("TR| ÇOCUK"))
+        assertTrue(isKidsCategory("RU| Детские"))
+        assertFalse(isKidsCategory("UK| Decades TV"))
     }
 
     @Test

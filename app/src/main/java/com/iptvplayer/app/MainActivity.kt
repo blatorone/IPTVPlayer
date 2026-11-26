@@ -2056,6 +2056,7 @@ private fun PlayerHome(
         initialValue = emptyMap<PortalSection, Map<String, List<SourceItem<PortalGroup>>>>(),
         sourcesForBrowsing, combine, fallbackGroup, countries, metadataClient
     ) {
+        val started = SystemClock.elapsedRealtime()
         value = withContext(Dispatchers.Default) {
             listOf(PortalSection.MOVIES, PortalSection.SERIES).associateWith { section ->
             val entries = sourcesForBrowsing.flatMap { source ->
@@ -2103,6 +2104,7 @@ private fun PlayerHome(
             } else entries.associate { it.value.id to listOf(it) }
             }
         }
+        if (sourcesForBrowsing.isNotEmpty()) AppDiagnostics.record(context, "vod_groups ms:${SystemClock.elapsedRealtime() - started}")
     }
     fun sessionFor(source: SavedPortal): StalkerPortal =
         if (source.identity == storedSource?.identity) {
@@ -2457,6 +2459,7 @@ private fun PlayerHome(
                     var requested = pages
                     var rounds = 0
                     var incomplete = false
+                    val started = SystemClock.elapsedRealtime()
                     do {
                         val result = loadTmdbPortalShelf(
                             client, section, category, requested, sourcesForBrowsing, countries, ::sessionFor
@@ -2469,6 +2472,8 @@ private fun PlayerHome(
                         requested = result.nextPages
                         rounds++
                     } while (requested.isNotEmpty() && metadataTitles.size - previous.size < 24 && rounds < 8)
+                    AppDiagnostics.record(context,
+                        "vod_group_tmdb ${section.name} ms:${SystemClock.elapsedRealtime() - started} rounds:$rounds titles:${metadataTitles.size}")
                     ui.groupError = incomplete
                 } catch (error: CancellationException) {
                     throw error
@@ -2494,6 +2499,7 @@ private fun PlayerHome(
         ui.groupError = false
         ui.groupLoading = true
         groupJob = scope.launch {
+            val started = SystemClock.elapsedRealtime()
             try {
                 val requests = Semaphore(4)
                 fun pageKey(item: SourceItem<PortalGroup>) = "${item.source.identity}:${item.value.id}"
@@ -2518,7 +2524,10 @@ private fun PlayerHome(
                         }
                     }.map { it.await() }.mapNotNull { (id, page) -> page?.let { id to it } }.toMap()
                 }
+                val loadedAt = SystemClock.elapsedRealtime()
                 val target = VodCategory.entries.firstOrNull { it.id == group.id }
+                // Filtering and merging thousands of titles off the main thread (it made the UI stall).
+                val variants = withContext(Dispatchers.Default) {
                 val entries = owners.flatMap { item ->
                     val providerCategory = vodCategory(item.value)
                     pages[pageKey(item)]?.titles.orEmpty().filter { title ->
@@ -2531,9 +2540,13 @@ private fun PlayerHome(
                         }
                     }.map { SourceItem(item.source, it) }
                 }
-                val variants = if (combine) {
+                if (combine) {
                     mergeCatalogueTitles(entries.distinct(), requireVerifiedIdentity = section == PortalSection.SERIES)
                 } else entries.map(::listOf)
+                }
+                AppDiagnostics.record(context,
+                    "vod_group ${section.name} portals:${owners.size} load_ms:${loadedAt - started} " +
+                        "merge_ms:${SystemClock.elapsedRealtime() - loadedAt} titles:${variants.size} next:$next")
                 groupPages = pages
                 groupVariants = variants.associateBy { it.first().value }
                 groupCatalog = PortalCatalog(

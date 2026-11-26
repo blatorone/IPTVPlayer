@@ -198,6 +198,7 @@ function askPin(title) {
     dialog.onclose = () => {
       const pin = input.value;
       input.value = "";
+      input.blur();
       resolve(dialog.returnValue === "ok" && /^[^\x00-\x1f]{4,64}$/.test(pin) ? pin : null);
     };
     dialog.showModal();
@@ -499,11 +500,18 @@ function renderSettings() {
     if (!groups.has(s.section)) groups.set(s.section, []);
     groups.get(s.section).push(s);
   }
-  $("settings").replaceChildren(...[...groups].flatMap(([section, items]) => [
-    el("h3", {}, section),
-    ...items.map((s) => settingRow(s, (value) => send({ t: "set", id: s.id, value }))),
-  ]));
+  // Like the app: sections on the left, the settings of the chosen section on the right.
+  const names = [...groups.keys()];
+  if (!names.includes(settingsSection)) settingsSection = names[0];
+  $("settings").replaceChildren(el("div", { class: "settings-split" },
+    el("nav", { class: "settings-nav" }, names.map((name) => el("button", {
+      class: name === settingsSection ? "active" : "",
+      onclick: () => { settingsSection = name; renderSettings(); },
+    }, name))),
+    el("div", { class: "settings-rows" },
+      (groups.get(settingsSection) || []).map((s) => settingRow(s, (value) => send({ t: "set", id: s.id, value }))))));
 }
+let settingsSection = null;
 
 // ---------- events ----------
 $("tabs").addEventListener("click", (e) => {
@@ -656,6 +664,7 @@ function passwordForm(label, onSubmit, numeric = false) {
     const value = input.value;
     if (!/^[^\x00-\x1f]{4,64}$/.test(value)) { toast(t("pw.min4"), true); return; }
     input.value = "";
+    input.blur();
     onSubmit(value);
   });
   setTimeout(() => input.focus(), 0);

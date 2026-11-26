@@ -84,3 +84,10 @@ button.primary, nav button.active, .segments button.active { color: var(--on-acc
 .pin-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-width: 320px; margin: 0 auto; }
 .pin-key { font-size: 1.4rem; padding: 16px 0; border-radius: 14px; }
 .pin-lengths { display: grid; gap: 10px; max-width: 320px; margin: 0 auto; }
+
+/* Settings like in the app: sections left, rows right */
+.settings-split { display: flex; gap: 10px; align-items: flex-start; }
+.settings-nav { display: flex; flex-direction: column; gap: 4px; flex: 0 0 34%; position: sticky; top: 8px; }
+.settings-nav button { text-align: start; padding: 10px; border-radius: 10px; }
+.settings-nav button.active { background: var(--accent); color: var(--on-accent); }
+.settings-rows { flex: 1; min-width: 0; }

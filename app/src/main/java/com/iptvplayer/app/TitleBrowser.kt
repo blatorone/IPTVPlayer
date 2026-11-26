@@ -150,9 +150,12 @@ internal fun ColumnScope.TitleGrid(
         }
     }
     val allRow = rememberLazyListState()
+    // Which row the title was opened from ("hero", "all", "new"): Back returns there, one step back.
+    var lastShelf by rememberSaveable { mutableStateOf("all") }
     val returnIndex = returnTitle?.let { target -> sorted.indexOfFirst { it == target } } ?: -1
     val returnFocus = remember { FocusRequester() }
     LaunchedEffect(returnTitle, returnIndex, focusFirstTitle) {
+        if (returnIndex >= 0 && lastShelf != "all") return@LaunchedEffect
         if (returnIndex >= 0) {
             if (allRow.layoutInfo.visibleItemsInfo.none { it.index == returnIndex }) allRow.scrollToItem(returnIndex)
         } else if (returnTitle != null) onTitleFocusRestored()
@@ -172,11 +175,16 @@ internal fun ColumnScope.TitleGrid(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     itemsIndexed(popular, key = { _, title -> "hero-${posterShelfKey(title)}" }) { index, title ->
+                        val restoreHere = lastShelf == "hero" && returnTitle != null && title == returnTitle
+                        if (restoreHere) LaunchedEffect(title) {
+                            if (requestFocusSoon(returnFocus)) onTitleFocusRestored()
+                        }
                         FeaturedTitle(
                             title = title,
                             height = (maxHeight * if (compact) 0.30f else 0.36f).coerceIn(150.dp, 300.dp),
-                            modifier = Modifier.width(maxWidth * 0.86f),
-                            onSelect = { onSelect(title) }
+                            modifier = Modifier.width(maxWidth * 0.86f)
+                                .then(if (restoreHere) Modifier.focusRequester(returnFocus) else Modifier),
+                            onSelect = { lastShelf = "hero"; onSelect(title) }
                         )
                     }
                 }
@@ -186,10 +194,10 @@ internal fun ColumnScope.TitleGrid(
                 TitleShelf(
                     title = categoryTitle,
                     titles = sorted, cardWidth = cardWidth, state = allRow,
-                    focusIndex = returnIndex.takeIf { it >= 0 } ?: if (focusFirstTitle) 0 else -1,
+                    focusIndex = returnIndex.takeIf { it >= 0 && lastShelf == "all" } ?: if (focusFirstTitle) 0 else -1,
                     focusRequester = returnFocus,
                     newEpisodes = newEpisodes, onFocusRestored = onTitleFocusRestored,
-                    onSelect = onSelect
+                    onSelect = { lastShelf = "all"; onSelect(it) }
                 )
             }
             val withNewEpisodes = sorted.filter { newEpisodes(it) > 0 }
@@ -197,7 +205,10 @@ internal fun ColumnScope.TitleGrid(
                 TitleShelf(
                     title = stringResource(R.string.catalog_shelf_new_episodes),
                     titles = withNewEpisodes, cardWidth = cardWidth,
-                    newEpisodes = newEpisodes, onSelect = onSelect
+                    focusIndex = if (lastShelf == "new" && returnTitle != null) withNewEpisodes.indexOf(returnTitle) else -1,
+                    focusRequester = returnFocus,
+                    newEpisodes = newEpisodes, onFocusRestored = onTitleFocusRestored,
+                    onSelect = { lastShelf = "new"; onSelect(it) }
                 )
             }
         }
@@ -270,8 +281,7 @@ private fun TitleShelf(
             itemsIndexed(titles, key = { index, item -> "${posterShelfKey(item)}-$index" }) { index, item ->
                 val shouldRestore = index == focusIndex && focusRequester != null
                 if (shouldRestore) LaunchedEffect(item) {
-                    withFrameNanos { }
-                    if (focusRequester!!.requestFocus()) onFocusRestored()
+                    if (requestFocusSoon(focusRequester!!)) onFocusRestored()
                 }
                 PosterShelfCard(
                     item, cardWidth, newEpisodes(item),
@@ -282,6 +292,18 @@ private fun TitleShelf(
             }
         }
     }
+}
+
+/**
+ * Back from a title: the card may not be laid out in the first frame, and a single failed try
+ * left the focus on the categories. Tries for a few frames until the card takes the focus.
+ */
+private suspend fun requestFocusSoon(requester: FocusRequester): Boolean {
+    repeat(12) {
+        withFrameNanos { }
+        if (runCatching { requester.requestFocus() }.getOrDefault(false)) return true
+    }
+    return false
 }
 
 private fun posterShelfKey(title: PortalTitle): String = listOfNotNull(

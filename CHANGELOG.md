@@ -1,5 +1,9 @@
 # Änderungen
 
+## 1.0.94
+
+- Kinderkonto: „Trakt für <Name>“ öffnet sich wieder (lag hinter der Kinderschutz-Seite) und erscheint nur, wenn beim Admin ein Trakt-Konto verbunden ist. Das Kinderkonto nutzt dieselbe Trakt-API; ist keine gespeichert, wird sie einmal eingegeben.
+
 ## 1.0.93
 
 - Live-TV: Beim Wechsel der Quelle oder des Senders bleibt das letzte Bild stehen, statt schwarz zu werden. Der nächste Stream wird schon vorbereitet, sobald der laufende hakt.

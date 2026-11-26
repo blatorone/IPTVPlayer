@@ -3,7 +3,7 @@
 ## 1.0.98
 
 - Behoben: Nach dem Start im Vollbild ließ sich nicht umschalten – die Tasten nutzten noch die beim Start leere Senderliste. Jetzt gilt immer die aktuelle Liste.
-- Diagnose: Beim Umschalten im Vollbild werden Messwerte (nur Zahlen, keine Sendernamen) im Diagnosebericht festgehalten, um den Fehler nach dem Vollbildstart zu finden.
+- Serbisch (lateinisch): falsche Großschreibung von „Nj“, „Lj“ und „Dž“ mitten im Wort korrigiert.
 
 ## 1.0.97
 

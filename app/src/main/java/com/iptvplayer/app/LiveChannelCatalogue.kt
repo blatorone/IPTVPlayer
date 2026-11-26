@@ -89,15 +89,81 @@ private val generalStation = Regex(
 
 // The description depends only on the channel name and provider category; the same names repeat
 // across portals and every regrouping (country selection, refresh) would parse them again.
+// Portals with ~60 000 channels are common, so the limit lies well above that.
+private const val DESCRIPTION_CACHE_LIMIT = 250_000
 private val descriptionCache = java.util.concurrent.ConcurrentHashMap<String, ChannelDescription>()
+@Volatile private var descriptionCacheDirty = false
 
 internal fun describeChannel(channel: StalkerChannel, providerCategory: String?): ChannelDescription {
     val key = channel.name + '\u0000' + providerCategory.orEmpty()
     descriptionCache[key]?.let { return it }
     val description = parseChannelDescription(channel, providerCategory)
-    if (descriptionCache.size > 60_000) descriptionCache.clear()
+    if (descriptionCache.size > DESCRIPTION_CACHE_LIMIT) descriptionCache.clear()
     descriptionCache[key] = description
+    descriptionCacheDirty = true
     return description
+}
+
+/*
+ * Parsing ~60 000 channel names took 45 s on a Fire TV Stick at every cold start, while the guide
+ * stayed empty. The parsed descriptions are kept in a file and read back at the next start
+ * (about a second). [version] (the app version) drops the file after an update, because the
+ * parsing rules may have changed. The file stays in the app's own cache folder.
+ */
+private const val DESCRIPTION_FILE_FORMAT = "channel-descriptions 1"
+
+internal fun loadChannelDescriptions(file: java.io.File, version: String) {
+    if (descriptionCache.isNotEmpty() || !file.exists()) return
+    runCatching {
+        file.bufferedReader(Charsets.UTF_8).useLines { lines ->
+            val rows = lines.iterator()
+            if (!rows.hasNext() || rows.next() != "$DESCRIPTION_FILE_FORMAT $version") return@useLines
+            val categories = LiveCategory.entries.associateBy { it.name }
+            for (line in rows) {
+                val parts = line.split('\t')
+                if (parts.size != 6) continue
+                val category = categories[parts[4]] ?: continue
+                descriptionCache.putIfAbsent(
+                    parts[0] + '\u0000' + parts[1],
+                    ChannelDescription(parts[2], parts[3], category, if (parts[5].isEmpty()) emptyList() else parts[5].split(','))
+                )
+            }
+        }
+    }
+}
+
+internal fun saveChannelDescriptions(file: java.io.File, version: String) {
+    if (!descriptionCacheDirty) return
+    descriptionCacheDirty = false
+    runCatching {
+        val temporary = java.io.File(file.path + ".tmp")
+        temporary.bufferedWriter(Charsets.UTF_8).use { writer ->
+            writer.write("$DESCRIPTION_FILE_FORMAT $version\n")
+            for ((key, description) in descriptionCache) {
+                val split = key.indexOf('\u0000')
+                if (split < 0) continue
+                val values = listOf(
+                    key.substring(0, split), key.substring(split + 1), description.name, description.country,
+                    description.category.name, description.qualities.joinToString(",")
+                )
+                if (values.any { value -> value.any { it == '\t' || it == '\n' || it == '\r' } } ||
+                    description.qualities.any { ',' in it }
+                ) continue
+                writer.write(values.joinToString("\t"))
+                writer.write("\n")
+            }
+        }
+        if (!temporary.renameTo(file)) {
+            file.delete()
+            temporary.renameTo(file)
+        }
+    }
+}
+
+/** Only for tests: start without remembered descriptions. */
+internal fun clearChannelDescriptions() {
+    descriptionCache.clear()
+    descriptionCacheDirty = false
 }
 
 private fun parseChannelDescription(channel: StalkerChannel, providerCategory: String?): ChannelDescription {

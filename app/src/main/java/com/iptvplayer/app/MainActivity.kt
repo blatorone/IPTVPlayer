@@ -1975,8 +1975,19 @@ private fun PlayerHome(
         AppDiagnostics.record(context, "live_groups_start ch:${sourcesForBrowsing.sumOf { it.channels.size }}")
         try {
             val started = SystemClock.elapsedRealtime()
+            val descriptionFile = java.io.File(context.cacheDir, "channel-descriptions")
+            val descriptionVersion = runCatching {
+                androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(
+                    context.packageManager.getPackageInfo(context.packageName, 0)
+                ).toString()
+            }.getOrDefault("0")
             val groups = withContext(Dispatchers.Default) {
+                loadChannelDescriptions(descriptionFile, descriptionVersion)
                 buildLiveChannelGroups(sourcesForBrowsing, combine, mergePortalChannels, countries)
+            }
+            // Newly parsed channel names are kept for the next start.
+            if (sourcesForBrowsing.isNotEmpty()) launch(Dispatchers.IO) {
+                saveChannelDescriptions(descriptionFile, descriptionVersion)
             }
             AppDiagnostics.record(
                 context,

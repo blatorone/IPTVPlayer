@@ -7,7 +7,7 @@
 - Neu: „Letzten Sender im Vollbild starten“. Die App startet dann sofort im Vollbild (ohne kurz den Guide zu zeigen) und blendet oben links einmal die Senderinfo ein. Ausgeschaltet läuft der Sender im Guide-Vorschaubild.
 - Zurück-Taste: In Filmen und Serien bleibt immer eine Kategorie offen (vorher wurde der untere Bereich schwarz). Zurück führt zur Startseite und von dort aus der App.
 - Obere Leiste: Die aktuelle Seite zeigt das Symbol in der Akzentfarbe (ohne Symbole die Schrift) statt des Strichs.
-- Live-TV: Senderliste wird beim Start etwas schneller aufbereitet.
+- Live-TV: Die Senderliste steht beim Start deutlich schneller bereit. Die App merkt sich, wie sie die Sendernamen (Land, Qualität, Kategorie) gelesen hat, statt bei jedem Start alle neu zu zerlegen – bei rund 60 000 Sendern dauerte das auf dem Fire TV Stick etwa 45 Sekunden. Nach einem App-Update wird einmal neu gerechnet.
 - Diagnose: „Diagnosebericht in ‚Download‘ speichern“ legt den Bericht ohne Ordnerauswahl im Download-Ordner ab – auch auf Fire TV, das keine Ordnerauswahl hat.
 - Trakt: Ist schon eine Trakt-API gespeichert (beim Kinderkonto die des Admins), erscheint direkt der QR-Code statt der Eingabefelder; „Trakt-API ändern“ zeigt sie bei Bedarf.
 - Einstellungen: Nach rechts in die Zeilen geht es beim ersten Mal zur obersten Zeile, danach zur zuletzt benutzten des Bereichs (vorher sprang der Fokus z. B. bei „Sperren“ nach unten). Nach dem Schließen einer Seite steht der Fokus wieder auf der Zeile, die sie geöffnet hat; neu geöffnete Einstellungen beginnen wieder oben.

@@ -1,5 +1,9 @@
 # Änderungen
 
+## 1.0.96
+
+- App-Updates: Die Markierung für ein neues Update steht wieder als kleine „1“ oben rechts neben „Einstellungen“ (in 1.0.95 ersetzte sie den Text).
+
 ## 1.0.95
 
 - Kinderkonto: „Trakt für <Name>“ nutzt die Trakt-Kennung des Admins, auch wenn dessen Konto noch mit der früher eingebauten Kennung verbunden ist; eine eigene API muss dann nicht eingegeben werden.

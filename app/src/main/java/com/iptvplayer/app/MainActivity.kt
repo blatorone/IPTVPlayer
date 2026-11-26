@@ -6783,7 +6783,7 @@ private fun PlayerHome(
                                         MenuButton(
                                             stringResource(destination.label), Modifier.fillMaxWidth(),
                                             leadingIcon = destination.icon.takeUnless { mainMenuStyle == MainMenuStyle.TEXT },
-                                            count = 1.takeIf { destination == Destination.SETTINGS && appUpdates.available },
+                                            badge = 1.takeIf { destination == Destination.SETTINGS && appUpdates.available },
                                             iconOnly = mainMenuStyle == MainMenuStyle.ICONS
                                         ) {
                                             fullscreen = false
@@ -7360,7 +7360,7 @@ private fun PlayerHome(
                     MenuButton(
                         label = stringResource(item.label),
                         leadingIcon = item.icon.takeUnless { mainMenuStyle == MainMenuStyle.TEXT },
-                        count = 1.takeIf { item == Destination.SETTINGS && appUpdates.available },
+                        badge = 1.takeIf { item == Destination.SETTINGS && appUpdates.available },
                         iconOnly = mainMenuStyle == MainMenuStyle.ICONS,
                         modifier = Modifier.fillMaxWidth()
                             .focusRequester(destinationFocusRequester(item))
@@ -7416,7 +7416,7 @@ private fun PlayerHome(
                                         right = destinationFocusRequesters.getValue(next)
                                     },
                                 leadingIcon = item.icon.takeUnless { mainMenuStyle == MainMenuStyle.TEXT },
-                                count = 1.takeIf { item == Destination.SETTINGS && appUpdates.available },
+                                badge = 1.takeIf { item == Destination.SETTINGS && appUpdates.available },
                                 iconOnly = mainMenuStyle == MainMenuStyle.ICONS,
                                 selected = item == (destination ?: Destination.LIVE) ||
                                     item == Destination.SETTINGS && destination in setOf(
@@ -10522,6 +10522,8 @@ internal fun MenuButton(
     selected: Boolean = false,
     logo: String? = null,
     count: Int? = null,
+    /** Small marker at the top right of the label (e.g. an update at "Einstellungen"). */
+    badge: Int? = null,
     hiddenIndicator: Boolean = false,
     leadingIcon: Int? = null,
     providerMark: String? = null,
@@ -10622,6 +10624,12 @@ internal fun MenuButton(
             )
             if (count != null) {
                 Text(count.toString(), Modifier.padding(start = 8.dp), style = MaterialTheme.typography.labelSmall)
+            }
+            if (badge != null) Box(
+                Modifier.align(Alignment.Top).padding(start = 4.dp)
+                    .background(MaterialTheme.colorScheme.primary, androidx.compose.foundation.shape.CircleShape).padding(horizontal = 6.dp, vertical = 1.dp)
+            ) {
+                Text(badge.toString(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimary)
             }
         }
     }

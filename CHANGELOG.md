@@ -3,6 +3,8 @@
 ## 1.0.97
 
 - Filme und Serien: „Mein Bereich“ ersetzt Weiter schauen, Bald verfügbar, Merkliste und Verlauf. Er steht vorne in der Kategorie-Leiste und zeigt Reihen mit Postern: Weiter schauen, Merkliste, (bei Serien) Bald verfügbar und Zuletzt gesehen.
+- „Mein Bereich“ hat ein eigenes Symbol; neue Folgen gefolgter Serien stehen als Zahl im Kreis daneben (wie bei „Einstellungen“).
+- Handy-Seite: folgt der App-Sprache (17 Sprachen), mit Backup, Entsperren per PIN oder Passwort und den neuen Einstellungen.
 - Startseite: Unter Allgemein lässt sich wählen, ob die App mit Live-TV, Filmen oder Serien startet. Filme und Serien öffnen die erste Kategorie; „Letzten Sender beim Start abspielen“ gibt es dann nicht, es wird nichts abgespielt.
 - Neu: „Letzten Sender im Vollbild starten“. Die App startet dann sofort im Vollbild (ohne kurz den Guide zu zeigen) und blendet oben links einmal die Senderinfo ein. Ausgeschaltet läuft der Sender im Guide-Vorschaubild.
 - Behoben: Nach dem Start im Vollbild ließ sich nicht umschalten (und die Senderinfo zeigte keine Programmdaten), bis man das Vollbild einmal verlassen hatte.

@@ -185,7 +185,10 @@ function toast(text, error = false) {
   toastTimer = setTimeout(() => { box.className = ""; }, 3500);
 }
 function notice(text) { $("portal-notice").replaceChildren(el("div", { class: "notice" }, text)); }
-function show() { $("intro").hidden = true; $("tabs").hidden = false; $("app").hidden = false; }
+function show() {
+  $("intro").hidden = true; $("tabs").hidden = false; $("app").hidden = false;
+  if (!$("page-title").textContent) switchTab(tab);
+}
 
 function askPin(title) {
   return new Promise((resolve) => {
@@ -219,6 +222,9 @@ let categorySection = "LIVE";
 
 function render() {
   if (!state) return;
+  // Keep the title in the current language (it may change with the app language).
+  const active = [...$("tabs").children].find((b) => b.dataset.tab === tab);
+  if (active) $("page-title").textContent = active.textContent.trim();
   renderPortals();
   renderCountries();
   renderCategories();
@@ -316,6 +322,10 @@ function switchTab(name) {
   tab = name;
   for (const b of $("tabs").children) b.classList.toggle("active", b.dataset.tab === name);
   for (const n of ["portals", "countries", "categories", "parental", "settings", "backup"]) $(`tab-${n}`).hidden = n !== name;
+  // The page title follows the tab (like the title bar of an app); settings return to their list.
+  const label = [...$("tabs").children].find((b) => b.dataset.tab === name);
+  $("page-title").textContent = label ? label.textContent.trim() : "";
+  if (name === "settings") { settingsSection = null; if (state) renderSettings(); }
   window.scrollTo(0, 0);
 }
 
@@ -500,16 +510,20 @@ function renderSettings() {
     if (!groups.has(s.section)) groups.set(s.section, []);
     groups.get(s.section).push(s);
   }
-  // Like the app: sections on the left, the settings of the chosen section on the right.
+  // Like the app: first the list of sections, a tap opens the section as its own page.
   const names = [...groups.keys()];
-  if (!names.includes(settingsSection)) settingsSection = names[0];
-  $("settings").replaceChildren(el("div", { class: "settings-split" },
-    el("nav", { class: "settings-nav" }, names.map((name) => el("button", {
-      class: name === settingsSection ? "active" : "",
-      onclick: () => { settingsSection = name; renderSettings(); },
-    }, name))),
-    el("div", { class: "settings-rows" },
-      (groups.get(settingsSection) || []).map((s) => settingRow(s, (value) => send({ t: "set", id: s.id, value }))))));
+  if (settingsSection && !names.includes(settingsSection)) settingsSection = null;
+  if (!settingsSection) {
+    $("settings").replaceChildren(el("div", { class: "list-group" }, names.map((name) => el("button", {
+      class: "list-item", onclick: () => { settingsSection = name; window.scrollTo(0, 0); renderSettings(); },
+    }, el("span", {}, name), el("span", { class: "chevron", "aria-hidden": "true" }, "›")))));
+    return;
+  }
+  $("settings").replaceChildren(
+    el("button", { class: "back-link", onclick: () => { settingsSection = null; window.scrollTo(0, 0); renderSettings(); } },
+      el("span", { "aria-hidden": "true" }, "‹"), " ", settingsSection),
+    el("div", { class: "list-group" },
+      (groups.get(settingsSection) || []).map((s) => settingRow(s, (value) => send({ t: "set", id: s.id, value })))));
 }
 let settingsSection = null;
 

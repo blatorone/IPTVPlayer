@@ -38,15 +38,16 @@
   </main>
 
   <nav id="tabs" hidden>
-    <button data-tab="portals" class="active" data-i18n="tab.portals">Portale</button>
-    <button data-tab="countries" data-i18n="tab.countries">Länder</button>
-    <button data-tab="categories" data-i18n="tab.categories">Kategorien</button>
-    <button data-tab="parental" data-i18n="tab.parental">Sperren</button>
-    <button data-tab="settings" data-i18n="tab.settings">Einstellungen</button>
-    <button data-tab="backup" data-i18n="tab.backup">Backup</button>
+    <button data-tab="portals" class="active"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16v10H4z M8 20h8 M12 16v4"/></svg><span data-i18n="tab.portals">Portale</span></button>
+    <button data-tab="countries"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17 M12 3.5c3 3.2 3 13.8 0 17 M12 3.5c-3 3.2-3 13.8 0 17"/></svg><span data-i18n="tab.countries">Länder</span></button>
+    <button data-tab="categories"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h7v6H4z M13 5h7v6h-7z M4 13h7v6H4z M13 13h7v6h-7z"/></svg><span data-i18n="tab.categories">Kategorien</span></button>
+    <button data-tab="parental"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/></svg><span data-i18n="tab.parental">Sperren</span></button>
+    <button data-tab="settings"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10 M18 7h2 M4 17h4 M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg><span data-i18n="tab.settings">Einstellungen</span></button>
+    <button data-tab="backup"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11 M7.5 10.5L12 15l4.5-4.5 M5 19h14"/></svg><span data-i18n="tab.backup">Backup</span></button>
   </nav>
 
   <main id="app" hidden>
+    <h1 id="page-title" class="page-title"></h1>
     <section id="tab-portals">
       <div id="portal-notice"></div>
       <div id="portal-merge"></div>

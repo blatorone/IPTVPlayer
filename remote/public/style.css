@@ -85,9 +85,46 @@ button.primary, nav button.active, .segments button.active { color: var(--on-acc
 .pin-key { font-size: 1.4rem; padding: 16px 0; border-radius: 14px; }
 .pin-lengths { display: grid; gap: 10px; max-width: 320px; margin: 0 auto; }
 
-/* Settings like in the app: sections left, rows right */
-.settings-split { display: flex; gap: 10px; align-items: flex-start; }
-.settings-nav { display: flex; flex-direction: column; gap: 4px; flex: 0 0 34%; position: sticky; top: 8px; }
-.settings-nav button { text-align: start; padding: 10px; border-radius: 10px; }
-.settings-nav button.active { background: var(--accent); color: var(--on-accent); }
-.settings-rows { flex: 1; min-width: 0; }
+/* ---------- App look ---------- */
+:root { --radius: 16px; --bar: 64px; }
+body { -webkit-tap-highlight-color: transparent; }
+header { padding: 10px 16px; padding-top: max(10px, env(safe-area-inset-top)); backdrop-filter: blur(12px);
+  background: rgba(11,11,13,.85); }
+main { padding: 8px 14px calc(var(--bar) + 28px + env(safe-area-inset-bottom)); }
+.page-title { font-size: 1.7rem; font-weight: 800; letter-spacing: -.02em; margin: 14px 4px 10px; }
+
+/* Bottom tab bar with symbols, like a phone app */
+nav#tabs { position: fixed; top: auto; bottom: 0; left: 0; right: 0; z-index: 3; display: grid;
+  grid-template-columns: repeat(6, 1fr); gap: 0; padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+  background: rgba(17,17,21,.94); backdrop-filter: blur(14px); border-top: 1px solid var(--line); border-bottom: none;
+  overflow: visible; }
+nav#tabs[hidden] { display: none; }
+nav#tabs button { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 0;
+  background: none; border: none; border-radius: 12px; padding: 6px 2px; color: var(--muted); font-size: .68rem; }
+nav#tabs button svg { width: 24px; height: 24px; }
+nav#tabs button span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+nav#tabs button.active { background: none; color: var(--accent); }
+nav#tabs button.active svg { filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 45%, transparent)); }
+
+/* Grouped lists (settings sections and rows) */
+.list-group { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; margin: 8px 0 18px; }
+.list-group > .row, .list-group > form.row, .list-group > .list-item { margin: 0; border: none; border-radius: 0;
+  border-bottom: 1px solid var(--line); background: none; }
+.list-group > :last-child { border-bottom: none; }
+.list-item { display: flex; width: 100%; justify-content: space-between; align-items: center; gap: 12px;
+  min-height: 56px; padding: 12px 16px; text-align: start; font-size: 1rem; }
+.list-item:active, .back-link:active { background: var(--card2); }
+.chevron { color: var(--muted); font-size: 1.4rem; line-height: 1; }
+.back-link { display: inline-flex; align-items: center; gap: 2px; background: none; border: none; padding: 6px 4px;
+  color: var(--accent); font-weight: 600; font-size: 1.05rem; }
+.back-link span { font-size: 1.6rem; line-height: 1; }
+
+/* Cards and controls a bit softer */
+.card { border-radius: var(--radius); padding: 16px; }
+.row { border-radius: 14px; padding: 12px 14px; }
+button { border-radius: 12px; padding: 10px 16px; }
+button.primary { box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 35%, transparent); }
+input, select { border-radius: 12px; }
+.segments { overflow-x: auto; padding-bottom: 2px; }
+#toast { bottom: calc(var(--bar) + 18px + env(safe-area-inset-bottom)); }
+.sticky-actions { bottom: calc(var(--bar) + env(safe-area-inset-bottom)); }

@@ -946,4 +946,7 @@
     <string name="timeshift_setting">Timeshift (إيقاف البث المباشر مؤقتًا وإرجاعه)</string>
     <string name="timeshift_duration_setting">مدة Timeshift: %1$d دقيقة</string>
     <string name="timeshift_hint">تُسجَّل القناة الحالية في ذاكرة التطبيق (حتى نحو 3 غيغابايت، وتُحذف الأجزاء الأقدم باستمرار). عندها يمكن إيقاف البث المباشر مؤقتًا والتنقل فيه بشريط التشغيل. يسري من تشغيل القناة التالي.</string>
+    <string name="smooth_switch_setting">تبديل سلس للبوابة (تجريبي)</string>
+    <string name="smooth_switch_hint">المرحلة الأولى: عند التبديل إلى بوابة أخرى يقيس التطبيق مقدار الفرق بين البثين (يظهر في تقرير التشخيص). لاحقًا سيُكمل البث الجديد من الموضع نفسه.</string>
+    <string name="smooth_switch_weak_device">قد يكون هذا الجهاز ضعيفًا لذلك – الاستخدام على مسؤوليتك.</string>
 </resources>

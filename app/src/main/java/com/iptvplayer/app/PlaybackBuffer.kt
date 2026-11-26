@@ -84,3 +84,19 @@ internal fun TimeshiftSettings() {
     Text(stringResource(R.string.timeshift_hint), style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
+
+/** Settings row under Wiedergabe: the experimental smooth portal switch (always selectable). */
+@Composable
+internal fun SmoothSwitchSettings() {
+    val context = LocalContext.current
+    var enabled by remember { mutableStateOf(smoothSwitchEnabled(context)) }
+    val weak = remember { weakDevice(context) }
+    SettingRow(stringResource(R.string.smooth_switch_setting), selected = enabled) {
+        enabled = !enabled
+        setSmoothSwitchEnabled(context, enabled)
+    }
+    Text(stringResource(R.string.smooth_switch_hint), style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant)
+    if (weak) Text(stringResource(R.string.smooth_switch_weak_device), style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.error)
+}

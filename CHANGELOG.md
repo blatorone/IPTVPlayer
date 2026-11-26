@@ -2,6 +2,7 @@
 
 ## 1.0.99
 
+- Neu unter Wiedergabe: „Fließender Portalwechsel (experimentell)“, standardmäßig aus. Erste Stufe: Beim Wechsel zu einem anderen Portal misst die App, wie weit die Streams auseinanderliegen (im Diagnosebericht). Auf schwachen Geräten erscheint ein Hinweis, die Option bleibt aber wählbar.
 - Neu unter Wiedergabe: Timeshift (standardmäßig aus). Der laufende Sender wird im App-Speicher mitgeschnitten (15, 30 oder 60 Minuten); Live-TV lässt sich dann pausieren und mit der Wiedergabeleiste zurück- und vorspulen.
 - Filme und Serien: Kategorien wie „Beliebt“ oder „Im Kino“ laden deutlich schneller; einmal geöffnet erscheinen sie beim nächsten Mal sofort.
 - Live-TV: Die gespeicherte Senderliste bleibt nach App-Updates erhalten (kein langes Neuaufbereiten mehr nach jedem Update).

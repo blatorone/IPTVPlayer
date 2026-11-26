@@ -245,6 +245,7 @@ class MainActivity : ComponentActivity() {
                 super.buildAudioSink(context, enableFloatOutput, enableAudioOutputPlaybackParams)
                     ?.let { EpisodeAudioTapSink(it, decodeEncoded = decodeAudioForIntro) }
         }
+        SmoothSwitch.enabled = smoothSwitchEnabled(this)
         // Optional buffer (Wiedergabe → Puffer); off keeps the player's usual values.
         player = ExoPlayer.Builder(this, renderers).setLoadControl(bufferLoadControl(chosenBuffer(this))).build().also { activePlayer ->
             activePlayer.trackSelectionParameters = activePlayer.trackSelectionParameters
@@ -3142,6 +3143,17 @@ private fun PlayerHome(
             return
         }
         savePlaybackPosition(onFailure = true)
+        // Experimental smooth switch, stage 1: measure how far apart the two portals are.
+        if (attempt.selection.section == PortalSection.LIVE && SmoothSwitch.enabled) {
+            SmoothSwitch.markSwitch()
+            scope.launch {
+                delay(14_000)
+                val result = SmoothSwitch.measure()
+                AppDiagnostics.record(context, result?.let { (lag, score) ->
+                    "smooth_measure lag_ms:$lag score:${"%.2f".format(java.util.Locale.ROOT, score)}"
+                } ?: "smooth_measure none")
+            }
+        }
         val position = attempt.progressKey?.let { progressPreferences?.getLong(it, attempt.positionMs) }
             ?: attempt.positionMs
         // `starting` is cleared once the stream played. A failover after that keeps the
@@ -8052,6 +8064,7 @@ private fun PlayerHome(
                                 SettingsSection.PLAYBACK -> {
                                     BufferSettings()
                                     TimeshiftSettings()
+                                    SmoothSwitchSettings()
                                     SettingRow(stringResource(R.string.episode_settings), Modifier) { openSettingsPage { ui.episodeSettingsOpen = true } }
                                     SettingRow(
                                         stringResource(

@@ -293,7 +293,16 @@ internal class EpisodeAudioTapSink(
         super.setOutputStreamOffsetUs(outputStreamOffsetUs)
     }
 
+    private var smoothBuffer: ByteBuffer? = null
+    private var smoothPresentationUs = Long.MIN_VALUE
+
     override fun handleBuffer(buffer: ByteBuffer, presentationTimeUs: Long, encodedAccessUnitCount: Int): Boolean {
+        // Loudness for the experimental smooth portal switch (once per buffer, like below).
+        if (SmoothSwitch.enabled && pcm && (buffer !== smoothBuffer || presentationTimeUs != smoothPresentationUs)) {
+            smoothBuffer = buffer
+            smoothPresentationUs = presentationTimeUs
+            runCatching { SmoothSwitch.accept(buffer, encoding, channels) }
+        }
         // The sink receives the same buffer again until it is fully consumed; analyse it once.
         if (EpisodeAudioTap.active && (buffer !== lastBuffer || presentationTimeUs != lastPresentationUs)) {
             lastBuffer = buffer

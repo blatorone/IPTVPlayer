@@ -931,4 +931,7 @@
     <string name="timeshift_setting">Timeshift (pausar y retroceder la TV en directo)</string>
     <string name="timeshift_duration_setting">Duración del timeshift: %1$d min</string>
     <string name="timeshift_hint">El canal en curso se graba en la memoria de la app (hasta unos 3 GB; las partes antiguas se borran continuamente). Así la TV en directo se puede pausar y desplazar con la barra de reproducción. Se aplica a partir del próximo inicio de canal.</string>
+    <string name="smooth_switch_setting">Cambio de portal fluido (experimental)</string>
+    <string name="smooth_switch_hint">Primera fase: al pasar a otro portal, la app mide cuánto se desfasan los streams (aparece en el informe de diagnóstico). Más adelante continuará el nuevo stream en el mismo punto.</string>
+    <string name="smooth_switch_weak_device">Este dispositivo puede ser demasiado débil para esto: úsalo bajo tu propia responsabilidad.</string>
 </resources>

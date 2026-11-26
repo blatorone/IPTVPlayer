@@ -926,4 +926,7 @@
     <string name="timeshift_setting">Timeshift (canlı TV\'yi duraklat ve geri sar)</string>
     <string name="timeshift_duration_setting">Timeshift süresi: %1$d dk</string>
     <string name="timeshift_hint">Açık kanal uygulama belleğine kaydedilir (yaklaşık 3 GB\'a kadar, eski kısımlar sürekli silinir). Böylece canlı TV duraklatılabilir ve oynatma çubuğuyla sarılabilir. Bir sonraki kanal açılışından itibaren geçerli.</string>
+    <string name="smooth_switch_setting">Akıcı portal geçişi (deneysel)</string>
+    <string name="smooth_switch_hint">İlk aşama: Başka bir portala geçerken uygulama yayınlar arasındaki farkı ölçer (tanılama raporunda görünür). Daha sonra yeni yayını aynı yerden sürdürecek.</string>
+    <string name="smooth_switch_weak_device">Bu cihaz bunun için yetersiz olabilir – kullanım kendi sorumluluğunuzdadır.</string>
 </resources>

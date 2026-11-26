@@ -931,4 +931,7 @@
     <string name="timeshift_setting">Timeshift (pauză și derulare TV live)</string>
     <string name="timeshift_duration_setting">Durată timeshift: %1$d min</string>
     <string name="timeshift_hint">Canalul curent este înregistrat în memoria aplicației (până la circa 3 GB, părțile vechi se șterg continuu). Astfel TV-ul live poate fi pus pe pauză și derulat cu bara de redare. Se aplică de la următoarea pornire a canalului.</string>
+    <string name="smooth_switch_setting">Schimbare lină a portalului (experimental)</string>
+    <string name="smooth_switch_hint">Prima etapă: la trecerea pe alt portal, aplicația măsoară cât de decalate sunt fluxurile (apare în raportul de diagnosticare). Mai târziu va continua fluxul nou din același loc.</string>
+    <string name="smooth_switch_weak_device">Acest dispozitiv poate fi prea slab pentru asta – folosire pe propriul risc.</string>
 </resources>

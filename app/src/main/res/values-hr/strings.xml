@@ -931,4 +931,7 @@
     <string name="timeshift_setting">Timeshift (pauziranje i premotavanje TV-a uživo)</string>
     <string name="timeshift_duration_setting">Trajanje timeshifta: %1$d min</string>
     <string name="timeshift_hint">Trenutni kanal snima se u memoriju aplikacije (do oko 3 GB, stariji dijelovi stalno se brišu). Tada se TV uživo može pauzirati i premotavati trakom reprodukcije. Vrijedi od sljedećeg pokretanja kanala.</string>
+    <string name="smooth_switch_setting">Glatka promjena portala (eksperimentalno)</string>
+    <string name="smooth_switch_hint">Prva faza: pri prelasku na drugi portal aplikacija mjeri koliko su streamovi pomaknuti (vidi se u dijagnostičkom izvješću). Kasnije će nastaviti novi stream na istom mjestu.</string>
+    <string name="smooth_switch_weak_device">Ovaj uređaj možda je preslab za to – korištenje na vlastitu odgovornost.</string>
 </resources>

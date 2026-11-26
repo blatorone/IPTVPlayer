@@ -931,4 +931,7 @@
     <string name="timeshift_setting">Timeshift (паузирање и премотавање ТВ-а уживо)</string>
     <string name="timeshift_duration_setting">Трајање timeshift-а: %1$d мин</string>
     <string name="timeshift_hint">Тренутни канал се снима у меморију апликације (до око 3 GB, старији делови се стално бришу). Тада се ТВ уживо може паузирати и премотавати траком репродукције. Важи од следећег покретања канала.</string>
+    <string name="smooth_switch_setting">Глатка промена портала (експериментално)</string>
+    <string name="smooth_switch_hint">Прва фаза: при преласку на други портал апликација мери колико су стримови померени (види се у дијагностичком извештају). Касније ће наставити нови стрим на истом месту.</string>
+    <string name="smooth_switch_weak_device">Овај уређај је можда преслаб за то – коришћење на сопствену одговорност.</string>
 </resources>

@@ -220,12 +220,6 @@ internal fun rememberAppUpdates(): AppUpdateUi {
             try {
                 release = checkRelease(context, beta)
                 if (manual && release != null) dialogOpen = true
-                // A new version found at start asks once (per version) whether to update now.
-                val found = release
-                if (!manual && found != null && preferences.getString("asked_version", null) != found.tag) {
-                    preferences.edit().putString("asked_version", found.tag).apply()
-                    dialogOpen = true
-                }
                 lastCheck = System.currentTimeMillis()
                 preferences.edit().putLong("last_check", lastCheck).apply()
                 if (release == null) result = R.string.update_current
@@ -239,8 +233,12 @@ internal fun rememberAppUpdates(): AppUpdateUi {
         }
     }
     LaunchedEffect(auto) {
-        // Every start of the app (with the switch on).
-        if (auto) check(manual = false)
+        // At every start of the app and then every 6 hours while it runs (with the switch on).
+        // A new version only shows the badge at "Einstellungen"; opening them jumps to the update.
+        while (auto) {
+            check(manual = false)
+            kotlinx.coroutines.delay(6 * 3_600_000L)
+        }
     }
     fun install(available: AppRelease) {
         scope.launch {

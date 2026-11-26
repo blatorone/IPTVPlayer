@@ -3,7 +3,7 @@
 ## 1.0.95
 
 - Kinderkonto: „Trakt für <Name>“ nutzt die Trakt-Kennung des Admins, auch wenn dessen Konto noch mit der früher eingebauten Kennung verbunden ist; eine eigene API muss dann nicht eingegeben werden.
-- App-Updates: Mit „Beim Start automatisch nach Updates suchen“ wird jetzt bei jedem Start gesucht (bisher höchstens einmal pro Stunde). Eine neue Version fragt einmal direkt, ob jetzt aktualisiert werden soll.
+- App-Updates: Mit „Beim Start automatisch nach Updates suchen“ wird jetzt bei jedem Start und danach alle 6 Stunden gesucht. Eine neue Version zeigt die Markierung an „Einstellungen“; beim Öffnen geht es direkt zum Update.
 
 ## 1.0.94
 

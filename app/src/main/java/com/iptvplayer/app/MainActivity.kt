@@ -93,11 +93,13 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
@@ -124,12 +126,14 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import java.time.Instant
 import java.time.ZoneId
+import androidx.compose.ui.res.pluralStringResource
 import java.time.format.DateTimeFormatter
 import androidx.media3.common.MediaItem
 import androidx.media3.common.C
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.Timeline
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.Log
@@ -242,24 +246,31 @@ class MainActivity : ComponentActivity() {
         }
         enableEdgeToEdge()
         setContent {
-            var accentChoice by remember {
-                mutableStateOf(
-                    AccentChoice.entries.firstOrNull {
-                        it.name == getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE)
-                            .getString("accent_color", null)
-                    } ?: AccentChoice.RED
-                )
+            // Each account has its own accent colour.
+            var kidsAccount by remember { mutableStateOf(false) }
+            var accentVersion by remember { mutableIntStateOf(0) }
+            val accentChoice = remember(kidsAccount, accentVersion) {
+                AccentChoice.entries.firstOrNull {
+                    it.name == getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE)
+                        .getString(UserProfiles.accentKey(kidsAccount), null)
+                } ?: AccentChoice.RED
             }
+            // New installs accept the terms first; nothing else is shown before that.
+            var termsAccepted by remember { mutableStateOf(disclaimerAccepted(this@MainActivity)) }
             MaterialTheme(colorScheme = playerColors(accentChoice)) {
-                PlayerHome(
+                if (!termsAccepted) DisclaimerScreen(
+                    onAccept = { acceptDisclaimer(this@MainActivity); termsAccepted = true },
+                    onExit = ::finish
+                ) else PlayerHome(
                     player = player,
                     storage = storage,
                     accentChoice = accentChoice,
                     onAccentChoiceChange = { choice ->
-                        accentChoice = choice
                         getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE)
-                            .edit().putString("accent_color", choice.name).apply()
+                            .edit().putString(UserProfiles.accentKey(kidsAccount), choice.name).apply()
+                        accentVersion++
                     },
+                    onAccountChange = { kids -> kidsAccount = kids; accentVersion++ },
                     registerLongBack = { longBackAction = it },
                     registerScreenBack = { screenBackAction = it },
                     registerPlaybackInput = { playbackInputAction = it },
@@ -307,6 +318,9 @@ internal class PinRequest(
     val onSuccess: (String) -> Unit
 )
 
+/** "Same PIN as … or an own one?" when setting the Kindersicherung or settings PIN. */
+private class SharedPinQuestion(val text: String, val onShared: () -> Unit, val onOwn: () -> Unit)
+
 private class CastReturn(
     val destination: Destination?,
     val details: Pair<PortalSection, PortalTitle>?,
@@ -321,6 +335,8 @@ private enum class Destination(val label: Int, val icon: Int? = null) {
     SERIES(R.string.destination_series, R.drawable.ic_menu_series),
     SETTINGS(R.string.destination_settings, R.drawable.ic_menu_settings),
     SEARCH(R.string.search, R.drawable.ic_menu_search),
+    /** "Abmelden": opens the account selection (only with a kids account). */
+    PROFILES(R.string.logout, R.drawable.ic_menu_logout),
     CATEGORIES(R.string.category_settings),
     SOURCES(R.string.destination_sources)
 }
@@ -407,7 +423,28 @@ internal enum class AccentChoice(val label: Int, val color: Color) {
     ORANGE(R.string.accent_orange, Color(0xFFFF8A24)),
     BRONZE(R.string.accent_bronze, Color(0xFFC8783C)),
     BROWN(R.string.accent_brown, Color(0xFF8D6E63)),
-    GREY(R.string.accent_grey, Color(0xFF90A4AE));
+    GREY(R.string.accent_grey, Color(0xFF90A4AE)),
+    // Added in 1.0.93, below the first 20 so the palette keeps its width.
+    CRIMSON(R.string.accent_crimson, Color(0xFFC62828)),
+    RASPBERRY(R.string.accent_raspberry, Color(0xFFD81B60)),
+    SALMON(R.string.accent_salmon, Color(0xFFFF8A80)),
+    ROSE(R.string.accent_rose, Color(0xFFF48FB1)),
+    ORCHID(R.string.accent_orchid, Color(0xFFBA68C8)),
+    LAVENDER(R.string.accent_lavender, Color(0xFFB39DDB)),
+    NAVY(R.string.accent_navy, Color(0xFF3949AB)),
+    ROYAL(R.string.accent_royal, Color(0xFF2962FF)),
+    ICE(R.string.accent_ice, Color(0xFF81D4FA)),
+    TURQUOISE(R.string.accent_turquoise, Color(0xFF1DE9B6)),
+    PETROL(R.string.accent_petrol, Color(0xFF00796B)),
+    MINT(R.string.accent_mint, Color(0xFF69F0AE)),
+    EMERALD(R.string.accent_emerald, Color(0xFF00C853)),
+    OLIVE(R.string.accent_olive, Color(0xFF9E9D24)),
+    CHARTREUSE(R.string.accent_chartreuse, Color(0xFFC6FF00)),
+    LEMON(R.string.accent_lemon, Color(0xFFFFEB3B)),
+    GOLD(R.string.accent_gold, Color(0xFFD4A017)),
+    APRICOT(R.string.accent_apricot, Color(0xFFFFAB76)),
+    RUST(R.string.accent_rust, Color(0xFFD84315)),
+    SAND(R.string.accent_sand, Color(0xFFBCAAA4));
 
     /** Darker shade for filled areas such as the selected row. */
     val container: Color get() = androidx.compose.ui.graphics.lerp(color, Color.Black, 0.35f)
@@ -430,6 +467,23 @@ internal enum class ExitConfirmation(val label: Int) {
 }
 private const val SETTINGS_PAGE_FOCUS_GRACE_MS = 800L
 private const val REMOTE_PIN_ATTEMPTS = 5
+/** Live-TV watchdog: long buffering or jumps only count within this window. */
+private const val STALL_WINDOW_MS = 3 * 60_000L
+/** Picture (or picture and sound) standing still this long while "playing" counts as a hang. */
+private const val FROZEN_LIMIT_MS = 8_000L
+/** A stream that played this long without trouble is remembered as a good one for the channel. */
+private const val STEADY_PLAY_MS = 90_000L
+
+/**
+ * Position in the stream as a whole. For live HLS the plain position is measured from the start
+ * of the moving live window and would jump back with every playlist update.
+ */
+internal fun liveStreamPosition(player: Player): Long {
+    val timeline = player.currentTimeline
+    if (timeline.isEmpty) return player.currentPosition
+    val window = timeline.getWindow(player.currentMediaItemIndex, Timeline.Window())
+    return window.positionInFirstPeriodMs + player.currentPosition
+}
 
 internal fun playerColors(accent: AccentChoice) = darkColorScheme(
     primary = accent.color,
@@ -527,10 +581,10 @@ private enum class SettingsSection(val label: Int, val icon: Int) {
     APPEARANCE(R.string.settings_appearance, R.drawable.settings_appearance),
     PLAYBACK(R.string.settings_playback, R.drawable.settings_playback),
     CONTROLS(R.string.settings_controls, R.drawable.settings_controls),
-    METADATA(R.string.settings_metadata, R.drawable.settings_metadata),
     SYNC(R.string.settings_sync, R.drawable.settings_sync),
-    PARENTAL(R.string.settings_parental, R.drawable.settings_parental),
+    PARENTAL(R.string.settings_locks, R.drawable.settings_parental),
     UPDATES(R.string.settings_updates, R.drawable.settings_updates),
+    DIAGNOSTICS(R.string.settings_diagnostics, R.drawable.settings_diagnostics),
     ABOUT(R.string.settings_about, R.drawable.settings_about)
 }
 
@@ -559,8 +613,63 @@ private fun EpisodeTimingAdjustment(
     }
 }
 
+/**
+ * Simple on/off states of PlayerHome in one object: the large content lambdas capture this one
+ * reference instead of a MutableState each (ART on Android 11 rejects lambdas with >255 captures).
+ */
+private class PlayerHomeFlags {
+    var metadataSettingsOpen by mutableStateOf<Boolean>(false)
+    var traktSettingsOpen by mutableStateOf<Boolean>(false)
+    var kidsProtectionOpen by mutableStateOf<Boolean>(false)
+    var termsOpen by mutableStateOf<Boolean>(false)
+    var profilePickerOpen by mutableStateOf<Boolean>(false)
+    var profileStartChecked by mutableStateOf<Boolean>(false)
+    var kidsNameDialog by mutableStateOf<Boolean>(false)
+    var kidsColorOpen by mutableStateOf<Boolean>(false)
+    var kidsAccentVersion by mutableStateOf<Int>(0)
+    /** The Trakt page was opened for the kids account (by the admin, in the Kinderschutz). */
+    var traktForKids by mutableStateOf<Boolean>(false)
+    var kidsTraktName by mutableStateOf<String?>(null)
+    var exitBlockedUntil by mutableStateOf<Long>(0L)
+    var exitDialogOpen by mutableStateOf<Boolean>(false)
+    var accentPaletteOpen by mutableStateOf<Boolean>(false)
+    var settingsContentFocused by mutableStateOf<Boolean>(false)
+    var episodeSettingsOpen by mutableStateOf<Boolean>(false)
+    var epgSettingsOpen by mutableStateOf<Boolean>(false)
+    var epgUpdating by mutableStateOf<Boolean>(false)
+    var epgUpdateFailed by mutableStateOf<Boolean>(false)
+    var epgSourceWriteFailed by mutableStateOf<Boolean>(false)
+    var epgSourceSaving by mutableStateOf<Boolean>(false)
+    var askForCountries by mutableStateOf<Boolean>(false)
+    var choosingCountries by mutableStateOf<Boolean>(false)
+    var showHiddenCategories by mutableStateOf<Boolean>(false)
+    var sourceRefreshDialogOpen by mutableStateOf<Boolean>(false)
+    var controlSettingsOpen by mutableStateOf<Boolean>(false)
+    var settingsPageOpenedAt by mutableStateOf<Long>(0L)
+    var remoteAccessOpen by mutableStateOf<Boolean>(false)
+    var expiryLeadPickerOpen by mutableStateOf<Boolean>(false)
+    var metadataBusy by mutableStateOf<Boolean>(false)
+    var metadataError by mutableStateOf<Boolean>(false)
+    var traktBusy by mutableStateOf<Boolean>(false)
+    var sendingWatchStatus by mutableStateOf<Boolean>(false)
+    var traktSyncRequested by mutableStateOf<Boolean>(false)
+    var startupPortalRefreshStarted by mutableStateOf<Boolean>(false)
+    var groupUsesTmdb by mutableStateOf<Boolean>(false)
+    var groupLoading by mutableStateOf<Boolean>(false)
+    var groupError by mutableStateOf<Boolean>(false)
+    var focusFirstTitle by mutableStateOf<Boolean>(false)
+    var focusTitlePrimary by mutableStateOf<Boolean>(false)
+    var resumeEpisodeMissing by mutableStateOf<Boolean>(false)
+    var liveGroupsLoading by mutableStateOf<Boolean>(false)
+    var liveGroupsReady by mutableStateOf<Boolean>(false)
+    var cachedStartupAttempt by mutableStateOf<Boolean>(false)
+    var restoredLastLiveChannel by mutableStateOf<Boolean>(false)
+    var overlayScheduleFocused by mutableStateOf<Boolean>(false)
+}
+
 @Composable
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 private fun PlayerHome(
     player: ExoPlayer? = null,
     storage: PortalStorage? = null,
@@ -572,9 +681,11 @@ private fun PlayerHome(
     registerPromptInput: ((((android.view.KeyEvent) -> Boolean)?) -> Unit) = {},
     registerKeySounds: (Boolean) -> Unit = {},
     onExit: () -> Unit = {},
+    onAccountChange: (kids: Boolean) -> Unit = {},
     onFullscreen: (Boolean) -> Unit = {},
     canPlay: () -> Boolean = { false }
 ) {
+    val ui = remember { PlayerHomeFlags() }
     var selected by remember { mutableStateOf<Destination?>(Destination.LIVE) }
     var pendingVodCategory by rememberSaveable { mutableStateOf<Destination?>(null) }
     var lastFocused by rememberSaveable { mutableStateOf(Destination.LIVE) }
@@ -605,8 +716,20 @@ private fun PlayerHome(
         val saved = preferences?.getString("vod_live_view", null)
         mutableStateOf(VodLiveView.entries.firstOrNull { it.name == saved } ?: VodLiveView.BACKGROUND)
     }
-    val progressPreferences = remember(context, preview) {
-        if (preview) null else context.getSharedPreferences("vod_progress", Context.MODE_PRIVATE)
+    val parental = remember(preferences) { ParentalControls(preferences) }
+    val profiles = remember(preferences) { UserProfiles(preferences) }
+    val kidsAccountActive = parental.kidsMode && profiles.hasKids
+    /** The kids account keeps its own progress, watchlist, favourites and Trakt account. */
+    val separateKidsData = kidsAccountActive && !profiles.kidsShareData
+    fun userDataKey(name: String) = if (separateKidsData) "kids:$name" else name
+    val progressPreferences = remember(context, preview, separateKidsData) {
+        if (preview) null else context.getSharedPreferences(
+            if (separateKidsData) "vod_progress_kids" else "vod_progress", Context.MODE_PRIVATE
+        )
+    }
+    // Which portal's stream ran best per Live-TV channel; that one is tried first next time.
+    val liveStreamHistory = remember(context, preview) {
+        LiveStreamHistory(if (preview) null else context.getSharedPreferences(LiveStreamHistory.FILE, Context.MODE_PRIVATE))
     }
     var seriesActivity by remember(progressPreferences) {
         mutableStateOf(decodeSeriesActivity(progressPreferences?.getString("series_activity", null)))
@@ -623,30 +746,24 @@ private fun PlayerHome(
         mutableStateOf(decodeMovieHistory(progressPreferences?.getString("movie_bookmarks", null)))
     }
     var metadataClient by remember { mutableStateOf<TmdbClient?>(null) }
-    var metadataSettingsOpen by remember { mutableStateOf(false) }
     var traktSession by remember { mutableStateOf<TraktSession?>(null) }
-    val parental = remember(preferences) { ParentalControls(preferences) }
+    /** The user's own Trakt API app; needed before a (new) account can be connected. */
+    var traktApp by remember { mutableStateOf<TraktApp?>(null) }
+    var sharedPinQuestion by remember { mutableStateOf<SharedPinQuestion?>(null) }
     var pinRequest by remember { mutableStateOf<PinRequest?>(null) }
-    var exitBlockedUntil by remember { mutableStateOf(0L) }
     var exitConfirmation by remember(preferences) {
         val saved = preferences?.getString("exit_confirmation", null)
         mutableStateOf(ExitConfirmation.entries.firstOrNull { it.name == saved } ?: ExitConfirmation.DIALOG)
     }
-    var exitDialogOpen by remember { mutableStateOf(false) }
-    var accentPaletteOpen by remember { mutableStateOf(false) }
     var portalCategoriesFor by remember { mutableStateOf<SavedPortal?>(null) }
     // Settings: whether focus is in the rows on the right, and a request to move it there.
-    var settingsContentFocused by remember { mutableStateOf(false) }
     var settingsContentFocusRequest by remember { mutableIntStateOf(0) }
     val settingsContentFocus = remember { FocusRequester() }
     val ageRatings = remember { HashMap<String, Int?>() }
     var traktDeviceCode by remember { mutableStateOf<TraktDeviceCode?>(null) }
-    var traktBusy by remember { mutableStateOf(false) }
-    var sendingWatchStatus by remember { mutableStateOf(false) }
     var traktStatus by remember { mutableStateOf<String?>(null) }
     var traktPlaybackNotice by remember { mutableStateOf<String?>(null) }
     var portalRefreshNotice by remember { mutableStateOf<String?>(null) }
-    var traktSyncRequested by remember { mutableStateOf(false) }
     val playbackNoticeHost = remember { androidx.compose.material3.SnackbarHostState() }
     LaunchedEffect(traktPlaybackNotice) {
         val notice = traktPlaybackNotice ?: return@LaunchedEffect
@@ -677,8 +794,6 @@ private fun PlayerHome(
         }
         newEpisodesNotice = null
     }
-    var episodeSettingsOpen by remember { mutableStateOf(false) }
-    var epgSettingsOpen by remember { mutableStateOf(false) }
     var settingsSection by rememberSaveable { mutableStateOf<SettingsSection?>(null) }
     var mainMenuStyle by remember(preferences) {
         mutableStateOf(MainMenuStyle.entries.firstOrNull {
@@ -721,10 +836,6 @@ private fun PlayerHome(
     var xmlTvSources by remember { mutableStateOf(emptyList<String>()) }
     var xmlTvSourcesLoaded by remember { mutableStateOf(storage == null) }
     var epgRefreshRequest by remember { mutableIntStateOf(0) }
-    var epgUpdating by remember { mutableStateOf(false) }
-    var epgUpdateFailed by remember { mutableStateOf(false) }
-    var epgSourceWriteFailed by remember { mutableStateOf(false) }
-    var epgSourceSaving by remember { mutableStateOf(false) }
     var epgSourceDraft by remember { mutableStateOf("") }
     val activeEpisodeProvider = when {
         traktSession != null -> "Trakt"
@@ -798,8 +909,6 @@ private fun PlayerHome(
     var outroOfferClosed by remember { mutableStateOf<Pair<String, Long>?>(null) }
     /** Whether the current skip offer is for end credits rather than the opening. */
     var skipIsOutro by remember { mutableStateOf(false) }
-    var metadataBusy by remember { mutableStateOf(false) }
-    var metadataError by remember { mutableStateOf(false) }
     var pendingSeriesEpisode by remember { mutableStateOf<Pair<PortalTitle, EpisodeResume>?>(null) }
     var pendingMovie by remember { mutableStateOf<WatchedMovie?>(null) }
     var currentTraktPlayback by remember { mutableStateOf<TraktMedia?>(null) }
@@ -812,12 +921,9 @@ private fun PlayerHome(
     var automaticCountries by remember(preferences) {
         mutableStateOf(preferences?.getBoolean("autoCountries", true) ?: true)
     }
-    var askForCountries by remember { mutableStateOf(false) }
-    var choosingCountries by remember { mutableStateOf(false) }
     var hiddenCategories by remember(preferences) {
         mutableStateOf(preferences?.getStringSet("hidden", emptySet()).orEmpty().toSet())
     }
-    var showHiddenCategories by remember { mutableStateOf(false) }
     var mergeSources by remember(preferences) {
         mutableStateOf(preferences?.getBoolean("mergeSources", true) ?: true)
     }
@@ -838,11 +944,11 @@ private fun PlayerHome(
     var categoryMenu by remember { mutableStateOf<Pair<PortalSection, String?>?>(null) }
     val categoryOrders = remember { mutableStateMapOf<String, List<String>>() }
     var details by remember { mutableStateOf<Pair<PortalSection, PortalTitle>?>(null) }
-    var favorites by remember(preferences) {
-        mutableStateOf(preferences?.getStringSet("favorites", emptySet()).orEmpty().toSet())
+    var favorites by remember(preferences, separateKidsData) {
+        mutableStateOf(preferences?.getStringSet(userDataKey("favorites"), emptySet()).orEmpty().toSet())
     }
-    var watchlist by remember(preferences) {
-        mutableStateOf(preferences?.getStringSet("watchlist", emptySet()).orEmpty().toSet())
+    var watchlist by remember(preferences, separateKidsData) {
+        mutableStateOf(preferences?.getStringSet(userDataKey("watchlist"), emptySet()).orEmpty().toSet())
     }
     var searchQuery by remember { mutableStateOf("") }
     var liveSession by remember { mutableStateOf<Pair<StalkerPortal, String?>?>(null) }
@@ -879,10 +985,13 @@ private fun PlayerHome(
     val appUpdates = rememberAppUpdates()
     var lastBack by remember { mutableStateOf(0L) }
     var triedHls by remember { mutableStateOf(false) }
+    /** When the position was last moved on purpose (seek, reload), so the loop check ignores it. */
+    val playerPositionResetAt = remember { java.util.concurrent.atomic.AtomicLong(0L) }
+    /** When a running Live-TV stream was last reloaded after a short network error. */
+    var liveRetryAt by remember { mutableStateOf(0L) }
     var connecting by remember { mutableStateOf(false) }
     var batchProgress by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var batchSummary by remember { mutableStateOf<Pair<Int, Int>?>(null) }
-    var sourceRefreshDialogOpen by remember { mutableStateOf(false) }
     var selectedRefreshSources by remember { mutableStateOf<Set<String>>(emptySet()) }
     var playbackJob by remember { mutableStateOf<Job?>(null) }
     var sourceError by remember { mutableStateOf<Int?>(null) }
@@ -895,12 +1004,9 @@ private fun PlayerHome(
     var metadataTitles by remember {
         mutableStateOf(emptyMap<Int, Pair<PortalTitle, List<SourceItem<PortalTitle>>>>())
     }
-    var groupUsesTmdb by remember { mutableStateOf(false) }
     var groupPages by remember { mutableStateOf(emptyMap<String, PortalCatalog>()) }
     var groupVariants by remember { mutableStateOf(emptyMap<PortalTitle, List<SourceItem<PortalTitle>>>()) }
     var searchedVariants by remember { mutableStateOf(emptyMap<PortalTitle, List<SourceItem<PortalTitle>>>()) }
-    var groupLoading by remember { mutableStateOf(false) }
-    var groupError by remember { mutableStateOf(false) }
     var groupJob by remember { mutableStateOf<Job?>(null) }
     var catalogLoading by remember { mutableStateOf(emptySet<PortalSection>()) }
     var catalogErrors by remember { mutableStateOf(emptySet<PortalSection>()) }
@@ -921,9 +1027,6 @@ private fun PlayerHome(
             }?.let { input to it }
         }.toTypedArray())
     }
-    var controlSettingsOpen by remember { mutableStateOf(false) }
-    var settingsPageOpenedAt by remember { mutableStateOf(0L) }
-    var remoteAccessOpen by remember { mutableStateOf(false) }
     val remotePinFailures = remember { java.util.concurrent.atomic.AtomicInteger() }
     var openedSeries by remember { mutableStateOf<PortalTitle?>(null) }
     var seasons by remember { mutableStateOf<List<PortalSeason>?>(null) }
@@ -939,11 +1042,8 @@ private fun PlayerHome(
     var openedSeason by remember { mutableStateOf<PortalSeason?>(null) }
     val seriesDetailScroll = rememberLazyListState()
     var catalogueReturnTitle by remember { mutableStateOf<PortalTitle?>(null) }
-    var focusFirstTitle by remember { mutableStateOf(false) }
-    var focusTitlePrimary by remember { mutableStateOf(false) }
     var episodeVariants by remember { mutableStateOf(emptyMap<PortalTitle, List<SourceItem<PortalTitle>>>()) }
     var episodeError by remember { mutableStateOf(false) }
-    var resumeEpisodeMissing by remember { mutableStateOf(false) }
     var episodeJob by remember { mutableStateOf<Job?>(null) }
     var address by remember { mutableStateOf("") }
     var mac by remember { mutableStateOf("") }
@@ -1048,15 +1148,27 @@ private fun PlayerHome(
     }
     // Live-TV, films and series only appear when an active source provides them. Without any
     // source everything stays visible so the setup remains reachable.
-    val visibleDestinations = remember(sourcesForBrowsing) {
+    val visibleDestinations = remember(sourcesForBrowsing, parental.hiddenAreas, kidsAccountActive, profiles.kidsAreas, profiles.kidsName) {
         fun offers(section: PortalSection) = sourcesForBrowsing.any { source ->
             source.catalogs[section]?.let { it.titles.isNotEmpty() || it.groups.isNotEmpty() } == true
         }
-        if (sourcesForBrowsing.isEmpty()) mainDestinations else mainDestinations.filter { destination ->
+        val available = if (sourcesForBrowsing.isEmpty()) mainDestinations else mainDestinations.filter { destination ->
             when (destination) {
                 Destination.LIVE -> sourcesForBrowsing.any { it.channels.isNotEmpty() }
                 Destination.MOVIES -> offers(PortalSection.MOVIES)
                 Destination.SERIES -> offers(PortalSection.SERIES)
+                else -> true
+            }
+        }
+        // Areas hidden in the Einstellungsschutz (or not allowed for the kids account); if that
+        // would leave none, they all stay. The kids account has no settings; "Abmelden" only
+        // exists with a kids account.
+        val hidden = if (kidsAccountActive) MAIN_AREAS.toSet() - profiles.kidsAreas else parental.hiddenAreas
+        val shown = available.filterNot { it.name in hidden }
+        (if (shown.any { it.name in MAIN_AREAS }) shown else available).filter { destination ->
+            when (destination) {
+                Destination.PROFILES -> profiles.hasKids
+                Destination.SETTINGS -> !kidsAccountActive
                 else -> true
             }
         }
@@ -1088,9 +1200,14 @@ private fun PlayerHome(
     var restoring by remember { mutableStateOf(storage != null) }
     var startupPortalRefresh by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var startupPortalCheck by remember { mutableStateOf<Pair<Int, Int>?>(null) }
-    var startupPortalRefreshStarted by remember { mutableStateOf(false) }
     var autoDisableUnavailablePortals by remember(preferences) {
         mutableStateOf(preferences?.getBoolean("auto_disable_unavailable_portals", true) ?: true)
+    }
+    // How long before a portal's end date the notice comes (default one week).
+    var expiryLead by remember(preferences) { mutableStateOf(ExpiryLead.parse(preferences?.getString("expiry_lead", null))) }
+    fun changeExpiryLead(lead: ExpiryLead) {
+        expiryLead = lead
+        preferences?.edit()?.putString("expiry_lead", lead.key)?.apply()
     }
     var storageError by remember { mutableStateOf<Int?>(null) }
     val detailMetadata by produceState<TmdbTitle?>(null, metadataClient, details, mergeSources, traktSession?.username) {
@@ -1127,17 +1244,34 @@ private fun PlayerHome(
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
-            metadataError = true
+            ui.metadataError = true
         }
     }
 
     LaunchedEffect(storage) {
+        traktApp = runCatching { storage?.readTraktApp() }.getOrNull()
+    }
+    fun saveTraktApp(clientId: String?, clientSecret: String?): String? {
+        val id = clientId?.trim().orEmpty().ifBlank { traktApp?.clientId.orEmpty() }
+        val secret = clientSecret?.trim()?.ifBlank { null } ?: traktApp?.clientSecret
+        if (!TraktApp.isValidValue(id)) return context.getString(R.string.trakt_app_invalid_id)
+        if (secret != null && !TraktApp.isValidValue(secret)) return context.getString(R.string.trakt_app_invalid_secret)
+        val app = TraktApp(id, secret)
+        traktApp = app
+        scope.launch { runCatching { storage?.writeTraktApp(app) } }
+        return null
+    }
+
+    LaunchedEffect(storage, profiles.kidsShareData, profiles.kidsName) {
+        ui.kidsTraktName = runCatching { storage?.readTraktSession(true)?.username }.getOrNull()
+    }
+    // Loaded at start and again when the account changes (a kids account may have its own).
+    LaunchedEffect(storage, separateKidsData) {
         try {
-            val session = storage?.readTraktSession()
-            if (session != null) {
-                traktSession = session
-                traktSyncRequested = true
-            }
+            val session = storage?.readTraktSession(separateKidsData)
+            traktSession = session
+            traktDeviceCode = null
+            if (session != null) ui.traktSyncRequested = true
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
@@ -1146,14 +1280,13 @@ private fun PlayerHome(
     }
 
     suspend fun <T> withTraktSession(action: suspend (TraktApi, TraktSession) -> T): T {
-        val clientId = TRAKT_CLIENT_ID
-        val api = TraktApi(clientId)
-        var session = storage?.readTraktSession() ?: traktSession
+        var session = storage?.readTraktSession(separateKidsData) ?: traktSession
             ?: error(context.getString(R.string.trakt_not_connected))
-        require(session.clientId == clientId) { context.getString(R.string.trakt_client_id_changed) }
+        // A connected account keeps the API app it was connected with.
+        val api = TraktApi(session.clientId, session.clientSecret)
         if (session.expiresAtMillis <= System.currentTimeMillis() + 60_000L) {
             session = api.refresh(session)
-            storage?.writeTraktSession(session)
+            storage?.writeTraktSession(session, separateKidsData)
             traktSession = session
         }
         return action(api, session)
@@ -1173,13 +1306,17 @@ private fun PlayerHome(
     }
 
     fun connectTrakt() {
-        if (traktBusy) return
-        val clientId = TRAKT_CLIENT_ID
-        traktBusy = true
+        if (ui.traktBusy) return
+        val app = traktApp
+        if (app == null) {
+            traktStatus = context.getString(R.string.trakt_app_missing)
+            return
+        }
+        ui.traktBusy = true
         traktStatus = null
         scope.launch {
             try {
-                val api = TraktApi(clientId)
+                val api = TraktApi(app.clientId, app.clientSecret)
                 val code = api.beginDeviceAuthorization()
                 traktDeviceCode = code
                 var interval = code.intervalSeconds
@@ -1193,9 +1330,12 @@ private fun PlayerHome(
                             val username = runCatching { api.accountName(result.session.accessToken) }
                                 .getOrDefault("Trakt")
                             val session = result.session.copy(username = username)
-                            storage?.writeTraktSession(session)
-                            traktSession = session
-                            traktSyncRequested = true
+                            val forKids = ui.traktForKids
+                            storage?.writeTraktSession(session, forKids)
+                            // The session of the account that is signed in is used right away.
+                            if (forKids == separateKidsData) traktSession = session
+                            if (forKids) ui.kidsTraktName = username
+                            ui.traktSyncRequested = true
                             traktDeviceCode = null
                             traktStatus = context.getString(R.string.trakt_connected_status, username)
                             return@launch
@@ -1210,17 +1350,19 @@ private fun PlayerHome(
                 traktDeviceCode = null
                 traktStatus = error.message ?: context.getString(R.string.trakt_connect_failed)
             } finally {
-                traktBusy = false
+                ui.traktBusy = false
             }
         }
     }
 
     fun disconnectTrakt() {
-        if (traktBusy) return
+        if (ui.traktBusy) return
         scope.launch {
             try {
-                storage?.clearTraktSession()
-                traktSession = null
+                val forKids = ui.traktForKids
+                storage?.clearTraktSession(forKids)
+                if (forKids == separateKidsData) traktSession = null
+                if (forKids) ui.kidsTraktName = null
                 traktDeviceCode = null
                 traktStatus = context.getString(R.string.trakt_disconnected_status)
             } catch (error: CancellationException) {
@@ -1232,8 +1374,8 @@ private fun PlayerHome(
     }
 
     fun syncTrakt(forceSeriesHistory: Boolean = false) {
-        if (traktBusy || sendingWatchStatus) return
-        traktBusy = true
+        if (ui.traktBusy || ui.sendingWatchStatus) return
+        ui.traktBusy = true
         traktStatus = context.getString(R.string.trakt_checking_changes)
         fun importedTitleKey(section: PortalSection, title: PortalTitle): String =
             "${catalogSession?.first?.sourceLabel.orEmpty()}:${section.name}:${title.id ?: title.name}"
@@ -1678,7 +1820,7 @@ private fun PlayerHome(
                         }
                     }
                 }?.apply()
-                preferences?.edit()?.putStringSet("watchlist", watchlist)?.apply()
+                preferences?.edit()?.putStringSet(userDataKey("watchlist"), watchlist)?.apply()
                 progressPreferences?.edit()
                     ?.putString("movie_bookmarks", encodeMovieHistory(movieBookmarks))
                     ?.putString("movie_history", encodeMovieHistory(movieHistory))
@@ -1703,24 +1845,24 @@ private fun PlayerHome(
                 AppDiagnostics.record(context, "trakt_library_sync_failed")
                 traktStatus = error.message ?: context.getString(R.string.trakt_sync_failed)
             } finally {
-                traktBusy = false
+                ui.traktBusy = false
             }
         }
     }
 
-    LaunchedEffect(traktSyncRequested, traktBusy, sendingWatchStatus, traktSession?.username, restoring) {
-        if (traktSyncRequested && !traktBusy && !sendingWatchStatus && traktSession != null && !restoring) {
+    LaunchedEffect(ui.traktSyncRequested, ui.traktBusy, ui.sendingWatchStatus, traktSession?.username, restoring) {
+        if (ui.traktSyncRequested && !ui.traktBusy && !ui.sendingWatchStatus && traktSession != null && !restoring) {
             // Let the cached guide and last channel render before remote account sync begins.
             delay(5_000)
-            traktSyncRequested = false
+            ui.traktSyncRequested = false
             syncTrakt()
         }
     }
 
     fun saveEpgSources(sources: List<String>) {
-        if (epgSourceSaving || storage == null) return
-        epgSourceSaving = true
-        epgSourceWriteFailed = false
+        if (ui.epgSourceSaving || storage == null) return
+        ui.epgSourceSaving = true
+        ui.epgSourceWriteFailed = false
         scope.launch {
             try {
                 storage.writeEpgSources(sources)
@@ -1729,9 +1871,9 @@ private fun PlayerHome(
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
-                epgSourceWriteFailed = true
+                ui.epgSourceWriteFailed = true
             } finally {
-                epgSourceSaving = false
+                ui.epgSourceSaving = false
             }
         }
     }
@@ -1742,29 +1884,29 @@ private fun PlayerHome(
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
-            epgSourceWriteFailed = true
+            ui.epgSourceWriteFailed = true
         } finally {
             xmlTvSourcesLoaded = true
         }
     }
 
     fun updateMetadataConnection(token: String?) {
-        if (metadataBusy) return
-        metadataBusy = true
-        metadataError = false
+        if (ui.metadataBusy) return
+        ui.metadataBusy = true
+        ui.metadataError = false
         scope.launch {
             try {
                 val client = token?.let(::TmdbClient)
                 client?.validate()
                 storage?.writeMetadataToken(token.orEmpty())
                 metadataClient = client
-                metadataSettingsOpen = false
+                ui.metadataSettingsOpen = false
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
-                metadataError = true
+                ui.metadataError = true
             } finally {
-                metadataBusy = false
+                ui.metadataBusy = false
             }
         }
     }
@@ -1775,13 +1917,11 @@ private fun PlayerHome(
     var liveGroups: Map<StalkerChannel, LiveChannelGroup> by remember {
         mutableStateOf(emptyMap())
     }
-    var liveGroupsLoading by remember { mutableStateOf(false) }
-    var liveGroupsReady by remember { mutableStateOf(false) }
     LaunchedEffect(sourcesForBrowsing, combine, mergePortalChannels, countries) {
         // Large portals can contain thousands of channels. Grouping and normalizing
         // them on Compose's main dispatcher made cold start and remote navigation
         // feel frozen even though the source data had already been restored locally.
-        liveGroupsLoading = true
+        ui.liveGroupsLoading = true
         try {
             val started = SystemClock.elapsedRealtime()
             val groups = withContext(Dispatchers.Default) {
@@ -1804,8 +1944,8 @@ private fun PlayerHome(
                 }
             }
         } finally {
-            liveGroupsLoading = false
-            liveGroupsReady = true
+            ui.liveGroupsLoading = false
+            ui.liveGroupsReady = true
         }
     }
     val liveVariants = remember(liveGroups) {
@@ -2089,7 +2229,7 @@ private fun PlayerHome(
             .distinctBy { it.id ?: it.name }
             .forEach { updateTrackedSeries(it, saved = true) }
         favorites = emptySet()
-        preferences?.edit()?.putStringSet("watchlist", watchlist)?.remove("favorites")?.apply()
+        preferences?.edit()?.putStringSet(userDataKey("watchlist"), watchlist)?.remove(userDataKey("favorites"))?.apply()
         preferences?.all?.keys?.filter { it.startsWith("trakt_watchlist_dirty:") }?.forEach { key ->
             preferences.edit().putBoolean(key, true).apply()
         }
@@ -2175,11 +2315,11 @@ private fun PlayerHome(
         val key = titleKey(section, title)
         if (favorite) {
             favorites = if (key in favorites) favorites - key else favorites + key
-            preferences?.edit()?.putStringSet("favorites", favorites)?.apply()
+            preferences?.edit()?.putStringSet(userDataKey("favorites"), favorites)?.apply()
         } else {
             val saved = !isTitleSaved(section, title)
             watchlist = if (saved) watchlist + key else watchlist - key
-            preferences?.edit()?.putStringSet("watchlist", watchlist)?.apply()
+            preferences?.edit()?.putStringSet(userDataKey("watchlist"), watchlist)?.apply()
             traktSession?.username?.lowercase()?.let { username ->
                 preferences?.edit()?.putBoolean("trakt_watchlist_dirty:$username", true)?.apply()
             }
@@ -2204,9 +2344,9 @@ private fun PlayerHome(
         val hidden = categoryKey(section, id) in hiddenCategories
         val kidsFriendly = section != PortalSection.LIVE && (id == VodCategory.FAMILY.id || id == VodCategory.ANIMATION.id)
         if (!parental.allowsCategory(categoryKey(section, id), label, kidsFriendly)) return false
-        return (showHiddenCategories || !hidden) &&
+        return (ui.showHiddenCategories || !hidden) &&
             (section == PortalSection.LIVE || combine || countries.isEmpty() || categoryCountry(label, country) in countries ||
-                (showHiddenCategories && hidden))
+                (ui.showHiddenCategories && hidden))
     }
 
     fun closeGroup() {
@@ -2215,11 +2355,11 @@ private fun PlayerHome(
         groupCatalog = null
         metadataNextPages = emptyMap()
         metadataTitles = emptyMap()
-        groupUsesTmdb = false
+        ui.groupUsesTmdb = false
         groupPages = emptyMap()
         groupVariants = emptyMap()
-        groupError = false
-        groupLoading = false
+        ui.groupError = false
+        ui.groupLoading = false
     }
 
     fun loadGroup(section: PortalSection, group: PortalGroup, next: Boolean = false) {
@@ -2237,9 +2377,9 @@ private fun PlayerHome(
             selectedGroup = section to group
             groupCatalog = null
             groupVariants = previous.values.toMap()
-            groupUsesTmdb = true
-            groupError = false
-            groupLoading = true
+            ui.groupUsesTmdb = true
+            ui.groupError = false
+            ui.groupLoading = true
             groupJob = scope.launch {
                 try {
                     // Only titles found in the portals are shown, so one TMDB page may yield just a
@@ -2259,14 +2399,14 @@ private fun PlayerHome(
                         requested = result.nextPages
                         rounds++
                     } while (requested.isNotEmpty() && metadataTitles.size - previous.size < 24 && rounds < 8)
-                    groupError = incomplete
+                    ui.groupError = incomplete
                 } catch (error: CancellationException) {
                     throw error
                 } catch (_: Exception) {
-                    groupError = true
+                    ui.groupError = true
                     groupCatalog = PortalCatalog(groupVariants.keys.toList(), null, 1)
                 } finally {
-                    if (kotlin.coroutines.coroutineContext.isActive) groupLoading = false
+                    if (kotlin.coroutines.coroutineContext.isActive) ui.groupLoading = false
                 }
             }
             return
@@ -2276,13 +2416,13 @@ private fun PlayerHome(
         val previous = if (next) groupPages else emptyMap()
         groupJob?.cancel()
         selectedGroup = section to group
-        groupUsesTmdb = false
+        ui.groupUsesTmdb = false
         if (!next) {
             groupCatalog = null
             groupVariants = emptyMap()
         }
-        groupError = false
-        groupLoading = true
+        ui.groupError = false
+        ui.groupLoading = true
         groupJob = scope.launch {
             try {
                 val requests = Semaphore(4)
@@ -2302,7 +2442,7 @@ private fun PlayerHome(
                             } catch (error: CancellationException) {
                                 throw error
                             } catch (_: Exception) {
-                                groupError = true
+                                ui.groupError = true
                                 key to before
                             }
                         }
@@ -2334,15 +2474,15 @@ private fun PlayerHome(
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
-                groupError = true
+                ui.groupError = true
             } finally {
-                if (kotlin.coroutines.coroutineContext.isActive) groupLoading = false
+                if (kotlin.coroutines.coroutineContext.isActive) ui.groupLoading = false
             }
         }
     }
     LaunchedEffect(countries) {
         val group = selectedGroup
-        if (groupUsesTmdb && group != null) loadGroup(group.first, group.second)
+        if (ui.groupUsesTmdb && group != null) loadGroup(group.first, group.second)
     }
     var epgCache by remember {
         mutableStateOf(emptyMap<String, List<PortalProgramme>>())
@@ -2392,7 +2532,7 @@ private fun PlayerHome(
                 liveVariants[channel].orEmpty().firstNotNullOfOrNull { item ->
                     guide.programmes(item.value, channel.name).takeIf { it.isNotEmpty() }
                 }
-            } ?: emptyList<PortalProgramme>().takeUnless { epgUpdating }
+            } ?: emptyList<PortalProgramme>().takeUnless { ui.epgUpdating }
         } else {
             val key = programmeKey(channel)
             if (key == null) emptyList() else epgCache[key]
@@ -2483,8 +2623,8 @@ private fun PlayerHome(
         epgHorizonHours, epgRefreshRequest, epgRefreshHours) {
         if (restoring || !hasPortal || !xmlTvSourcesLoaded || !guideCacheLoaded) return@LaunchedEffect
         val refresh = epgAtStartup || epgRefreshRequest > 0
-        epgUpdateFailed = false
-        epgUpdating = true
+        ui.epgUpdateFailed = false
+        ui.epgUpdating = true
         try {
             if (useXmlTv) {
                 val sources = xmlTvSources.mapNotNull(::guideSourceUri)
@@ -2507,7 +2647,7 @@ private fun PlayerHome(
                     } }.awaitAll()
                 }
                 externalGuides = results.mapNotNull { it.guide }
-                epgUpdateFailed = results.any { it.failed }
+                ui.epgUpdateFailed = results.any { it.failed }
             } else if (refresh) {
                 val available = liveCategories.entries
                     .filter { visibleCategory(PortalSection.LIVE, it.key, it.key) }.flatMap { it.value }
@@ -2518,10 +2658,10 @@ private fun PlayerHome(
                 // must not make thousands of old channels refresh every cycle.
                 val refreshTargets = (selected + visibleEpgChannels.asSequence() + pinned.asSequence())
                     .filter { it in available }.distinct().toList()
-                epgUpdateFailed = !loadProviderSchedules(refreshTargets, force = epgRefreshRequest > 0)
+                ui.epgUpdateFailed = !loadProviderSchedules(refreshTargets, force = epgRefreshRequest > 0)
             }
         } finally {
-            epgUpdating = false
+            ui.epgUpdating = false
         }
     }
 
@@ -2874,6 +3014,11 @@ private fun PlayerHome(
 
     fun failPlayback(attempt: PlaybackAttempt, message: Int) {
         if (playbackAttempt !== attempt) return
+        if (attempt.selection.section == PortalSection.LIVE) {
+            val key = attempt.liveRestoreKey
+            val source = attempt.variants[attempt.index].sourceId
+            if (key != null && source != null) liveStreamHistory.recordFailure(key, source)
+        }
         if (attempt.index + 1 >= attempt.variants.size) {
             savePlaybackPosition(onFailure = true)
             currentTraktPlayback = null
@@ -2911,10 +3056,13 @@ private fun PlayerHome(
         programmeChannel = channel
         val selection = liveSelection(channel, group, combine)
         if (!openFullscreenOnStart && playing != null && reopenPlayback(selection)) return
+        val channelKey = programmeKey(channel) ?: group.identity
         startPlayback(
             channel,
             selection,
-            group.variants.preferringSource(null, preferredPortal) { it.item.source.identity }.map { variant ->
+            group.variants.preferringSource(null, preferredPortal) { it.item.source.identity }
+                .rankedByHistory(channelKey?.let(liveStreamHistory::records).orEmpty()) { it.item.source.identity }
+                .map { variant ->
                 val item = variant.item
                 val portal = sessionFor(item.source)
                 val quality = variant.description.qualities.joinToString(" / ")
@@ -2923,7 +3071,7 @@ private fun PlayerHome(
                 PlaybackVariant(label, sourceId = item.source.identity) { portal.resolve(item.value, portal.openSession()) }
             },
             openFullscreenOnStart = openFullscreenOnStart,
-            liveRestoreKey = programmeKey(channel) ?: group.identity
+            liveRestoreKey = channelKey
         )
     }
 
@@ -2935,7 +3083,6 @@ private fun PlayerHome(
         return listOf(sourceScope, countries.joinToString(","), hiddenCategories.sorted().joinToString(",")).joinToString("|")
     }
 
-    var cachedStartupAttempt by remember { mutableStateOf(false) }
     var startupSnapshotChecked by remember { mutableStateOf(storage == null) }
     LaunchedEffect(storage, restoring, playLastChannelAtStartup, selected) {
         if (restoring || startupSnapshotChecked) return@LaunchedEffect
@@ -2961,12 +3108,14 @@ private fun PlayerHome(
             if (validStreams.isNotEmpty()) {
                 val channel = StalkerChannel(cached.name, "", null, null)
                 programmeChannel = channel
-                cachedStartupAttempt = true
+                ui.cachedStartupAttempt = true
                 startPlayback(
                     channel, PlaybackSelection(cached.selectionSource, PortalSection.LIVE, cached.selectionId),
                     validStreams.map { saved ->
                         saved to SavedPortal(saved.address, saved.mac, emptyList(), emptyMap(), emptyMap()).identity
-                    }.preferringSource(null, preferredPortal) { it.second }.map { (saved, identity) ->
+                    }.preferringSource(null, preferredPortal) { it.second }
+                        .rankedByHistory(liveStreamHistory.records(cached.key)) { it.second }
+                        .map { (saved, identity) ->
                         val portal = StalkerPortal(saved.address, saved.mac)
                         val stream = StalkerChannel(cached.name, saved.command, null, null, id = saved.id, direct = saved.direct)
                         PlaybackVariant(portal.sourceLabel, sourceId = identity) {
@@ -2989,7 +3138,6 @@ private fun PlayerHome(
         programmeChannel = restored
     }
 
-    var restoredLastLiveChannel by remember { mutableStateOf(false) }
     LaunchedEffect(category) {
         if (category != null) {
             lastLiveCategory = category
@@ -3010,10 +3158,10 @@ private fun PlayerHome(
         }
     }
     LaunchedEffect(restoring, startupSnapshotChecked, liveCategories, playbackError, playLastChannelAtStartup) {
-        if (restoring || !startupSnapshotChecked || liveCategories.isEmpty() || restoredLastLiveChannel) return@LaunchedEffect
-        val retryFromCatalogue = cachedStartupAttempt && playbackError != null
-        if (cachedStartupAttempt && !retryFromCatalogue && playbackSelection != null) return@LaunchedEffect
-        restoredLastLiveChannel = true
+        if (restoring || !startupSnapshotChecked || liveCategories.isEmpty() || ui.restoredLastLiveChannel) return@LaunchedEffect
+        val retryFromCatalogue = ui.cachedStartupAttempt && playbackError != null
+        if (ui.cachedStartupAttempt && !retryFromCatalogue && playbackSelection != null) return@LaunchedEffect
+        ui.restoredLastLiveChannel = true
         if (selected != Destination.LIVE || playbackSelection != null && !retryFromCatalogue) return@LaunchedEffect
         val orderedCategories = liveCategories.keys
             .filter { visibleCategory(PortalSection.LIVE, it, it) }
@@ -3054,7 +3202,7 @@ private fun PlayerHome(
         openedSeason = null
         episodeVariants = emptyMap()
         episodeError = false
-        resumeEpisodeMissing = false
+        ui.resumeEpisodeMissing = false
     }
 
     fun switchSource(source: SavedPortal) {
@@ -3231,7 +3379,7 @@ private fun PlayerHome(
         return prefs.isPlaybackCompleted(key, fallback)
     }
     fun setWatched(section: PortalSection, title: PortalTitle, episodes: List<Pair<PortalSeason, PortalTitle>>, watched: Boolean) {
-        if (sendingWatchStatus || traktBusy) return
+        if (ui.sendingWatchStatus || ui.traktBusy) return
         val prefs = progressPreferences ?: return
         val keys = if (section == PortalSection.MOVIES) {
             setOf(titleSelection(section, title).progressKey) + movieHistory.filter { movie ->
@@ -3291,7 +3439,7 @@ private fun PlayerHome(
             val episodeNumber = episodeKey.toIntOrNull()?.takeIf { it > 0 } ?: return@mapNotNull null
             seasonNumber to episodeNumber
         }
-        sendingWatchStatus = true
+        ui.sendingWatchStatus = true
         scope.launch {
             try {
                 val accepted = numberedEpisodes.size == episodes.size && withTraktSession { api, session ->
@@ -3309,7 +3457,7 @@ private fun PlayerHome(
             } catch (_: Exception) {
                 traktPlaybackNotice = context.getString(R.string.trakt_manual_history_failed)
             } finally {
-                sendingWatchStatus = false
+                ui.sendingWatchStatus = false
             }
         }
     }
@@ -3322,12 +3470,12 @@ private fun PlayerHome(
                 { Text(stringResource(R.string.trakt_manual_history_description)) }
             } else null,
             confirmButton = {
-                MaterialTextButton(enabled = !sendingWatchStatus && !traktBusy, onClick = { update(true); watchStatusAction = null }) {
+                MaterialTextButton(enabled = !ui.sendingWatchStatus && !ui.traktBusy, onClick = { update(true); watchStatusAction = null }) {
                     Text(stringResource(R.string.mark_watched))
                 }
             },
             dismissButton = {
-                MaterialTextButton(enabled = !sendingWatchStatus && !traktBusy, onClick = { update(false); watchStatusAction = null }) {
+                MaterialTextButton(enabled = !ui.sendingWatchStatus && !ui.traktBusy, onClick = { update(false); watchStatusAction = null }) {
                     Text(stringResource(R.string.mark_unwatched))
                 }
             }
@@ -3392,7 +3540,7 @@ private fun PlayerHome(
             )
         ) return
         closeSeries()
-        focusTitlePrimary = true
+        ui.focusTitlePrimary = true
         if (section == PortalSection.SERIES) seriesDetailScroll.requestScrollToItem(0)
         details = section to title
         if (section == PortalSection.SERIES && isTitleSaved(section, title) && trackedSeries(title) == null) {
@@ -3446,7 +3594,7 @@ private fun PlayerHome(
         if (section == PortalSection.SERIES && openedSeries == title) {
             if (resume != null) {
                 val item = resumeEpisode(seasons.orEmpty(), resume)
-                if (item == null) resumeEpisodeMissing = true
+                if (item == null) ui.resumeEpisodeMissing = true
                 else {
                     openedSeason = item.first
                     selectTitle(section, item.second, progressOverride = resume.progressKey)
@@ -3457,7 +3605,7 @@ private fun PlayerHome(
         if (section == PortalSection.SERIES && openedSeries == null) {
             openedSeries = title
             episodeError = false
-            resumeEpisodeMissing = false
+            ui.resumeEpisodeMissing = false
             seasons = null
             openedSeason = null
             episodeVariants = emptyMap()
@@ -3505,7 +3653,7 @@ private fun PlayerHome(
                             val (season, episode) = item
                             openedSeason = season
                             selectTitle(section, episode, progressOverride = resume.progressKey)
-                        } else resumeEpisodeMissing = true
+                        } else ui.resumeEpisodeMissing = true
                     }
                 } catch (error: CancellationException) {
                     throw error
@@ -4081,7 +4229,7 @@ private fun PlayerHome(
                 val imported = refreshPortal(enteredAddress, enteredMac, activate = true)
                 if (automaticCountries && importStatuses.values.any {
                     it is ImportStatus.Count || it is ImportStatus.Loaded || it is ImportStatus.Partial
-                }) askForCountries = true
+                }) ui.askForCountries = true
                 if (firstPortal && imported && selected == Destination.SOURCES) selected = Destination.LIVE
             } finally {
                 connecting = false
@@ -4091,7 +4239,7 @@ private fun PlayerHome(
 
     fun openSourceRefreshDialog() {
         selectedRefreshSources = emptySet()
-        sourceRefreshDialogOpen = true
+        ui.sourceRefreshDialogOpen = true
     }
 
     fun refreshSources(sources: List<SavedPortal>) {
@@ -4120,7 +4268,7 @@ private fun PlayerHome(
                 portalRefreshNotice = if (unavailable.isEmpty()) {
                     context.getString(R.string.portals_refresh_success, reachableCount)
                 } else context.getString(R.string.portals_refresh_with_unavailable, reachableCount, unavailable.joinToString(", "))
-                if (completed > 0 && automaticCountries) askForCountries = true
+                if (completed > 0 && automaticCountries) ui.askForCountries = true
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
@@ -4133,9 +4281,9 @@ private fun PlayerHome(
         }
     }
 
-    LaunchedEffect(restoring, refreshPortalsAtStartup, liveGroupsReady) {
-        if (restoring || startupPortalRefreshStarted || savedSources.isEmpty()) return@LaunchedEffect
-        startupPortalRefreshStarted = true
+    LaunchedEffect(restoring, refreshPortalsAtStartup, ui.liveGroupsReady) {
+        if (restoring || ui.startupPortalRefreshStarted || savedSources.isEmpty()) return@LaunchedEffect
+        ui.startupPortalRefreshStarted = true
         val sources = savedSources.filter { it.enabled || it.autoDisabled }
         val unavailable = mutableListOf<String>()
         var fullRefreshPerformed = false
@@ -4232,6 +4380,14 @@ private fun PlayerHome(
 
     DisposableEffect(player) {
         val listener = object : Player.Listener {
+            override fun onPositionDiscontinuity(
+                oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int
+            ) {
+                if (reason == Player.DISCONTINUITY_REASON_SEEK || reason == Player.DISCONTINUITY_REASON_SEEK_ADJUSTMENT) {
+                    playerPositionResetAt.set(SystemClock.elapsedRealtime())
+                }
+            }
+
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 if (isPlaying) {
                     sendTraktScrobble("start")
@@ -4373,6 +4529,23 @@ private fun PlayerHome(
                     }
                     return
                 }
+                // A running Live-TV stream that fell behind its live window or lost the connection
+                // for a moment is reloaded once instead of switching away from a good source.
+                val now = SystemClock.elapsedRealtime()
+                val transient = error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW ||
+                    error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ||
+                    error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ||
+                    error.errorCode == PlaybackException.ERROR_CODE_IO_UNSPECIFIED
+                if (attempt.selection.section == PortalSection.LIVE && startingChannel == null && transient &&
+                    now - liveRetryAt > 60_000
+                ) {
+                    liveRetryAt = now
+                    playerPositionResetAt.set(now)
+                    AppDiagnostics.record(context, "playback_live_reload")
+                    player.seekToDefaultPosition()
+                    player.prepare()
+                    return
+                }
                 val httpStatus = (error.cause as? HttpDataSource.InvalidResponseCodeException)
                     ?.responseCode
                 val message = when {
@@ -4398,16 +4571,58 @@ private fun PlayerHome(
             }
         }
     }
+    /**
+     * Resolves the next Live-TV stream ahead of time, so a failover starts right away. Portal links
+     * expire, so this is repeated as soon as the running stream shows trouble.
+     */
+    fun prepareNextLiveVariant(attempt: PlaybackAttempt) {
+        if (attempt.selection.section != PortalSection.LIVE) return
+        val next = attempt.variants.getOrNull(attempt.index + 1) ?: return
+        val ready = preparedLiveVariant
+        if (ready != null && ready.variant === next && SystemClock.elapsedRealtime() - ready.preparedAt < 8_000) return
+        scope.launch {
+            try {
+                val stream = next.resolve()
+                if (playbackAttempt === attempt) {
+                    preparedLiveVariant = PreparedLiveVariant(next, stream, SystemClock.elapsedRealtime())
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                // Resolved again on demand if the running stream fails.
+            }
+        }
+    }
+
     LaunchedEffect(playbackAttempt, player) {
         val attempt = playbackAttempt ?: return@LaunchedEffect
         val activePlayer = player ?: return@LaunchedEffect
+        val live = attempt.selection.section == PortalSection.LIVE
         var hasPlayed = activePlayer.playbackState == Player.STATE_READY
         var bufferingSince: Long? = null
         var countedThisBuffer = false
-        var prolongedBufferEpisodes = 0
+        // Long buffering only counts within a few minutes: a stream that stalls once an hour is fine.
+        val bufferEpisodes = ArrayDeque<Long>()
+        val jumps = ArrayDeque<Long>()
+        var lastPosition = -1L
+        var positionMovedAt = SystemClock.elapsedRealtime()
+        var lastFrames = -1
+        var framesMovedAt = SystemClock.elapsedRealtime()
+        var frameSampleAt = 0L
+        var frameSample = 0
+        var fluentVideo = false
+        var playedMs = 0L
+        var successRecorded = false
+        fun fail(event: String) {
+            AppDiagnostics.record(context, event)
+            scope.launch { failPlayback(attempt, R.string.playback_timeout) }
+        }
         while (playbackAttempt === attempt) {
             val now = SystemClock.elapsedRealtime()
+            if (activePlayer.currentMediaItem?.mediaId != attempt.mediaId) { delay(250); continue }
             if (activePlayer.playbackState == Player.STATE_READY) hasPlayed = true
+            while (bufferEpisodes.isNotEmpty() && now - bufferEpisodes.first() > STALL_WINDOW_MS) bufferEpisodes.removeFirst()
+            while (jumps.isNotEmpty() && now - jumps.first() > STALL_WINDOW_MS) jumps.removeFirst()
             if (hasPlayed && canPlay() && activePlayer.playWhenReady &&
                 activePlayer.playbackState == Player.STATE_BUFFERING
             ) {
@@ -4415,17 +4630,59 @@ private fun PlayerHome(
                     bufferingSince = now
                     countedThisBuffer = false
                 }
+                if (now - bufferingSince!! >= 1_500) prepareNextLiveVariant(attempt)
                 if (!countedThisBuffer && now - bufferingSince!! >= 4_000) {
                     countedThisBuffer = true
-                    prolongedBufferEpisodes++
-                    if (prolongedBufferEpisodes >= 3) {
-                        failPlayback(attempt, R.string.playback_timeout)
-                        return@LaunchedEffect
-                    }
+                    bufferEpisodes.addLast(now)
+                    if (bufferEpisodes.size >= 3) return@LaunchedEffect fail("playback_repeated_buffering")
                 }
             } else if (activePlayer.playbackState != Player.STATE_BUFFERING) {
                 bufferingSince = null
                 countedThisBuffer = false
+            }
+            if (live && activePlayer.isPlaying) {
+                playedMs += 250
+                val position = liveStreamPosition(activePlayer)
+                val reset = now - playerPositionResetAt.get() < 5_000
+                if (lastPosition >= 0 && !reset && position < lastPosition - 1_500) {
+                    // The stream jumped back by itself: a source that keeps repeating the last seconds.
+                    jumps.addLast(now)
+                    prepareNextLiveVariant(attempt)
+                    if (jumps.size >= 2) return@LaunchedEffect fail("playback_stream_loop")
+                }
+                if (position != lastPosition) positionMovedAt = now
+                lastPosition = position
+                // Picture and sound stand still although the player reports playback.
+                if (now - positionMovedAt >= 3_000) prepareNextLiveVariant(attempt)
+                if (now - positionMovedAt >= FROZEN_LIMIT_MS) return@LaunchedEffect fail("playback_frozen")
+                // Only the picture stands still (sound goes on).
+                val videoSelected = activePlayer.currentTracks.isTypeSelected(C.TRACK_TYPE_VIDEO)
+                val frames = activePlayer.videoDecoderCounters?.let { it.ensureUpdated(); it.renderedOutputBufferCount }
+                if (videoSelected && frames != null && frameSampleAt == 0L) { frameSampleAt = now; frameSample = frames }
+                if (videoSelected && frames != null && now - frameSampleAt >= 4_000) {
+                    // Radio channels often show a still image with hardly any frames: only fluent
+                    // video (10+ frames per second at some point) is watched for a frozen picture.
+                    if (frames - frameSample >= 40) fluentVideo = true
+                    frameSampleAt = now
+                    frameSample = frames
+                }
+                if (videoSelected && frames != null && fluentVideo) {
+                    if (frames != lastFrames) framesMovedAt = now
+                    lastFrames = frames
+                    if (now - framesMovedAt >= 3_000) prepareNextLiveVariant(attempt)
+                    if (now - framesMovedAt >= FROZEN_LIMIT_MS) return@LaunchedEffect fail("playback_picture_frozen")
+                } else framesMovedAt = now
+                // A steady run is remembered: this portal is tried first for the channel next time.
+                if (!successRecorded && playedMs >= STEADY_PLAY_MS && bufferEpisodes.isEmpty() && jumps.isEmpty()) {
+                    successRecorded = true
+                    val key = attempt.liveRestoreKey
+                    val source = attempt.variants[attempt.index].sourceId
+                    if (key != null && source != null) liveStreamHistory.recordSuccess(key, source)
+                }
+            } else {
+                positionMovedAt = now
+                framesMovedAt = now
+                lastPosition = -1L
             }
             delay(250)
         }
@@ -4433,19 +4690,9 @@ private fun PlayerHome(
     LaunchedEffect(playbackAttempt, starting) {
         val attempt = playbackAttempt ?: return@LaunchedEffect
         if (starting != null || attempt.selection.section != PortalSection.LIVE) return@LaunchedEffect
-        val next = attempt.variants.getOrNull(attempt.index + 1) ?: return@LaunchedEffect
         delay(750)
         if (player?.isPlaying != true) return@LaunchedEffect
-        try {
-            val stream = next.resolve()
-            if (playbackAttempt === attempt) {
-                preparedLiveVariant = PreparedLiveVariant(next, stream, SystemClock.elapsedRealtime())
-            }
-        } catch (error: CancellationException) {
-            throw error
-        } catch (_: Exception) {
-            // Resolve again on demand if the running stream fails.
-        }
+        prepareNextLiveVariant(attempt)
     }
     LaunchedEffect(playbackSelection) {
         if (playbackSelection?.section == PortalSection.LIVE || playbackSelection == null) return@LaunchedEffect
@@ -4468,7 +4715,6 @@ private fun PlayerHome(
     var playbackControlsVisible by remember { mutableStateOf(false) }
     var dismissPlaybackControls by remember { mutableIntStateOf(0) }
     var overlayInteraction by remember { mutableIntStateOf(0) }
-    var overlayScheduleFocused by remember { mutableStateOf(false) }
     var guideProgramme by remember { mutableStateOf<Pair<StalkerChannel, PortalProgramme>?>(null) }
     val guideNow by produceState(System.currentTimeMillis() / 1_000) {
         while (true) {
@@ -4543,7 +4789,7 @@ private fun PlayerHome(
         guidePanel = guidePanel.afterProgrammeGuide(input)
     }
     fun showFullscreenPanel(panel: GuidePanel) {
-        if (panel != fullscreenGuidePanel) overlayScheduleFocused = false
+        if (panel != fullscreenGuidePanel) ui.overlayScheduleFocused = false
         if (panel != GuidePanel.GRID) fullscreenOverlayContent = panel
         fullscreenGuidePanel = panel
     }
@@ -4565,21 +4811,33 @@ private fun PlayerHome(
     fun isMainMenuOpen() = selected == Destination.LIVE && guidePanel == GuidePanel.MENU && !fullscreen
     val mainMenuOpen = isMainMenuOpen()
     LaunchedEffect(mainMenuOpen) { if (!mainMenuOpen) lastBack = 0L }
-    fun settingsPageOpen() = epgSettingsOpen || episodeSettingsOpen || controlSettingsOpen ||
-        metadataSettingsOpen || guideAppearancePage != null || remoteAccessOpen || accentPaletteOpen
+    fun settingsPageOpen() = ui.epgSettingsOpen || ui.episodeSettingsOpen || ui.controlSettingsOpen ||
+        ui.metadataSettingsOpen || ui.traktSettingsOpen || ui.kidsProtectionOpen || ui.termsOpen || guideAppearancePage != null || ui.remoteAccessOpen || ui.accentPaletteOpen
     fun openSettingsPage(open: () -> Unit) {
-        settingsPageOpenedAt = SystemClock.elapsedRealtime()
+        ui.settingsPageOpenedAt = SystemClock.elapsedRealtime()
         open()
     }
     fun closeSettingsPages(): Boolean {
+        if (ui.kidsColorOpen) {
+            ui.kidsColorOpen = false
+            return true
+        }
+        if (ui.traktForKids && ui.traktSettingsOpen) {
+            ui.traktSettingsOpen = false
+            ui.traktForKids = false
+            return true
+        }
         val open = settingsPageOpen()
-        epgSettingsOpen = false
-        episodeSettingsOpen = false
-        controlSettingsOpen = false
-        metadataSettingsOpen = false
+        ui.epgSettingsOpen = false
+        ui.episodeSettingsOpen = false
+        ui.controlSettingsOpen = false
+        ui.metadataSettingsOpen = false
+        ui.traktSettingsOpen = false
+        ui.kidsProtectionOpen = false
+        ui.termsOpen = false
         guideAppearancePage = null
-        remoteAccessOpen = false
-        accentPaletteOpen = false
+        ui.remoteAccessOpen = false
+        ui.accentPaletteOpen = false
         return open
     }
     fun openSettingsNow() {
@@ -4595,15 +4853,25 @@ private fun PlayerHome(
         lastBack = 0L
         selected = Destination.SETTINGS
     }
+    /** Runs [action] right away, or after the settings PIN when [flag] protects it (Einstellungsschutz). */
+    fun withSettingsPin(flag: Boolean, unlock: Boolean = true, action: () -> Unit) {
+        if (!parental.needsSettingsPin(flag)) return action()
+        if (pinRequest == null) pinRequest = PinRequest(
+            context.getString(R.string.pin_enter), null, check = parental::checkSettingsPin, length = parental.settingsPinLength
+        ) {
+            if (unlock) parental.settingsUnlocked = true
+            action()
+        }
+    }
     fun openSettings(after: () -> Unit = {}) {
-        if (parental.kidsMode || parental.hasPin && parental.protectSettings) {
+        if (parental.kidsMode || parental.needsSettingsPin(parental.protectSettings)) {
             val kids = parental.kidsMode
             if (pinRequest == null) pinRequest = PinRequest(
                 context.getString(if (kids) R.string.kids_mode_exit else R.string.pin_enter), null,
-                check = if (kids) parental::checkKidsPin else parental::checkPin,
-                length = if (kids) parental.kidsExitPinLength else parental.pinLength
+                check = if (kids) parental::checkKidsPin else parental::checkSettingsPin,
+                length = if (kids) parental.kidsExitPinLength else parental.settingsPinLength
             ) {
-                if (kids) parental.updateKidsMode(false)
+                if (kids) parental.updateKidsMode(false) else parental.settingsUnlocked = true
                 openSettingsNow()
                 after()
             }
@@ -4615,7 +4883,9 @@ private fun PlayerHome(
     /** Opens "Per Handy einstellen" (e.g. from setting up a portal). */
     fun openRemoteAccess() {
         editing = false
-        openSettings { openSettingsPage { remoteAccessOpen = true } }
+        openSettings {
+            withSettingsPin(parental.lockPortals || parental.lockCategories) { openSettingsPage { ui.remoteAccessOpen = true } }
+        }
     }
     fun returnToCategories() {
         lastLiveCategory = category
@@ -4657,13 +4927,13 @@ private fun PlayerHome(
     }
     fun requestAppExit() {
         val now = SystemClock.elapsedRealtime()
-        if (now < exitBlockedUntil) return
+        if (now < ui.exitBlockedUntil) return
         when (exitConfirmation) {
             ExitConfirmation.NONE -> {
                 savePlaybackPosition()
                 onExit()
             }
-            ExitConfirmation.DIALOG -> exitDialogOpen = true
+            ExitConfirmation.DIALOG -> ui.exitDialogOpen = true
             ExitConfirmation.DOUBLE_BACK -> if (lastBack != 0L && now - lastBack <= EXIT_CONFIRMATION_MS) {
                 savePlaybackPosition()
                 onExit()
@@ -4708,11 +4978,11 @@ private fun PlayerHome(
         } else if (selected == Destination.SETTINGS && closeSettingsPages()) {
             // Back from a settings page returns to the rows of its section (one step at a time).
             settingsContentFocusRequest++
-        } else if (selected == Destination.SETTINGS && settingsContentFocused) {
+        } else if (selected == Destination.SETTINGS && ui.settingsContentFocused) {
             // Back from the rows goes to the section bar on the left.
             settingsFocusRequesters[settingsSection]?.let { requester -> runCatching { requester.requestFocus() } }
         } else if (selected == Destination.SETTINGS) {
-            exitBlockedUntil = SystemClock.elapsedRealtime() + EXIT_CONFIRMATION_MS
+            ui.exitBlockedUntil = SystemClock.elapsedRealtime() + EXIT_CONFIRMATION_MS
             selected = settingsReturnDestination
             guidePanel = GuidePanel.GRID
             lastBack = 0L
@@ -4755,24 +5025,95 @@ private fun PlayerHome(
             stringResource(R.string.portal_categories_title, portalName(source)), source
         ) { portalCategoriesFor = null }
     }
-    if (exitDialogOpen) AlertDialog(
-        onDismissRequest = { exitDialogOpen = false },
+    if (ui.expiryLeadPickerOpen) AlertDialog(
+        onDismissRequest = { ui.expiryLeadPickerOpen = false },
+        title = { Text(stringResource(R.string.expiry_lead_title)) },
+        text = {
+            val current = remember { FocusRequester() }
+            androidx.compose.foundation.lazy.LazyColumn(
+                Modifier.heightIn(max = 380.dp), verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                items(ExpiryLead.ALL) { lead ->
+                    MenuButton(
+                        expiryLeadLabel(context, lead),
+                        if (lead == expiryLead) Modifier.fillMaxWidth().focusRequester(current) else Modifier.fillMaxWidth(),
+                        selected = lead == expiryLead
+                    ) {
+                        changeExpiryLead(lead)
+                        ui.expiryLeadPickerOpen = false
+                    }
+                }
+            }
+            LaunchedEffect(Unit) { withFrameNanos { }; runCatching { current.requestFocus() } }
+        },
+        confirmButton = {}
+    )
+    if (ui.exitDialogOpen) AlertDialog(
+        onDismissRequest = { ui.exitDialogOpen = false },
         title = { Text(stringResource(R.string.exit_dialog_title)) },
         text = { Text(stringResource(R.string.exit_dialog_message)) },
         confirmButton = {
             MenuButton(stringResource(R.string.exit_dialog_confirm), Modifier) {
-                exitDialogOpen = false
+                ui.exitDialogOpen = false
                 savePlaybackPosition()
                 onExit()
             }
         },
         dismissButton = {
             val cancel = remember { FocusRequester() }
-            MenuButton(stringResource(android.R.string.cancel), Modifier.focusRequester(cancel)) { exitDialogOpen = false }
+            MenuButton(stringResource(android.R.string.cancel), Modifier.focusRequester(cancel)) { ui.exitDialogOpen = false }
             // Cancel has focus first, so a further Back or OK press does not close the app by accident.
             LaunchedEffect(Unit) { runCatching { cancel.requestFocus() } }
         }
     )
+    // Portals that run out soon (or did): a notice that has to be confirmed with OK or Back.
+    val expiryConfirmations = remember(preferences) { ExpiryConfirmations(preferences) }
+    var expiryConfirmedVersion by remember { mutableIntStateOf(0) }
+    val expiryNotices = remember(savedSources, restoring, expiryConfirmedVersion) {
+        if (restoring) emptyList() else pendingExpiryNotices(
+            savedSources.filter { it.enabled || it.autoDisabled }, java.time.LocalDate.now(), expiryLead, ::portalName,
+            expiryConfirmations::state
+        )
+    }
+    if (expiryNotices.isNotEmpty() && !ui.exitDialogOpen && !ui.profilePickerOpen && pinRequest == null && !kidsAccountActive) {
+        fun confirmExpiry() {
+            expiryConfirmations.confirm(expiryNotices)
+            expiryConfirmedVersion++
+        }
+        AlertDialog(
+            onDismissRequest = ::confirmExpiry,
+            title = {
+                Text(stringResource(
+                    if (expiryNotices.all { it.state == ExpiryState.EXPIRED }) R.string.portal_expiry_notice_title_expired
+                    else R.string.portal_expiry_notice_title
+                ))
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    val format = DateTimeFormatter.ofPattern("dd.MM.uuuu")
+                    expiryNotices.forEach { notice ->
+                        val date = notice.expiry.format(format)
+                        Text(when {
+                            notice.daysLeft < 0 -> stringResource(R.string.portal_expiry_notice_expired, notice.name, date)
+                            notice.daysLeft == 0L -> stringResource(R.string.portal_expiry_notice_today, notice.name)
+                            else -> pluralStringResource(
+                                R.plurals.portal_expiry_notice_days, notice.daysLeft.toInt(), notice.name, date, notice.daysLeft.toInt()
+                            )
+                        })
+                    }
+                    Text(
+                        stringResource(R.string.portal_expiry_notice_hint),
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                val ok = remember { FocusRequester() }
+                MenuButton(stringResource(android.R.string.ok), Modifier.focusRequester(ok)) { confirmExpiry() }
+                LaunchedEffect(Unit) { runCatching { ok.requestFocus() } }
+            }
+        )
+    }
     var playerControlsRequest by remember { mutableIntStateOf(0) }
     fun changeLiveChannel(step: Int): Boolean {
         val groups = withCategoryOrder(PortalSection.LIVE, liveCategories.keys
@@ -4830,7 +5171,7 @@ private fun PlayerHome(
         }
     }
     val longBack by rememberUpdatedState<() -> Boolean>({
-        !watchingPrompt && !playbackControlsVisible && !controlSettingsOpen && guideAppearancePage == null &&
+        !watchingPrompt && !playbackControlsVisible && !ui.controlSettingsOpen && guideAppearancePage == null &&
             (runMappedControl(GuideInput.LONG_BACK) ||
                 if (fullscreen && fullscreenGuidePanel != GuidePanel.GRID) {
                     showFullscreenPanel(GuidePanel.GRID)
@@ -4872,7 +5213,14 @@ private fun PlayerHome(
         }
     }
     BackHandler(onBack = ::navigateBack)
-    categoryMenu?.let { (section, first) ->
+    // Hiding, ordering and locking categories needs the settings PIN when they are protected.
+    val lockedCategoryMenu = categoryMenu?.takeIf { parental.needsSettingsPin(parental.lockCategories) }
+    LaunchedEffect(lockedCategoryMenu) {
+        val pending = lockedCategoryMenu ?: return@LaunchedEffect
+        categoryMenu = null
+        withSettingsPin(true, unlock = false) { categoryMenu = pending }
+    }
+    if (lockedCategoryMenu == null) categoryMenu?.let { (section, first) ->
         val defaultGroups = if (section == PortalSection.LIVE) {
             allLiveCategories.keys.sortedBy { categoryNames.values.indexOf(it) }.map { PortalGroup(it, it) }
         } else defaultVodCategoryOrder(section)
@@ -4900,6 +5248,93 @@ private fun PlayerHome(
                     }
                 } else parental.toggleLocked(key)
             } else null
+        )
+    }
+    // Leaving the settings locks the protected settings again.
+    LaunchedEffect(selected) {
+        if (selected != Destination.SETTINGS && selected != Destination.SOURCES && selected != Destination.CATEGORIES) {
+            parental.settingsUnlocked = false
+        }
+    }
+    // ---- Accounts ----
+    LaunchedEffect(kidsAccountActive) { onAccountChange(kidsAccountActive) }
+    // Without a PIN the kids account cannot be protected: it goes with the PIN.
+    LaunchedEffect(parental.hasPin) { if (!parental.hasPin && profiles.hasKids) profiles.removeKids() }
+    LaunchedEffect(Unit) {
+        if (ui.profileStartChecked) return@LaunchedEffect
+        ui.profileStartChecked = true
+        if (!profiles.hasKids) return@LaunchedEffect
+        when (profiles.startProfile) {
+            StartProfile.KIDS -> parental.updateKidsMode(true)
+            // Admin (with PIN) or choose: nothing is usable before the account is confirmed.
+            StartProfile.ADMIN, StartProfile.ASK -> {
+                parental.updateKidsMode(true)
+                ui.profilePickerOpen = true
+                if (profiles.startProfile == StartProfile.ADMIN) pinRequest = PinRequest(
+                    context.getString(R.string.profile_admin_pin), null,
+                    check = parental::checkKidsPin, length = parental.kidsExitPinLength
+                ) {
+                    parental.updateKidsMode(false)
+                    ui.profilePickerOpen = false
+                }
+            }
+        }
+    }
+    fun switchAccount(kids: Boolean) {
+        if (kids != parental.kidsMode) stopPlayback()
+        parental.updateKidsMode(kids)
+        parental.settingsUnlocked = false
+        ui.profilePickerOpen = false
+        closeSettingsPages()
+        if (selected == Destination.SETTINGS || selected == Destination.SOURCES || selected == Destination.CATEGORIES) {
+            selected = Destination.LIVE
+        }
+    }
+    if (ui.profilePickerOpen && profiles.hasKids) ProfilePicker(
+        profiles.kidsName.orEmpty(),
+        onAdmin = {
+            if (pinRequest == null) pinRequest = PinRequest(
+                context.getString(R.string.profile_admin_pin), null,
+                check = parental::checkKidsPin, length = parental.kidsExitPinLength
+            ) { switchAccount(false) }
+        },
+        onKids = { switchAccount(true) },
+        onExit = onExit
+    )
+    // Closing the dialog must not hand the focus to a section of the bar (that would switch the
+    // section): the Kinderschutz page keeps it.
+    fun closeKidsNameDialog() {
+        ui.kidsNameDialog = false
+        ui.settingsPageOpenedAt = SystemClock.elapsedRealtime()
+        settingsContentFocusRequest++
+    }
+    if (ui.kidsNameDialog) ProfileNameDialog(
+        profiles.kidsName.orEmpty(),
+        onSave = { name ->
+            profiles.createKids(name)
+            closeKidsNameDialog()
+        },
+        onDismiss = ::closeKidsNameDialog
+    )
+    sharedPinQuestion?.let { question ->
+        AlertDialog(
+            onDismissRequest = { sharedPinQuestion = null },
+            title = { Text(stringResource(R.string.pin_same_title)) },
+            text = { Text(question.text) },
+            confirmButton = {
+                val same = remember { FocusRequester() }
+                MenuButton(stringResource(R.string.pin_same), Modifier.focusRequester(same)) {
+                    sharedPinQuestion = null
+                    question.onShared()
+                }
+                LaunchedEffect(Unit) { runCatching { same.requestFocus() } }
+            },
+            dismissButton = {
+                MenuButton(stringResource(R.string.pin_own), Modifier) {
+                    sharedPinQuestion = null
+                    question.onOwn()
+                }
+            }
         )
     }
     pinRequest?.let { request ->
@@ -4947,7 +5382,7 @@ private fun PlayerHome(
                 GuideInput.entries.forEach { editor.remove("control_${it.name}") }
             }?.apply()
         },
-        onDismiss = { controlSettingsOpen = false }
+        onDismiss = { ui.controlSettingsOpen = false }
     ) }
     // Remote settings from a phone: reads and changes the same states as the settings on the device.
     val remoteHandlerNow = object : RemoteHandler {
@@ -4991,6 +5426,9 @@ private fun PlayerHome(
                     "play_last_channel_at_startup") { playLastChannelAtStartup = it })
                 add(toggle("portalRefresh", library, text(R.string.portal_refresh_at_start), { refreshPortalsAtStartup },
                     "refresh_portals_at_startup") { refreshPortalsAtStartup = it })
+                add(RemoteEntry.Choice("expiryLead", library, text(R.string.expiry_lead_title),
+                    ExpiryLead.ALL.map { RemoteOption(it.key, expiryLeadLabel(context, it)) }, { expiryLead.key }
+                ) { value -> changeExpiryLead(ExpiryLead.parse(value)) })
                 add(toggle("autoDisable", library, text(R.string.auto_disable_unavailable_portals),
                     { autoDisableUnavailablePortals }, "auto_disable_unavailable_portals") { autoDisableUnavailablePortals = it })
                 add(toggle("merge", library, text(R.string.merge_sources), { mergeSources }, "mergeSources") {
@@ -5026,7 +5464,7 @@ private fun PlayerHome(
                 xmlTvSources.forEachIndexed { index, url ->
                     add(RemoteEntry.Action("epgRemove$index", guide, "${index + 1}. " + (guideSourceUri(url)?.host ?: url),
                         "Entfernen") {
-                        if (epgSourceSaving) "Bitte kurz warten." else { saveEpgSources(xmlTvSources.filterNot { it == url }); "Quelle entfernt." }
+                        if (ui.epgSourceSaving) "Bitte kurz warten." else { saveEpgSources(xmlTvSources.filterNot { it == url }); "Quelle entfernt." }
                     }.shownIf("epgSource", "CUSTOM"))
                 }
                 add(RemoteEntry.Input("epgAdd", guide, text(R.string.epg_add_source), text(R.string.epg_source_url), false,
@@ -5035,7 +5473,7 @@ private fun PlayerHome(
                     when {
                         source == null -> "Die Adresse ist ungültig."
                         source in xmlTvSources -> "Diese Quelle ist schon vorhanden."
-                        epgSourceSaving || !xmlTvSourcesLoaded -> "Bitte kurz warten."
+                        ui.epgSourceSaving || !xmlTvSourcesLoaded -> "Bitte kurz warten."
                         else -> { saveEpgSources(xmlTvSources + source); "Quelle hinzugefügt." }
                     }
                 }.shownIf("epgSource", "CUSTOM"))
@@ -5062,11 +5500,11 @@ private fun PlayerHome(
                 })
                 add(RemoteEntry.Action("epgRefreshNow", guide,
                     when {
-                        epgUpdating -> "EPG wird aktualisiert …"
-                        epgUpdateFailed || epgSourceWriteFailed -> text(R.string.epg_refresh_failed)
+                        ui.epgUpdating -> "EPG wird aktualisiert …"
+                        ui.epgUpdateFailed || ui.epgSourceWriteFailed -> text(R.string.epg_refresh_failed)
                         else -> "EPG aktualisieren"
                     }, text(R.string.epg_refresh_now)) {
-                    if (epgUpdating) "Läuft bereits." else if (useXmlTv && xmlTvSources.isEmpty()) "Zuerst eine XMLTV-Quelle hinzufügen."
+                    if (ui.epgUpdating) "Läuft bereits." else if (useXmlTv && xmlTvSources.isEmpty()) "Zuerst eine XMLTV-Quelle hinzufügen."
                     else { epgRefreshRequest++; "EPG wird aktualisiert." }
                 })
                 // Appearance of the guide and of the fullscreen channel list.
@@ -5196,14 +5634,14 @@ private fun PlayerHome(
                 })
                 val metadata = text(R.string.settings_metadata)
                 add(RemoteEntry.Info("tmdbStatus", metadata, "TMDB", when {
-                    metadataBusy -> "Verbindung wird geprüft …"
-                    metadataError -> text(R.string.tmdb_connection_failed)
+                    ui.metadataBusy -> "Verbindung wird geprüft …"
+                    ui.metadataError -> text(R.string.tmdb_connection_failed)
                     metadataClient != null -> text(R.string.tmdb_connected)
                     else -> "Nicht verbunden. Ohne TMDB werden Folgeninfos von TVmaze geladen."
                 }, "https://www.themoviedb.org/settings/api"))
                 add(RemoteEntry.Input("tmdbToken", metadata, text(R.string.tmdb_token), "Token einfügen", true,
                     text(R.string.tmdb_connect)) { value ->
-                    if (value.isBlank()) "Bitte den Token eingeben." else if (metadataBusy) "Bitte kurz warten."
+                    if (value.isBlank()) "Bitte den Token eingeben." else if (ui.metadataBusy) "Bitte kurz warten."
                     else { updateMetadataConnection(value.trim()); "Verbindung wird geprüft …" }
                 })
                 if (metadataClient != null) add(RemoteEntry.Action("tmdbDisconnect", metadata, "TMDB-Verbindung",
@@ -5214,14 +5652,25 @@ private fun PlayerHome(
                 add(RemoteEntry.Info("traktStatus", sync, "Trakt", when {
                     trakt != null -> context.getString(R.string.trakt_connected_as, trakt.username)
                     code != null -> context.getString(R.string.trakt_enter_code, code.verificationUrl) + " " + code.userCode
-                    traktBusy -> text(R.string.trakt_connecting)
+                    ui.traktBusy -> text(R.string.trakt_connecting)
                     else -> traktStatus ?: "Nicht verbunden."
                 }, code?.verificationUrl))
-                if (trakt == null && code == null) add(RemoteEntry.Action("traktConnect", sync, "Trakt-Konto",
+                if (trakt == null) {
+                    add(RemoteEntry.Info("traktAppInfo", sync, text(R.string.trakt_app_title),
+                        text(if (traktApp == null) R.string.trakt_app_help else R.string.trakt_app_saved),
+                        "https://trakt.tv/oauth/applications"))
+                    add(RemoteEntry.Input("traktClientId", sync, "Client ID", "Client ID einfügen", true,
+                        text(R.string.trakt_app_save)) { value -> saveTraktApp(value, null) ?: "Client ID gespeichert." })
+                    add(RemoteEntry.Input("traktClientSecret", sync, "Client Secret", "Client Secret einfügen", true,
+                        text(R.string.trakt_app_save)) { value ->
+                        if (traktApp == null) "Bitte zuerst die Client ID eingeben." else saveTraktApp(null, value) ?: "Client Secret gespeichert."
+                    })
+                }
+                if (trakt == null && code == null && traktApp != null) add(RemoteEntry.Action("traktConnect", sync, "Trakt-Konto",
                     text(R.string.trakt_connect)) { connectTrakt(); "Code wird angefordert …" })
                 if (trakt != null) {
                     add(RemoteEntry.Action("traktSync", sync, traktStatus ?: "Verlauf und Merkliste", "Synchronisieren") {
-                        if (traktBusy) "Läuft bereits." else { syncTrakt(forceSeriesHistory = true); text(R.string.trakt_syncing) }
+                        if (ui.traktBusy) "Läuft bereits." else { syncTrakt(forceSeriesHistory = true); text(R.string.trakt_syncing) }
                     })
                     add(RemoteEntry.Action("traktDisconnect", sync, "Trakt-Konto", text(R.string.trakt_disconnect)) {
                         disconnectTrakt(); null
@@ -5237,6 +5686,30 @@ private fun PlayerHome(
                 add(RemoteEntry.Choice("parental.kidsAge", parentalSection, name(R.string.kids_age),
                     KIDS_AGES.map { RemoteOption(it.toString(), context.getString(R.string.kids_age_value, it)) },
                     { parental.kidsAge.toString() }) {})
+                // Einstellungsschutz (the PIN itself is set on the device) and areas of the admin.
+                if (parental.hasSettingsPin) {
+                    add(RemoteEntry.Toggle("parental.lockPortals", parentalSection, text(R.string.settings_lock_portals),
+                        { parental.lockPortals }) {})
+                    add(RemoteEntry.Toggle("parental.lockCategories", parentalSection, text(R.string.settings_lock_categories),
+                        { parental.lockCategories }) {})
+                }
+                listOf("LIVE" to R.string.destination_live, "MOVIES" to R.string.destination_movies, "SERIES" to R.string.destination_series)
+                    .forEach { (area, label) ->
+                        add(RemoteEntry.Toggle("parental.area.$area", parentalSection,
+                            context.getString(R.string.settings_area_shown, text(label)), { area !in parental.hiddenAreas }) {})
+                    }
+                profiles.kidsName?.let { kids ->
+                    listOf("LIVE" to R.string.destination_live, "MOVIES" to R.string.destination_movies, "SERIES" to R.string.destination_series)
+                        .forEach { (area, label) ->
+                            add(RemoteEntry.Toggle("parental.kidsArea.$area", parentalSection,
+                                context.getString(R.string.kids_profile_area, kids, text(label)), { area in profiles.kidsAreas }) {})
+                        }
+                    add(RemoteEntry.Toggle("parental.kidsShare", parentalSection,
+                        context.getString(R.string.kids_profile_share, kids), { profiles.kidsShareData }) {})
+                    add(RemoteEntry.Choice("parental.startProfile", parentalSection, "Beim Start",
+                        StartProfile.entries.map { RemoteOption(it.name, if (it == StartProfile.KIDS) kids else text(it.label)) },
+                        { profiles.startProfile.name }) {})
+                }
             }
         }
 
@@ -5273,9 +5746,12 @@ private fun PlayerHome(
                 countries = available.sortedWith(compareBy({ it !in countries }, {
                     if (it in countries) countries.indexOf(it).toString().padStart(4, '0') else countryName(it)
                 })).map { RemoteCountry(it, countryName(it), it in countries) },
-                parental = RemoteParental(parental.hasPin, parental.separateKidsPin, parental.kidsMode),
+                parental = RemoteParental(
+                    parental.hasPin, parental.separateKidsPin, parental.kidsMode,
+                    hasSettingsPin = parental.hasSettingsPin, kidsAccount = profiles.kidsName
+                ),
                 busy = if (connecting) "Portale werden geladen …" else null,
-                askCountries = askForCountries || choosingCountries,
+                askCountries = ui.askForCountries || ui.choosingCountries,
                 error = sourceError?.let(::text)
             )
         }
@@ -5314,14 +5790,14 @@ private fun PlayerHome(
                 saveCountries(command.codes.filter { it in allowed }.toCollection(LinkedHashSet()))
                 if (command.confirm) {
                     // Confirmed on the phone: the question on the device is answered too.
-                    askForCountries = false
-                    choosingCountries = false
+                    ui.askForCountries = false
+                    ui.choosingCountries = false
                     RemoteReply(true, "Länder übernommen.")
                 } else RemoteReply(true)
             }
             RemoteCommand.Finish -> RemoteReply(true)
             RemoteCommand.CountriesLater -> {
-                askForCountries = false
+                ui.askForCountries = false
                 RemoteReply(true)
             }
             is RemoteCommand.PortalEdit -> savedSources.firstOrNull { it.identity == command.id }?.let { source ->
@@ -5376,7 +5852,8 @@ private fun PlayerHome(
                 when (command.field) {
                     "protectSettings" -> when {
                         value?.isBoolean != true -> RemoteReply(false)
-                        !parental.hasPin -> RemoteReply(false, "Zuerst eine PIN festlegen.")
+                        !parental.hasSettingsPin -> RemoteReply(false, "Zuerst am Gerät unter Einstellungsschutz eine PIN festlegen.")
+                        !value.asBoolean && !pinOk(command.pin, parental::checkSettingsPin) -> wrongPin
                         else -> { parental.updateProtectSettings(value.asBoolean); RemoteReply(true) }
                     }
                     "lockAdult" -> when {
@@ -5395,6 +5872,35 @@ private fun PlayerHome(
                     "kidsAge" -> value?.takeIf { it.isString }?.asString?.toIntOrNull()?.takeIf { it in KIDS_AGES }?.let {
                         parental.updateKidsAge(it); RemoteReply(true)
                     } ?: RemoteReply(false)
+                    "lockPortals", "lockCategories", "area.LIVE", "area.MOVIES", "area.SERIES" -> when {
+                        value?.isBoolean != true -> RemoteReply(false)
+                        // Like on the device: with a settings PIN every change here needs it.
+                        parental.hasSettingsPin && !pinOk(command.pin, parental::checkSettingsPin) -> wrongPin
+                        command.field == "lockPortals" -> { parental.updateLockPortals(value.asBoolean); RemoteReply(true) }
+                        command.field == "lockCategories" -> { parental.updateLockCategories(value.asBoolean); RemoteReply(true) }
+                        parental.setAreaHidden(command.field.removePrefix("area."), !value.asBoolean) -> RemoteReply(true)
+                        else -> RemoteReply(false, context.getString(R.string.settings_area_last))
+                    }
+                    "kidsName" -> when {
+                        !parental.hasPin -> RemoteReply(false, "Zuerst eine PIN festlegen.")
+                        value?.isString != true || value.asString.isBlank() -> RemoteReply(false, "Bitte einen Namen eingeben.")
+                        else -> { profiles.createKids(value.asString.trim().take(UserProfiles.MAX_NAME)); RemoteReply(true) }
+                    }
+                    "kidsRemove" -> when {
+                        !profiles.hasKids -> RemoteReply(false)
+                        !pinOk(command.pin, parental::checkPin) -> wrongPin
+                        else -> { profiles.removeKids(); RemoteReply(true, "Kinderkonto entfernt.") }
+                    }
+                    "kidsShare" -> if (value?.isBoolean == true && profiles.hasKids) {
+                        profiles.updateKidsShareData(value.asBoolean); RemoteReply(true)
+                    } else RemoteReply(false)
+                    "startProfile" -> StartProfile.entries.firstOrNull { value?.isString == true && it.name == value.asString }
+                        ?.takeIf { profiles.hasKids }?.let { profiles.updateStartProfile(it); RemoteReply(true) } ?: RemoteReply(false)
+                    "kidsArea.LIVE", "kidsArea.MOVIES", "kidsArea.SERIES" -> when {
+                        value?.isBoolean != true || !profiles.hasKids -> RemoteReply(false)
+                        profiles.setKidsArea(command.field.removePrefix("kidsArea."), value.asBoolean) -> RemoteReply(true)
+                        else -> RemoteReply(false, context.getString(R.string.settings_area_last))
+                    }
                     else -> RemoteReply(false)
                 }
             }
@@ -5413,13 +5919,13 @@ private fun PlayerHome(
             onPinReset = { remotePinFailures.set(0) },
             onFinished = {
                 // Finished on the phone: back to Live-TV (or the first available area).
-                remoteAccessOpen = false
+                ui.remoteAccessOpen = false
                 selected = Destination.LIVE.takeIf { it in visibleDestinations } ?: settingsReturnDestination
                 lastFocused = selected ?: Destination.LIVE
                 guidePanel = GuidePanel.GRID
                 lastBack = 0L
             }
-        ) { remoteAccessOpen = false }
+        ) { ui.remoteAccessOpen = false }
     }
     LaunchedEffect(playbackAttempt, manualIntro, manualCredits) {
         val attempt = playbackAttempt ?: return@LaunchedEffect
@@ -5974,7 +6480,7 @@ private fun PlayerHome(
             if (input.vertical) return fullscreenGuidePanel == GuidePanel.GRID && (custom || live)
             return custom || seriesOverlay || live && (
                 fullscreenGuidePanel != GuidePanel.CHANNELS || !scheduleBesideList ||
-                    input == GuideInput.REMOTE_LEFT && !overlayScheduleFocused
+                    input == GuideInput.REMOTE_LEFT && !ui.overlayScheduleFocused
             )
         }
         val inputModifier = Modifier.guideNavigationInput(
@@ -6198,7 +6704,7 @@ private fun PlayerHome(
                                             if (!useXmlTv) loadProviderSchedules(visible)
                                         },
                                         onInteraction = { overlayInteraction++ },
-                                        onScheduleFocused = { overlayScheduleFocused = it },
+                                        onScheduleFocused = { ui.overlayScheduleFocused = it },
                                         onSelect = { channel ->
                                             overlayInteraction++
                                             if (!guideAppearance.keepChannelList) showFullscreenPanel(GuidePanel.GRID)
@@ -6235,7 +6741,8 @@ private fun PlayerHome(
                                             iconOnly = mainMenuStyle == MainMenuStyle.ICONS
                                         ) {
                                             fullscreen = false
-                                            if (destination == Destination.SETTINGS) openSettings() else {
+                                            if (destination == Destination.PROFILES) ui.profilePickerOpen = true
+                                            else if (destination == Destination.SETTINGS) openSettings() else {
                                                 showFullscreenPanel(GuidePanel.GRID)
                                                 guidePanel = GuidePanel.GRID
                                                 lastFocused = destination
@@ -6469,27 +6976,27 @@ private fun PlayerHome(
     }
     CastLayer()
     // While the phone is used, the question appears only there; the device shows nothing of it.
-    if (askForCountries && !remoteAccessOpen) {
+    if (ui.askForCountries && !ui.remoteAccessOpen && !ui.profilePickerOpen && pinRequest == null && !kidsAccountActive) {
         AlertDialog(
-            onDismissRequest = { askForCountries = false },
+            onDismissRequest = { ui.askForCountries = false },
             title = { Text(stringResource(R.string.select_countries)) },
             text = { Text(stringResource(R.string.ask_countries)) },
             confirmButton = {
                 TextButton(onClick = {
-                    askForCountries = false
-                    choosingCountries = true
+                    ui.askForCountries = false
+                    ui.choosingCountries = true
                 }) { Text(stringResource(R.string.select_countries)) }
             },
             dismissButton = {
-                TextButton(onClick = { askForCountries = false }) {
+                TextButton(onClick = { ui.askForCountries = false }) {
                     Text(stringResource(R.string.later))
                 }
             }
         )
     }
-    if (sourceRefreshDialogOpen) {
+    if (ui.sourceRefreshDialogOpen) {
         AlertDialog(
-            onDismissRequest = { sourceRefreshDialogOpen = false },
+            onDismissRequest = { ui.sourceRefreshDialogOpen = false },
             title = { Text(stringResource(R.string.select_sources_to_refresh_title)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -6527,36 +7034,38 @@ private fun PlayerHome(
                     enabled = selectedRefreshSources.isNotEmpty() && !connecting
                 ) {
                     val sources = savedSources.filter { it.identity in selectedRefreshSources }
-                    sourceRefreshDialogOpen = false
+                    ui.sourceRefreshDialogOpen = false
                     refreshSources(sources)
                 }
             },
             dismissButton = {
                 MenuButton(stringResource(android.R.string.cancel), Modifier) {
-                    sourceRefreshDialogOpen = false
+                    ui.sourceRefreshDialogOpen = false
                 }
             }
         )
     }
-    if (choosingCountries && !remoteAccessOpen) {
+    if (ui.choosingCountries && !ui.remoteAccessOpen) {
         CountryDialog(
             knownCountries, countries,
-            onApply = { saveCountries(it); choosingCountries = false },
-            onDismiss = { choosingCountries = false }
+            onApply = { saveCountries(it); ui.choosingCountries = false },
+            onDismiss = { ui.choosingCountries = false }
         )
     }
     val metadataSettingsPage: @Composable () -> Unit = {
         MetadataSettings(
             connected = metadataClient != null,
-            busy = metadataBusy,
-            error = metadataError,
+            busy = ui.metadataBusy,
+            error = ui.metadataError,
             onConnect = { updateMetadataConnection(it) },
             onDisconnect = { updateMetadataConnection(null) },
-            onDismiss = { metadataSettingsOpen = false }
+            onDismiss = { ui.metadataSettingsOpen = false }
         )
     }
     if (storage != null && !restoring && storageError == null && savedSources.isEmpty() &&
-        !hasPortal && !initialPortalPromptDismissed && !editing && !connecting
+        !hasPortal && !initialPortalPromptDismissed && !editing && !connecting &&
+        // Not before the account is chosen, and never in the kids account.
+        !ui.profilePickerOpen && pinRequest == null && !kidsAccountActive
     ) AlertDialog(
         onDismissRequest = { initialPortalPromptDismissed = true },
         title = { Text(stringResource(R.string.first_portal_title)) },
@@ -6569,10 +7078,12 @@ private fun PlayerHome(
                 }) { Text(stringResource(R.string.remote_setup_portal)) }
                 TextButton(onClick = {
                     initialPortalPromptDismissed = true
-                    selected = Destination.SOURCES
-                    address = ""
-                    mac = ""
-                    editing = true
+                    withSettingsPin(parental.lockPortals) {
+                        selected = Destination.SOURCES
+                        address = ""
+                        mac = ""
+                        editing = true
+                    }
                 }) { Text(stringResource(R.string.add_portal)) }
             }
         },
@@ -6581,7 +7092,7 @@ private fun PlayerHome(
         }
     )
     val epgSettingsPage: @Composable () -> Unit = {
-        SettingsDialog(stringResource(R.string.epg_settings), { epgSettingsOpen = false }) {
+        SettingsDialog(stringResource(R.string.epg_settings), { ui.epgSettingsOpen = false }) {
                 SettingRow(stringResource(R.string.epg_provider), Modifier, selected = !useXmlTv) {
                     useXmlTv = false
                     preferences?.edit()?.putBoolean("xmltv_enabled", false)?.apply()
@@ -6594,7 +7105,7 @@ private fun PlayerHome(
                     xmlTvSources.forEachIndexed { index, url ->
                         SettingRow(
                             "${index + 1}. ${guideSourceUri(url)?.host.orEmpty()}: " + stringResource(R.string.epg_remove_source),
-                            enabled = !epgSourceSaving
+                            enabled = !ui.epgSourceSaving
                         ) { saveEpgSources(xmlTvSources.filterNot { it == url }) }
                     }
                     OutlinedTextField(
@@ -6603,7 +7114,7 @@ private fun PlayerHome(
                         singleLine = true, modifier = Modifier.fillMaxWidth()
                     )
                     val source = guideSourceUri(epgSourceDraft)?.toASCIIString()
-                    SettingRow(stringResource(R.string.epg_add_source), enabled = source != null && source !in xmlTvSources && !epgSourceSaving && xmlTvSourcesLoaded) { source?.let { saveEpgSources(xmlTvSources + it) } }
+                    SettingRow(stringResource(R.string.epg_add_source), enabled = source != null && source !in xmlTvSources && !ui.epgSourceSaving && xmlTvSourcesLoaded) { source?.let { saveEpgSources(xmlTvSources + it) } }
                 }
                 SettingRow(stringResource(R.string.epg_refresh_at_start), Modifier, selected = epgAtStartup) {
                     epgAtStartup = !epgAtStartup
@@ -6625,15 +7136,15 @@ private fun PlayerHome(
                     preferences?.edit()?.putInt("epg_horizon_hours", epgHorizonHours)?.apply()
                     epgRefreshRequest++
                 }
-                SettingRow(stringResource(R.string.epg_refresh_now), enabled = !epgUpdating && (!useXmlTv || xmlTvSources.isNotEmpty())) { epgRefreshRequest++ }
-                if (epgUpdating) LinearProgressIndicator(Modifier.fillMaxWidth())
-                if (epgUpdateFailed || epgSourceWriteFailed) {
+                SettingRow(stringResource(R.string.epg_refresh_now), enabled = !ui.epgUpdating && (!useXmlTv || xmlTvSources.isNotEmpty())) { epgRefreshRequest++ }
+                if (ui.epgUpdating) LinearProgressIndicator(Modifier.fillMaxWidth())
+                if (ui.epgUpdateFailed || ui.epgSourceWriteFailed) {
                     Text(stringResource(R.string.epg_refresh_failed), color = MaterialTheme.colorScheme.error)
                 }
         }
     }
     val episodeSettingsPage: @Composable () -> Unit = {
-        SettingsDialog(stringResource(R.string.episode_settings), { episodeSettingsOpen = false }) {
+        SettingsDialog(stringResource(R.string.episode_settings), { ui.episodeSettingsOpen = false }) {
                 SettingRow(stringResource(R.string.auto_next_episode), Modifier, selected = autoNextEpisode) {
                     autoNextEpisode = !autoNextEpisode
                     preferences?.edit()?.putBoolean("auto_next_episode", autoNextEpisode)?.apply()
@@ -6776,7 +7287,7 @@ private fun PlayerHome(
             fun openVodCategory(group: PortalGroup) {
                 val section = vodSectionForScreen ?: return
                 catalogueReturnTitle = null
-                focusFirstTitle = true
+                ui.focusFirstTitle = true
                 preferences?.edit()?.putString(recentCategoryKey, group.id)?.apply()
                 closeSeries()
                 details = null
@@ -6815,7 +7326,8 @@ private fun PlayerHome(
                             (item == Destination.SETTINGS &&
                                 destination in listOf(Destination.SOURCES, Destination.CATEGORIES)),
                         onClick = {
-                            if (item == Destination.SETTINGS) openSettings() else {
+                            if (item == Destination.PROFILES) ui.profilePickerOpen = true
+                            else if (item == Destination.SETTINGS) openSettings() else {
                                 lastFocused = item
                                 guidePanel = GuidePanel.GRID
                                 if (item == Destination.LIVE) restoreGuideEntryFocus()
@@ -6865,7 +7377,8 @@ private fun PlayerHome(
                                         Destination.SOURCES, Destination.CATEGORIES
                                     ),
                                 onClick = {
-                                    if (item == Destination.SETTINGS) openSettings() else {
+                                    if (item == Destination.PROFILES) ui.profilePickerOpen = true
+                                    else if (item == Destination.SETTINGS) openSettings() else {
                                         lastFocused = item
                                         guidePanel = GuidePanel.GRID
                                         if (item == Destination.LIVE) restoreGuideEntryFocus()
@@ -6890,17 +7403,17 @@ private fun PlayerHome(
                 val portalCheckText = startupPortalCheck?.let { (number, total) ->
                     stringResource(R.string.portal_check_progress, number, total)
                 }
-                val busy = restoring || connecting || liveGroupsLoading || traktBusy || portalRefreshText != null ||
+                val busy = restoring || connecting || ui.liveGroupsLoading || ui.traktBusy || portalRefreshText != null ||
                     portalCheckText != null || importStatuses.values.any { it == ImportStatus.Loading || it is ImportStatus.Progress }
                 // All background activity in one line next to the category; together with the fixed
                 // progress strip above, the screen below never moves while something loads.
                 val statusLine = if (!busy) "" else buildList {
                     if (restoring) add(stringResource(R.string.startup_loading))
-                    if (liveGroupsLoading) add(stringResource(R.string.live_groups_loading))
+                    if (ui.liveGroupsLoading) add(stringResource(R.string.live_groups_loading))
                     portalRefreshText?.let(::add)
                     portalCheckText?.let(::add)
                     batchProgress?.let { (number, total) -> add("Portal-Import: $number / $total") }
-                    if (traktBusy) traktStatus?.let(::add)
+                    if (ui.traktBusy) traktStatus?.let(::add)
                     importStatuses.forEach { (section, status) ->
                         when (status) {
                             ImportStatus.Loading -> add(stringResource(section.label) + " wird geladen …")
@@ -7034,12 +7547,74 @@ private fun PlayerHome(
                                     // A page opened from a row ("›") replaces the rows on the right;
                                     // "Zurück" returns to the section.
                                     val subpage: (@Composable () -> Unit)? = when {
-                                        epgSettingsOpen -> epgSettingsPage
-                                        episodeSettingsOpen -> episodeSettingsPage
-                                        controlSettingsOpen -> controlSettingsPage
-                                        remoteAccessOpen -> remoteAccessPage
-                                        metadataSettingsOpen -> metadataSettingsPage
-                                        accentPaletteOpen -> { { AccentPalette(accentChoice, onAccentChoiceChange) } }
+                                        ui.epgSettingsOpen -> epgSettingsPage
+                                        ui.episodeSettingsOpen -> episodeSettingsPage
+                                        ui.controlSettingsOpen -> controlSettingsPage
+                                        ui.remoteAccessOpen -> remoteAccessPage
+                                        ui.metadataSettingsOpen -> metadataSettingsPage
+                                        ui.termsOpen -> { {
+                                            SettingsDialog(stringResource(R.string.disclaimer_title), { ui.termsOpen = false }) { DisclaimerText() }
+                                        } }
+                                        ui.kidsColorOpen -> { {
+                                            // The kids account's own accent colour, chosen by the admin.
+                                            val kidsAccent = remember(ui.kidsAccentVersion) {
+                                                AccentChoice.entries.firstOrNull {
+                                                    it.name == preferences?.getString(UserProfiles.accentKey(true), null)
+                                                } ?: AccentChoice.RED
+                                            }
+                                            SettingsDialog(
+                                                stringResource(R.string.kids_profile_color, profiles.kidsName.orEmpty()),
+                                                { ui.kidsColorOpen = false }
+                                            ) {
+                                                AccentPalette(kidsAccent) { choice ->
+                                                    preferences?.edit()?.putString(UserProfiles.accentKey(true), choice.name)?.apply()
+                                                    ui.kidsAccentVersion++
+                                                }
+                                            }
+                                        } }
+                                        ui.kidsProtectionOpen -> { {
+                                            SettingsDialog(stringResource(R.string.kids_protection), { ui.kidsProtectionOpen = false }) {
+                                                ParentalSettings(parental, { pinRequest = it }, profiles.hasKids) { onShared, onOwn ->
+                                                    sharedPinQuestion = SharedPinQuestion(context.getString(R.string.parental_pin_same_question), onShared, onOwn)
+                                                }
+                                                KidsProfileSettings(
+                                                    profiles, parental,
+                                                    onCreate = { ui.kidsNameDialog = true },
+                                                    onRename = { ui.kidsNameDialog = true },
+                                                    onColor = { openSettingsPage { ui.kidsColorOpen = true } },
+                                                    onTrakt = { openSettingsPage { ui.traktForKids = true; ui.traktSettingsOpen = true } },
+                                                    kidsTraktName = ui.kidsTraktName,
+                                                    onRemove = {
+                                                        pinRequest = PinRequest(context.getString(R.string.pin_enter), null,
+                                                            check = parental::checkPin, length = parental.pinLength) { profiles.removeKids() }
+                                                    }
+                                                )
+                                            }
+                                        } }
+                                        ui.traktSettingsOpen -> { {
+                                            SettingsDialog(
+                                                if (ui.traktForKids) stringResource(R.string.kids_profile_trakt, profiles.kidsName.orEmpty())
+                                                else stringResource(R.string.trakt_settings),
+                                                { ui.traktSettingsOpen = false; ui.traktForKids = false }
+                                            ) {
+                                                TraktSettings(
+                                                    accountName = if (ui.traktForKids) ui.kidsTraktName else traktSession?.username,
+                                                    app = traktApp,
+                                                    onSaveApp = ::saveTraktApp,
+                                                    deviceCode = traktDeviceCode,
+                                                    busy = ui.traktBusy,
+                                                    status = traktStatus,
+                                                    onConnect = ::connectTrakt,
+                                                    onSync = {
+                                                        // The kids account syncs when it signs in with its own data.
+                                                        if (ui.traktForKids) traktStatus = context.getString(R.string.kids_profile_trakt_sync, profiles.kidsName.orEmpty())
+                                                        else syncTrakt(forceSeriesHistory = true)
+                                                    },
+                                                    onDisconnect = ::disconnectTrakt
+                                                )
+                                            }
+                                        } }
+                                        ui.accentPaletteOpen -> { { AccentPalette(accentChoice, onAccentChoiceChange) } }
                                         else -> guideAppearancePage?.let { page -> { guideAppearanceSettingsPage(page) } }
                                     }
                                     if (subpage != null) {
@@ -7047,7 +7622,10 @@ private fun PlayerHome(
                                     } else when (section) {
                                 SettingsSection.GENERAL -> {
                                     SettingRow(stringResource(R.string.remote_access), Modifier) {
-                                        openSettingsPage { remoteAccessOpen = true }
+                                        // The phone can change portals and categories: it needs the PIN when they are protected.
+                                        withSettingsPin(parental.lockPortals || parental.lockCategories) {
+                                            openSettingsPage { ui.remoteAccessOpen = true }
+                                        }
                                     }
                                     SettingRow(
                                         stringResource(R.string.show_touch_back_button), Modifier,
@@ -7090,11 +7668,14 @@ private fun PlayerHome(
                                     SettingRow(
                                         label = stringResource(R.string.destination_sources),
                                         modifier = Modifier,
-                                        onClick = { selected = Destination.SOURCES }
+                                        onClick = { withSettingsPin(parental.lockPortals) { selected = Destination.SOURCES } }
                                     )
                                     SettingRow(stringResource(R.string.category_settings), Modifier) {
-                                        selected = Destination.CATEGORIES
+                                        withSettingsPin(parental.lockCategories) { selected = Destination.CATEGORIES }
                                     }
+                                    SettingRow(
+                                        stringResource(R.string.expiry_lead_setting, expiryLeadLabel(context, expiryLead)), Modifier
+                                    ) { ui.expiryLeadPickerOpen = true }
                                     SettingRow(
                                         stringResource(R.string.auto_disable_unavailable_portals), Modifier,
                                         selected = autoDisableUnavailablePortals
@@ -7106,12 +7687,12 @@ private fun PlayerHome(
                                     }
                                 }
                                 SettingsSection.GUIDE ->
-                                    SettingRow(stringResource(R.string.epg_settings), Modifier) { openSettingsPage { epgSettingsOpen = true } }
+                                    SettingRow(stringResource(R.string.epg_settings), Modifier) { openSettingsPage { ui.epgSettingsOpen = true } }
                                 SettingsSection.APPEARANCE -> {
                                     SettingRow(
                                 stringResource(R.string.accent_color_setting, stringResource(accentChoice.label)),
                                 Modifier
-                            ) { openSettingsPage { accentPaletteOpen = true } }
+                            ) { openSettingsPage { ui.accentPaletteOpen = true } }
                             SettingRow(
                                         stringResource(R.string.menu_style_setting, stringResource(mainMenuStyle.label)),
                                         Modifier
@@ -7137,7 +7718,7 @@ private fun PlayerHome(
                                     }
                                 }
                                 SettingsSection.PLAYBACK -> {
-                                    SettingRow(stringResource(R.string.episode_settings), Modifier) { openSettingsPage { episodeSettingsOpen = true } }
+                                    SettingRow(stringResource(R.string.episode_settings), Modifier) { openSettingsPage { ui.episodeSettingsOpen = true } }
                                     SettingRow(
                                         stringResource(
                                             if (subtitleDefaultEnabled) R.string.subtitles_default_on
@@ -7174,11 +7755,42 @@ private fun PlayerHome(
                                     }
                                 }
                                 SettingsSection.CONTROLS ->
-                                    SettingRow(stringResource(R.string.control_settings), Modifier) { openSettingsPage { controlSettingsOpen = true } }
+                                    SettingRow(stringResource(R.string.control_settings), Modifier) { openSettingsPage { ui.controlSettingsOpen = true } }
                                 SettingsSection.UPDATES -> appUpdates.settings()
-                                SettingsSection.PARENTAL -> ParentalSettings(parental) { pinRequest = it }
+                                // "Sperren": the Kinderschutz opens as its own page; below it the settings protection.
+                                SettingsSection.PARENTAL -> {
+                                    SettingRow(
+                                        listOf(
+                                            stringResource(R.string.kids_protection),
+                                            stringResource(if (parental.hasPin) R.string.kids_protection_on else R.string.kids_protection_off)
+                                        ).joinToString(" · "), Modifier
+                                    ) { openSettingsPage { ui.kidsProtectionOpen = true } }
+                                    Text(stringResource(R.string.settings_protection), style = MaterialTheme.typography.titleSmall,
+                                        color = MaterialTheme.colorScheme.primary)
+                                    SettingsProtection(parental, { pinRequest = it }) { onShared, onOwn ->
+                                        sharedPinQuestion = SharedPinQuestion(context.getString(R.string.settings_pin_same_question), onShared, onOwn)
+                                    }
+                                }
                                 SettingsSection.ABOUT -> {
                                     AboutSettings()
+                                    SettingRow(stringResource(R.string.disclaimer_title), Modifier) { openSettingsPage { ui.termsOpen = true } }
+                                }
+                                SettingsSection.DIAGNOSTICS -> {
+                                    // Portal backup: the file holds addresses and MACs, so it follows the portal lock.
+                                    Text(stringResource(R.string.portal_transfer_title), style = MaterialTheme.typography.titleSmall,
+                                        color = MaterialTheme.colorScheme.primary)
+                                    if (savedSources.isNotEmpty()) {
+                                        SettingRow(stringResource(R.string.export_portals), Modifier) {
+                                            withSettingsPin(parental.lockPortals) { exportPortals.launch("streamwatch-portals.json") }
+                                        }
+                                    }
+                                    SettingRow(stringResource(R.string.import_portals), Modifier) {
+                                        withSettingsPin(parental.lockPortals) { importPortals.launch(arrayOf("application/json", "text/plain")) }
+                                    }
+                                    Text(stringResource(R.string.portal_transfer_privacy), style = MaterialTheme.typography.bodySmall)
+                                    portalTransferStatus?.let { Text(it) }
+                                    Text(stringResource(R.string.diagnostics_title), style = MaterialTheme.typography.titleSmall,
+                                        color = MaterialTheme.colorScheme.primary)
                                     Text(stringResource(R.string.diagnostics_description))
                                     Text(stringResource(
                                         if (diagnosticsTree == null) R.string.diagnostics_folder_missing
@@ -7201,26 +7813,25 @@ private fun PlayerHome(
                                     }
                                     diagnosticsStatus?.let { Text(it) }
                                 }
-                                SettingsSection.METADATA -> {
-                                    Text("Aktive Quelle für Folgeninfos: $activeEpisodeProvider")
+                                // Accounts and metadata in one place: each row opens its page on the right.
+                                SettingsSection.SYNC -> {
+                                    SettingRow(
+                                        listOf(
+                                            stringResource(R.string.trakt_settings),
+                                            traktSession?.username?.let { stringResource(R.string.trakt_row_connected, it) }
+                                                ?: stringResource(R.string.trakt_row_not_connected)
+                                        ).joinToString(" · "), Modifier
+                                    ) { openSettingsPage { ui.traktForKids = false; ui.traktSettingsOpen = true } }
                                     SettingRow(stringResource(R.string.tmdb_settings), Modifier) {
-                                        openSettingsPage { metadataSettingsOpen = true }
+                                        openSettingsPage { ui.metadataSettingsOpen = true }
                                     }
+                                    Text("Aktive Quelle für Folgeninfos: $activeEpisodeProvider")
                                     if (activeEpisodeProvider == "TVmaze") {
                                         SettingRow(stringResource(R.string.tvmaze_credit), Modifier) {
                                             uriHandler.openUri("https://www.tvmaze.com/")
                                         }
                                     }
                                 }
-                                SettingsSection.SYNC -> TraktSettings(
-                                    accountName = traktSession?.username,
-                                    deviceCode = traktDeviceCode,
-                                    busy = traktBusy,
-                                    status = traktStatus,
-                                    onConnect = ::connectTrakt,
-                                    onSync = { syncTrakt(forceSeriesHistory = true) },
-                                    onDisconnect = ::disconnectTrakt
-                                )
                                     }
                                 }
                             }
@@ -7233,7 +7844,7 @@ private fun PlayerHome(
                         SettingRow(
                             stringResource(R.string.select_countries),
                             Modifier.focusRequester(initialFocus)
-                        ) { choosingCountries = true }
+                        ) { ui.choosingCountries = true }
                         SettingRow(
                             stringResource(R.string.auto_country_prompt),
                             Modifier, selected = automaticCountries
@@ -7244,22 +7855,14 @@ private fun PlayerHome(
                         SettingRow(
                             stringResource(R.string.show_hidden_categories),
                             Modifier,
-                            selected = showHiddenCategories
-                        ) { showHiddenCategories = !showHiddenCategories }
+                            selected = ui.showHiddenCategories
+                        ) { ui.showHiddenCategories = !ui.showHiddenCategories }
                     }
+                    // "Abmelden" never becomes the selected page: it only opens the account selection.
+                    Destination.PROFILES -> Unit
                     Destination.SOURCES -> {
                         Text(stringResource(R.string.destination_sources), style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.primary)
-                        if (savedSources.isNotEmpty()) {
-                            SettingRow(stringResource(R.string.export_portals), Modifier) {
-                                exportPortals.launch("streamwatch-portals.json")
-                            }
-                        }
-                        SettingRow(stringResource(R.string.import_portals), Modifier) {
-                            importPortals.launch(arrayOf("application/json", "text/plain"))
-                        }
-                        Text(stringResource(R.string.portal_transfer_privacy))
-                        portalTransferStatus?.let { Text(it) }
                         SettingRow(
                             label = stringResource(R.string.add_portal),
                             modifier = Modifier.focusRequester(initialFocus),
@@ -7312,6 +7915,13 @@ private fun PlayerHome(
                                 runCatching { java.net.URI(source.address).host }.getOrNull().orEmpty()
                             }
                             val isActive = source.identity == storedSource?.identity
+                            // Portals that run out soon (amber) or did (red) are marked, with a note.
+                            val expiry = expiryState(source.subscriptionExpiry, java.time.LocalDate.now(), expiryLead)
+                            val expiryColor = when (expiry) {
+                                ExpiryState.SOON -> Color(0xFFFFB300)
+                                ExpiryState.EXPIRED -> Color(0xFFE53935)
+                                null -> null
+                            }
                             Text(stringResource(when (source.reachable) {
                                 true -> R.string.portal_status_reachable
                                 false -> R.string.portal_status_unreachable
@@ -7324,9 +7934,23 @@ private fun PlayerHome(
                             // The portal's frame: name, counts and its on/off switch belong together.
                             Surface(
                                 Modifier.weight(1f), shape = RoundedCornerShape(14.dp),
-                                color = MaterialTheme.colorScheme.surfaceContainer,
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                                color = expiryColor?.copy(alpha = 0.12f)?.compositeOver(MaterialTheme.colorScheme.surfaceContainer)
+                                    ?: MaterialTheme.colorScheme.surfaceContainer,
+                                border = BorderStroke(if (expiryColor != null) 2.dp else 1.dp, expiryColor ?: MaterialTheme.colorScheme.outlineVariant)
                             ) {
+                            Column {
+                            if (expiry != null && expiryColor != null) {
+                                val days = java.time.temporal.ChronoUnit.DAYS.between(java.time.LocalDate.now(), source.subscriptionExpiry)
+                                Text(
+                                    when {
+                                        expiry == ExpiryState.EXPIRED -> stringResource(R.string.portal_expired_badge)
+                                        days == 0L -> stringResource(R.string.portal_expires_today_badge)
+                                        else -> pluralStringResource(R.plurals.portal_expires_soon_badge, days.toInt(), days.toInt())
+                                    },
+                                    Modifier.padding(start = 14.dp, top = 8.dp),
+                                    color = expiryColor, style = MaterialTheme.typography.labelLarge
+                                )
+                            }
                             Row(Modifier.padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
                                 SettingRow(
                                 listOf(
@@ -7360,6 +7984,7 @@ private fun PlayerHome(
                                     source.enabled,
                                     stringResource(if (source.enabled) R.string.disable_portal else R.string.enable_portal)
                                 ) { setPortalEnabled(source, !source.enabled) }
+                            }
                             }
                             }
                             // The provider's own categories (before grouping): which countries are in the portal.
@@ -7785,8 +8410,8 @@ private fun PlayerHome(
                                     if (season.number == null || number.isNullOrBlank()) stringResource(R.string.play_first_episode)
                                     else stringResource(R.string.play_numbered_episode, season.number, number)
                                 },
-                                focusPrimary = focusTitlePrimary,
-                                onPrimaryFocused = { focusTitlePrimary = false },
+                                focusPrimary = ui.focusTitlePrimary,
+                                onPrimaryFocused = { ui.focusTitlePrimary = false },
                                 compact = compactMedia,
                                 onBack = ::navigateBack,
                                 onPlay = { selectTitle(section, title) },
@@ -7853,7 +8478,7 @@ private fun PlayerHome(
                                     onBack = ::navigateBack,
                                     header = {
                                         titleOverview()
-                                        if (resumeEpisodeMissing) Text(
+                                        if (ui.resumeEpisodeMissing) Text(
                                             stringResource(R.string.resume_episode_missing),
                                             color = MaterialTheme.colorScheme.error
                                         )
@@ -8045,10 +8670,10 @@ private fun PlayerHome(
                                     modifier = Modifier.weight(1f),
                                         categoryTitle = group.name,
                                     catalog = if (uncategorizedSelected) baseCatalog else groupCatalog,
-                                    loading = if (uncategorizedSelected) section in catalogLoading else groupLoading,
-                                    failed = if (uncategorizedSelected) section in catalogErrors else groupError,
+                                    loading = if (uncategorizedSelected) section in catalogLoading else ui.groupLoading,
+                                    failed = if (uncategorizedSelected) section in catalogErrors else ui.groupError,
                                     canLoadMore = !connecting,
-                                    emptyMessage = if (groupUsesTmdb) R.string.tmdb_no_portal_matches
+                                    emptyMessage = if (ui.groupUsesTmdb) R.string.tmdb_no_portal_matches
                                     else if (section == PortalSection.MOVIES) {
                                         R.string.no_movies
                                     } else R.string.no_series,
@@ -8060,10 +8685,10 @@ private fun PlayerHome(
                                     isSaved = { isTitleSaved(section, it) },
                                     preferPopularity = group.id == VodCategory.POPULAR.id,
                                     returnTitle = catalogueReturnTitle,
-                                    focusFirstTitle = focusFirstTitle,
+                                    focusFirstTitle = ui.focusFirstTitle,
                                     onTitleFocusRestored = {
                                         catalogueReturnTitle = null
-                                        focusFirstTitle = false
+                                        ui.focusFirstTitle = false
                                     },
                                     newEpisodes = { title ->
                                         if (section == PortalSection.SERIES) trackedSeries(title)?.unseen?.size ?: 0 else 0
@@ -8210,7 +8835,7 @@ private fun PlayerHome(
                             } else seriesActivityView = SeriesActivityView.HISTORY
                         }
                     }
-                    if (restoring || connecting || liveGroupsLoading || traktBusy || startupPortalRefresh != null || startupPortalCheck != null ||
+                    if (restoring || connecting || ui.liveGroupsLoading || ui.traktBusy || startupPortalRefresh != null || startupPortalCheck != null ||
                         cataloguePlaybackView == VodLiveView.CORNER && playing != null
                     ) header()
                     content()
@@ -8248,7 +8873,7 @@ private fun PlayerHome(
                                             // briefly hands focus to the first section ("Allgemein").
                                             // That must not close the page that has just opened.
                                             val justOpened = settingsPageOpen() &&
-                                                SystemClock.elapsedRealtime() - settingsPageOpenedAt <
+                                                SystemClock.elapsedRealtime() - ui.settingsPageOpenedAt <
                                                 SETTINGS_PAGE_FOCUS_GRACE_MS
                                             if (it.isFocused && settingsSection != item && !justOpened) {
                                                 closeSettingsPages()
@@ -8266,8 +8891,21 @@ private fun PlayerHome(
                         }
                         Column(
                             Modifier.weight(0.73f)
-                                .onFocusChanged { settingsContentFocused = it.hasFocus }
-                                .focusRequester(settingsContentFocus).focusGroup()
+                                .onFocusChanged { ui.settingsContentFocused = it.hasFocus }
+                                .focusRequester(settingsContentFocus)
+                                .focusProperties {
+                                    // Left out of the rows works like Back: one step at a time, and
+                                    // to the section that is open (not the one nearest on screen).
+                                    exit = { direction ->
+                                        if (direction == FocusDirection.Left) {
+                                            if (closeSettingsPages()) {
+                                                settingsContentFocusRequest++
+                                                FocusRequester.Cancel
+                                            } else settingsFocusRequesters[settingsSection] ?: FocusRequester.Default
+                                        } else FocusRequester.Default
+                                    }
+                                }
+                                .focusGroup()
                                 .verticalScroll(contentScroll),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) { content() }
@@ -9385,6 +10023,8 @@ internal fun PlayerFrame(
                 },
                 update = { view ->
                     onSurface?.invoke(view.videoSurfaceView as? SurfaceView)
+                    // Live TV keeps the last picture while another stream or channel starts (no black cut).
+                    view.setKeepContentOnPlayerReset(livePlayback)
                     listOf(
                         androidx.media3.ui.R.id.exo_prev,
                         androidx.media3.ui.R.id.exo_next,
@@ -9938,3 +10578,10 @@ private fun PlayerHomePreview() {
         PlayerHome()
     }
 }
+
+/** "1 Tag", "5 Tage", "2 Wochen", "1 Monat" for the expiry notice lead time. */
+internal fun expiryLeadLabel(context: Context, lead: ExpiryLead): String = when (lead.unit) {
+    'w' -> context.resources.getQuantityString(R.plurals.expiry_lead_weeks, lead.amount, lead.amount)
+    'm' -> context.getString(R.string.expiry_lead_month)
+    else -> context.resources.getQuantityString(R.plurals.expiry_lead_days, lead.amount, lead.amount)
+} + " " + context.getString(R.string.expiry_lead_before)

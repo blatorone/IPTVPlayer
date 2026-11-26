@@ -1,5 +1,21 @@
 # Änderungen
 
+## 1.0.93
+
+- Live-TV: Beim Wechsel der Quelle oder des Senders bleibt das letzte Bild stehen, statt schwarz zu werden. Der nächste Stream wird schon vorbereitet, sobald der laufende hakt.
+- Live-TV: Hänger werden besser erkannt – ein stehendes Bild (auch wenn nur der Ton weiterläuft) und Streams, die immer wieder ein paar Sekunden zurückspringen, führen zum Wechsel. Gut laufende Streams werden seltener grundlos gewechselt: langes Puffern zählt nur innerhalb von drei Minuten, kurze Verbindungsfehler laden erst denselben Stream neu.
+- Live-TV: Die App merkt sich je Sender, welches Portal am besten lief, und startet beim nächsten Mal damit.
+- Portale: Hinweis vor dem Ablauf und nach dem Ablauf (je einmal, mit OK oder Zurück bestätigen). In den Quellen sind bald ablaufende Portale gelb, abgelaufene rot markiert. Ab wann der Hinweis kommt, ist unter Quellen einstellbar (1–14 Tage, 1–3 Wochen oder 1 Monat; voreingestellt 1 Woche), auch am Handy.
+- Benutzerkonten: Neben dem Admin-Konto kann ein Kinderkonto angelegt werden (Sperren → Kinderschutz). Es sieht nur freigegebene Bereiche und Inhalte passend zur Altersgrenze und kommt nicht in die Einstellungen. „Abmelden“ oben im Menü wechselt das Konto, zum Admin nur mit PIN. Beim Start: Benutzer auswählen, Admin (mit PIN) oder Kinderkonto. Jedes Konto hat seine eigene Farbe; das Kinderkonto kann die Daten des Admins mitnutzen oder eigenen Fortschritt, eigene Merkliste und ein eigenes Trakt-Konto haben.
+- Sperren (früher Kindersicherung): Einstellungsschutz mit eigener oder gleicher PIN wie der Kinderschutz – Einstellungen, Portale und Kategorien lassen sich einzeln sperren. Live-TV, Filme und Serien lassen sich ausblenden; ein Bereich bleibt immer.
+- Trakt: Zum Verbinden trägt jeder seine eigene Trakt-API (Client ID und Client Secret) ein. Bereits verbundene Konten laufen unverändert weiter.
+- Einstellungen: Konten und Synchronisierung enthält jetzt auch die Filmdatenbank (TMDB). Neuer Bereich „Daten & Diagnose“ mit Portal-Sicherung und Diagnosebericht; „Über“ zeigt nur noch App-Infos und die Nutzungsbedingungen. Links aus den Einstellungen wirkt wie Zurück und bleibt im zuletzt offenen Bereich.
+- Farben: 40 Akzentfarben zur Auswahl; neben der Beispielansicht wie bisher, die neuen darunter über die ganze Breite.
+- PIN-Eingabe: Die Zifferntasten der Fernbedienung tippen die PIN direkt ein.
+- App-Updates: Die Änderungen im Update-Hinweis lassen sich mit der Fernbedienung durchscrollen (vom Knopf nach oben).
+- Download: Die APK heißt jetzt StreamWatch-<Nummer>.apk. Übergangsweise liegt sie zusätzlich unter dem alten Namen bei, damit ältere Versionen das Update finden.
+- Neue Installationen zeigen beim ersten Start die Nutzungsbedingungen, die akzeptiert werden müssen.
+
 ## 1.0.92
 
 - Quellen: Neben jedem Portal zeigt „Kategorien“ die Kategorien so, wie der Anbieter sie liefert – für Live-TV, Filme und Serien, mit erkanntem Land und Anzahl, oben zusammengefasst nach Ländern. So sieht man vor der Gruppierung, welche Länder ein Portal enthält. Auch am Handy bei den Portalen.

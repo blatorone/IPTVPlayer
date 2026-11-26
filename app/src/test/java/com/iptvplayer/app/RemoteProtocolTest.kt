@@ -21,6 +21,16 @@ class RemoteProtocolTest {
     }
 
     @Test
+    fun parsesProtectionAndKidsAccountCommands() {
+        val area = decode("""{"t":"parental","epoch":"e1","field":"area.MOVIES","value":false,"pin":"1234"}""")
+        assertEquals("area.MOVIES", (area as RemoteCommand.Parental).field)
+        assertEquals("1234", area.pin)
+        val name = decode("""{"t":"parental","epoch":"e1","field":"kidsName","value":"Mia"}""") as RemoteCommand.Parental
+        assertEquals("Mia", name.value?.asString)
+        assertNull(decode("""{"t":"parental","epoch":"e1","field":"somethingElse","value":true}"""))
+    }
+
+    @Test
     fun parsesCategoryAndCountryCommands() {
         val categories = decode("""{"t":"categories","epoch":"e1","section":"MOVIES","ids":["a","b"],"hidden":true}""")
         assertEquals(RemoteCommand.Categories(PortalSection.MOVIES, setOf("a", "b"), true), categories)

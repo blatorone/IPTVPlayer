@@ -32,9 +32,15 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.Locale
+
+/** The main areas that can be hidden ("Einstellungsschutz"); at least one stays visible. */
+internal val MAIN_AREAS = listOf("LIVE", "MOVIES", "SERIES")
 
 /** Age levels of the kids mode (German FSK steps). */
 internal val KIDS_AGES = listOf(0, 6, 12, 16, 18)
@@ -83,6 +89,82 @@ internal class ParentalControls(private val preferences: SharedPreferences?) {
     var lockedCategories by mutableStateOf(preferences?.getStringSet("parental_locked_categories", null)?.toSet().orEmpty())
         private set
 
+    // ---- Einstellungsschutz: what someone without the settings PIN may change ----
+    /** The settings use the Kindersicherung PIN (true) or their own PIN (settings_pin_hash). */
+    var settingsPinShared by mutableStateOf(
+        preferences?.getBoolean("settings_pin_shared", false) ?: false ||
+            // Earlier versions protected the settings with the Kindersicherung PIN only.
+            (preferences?.contains("settings_pin_shared") == false && protectSettings && hasPin)
+    )
+        private set
+    var ownSettingsPin by mutableStateOf(preferences?.getString("settings_pin_hash", null) != null)
+        private set
+    val hasSettingsPin: Boolean get() = ownSettingsPin || settingsPinShared && hasPin
+    var lockPortals by mutableStateOf(preferences?.getBoolean("settings_lock_portals", false) ?: false)
+        private set
+    var lockCategories by mutableStateOf(preferences?.getBoolean("settings_lock_categories", false) ?: false)
+        private set
+    /** Main areas (LIVE, MOVIES, SERIES) hidden from the menu; one always stays. */
+    var hiddenAreas by mutableStateOf(preferences?.getStringSet("hidden_areas", null)?.toSet().orEmpty())
+        private set
+    /** Settings PIN entered: protected settings stay open until the settings are left. */
+    var settingsUnlocked by mutableStateOf(false)
+
+    fun checkSettingsPin(pin: String): Boolean =
+        if (ownSettingsPin) preferences?.getString("settings_pin_hash", null) == hash(pin, "settings_pin_salt")
+        else settingsPinShared && checkPin(pin)
+
+    val settingsPinLength: Int? get() =
+        if (ownSettingsPin) preferences?.getInt("settings_pin_length", 0)?.takeIf { it >= 4 } else pinLength
+
+    /** Own settings PIN ([pin]) or the Kindersicherung PIN ([pin] null, shared). */
+    fun setSettingsPin(pin: String?) {
+        val editor = preferences?.edit()
+        if (pin == null) {
+            editor?.remove("settings_pin_hash")?.putBoolean("settings_pin_shared", true)
+        } else {
+            editor?.putString("settings_pin_hash", hash(pin, "settings_pin_salt"))?.putInt("settings_pin_length", pin.length)
+                ?.putBoolean("settings_pin_shared", false)
+        }
+        editor?.apply()
+        ownSettingsPin = pin != null
+        settingsPinShared = pin == null
+    }
+
+    /** Removes the settings PIN and with it every settings restriction. */
+    fun removeSettingsPin() {
+        preferences?.edit()?.remove("settings_pin_hash")?.putBoolean("settings_pin_shared", false)
+            ?.putBoolean("parental_protect_settings", false)?.putBoolean("settings_lock_portals", false)
+            ?.putBoolean("settings_lock_categories", false)?.apply()
+        ownSettingsPin = false
+        settingsPinShared = false
+        protectSettings = false
+        lockPortals = false
+        lockCategories = false
+    }
+
+    fun updateLockPortals(value: Boolean) {
+        lockPortals = value
+        preferences?.edit()?.putBoolean("settings_lock_portals", value)?.apply()
+    }
+
+    fun updateLockCategories(value: Boolean) {
+        lockCategories = value
+        preferences?.edit()?.putBoolean("settings_lock_categories", value)?.apply()
+    }
+
+    /** Hides or shows a main area; the last visible one cannot be hidden. */
+    fun setAreaHidden(area: String, hidden: Boolean): Boolean {
+        val next = if (hidden) hiddenAreas + area else hiddenAreas - area
+        if (MAIN_AREAS.all { it in next }) return false
+        hiddenAreas = next
+        preferences?.edit()?.putStringSet("hidden_areas", next)?.apply()
+        return true
+    }
+
+    /** Whether changing something guarded by [flag] needs the settings PIN right now. */
+    fun needsSettingsPin(flag: Boolean): Boolean = flag && hasSettingsPin && !settingsUnlocked
+
     /** Locked content stays visible until the app is closed after entering the PIN. */
     var unlocked by mutableStateOf(false)
     /** Titles released once with the PIN in kids mode during this session. */
@@ -121,11 +203,12 @@ internal class ParentalControls(private val preferences: SharedPreferences?) {
     }
 
     fun removePin() {
+        // Settings that share this PIN lose their protection with it; an own settings PIN stays.
+        if (settingsPinShared && !ownSettingsPin) removeSettingsPin()
         preferences?.edit()?.remove("parental_pin_hash")?.remove("kids_pin_hash")
-            ?.putBoolean("parental_protect_settings", false)?.putBoolean("kids_mode", false)?.apply()
+            ?.putBoolean("kids_mode", false)?.apply()
         hasPin = false
         separateKidsPin = false
-        protectSettings = false
         kidsMode = false
     }
 
@@ -224,7 +307,21 @@ internal fun PinDialog(
         title = { Text(title) },
         text = {
             Column(
-                Modifier.fillMaxWidth(),
+                Modifier.fillMaxWidth().onPreviewKeyEvent { event ->
+                    // The number keys of a remote (or keyboard) type the PIN directly.
+                    if (choosing || event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    val code = event.nativeKeyEvent.keyCode
+                    when (code) {
+                        in android.view.KeyEvent.KEYCODE_0..android.view.KeyEvent.KEYCODE_9 -> {
+                            type((code - android.view.KeyEvent.KEYCODE_0).toString()); true
+                        }
+                        in android.view.KeyEvent.KEYCODE_NUMPAD_0..android.view.KeyEvent.KEYCODE_NUMPAD_9 -> {
+                            type((code - android.view.KeyEvent.KEYCODE_NUMPAD_0).toString()); true
+                        }
+                        android.view.KeyEvent.KEYCODE_DEL -> { pin = pin.dropLast(1); true }
+                        else -> false
+                    }
+                },
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
@@ -300,7 +397,10 @@ private fun PinKey(label: String, modifier: Modifier, enabled: Boolean = true, o
 
 /** "Kindersicherung" page of the settings. */
 @Composable
-internal fun ParentalSettings(parental: ParentalControls, request: (PinRequest) -> Unit) {
+internal fun ParentalSettings(
+    parental: ParentalControls, request: (PinRequest) -> Unit, hasKidsAccount: Boolean,
+    askSharedPin: (onShared: () -> Unit, onOwn: () -> Unit) -> Unit
+) {
     val context = androidx.compose.ui.platform.LocalContext.current
     fun withPin(action: () -> Unit) = request(
         PinRequest(context.getString(R.string.pin_enter), null, check = parental::checkPin, length = parental.pinLength) { action() }
@@ -310,15 +410,22 @@ internal fun ParentalSettings(parental: ParentalControls, request: (PinRequest) 
     )
     if (!parental.hasPin) {
         Text(stringResource(R.string.pin_status_none))
-        SettingRow(stringResource(R.string.pin_set)) { newPin(R.string.pin_set, parental::setPin) }
+        SettingRow(stringResource(R.string.pin_set)) {
+            // With an own settings PIN, the Kindersicherung can use the same one.
+            if (parental.ownSettingsPin) askSharedPin({
+                request(PinRequest(context.getString(R.string.parental_pin_confirm_shared), null,
+                    check = parental::checkSettingsPin, length = parental.settingsPinLength) { pin ->
+                    parental.setPin(pin)
+                    parental.setSettingsPin(null)
+                })
+            }) { newPin(R.string.pin_set, parental::setPin) }
+            else newPin(R.string.pin_set, parental::setPin)
+        }
         Text(stringResource(R.string.kids_mode_hint), style = MaterialTheme.typography.bodySmall)
         return
     }
     if (parental.kidsMode) Text(stringResource(R.string.kids_mode_active), color = MaterialTheme.colorScheme.primary)
     SettingRow(stringResource(R.string.pin_change)) { withPin { newPin(R.string.pin_change, parental::setPin) } }
-    SettingRow(stringResource(R.string.parental_protect_settings), selected = parental.protectSettings) {
-        parental.updateProtectSettings(!parental.protectSettings)
-    }
     SettingRow(stringResource(R.string.parental_lock_adult), selected = parental.lockAdult) {
         if (parental.lockAdult) withPin { parental.updateLockAdult(false) } else parental.updateLockAdult(true)
     }
@@ -333,11 +440,71 @@ internal fun ParentalSettings(parental: ParentalControls, request: (PinRequest) 
         if (parental.separateKidsPin) withPin { parental.setKidsPin(null) }
         else newPin(R.string.kids_separate_pin) { parental.setKidsPin(it) }
     }
-    if (parental.kidsMode) SettingRow(stringResource(R.string.kids_mode_exit)) {
+    // With a kids account, kids mode is switched by changing the account ("Abmelden").
+    if (hasKidsAccount) Unit
+    else if (parental.kidsMode) SettingRow(stringResource(R.string.kids_mode_exit)) {
         request(PinRequest(context.getString(R.string.kids_mode_exit), null, check = parental::checkKidsPin, length = parental.kidsExitPinLength) {
             parental.updateKidsMode(false)
         })
     } else SettingRow(stringResource(R.string.kids_mode_start)) { parental.updateKidsMode(true) }
     Text(stringResource(R.string.kids_mode_hint), style = MaterialTheme.typography.bodySmall)
     SettingRow(stringResource(R.string.pin_remove)) { withPin { parental.removePin() } }
+}
+
+/** "Einstellungsschutz" page: settings PIN (own or shared) and what it protects. */
+@Composable
+internal fun SettingsProtection(
+    parental: ParentalControls, request: (PinRequest) -> Unit, askSharedPin: (onShared: () -> Unit, onOwn: () -> Unit) -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    fun withSettingsPin(action: () -> Unit) {
+        if (parental.settingsUnlocked || !parental.hasSettingsPin) action()
+        else request(PinRequest(context.getString(R.string.pin_enter), null, check = parental::checkSettingsPin, length = parental.settingsPinLength) {
+            parental.settingsUnlocked = true
+            action()
+        })
+    }
+    fun newOwnPin() = request(PinRequest(context.getString(R.string.settings_pin_set), null, newPin = true, check = { true }) {
+        parental.setSettingsPin(it)
+        parental.settingsUnlocked = true
+    })
+    fun choosePin() {
+        // With a Kindersicherung PIN the same one can be used, or an own one for the settings.
+        if (parental.hasPin) askSharedPin({
+            request(PinRequest(context.getString(R.string.settings_pin_confirm_shared), null, check = parental::checkPin, length = parental.pinLength) {
+                parental.setSettingsPin(null)
+                parental.settingsUnlocked = true
+            })
+        }, ::newOwnPin) else newOwnPin()
+    }
+    Text(stringResource(R.string.settings_protection_hint), style = MaterialTheme.typography.bodySmall)
+    if (!parental.hasSettingsPin) {
+        Text(stringResource(R.string.settings_pin_none))
+        SettingRow(stringResource(R.string.settings_pin_set)) { choosePin() }
+    } else {
+        Text(stringResource(if (parental.ownSettingsPin) R.string.settings_pin_own else R.string.settings_pin_shared_status))
+        SettingRow(stringResource(R.string.settings_pin_change)) { withSettingsPin { choosePin() } }
+        SettingRow(stringResource(R.string.parental_protect_settings), selected = parental.protectSettings) {
+            withSettingsPin { parental.updateProtectSettings(!parental.protectSettings) }
+        }
+        SettingRow(stringResource(R.string.settings_lock_portals), selected = parental.lockPortals) {
+            withSettingsPin { parental.updateLockPortals(!parental.lockPortals) }
+        }
+        SettingRow(stringResource(R.string.settings_lock_categories), selected = parental.lockCategories) {
+            withSettingsPin { parental.updateLockCategories(!parental.lockCategories) }
+        }
+    }
+    Text(stringResource(R.string.settings_areas), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+    var lastAreaMessage by remember { mutableStateOf(false) }
+    listOf("LIVE" to R.string.destination_live, "MOVIES" to R.string.destination_movies, "SERIES" to R.string.destination_series)
+        .forEach { (area, label) ->
+            val shown = area !in parental.hiddenAreas
+            SettingRow(stringResource(R.string.settings_area_shown, stringResource(label)), selected = shown) {
+                withSettingsPin { lastAreaMessage = !parental.setAreaHidden(area, shown) }
+            }
+        }
+    if (lastAreaMessage) Text(stringResource(R.string.settings_area_last), color = MaterialTheme.colorScheme.error)
+    if (parental.hasSettingsPin) SettingRow(stringResource(R.string.settings_pin_remove)) {
+        withSettingsPin { parental.removeSettingsPin() }
+    }
 }

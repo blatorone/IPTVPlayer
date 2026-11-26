@@ -14,6 +14,9 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,10 +43,17 @@ private const val maxApkBytes = 150L * 1024 * 1024
 private val releaseTag = Regex("""v\d+\.\d+\.\d+(-beta\.\d+)?""")
 
 internal data class AppRelease(
-    val tag: String, val code: Long, val notes: String, val digest: String, val beta: Boolean = false
+    val tag: String, val code: Long, val notes: String, val digest: String, val beta: Boolean = false,
+    val assetName: String = "IPTVPlayer-$code.apk"
 ) {
-    val downloadUrl get() = "https://github.com/$repository/releases/download/$tag/IPTVPlayer-$code.apk"
+    val downloadUrl get() = "https://github.com/$repository/releases/download/$tag/$assetName"
 }
+
+/**
+ * APK names of a release: "StreamWatch-<code>.apk" since 1.0.93. During the change the same file is
+ * also published as "IPTVPlayer-<code>.apk" so that older installs still find their update.
+ */
+private val apkPrefixes = listOf("StreamWatch-", "IPTVPlayer-")
 
 /**
  * Whether a GitHub release is offered: release tags always, betas ("-beta.N", marked as
@@ -58,15 +68,16 @@ internal fun parseAppRelease(json: JSONObject, installedCode: Long, allowBeta: B
     val beta = json.optBoolean("prerelease")
     if (!offersRelease(tag, json.optBoolean("draft"), beta, allowBeta)) return null
     val assets = json.getJSONArray("assets")
-    for (index in 0 until assets.length()) {
+    // The StreamWatch name is preferred; the earlier name is still accepted.
+    for (prefix in apkPrefixes) for (index in 0 until assets.length()) {
         val asset = assets.getJSONObject(index)
         val name = asset.optString("name")
-        if (!name.startsWith("IPTVPlayer-") || !name.endsWith(".apk")) continue
-        val code = name.removePrefix("IPTVPlayer-").removeSuffix(".apk").toLongOrNull() ?: continue
+        if (!name.startsWith(prefix) || !name.endsWith(".apk")) continue
+        val code = name.removePrefix(prefix).removeSuffix(".apk").toLongOrNull() ?: continue
         if (code <= installedCode) continue
         val digest = asset.optString("digest")
         require(digest.matches(Regex("sha256:[0-9a-f]{64}")))
-        return AppRelease(tag, code, json.optString("body").take(4000), digest.removePrefix("sha256:"), beta)
+        return AppRelease(tag, code, json.optString("body").take(4000), digest.removePrefix("sha256:"), beta, name)
     }
     return null
 }
@@ -255,14 +266,22 @@ internal fun rememberAppUpdates(): AppUpdateUi {
             onDismissRequest = { if (!busy) dialogOpen = false },
             title = { Text(stringResource(R.string.update_available, available.tag) + if (available.beta) " (Beta)" else "") },
             text = {
-                Column(Modifier.verticalScroll(rememberScrollState())) {
-                    Text(available.notes.ifBlank { stringResource(R.string.update_confirm_hint) })
+                // The notes scroll with the remote: Up from the button leads into them.
+                Column {
+                    RemoteScrollText(
+                        available.notes.ifBlank { stringResource(R.string.update_confirm_hint) },
+                        Modifier.weight(1f, fill = false).heightIn(max = 340.dp)
+                    )
                     if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                     result?.let { Text(stringResource(it)) }
                 }
             },
             confirmButton = {
-                if (!busy) MenuButton(stringResource(R.string.update_install), Modifier) { install(available) }
+                val installFocus = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
+                if (!busy) {
+                    MenuButton(stringResource(R.string.update_install), Modifier.focusRequester(installFocus)) { install(available) }
+                    LaunchedEffect(Unit) { runCatching { installFocus.requestFocus() } }
+                }
             },
             dismissButton = {
                 if (!busy) MenuButton(stringResource(android.R.string.cancel), Modifier) { dialogOpen = false }

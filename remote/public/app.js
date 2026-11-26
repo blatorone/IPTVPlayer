@@ -416,14 +416,20 @@ function renderParental() {
     return;
   }
   const fields = state.settings.filter((s) => s.id.startsWith("parental."));
-  const needsPin = { lockAdult: (v) => v === false, kidsMode: (v) => v === false };
+  // Like on the device: lockAdult off and leaving kids mode need the PIN; with a settings PIN,
+  // every change of the Einstellungsschutz and of the areas needs that one.
+  const settingsField = (f) => ["protectSettings", "lockPortals", "lockCategories"].includes(f) || f.startsWith("area.");
+  const needsPin = (field, value) =>
+    (field === "lockAdult" && value === false) || (field === "kidsMode" && value === false) ||
+    (p.hasSettingsPin && settingsField(field) && !(field === "protectSettings" && value === true));
   box.replaceChildren(
     p.kidsMode ? el("div", { class: "notice" }, "Der Kindermodus ist am Gerät aktiv.") : null,
     ...fields.map((s) => settingRow(s, async (value) => {
       const field = s.id.slice("parental.".length);
       let pin;
-      if (needsPin[field]?.(value)) {
-        pin = await askPin(field === "kidsMode" ? "PIN zum Beenden des Kindermodus" : "PIN eingeben");
+      if (needsPin(field, value)) {
+        pin = await askPin(field === "kidsMode" ? "PIN zum Beenden des Kindermodus"
+          : settingsField(field) ? "PIN der Einstellungen" : "PIN eingeben");
         if (!pin) return;
       }
       send({ t: "parental", field, value, pin });
@@ -440,9 +446,23 @@ function renderParental() {
         else { const pin = await askNewPin("PIN zum Beenden des Kindermodus"); if (pin) send({ t: "kidsPin", pin, current }); }
       } }, p.separateKidsPin ? "Eigene Kindermodus-PIN entfernen" : "Eigene Kindermodus-PIN festlegen"),
       el("button", { class: "danger", onclick: async () => {
-        if (!confirm("PIN und Kindersicherung wirklich entfernen?")) return;
+        if (!confirm("PIN und Kinderschutz wirklich entfernen?")) return;
         const current = await askPin("Aktuelle PIN"); if (current) send({ t: "pinRemove", current });
       } }, "PIN entfernen")),
+    p.hasSettingsPin ? null : el("p", { class: "hint" }, "Eine PIN für die Einstellungen (Einstellungsschutz) legst du am Gerät unter Sperren fest."),
+    el("h3", {}, "Kinderkonto"),
+    el("p", { class: "hint" }, p.kidsAccount
+      ? `„${p.kidsAccount}“ sieht nur die freigegebenen Bereiche passend zur Altersgrenze. Gewechselt wird am Gerät über „Abmelden“.`
+      : "Ein eigenes Konto für Kinder mit Altersgrenze und ohne Einstellungen."),
+    el("div", { class: "row-actions" },
+      el("button", { onclick: () => {
+        const name = (prompt("Name des Kinderkontos", p.kidsAccount || "") || "").trim();
+        if (name) send({ t: "parental", field: "kidsName", value: name });
+      } }, p.kidsAccount ? "Umbenennen" : "Kinderkonto anlegen"),
+      p.kidsAccount ? el("button", { class: "danger", onclick: async () => {
+        if (!confirm(`Kinderkonto „${p.kidsAccount}“ wirklich entfernen?`)) return;
+        const pin = await askPin("PIN eingeben"); if (pin) send({ t: "parental", field: "kidsRemove", value: true, pin });
+      } }, "Kinderkonto entfernen") : null),
     el("p", { class: "hint" }, "Einzelne Kategorien sperrst du unter „Kategorien“ mit dem Schloss."));
 }
 

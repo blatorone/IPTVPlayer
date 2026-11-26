@@ -56,13 +56,17 @@ jobs:
           keystore=$(mktemp)
           trap 'rm -f "$keystore"' EXIT
           printf '%s' "$RELEASE_KEYSTORE_BASE64" | base64 --decode > "$keystore"
-          apk="IPTVPlayer-$code.apk"
+          apk="StreamWatch-$code.apk"
+          # Installs before 1.0.93 look for the earlier name; the same file is published under both.
+          legacy="IPTVPlayer-$code.apk"
           apksigner="$ANDROID_HOME/build-tools/36.0.0/apksigner"
           "$apksigner" sign --ks "$keystore" --ks-key-alias "$RELEASE_KEY_ALIAS" \
             --ks-pass env:RELEASE_STORE_PASSWORD --key-pass env:RELEASE_KEY_PASSWORD \
             --out "$apk" "app/build/outputs/apk/release/$output"
           "$apksigner" verify "$apk"
           sha256sum "$apk" > "$apk.sha256"
+          cp "$apk" "$legacy"
+          sha256sum "$legacy" > "$legacy.sha256"
           notes() {
             awk -v heading="## $1" '
               $0 == heading { active = 1; next }
@@ -74,5 +78,5 @@ jobs:
           notes "$version" > release-notes.md
           grep -q '[^[:space:]]' release-notes.md || notes "${version%%-beta.*}" > release-notes.md
           grep -q '[^[:space:]]' release-notes.md
-          gh release create "$GITHUB_REF_NAME" "$apk" "$apk.sha256" "${prerelease[@]}" \
-            --repo blatorone/IPTVPlayer-Releases --title "IPTVPlayer $version" --notes-file release-notes.md
+          gh release create "$GITHUB_REF_NAME" "$apk" "$apk.sha256" "$legacy" "$legacy.sha256" "${prerelease[@]}" \
+            --repo blatorone/IPTVPlayer-Releases --title "StreamWatch $version" --notes-file release-notes.md

@@ -62,6 +62,10 @@ internal class PortalStorage(context: Context) {
     private val libraryFile = AtomicFile(File(context.noBackupFilesDir, "portal-library.v2"))
     private val metadataFile = AtomicFile(File(context.noBackupFilesDir, "metadata-token.v1"))
     private val traktSessionFile = AtomicFile(File(context.noBackupFilesDir, "trakt-session.v1"))
+    private val traktAppFile = AtomicFile(File(context.noBackupFilesDir, "trakt-app.v1"))
+    /** Trakt session of a kids account that keeps its own data. */
+    private val kidsTraktSessionFile = AtomicFile(File(context.noBackupFilesDir, "trakt-session-kids.v1"))
+    private fun traktFile(kids: Boolean) = if (kids) kidsTraktSessionFile else traktSessionFile
     private val epgSourcesFile = AtomicFile(File(context.noBackupFilesDir, "epg-sources.v1"))
     private val legacyGuideCacheFile = AtomicFile(File(context.noBackupFilesDir, "portal-guide.v1"))
     private val guideCacheFile = AtomicFile(File(context.noBackupFilesDir, "portal-guide.v2"))
@@ -188,30 +192,49 @@ internal class PortalStorage(context: Context) {
         withContext(Dispatchers.IO) { writeEncrypted(metadataFile, token) }
     }
 
-    suspend fun readTraktSession(): TraktSession? = mutex.withLock {
+    suspend fun readTraktSession(kids: Boolean = false): TraktSession? = mutex.withLock {
         withContext(Dispatchers.IO) {
-            val data = readEncrypted(traktSessionFile)?.let(::JSONObject) ?: return@withContext null
+            val data = readEncrypted(traktFile(kids))?.let(::JSONObject) ?: return@withContext null
             TraktSession(
                 data.getString("clientId"), data.getString("accessToken"), data.getString("refreshToken"),
-                data.getLong("expiresAtMillis"), data.optString("username", "Trakt")
+                data.getLong("expiresAtMillis"), data.optString("username", "Trakt"),
+                data.optString("clientSecret").ifBlank { null }
             )
         }
     }
 
-    suspend fun writeTraktSession(session: TraktSession) = mutex.withLock {
+    suspend fun writeTraktSession(session: TraktSession, kids: Boolean = false) = mutex.withLock {
         withContext(Dispatchers.IO) {
-            writeEncrypted(traktSessionFile, JSONObject().apply {
+            writeEncrypted(traktFile(kids), JSONObject().apply {
                 put("clientId", session.clientId)
                 put("accessToken", session.accessToken)
                 put("refreshToken", session.refreshToken)
                 put("expiresAtMillis", session.expiresAtMillis)
                 put("username", session.username)
+                session.clientSecret?.let { put("clientSecret", it) }
             }.toString())
         }
     }
 
-    suspend fun clearTraktSession() = mutex.withLock {
-        withContext(Dispatchers.IO) { traktSessionFile.delete() }
+    suspend fun readTraktApp(): TraktApp? = mutex.withLock {
+        withContext(Dispatchers.IO) {
+            val data = readEncrypted(traktAppFile)?.let(::JSONObject) ?: return@withContext null
+            TraktApp(data.getString("clientId"), data.optString("clientSecret").ifBlank { null })
+        }
+    }
+
+    suspend fun writeTraktApp(app: TraktApp?) = mutex.withLock {
+        withContext(Dispatchers.IO) {
+            if (app == null) traktAppFile.delete()
+            else writeEncrypted(traktAppFile, JSONObject().apply {
+                put("clientId", app.clientId)
+                app.clientSecret?.let { put("clientSecret", it) }
+            }.toString())
+        }
+    }
+
+    suspend fun clearTraktSession(kids: Boolean = false) = mutex.withLock {
+        withContext(Dispatchers.IO) { traktFile(kids).delete() }
     }
 
     suspend fun readEpgSources(): List<String> = mutex.withLock {

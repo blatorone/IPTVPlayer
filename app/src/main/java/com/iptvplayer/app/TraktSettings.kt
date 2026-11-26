@@ -11,7 +11,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
@@ -27,6 +31,8 @@ import java.nio.charset.StandardCharsets
 @Composable
 internal fun TraktSettings(
     accountName: String?,
+    app: TraktApp?,
+    onSaveApp: (clientId: String, clientSecret: String) -> String?,
     deviceCode: TraktDeviceCode?,
     busy: Boolean,
     status: String?,
@@ -37,9 +43,11 @@ internal fun TraktSettings(
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(stringResource(R.string.trakt_intro), style = MaterialTheme.typography.bodyMedium)
         if (accountName == null) {
+            // Every user connects with their own Trakt API app; the QR code comes only after that.
+            TraktAppForm(app, enabled = !busy && deviceCode == null, onSaveApp)
             SettingRow(
                 stringResource(if (busy) R.string.trakt_connecting else R.string.trakt_connect),
-                                enabled = !busy && deviceCode == null,
+                                enabled = !busy && deviceCode == null && app != null,
                 onClick = onConnect
             )
         } else {
@@ -96,4 +104,36 @@ internal fun QrCode(value: String, modifier: Modifier = Modifier) {
         stringResource(R.string.trakt_qr_unavailable), modifier,
         textAlign = TextAlign.Center, style = MaterialTheme.typography.bodySmall
     )
+}
+
+@Composable
+private fun TraktAppForm(app: TraktApp?, enabled: Boolean, onSave: (String, String) -> String?) {
+    var clientId by rememberSaveable { mutableStateOf("") }
+    var clientSecret by rememberSaveable { mutableStateOf("") }
+    var message by remember { mutableStateOf<String?>(null) }
+    Text(stringResource(R.string.trakt_app_title), fontWeight = FontWeight.SemiBold)
+    Text(
+        stringResource(if (app == null) R.string.trakt_app_help else R.string.trakt_app_saved),
+        style = MaterialTheme.typography.bodySmall
+    )
+    androidx.compose.material3.OutlinedTextField(
+        value = clientId, onValueChange = { clientId = it.trim() }, singleLine = true, enabled = enabled,
+        label = { Text("Client ID") }, modifier = Modifier.fillMaxWidth(),
+        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Password),
+        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
+    )
+    androidx.compose.material3.OutlinedTextField(
+        value = clientSecret, onValueChange = { clientSecret = it.trim() }, singleLine = true, enabled = enabled,
+        label = { Text("Client Secret") }, modifier = Modifier.fillMaxWidth(),
+        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Password),
+        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
+    )
+    SettingRow(
+        stringResource(R.string.trakt_app_save),
+        enabled = enabled && (clientId.isNotBlank() || (app != null && clientSecret.isNotBlank()))
+    ) {
+        message = onSave(clientId, clientSecret)
+        if (message == null) { clientId = ""; clientSecret = "" }
+    }
+    message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
 }

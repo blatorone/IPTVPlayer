@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -42,6 +43,7 @@ import androidx.compose.ui.unit.dp
  * Colour palette for the accent colour with an example screen beside it. The example shows
  * the colour that has focus (or was tapped last); OK or a tap applies it.
  */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 internal fun AccentPalette(current: AccentChoice, onChoose: (AccentChoice) -> Unit) {
     var preview by remember { mutableStateOf(current) }
@@ -52,31 +54,35 @@ internal fun AccentPalette(current: AccentChoice, onChoose: (AccentChoice) -> Un
         runCatching { currentFocus.requestFocus() }
     }
     Text(stringResource(R.string.accent_palette_hint), style = MaterialTheme.typography.bodySmall)
+    @Composable
+    fun swatch(choice: AccentChoice) = AccentSwatch(
+        choice, selected = choice == current, onFocus = { preview = choice },
+        modifier = if (choice == current) Modifier.focusRequester(currentFocus) else Modifier
+    ) {
+        preview = choice
+        onChoose(choice)
+    }
+    // Beside the example: five colours per row (as before, the example keeps its width);
+    // the remaining colours continue below it over the full width.
+    val besidePreview = AccentChoice.entries.take(20)
     Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            AccentChoice.entries.chunked(5).forEach { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    row.forEach { choice ->
-                        AccentSwatch(
-                            choice, selected = choice == current, onFocus = { preview = choice },
-                            modifier = if (choice == current) Modifier.focusRequester(currentFocus) else Modifier
-                        ) {
-                            preview = choice
-                            onChoose(choice)
-                        }
-                    }
-                }
+            besidePreview.chunked(5).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) { row.forEach { swatch(it) } }
             }
-            Text(
-                stringResource(preview.label) +
-                    if (preview == current) " · " + stringResource(R.string.accent_palette_active) else "",
-                style = MaterialTheme.typography.titleSmall
-            )
         }
         MaterialTheme(colorScheme = playerColors(preview)) {
             AccentPreview(Modifier.weight(1f))
         }
     }
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        AccentChoice.entries.drop(besidePreview.size).forEach { swatch(it) }
+    }
+    Text(
+        stringResource(preview.label) +
+            if (preview == current) " · " + stringResource(R.string.accent_palette_active) else "",
+        style = MaterialTheme.typography.titleSmall
+    )
 }
 
 @Composable
@@ -134,7 +140,7 @@ private fun AccentPreview(modifier: Modifier) {
                     contentAlignment = Alignment.Center
                 ) { Text("▶", color = colors.onPrimaryContainer) }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("Das Erste HD", style = MaterialTheme.typography.titleSmall, color = Color.White)
+                    Text("TV Sender", style = MaterialTheme.typography.titleSmall, color = Color.White)
                     LinearProgressIndicator(
                         progress = { 0.62f }, modifier = Modifier.fillMaxWidth(),
                         color = colors.primary, trackColor = Color(0xFF2C2C33)

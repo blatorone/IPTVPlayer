@@ -17,14 +17,25 @@ import kotlinx.coroutines.coroutineScope
 import org.json.JSONArray
 import org.json.JSONObject
 
-internal const val TRAKT_CLIENT_ID = "OFqILSXgqkCjYQ_wYRIbfs3O6ngifeMysl-mcbi6XqA"
+/**
+ * The user's own Trakt API app (trakt.tv/oauth/applications). StreamWatch ships no Client ID:
+ * everyone connects with their own app.
+ */
+internal data class TraktApp(val clientId: String, val clientSecret: String?) {
+    companion object {
+        private val VALUE = Regex("^[A-Za-z0-9_-]{20,200}$")
+        fun isValidValue(value: String) = VALUE.matches(value)
+    }
+}
 
 internal data class TraktSession(
     val clientId: String,
     val accessToken: String,
     val refreshToken: String,
     val expiresAtMillis: Long,
-    val username: String
+    val username: String,
+    /** Null for sessions of earlier versions; Trakt then accepts the refresh without it. */
+    val clientSecret: String? = null
 )
 
 internal data class TraktDeviceCode(
@@ -103,7 +114,7 @@ internal data class TraktTitleMetadata(
     val certification: String? = null
 )
 
-internal class TraktApi(private val clientId: String) {
+internal class TraktApi(private val clientId: String, private val clientSecret: String? = null) {
     private data class Response(val status: Int, val body: String, val pageCount: Int?)
 
     init {
@@ -130,7 +141,7 @@ internal class TraktApi(private val clientId: String) {
     suspend fun pollDeviceAuthorization(code: TraktDeviceCode): TraktDevicePoll = try {
         val json = request(
             "/oauth/device/token", "POST",
-            JSONObject().put("code", code.deviceCode).put("client_id", clientId)
+            JSONObject().put("code", code.deviceCode).put("client_id", clientId).withSecret()
         ).jsonObject()
         TraktDevicePoll.Authorized(json.session(clientId))
     } catch (error: TraktApiException) {
@@ -152,7 +163,7 @@ internal class TraktApi(private val clientId: String) {
         val json = request(
             "/oauth/token", "POST",
             JSONObject().put("refresh_token", session.refreshToken)
-                .put("client_id", clientId).put("grant_type", "refresh_token")
+                .put("client_id", clientId).put("grant_type", "refresh_token").withSecret()
         ).jsonObject()
         return json.session(clientId, session.username)
     }
@@ -826,13 +837,15 @@ internal class TraktApi(private val clientId: String) {
         error("Trakt-Anfrage fehlgeschlagen.")
     }
 
+    private fun JSONObject.withSecret(): JSONObject = apply { clientSecret?.let { put("client_secret", it) } }
+
     private fun JSONObject.session(clientId: String, username: String = "Trakt"): TraktSession {
         val access = optString("access_token").takeIf(String::isNotBlank) ?: error("Trakt hat kein Zugriffstoken geliefert.")
         val refresh = optString("refresh_token").takeIf(String::isNotBlank) ?: error("Trakt hat kein Erneuerungstoken geliefert.")
         return TraktSession(
             clientId, access, refresh,
             System.currentTimeMillis() + optLong("expires_in", 0).coerceAtLeast(0) * 1_000L,
-            username
+            username, clientSecret
         )
     }
 

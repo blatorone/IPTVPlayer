@@ -108,7 +108,13 @@ internal data class RemotePortal(
 )
 internal data class RemoteCategory(val id: String, val name: String, val hidden: Boolean, val locked: Boolean)
 internal data class RemoteCountry(val code: String, val name: String, val selected: Boolean)
-internal data class RemoteParental(val hasPin: Boolean, val separateKidsPin: Boolean, val kidsMode: Boolean)
+internal data class RemoteParental(
+    val hasPin: Boolean, val separateKidsPin: Boolean, val kidsMode: Boolean,
+    /** A PIN protects the settings (Einstellungsschutz): its changes need that PIN. */
+    val hasSettingsPin: Boolean = false,
+    /** Name of the kids account, if one exists. */
+    val kidsAccount: String? = null
+)
 
 internal data class RemoteState(
     val device: String,
@@ -154,7 +160,13 @@ internal object RemoteProtocol {
     private const val MAX_IDS = 5_000
     private val PIN = Regex("^[0-9]{4,12}$")
     private val COUNTRY = Regex("^([A-Z]{2}|$UNKNOWN_COUNTRY)$")
-    val PARENTAL_FIELDS = setOf("protectSettings", "lockAdult", "kidsMode", "kidsAge")
+    val PARENTAL_FIELDS = setOf(
+        "protectSettings", "lockAdult", "kidsMode", "kidsAge",
+        // Einstellungsschutz and areas (need the settings PIN when one is set)
+        "lockPortals", "lockCategories", "area.LIVE", "area.MOVIES", "area.SERIES",
+        // kids account
+        "kidsName", "kidsRemove", "kidsShare", "startProfile", "kidsArea.LIVE", "kidsArea.MOVIES", "kidsArea.SERIES"
+    )
 
     fun encodeState(state: RemoteState, epoch: String): String = JsonObject().apply {
         addProperty("t", "state")
@@ -263,6 +275,8 @@ internal object RemoteProtocol {
             addProperty("hasPin", state.parental.hasPin)
             addProperty("separateKidsPin", state.parental.separateKidsPin)
             addProperty("kidsMode", state.parental.kidsMode)
+            addProperty("hasSettingsPin", state.parental.hasSettingsPin)
+            state.parental.kidsAccount?.let { addProperty("kidsAccount", it) }
         })
     }.toString()
 

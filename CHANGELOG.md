@@ -11,6 +11,7 @@
 - Trakt: Zum Verbinden trägt jeder seine eigene Trakt-API (Client ID und Client Secret) ein. Bereits verbundene Konten laufen unverändert weiter.
 - Einstellungen: Konten und Synchronisierung enthält jetzt auch die Filmdatenbank (TMDB). Neuer Bereich „Daten & Diagnose“ mit Portal-Sicherung und Diagnosebericht; „Über“ zeigt nur noch App-Infos und die Nutzungsbedingungen. Links aus den Einstellungen wirkt wie Zurück und bleibt im zuletzt offenen Bereich.
 - Farben: 40 Akzentfarben zur Auswahl; neben der Beispielansicht wie bisher, die neuen darunter über die ganze Breite.
+- Farbverläufe: Zweite Palette mit 40 Farbverläufen (pro Konto wählbar). Fokus-Rahmen, Auswahlbalken und Schalter zeigen den Verlauf.
 - PIN-Eingabe: Die Zifferntasten der Fernbedienung tippen die PIN direkt ein.
 - App-Updates: Die Änderungen im Update-Hinweis lassen sich mit der Fernbedienung durchscrollen (vom Knopf nach oben).
 - Download: Die APK heißt jetzt StreamWatch-<Nummer>.apk. Übergangsweise liegt sie zusätzlich unter dem alten Namen bei, damit ältere Versionen das Update finden.

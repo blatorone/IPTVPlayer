@@ -63,7 +63,7 @@ internal fun SettingRow(
         color = if (focused) colors.surfaceContainerHighest else colors.surfaceContainerHigh,
         contentColor = if (enabled) colors.onSurface else colors.onSurface.copy(alpha = 0.38f),
         shape = RoundedCornerShape(12.dp),
-        border = if (focused) BorderStroke(2.dp, colors.primary) else null
+        border = if (focused) BorderStroke(2.dp, accentBrush()) else null
     ) {
         Row(
             Modifier.heightIn(min = 52.dp).padding(horizontal = 16.dp, vertical = 8.dp),
@@ -102,7 +102,7 @@ internal fun SettingToggleButton(on: Boolean, label: String, enabled: Boolean = 
             .semantics { contentDescription = label },
         color = if (focused) colors.surfaceContainerHighest else colors.surfaceContainerHigh,
         shape = RoundedCornerShape(12.dp),
-        border = if (focused) BorderStroke(2.dp, colors.primary) else null
+        border = if (focused) BorderStroke(2.dp, accentBrush()) else null
     ) {
         Box(Modifier.heightIn(min = 52.dp).padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
             SettingSwitch(on)
@@ -116,7 +116,7 @@ private fun SettingSwitch(on: Boolean) {
     val colors = MaterialTheme.colorScheme
     Box(
         Modifier.width(44.dp).height(24.dp)
-            .background(if (on) colors.primary else colors.outlineVariant, RoundedCornerShape(50)),
+            .then(if (on) Modifier.background(accentBrush(), RoundedCornerShape(50)) else Modifier.background(colors.outlineVariant, RoundedCornerShape(50))),
         contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart
     ) {
         Box(Modifier.padding(3.dp).size(18.dp).background(Color.White, RoundedCornerShape(50)))
@@ -143,7 +143,7 @@ internal fun SettingsNavItem(
         },
         contentColor = if (selected || focused) colors.onSurface else colors.onSurfaceVariant,
         shape = RoundedCornerShape(12.dp),
-        border = if (focused) BorderStroke(2.dp, colors.primary) else null
+        border = if (focused) BorderStroke(2.dp, accentBrush()) else null
     ) {
         Row(
             Modifier.heightIn(min = 46.dp).padding(horizontal = 12.dp, vertical = 6.dp),

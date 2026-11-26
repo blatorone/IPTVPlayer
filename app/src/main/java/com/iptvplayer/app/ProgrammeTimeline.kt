@@ -348,7 +348,7 @@ private fun GuideChannelCell(
             })
             .then(
                 when {
-                    focused -> Modifier.border(BorderStroke(2.dp, colors.primary), RoundedCornerShape(4.dp))
+                    focused -> Modifier.border(BorderStroke(2.dp, accentBrush()), RoundedCornerShape(4.dp))
                     playing -> Modifier.border(BorderStroke(1.5.dp, colors.primary), RoundedCornerShape(4.dp))
                     else -> Modifier
                 }

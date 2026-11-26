@@ -129,7 +129,7 @@ internal fun FullscreenChannelList(
                     },
                     shape = MaterialTheme.shapes.medium,
                     border = when {
-                        focused -> BorderStroke(2.dp, colors.primary)
+                        focused -> BorderStroke(2.dp, accentBrush())
                         playing === channel -> BorderStroke(1.5.dp, colors.primary)
                         else -> null
                     },

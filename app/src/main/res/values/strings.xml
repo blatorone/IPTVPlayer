@@ -589,6 +589,8 @@
     <string name="settings_parental">Kindersicherung</string>
     <string name="settings_locks">Sperren</string>
     <string name="logout">Abmelden</string>
+    <string name="accent_palette_plain">Farben</string>
+    <string name="accent_palette_gradients">Farbverläufe</string>
     <string name="profile_admin">Admin</string>
     <string name="profile_picker_title">Wer schaut?</string>
     <string name="profile_admin_pin">PIN für Admin eingeben</string>

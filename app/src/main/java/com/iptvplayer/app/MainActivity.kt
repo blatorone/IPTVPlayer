@@ -257,7 +257,12 @@ class MainActivity : ComponentActivity() {
             }
             // New installs accept the terms first; nothing else is shown before that.
             var termsAccepted by remember { mutableStateOf(disclaimerAccepted(this@MainActivity)) }
-            MaterialTheme(colorScheme = playerColors(accentChoice)) {
+            val accentGradient = remember(kidsAccount, accentVersion) {
+                AccentGradient.parse(getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE)
+                    .getString(AccentGradient.key(kidsAccount), null))
+            }
+            MaterialTheme(colorScheme = accentGradient?.let(::playerColors) ?: playerColors(accentChoice)) {
+            androidx.compose.runtime.CompositionLocalProvider(LocalAccentGradient provides accentGradient) {
                 if (!termsAccepted) DisclaimerScreen(
                     onAccept = { acceptDisclaimer(this@MainActivity); termsAccepted = true },
                     onExit = ::finish
@@ -265,9 +270,17 @@ class MainActivity : ComponentActivity() {
                     player = player,
                     storage = storage,
                     accentChoice = accentChoice,
+                    accentGradient = accentGradient,
                     onAccentChoiceChange = { choice ->
-                        getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE)
-                            .edit().putString(UserProfiles.accentKey(kidsAccount), choice.name).apply()
+                        // A plain colour replaces a gradient of this account.
+                        getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE).edit()
+                            .putString(UserProfiles.accentKey(kidsAccount), choice.name)
+                            .remove(AccentGradient.key(kidsAccount)).apply()
+                        accentVersion++
+                    },
+                    onAccentGradientChange = { gradient ->
+                        getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE).edit()
+                            .putString(AccentGradient.key(kidsAccount), gradient.name).apply()
                         accentVersion++
                     },
                     onAccountChange = { kids -> kidsAccount = kids; accentVersion++ },
@@ -286,6 +299,7 @@ class MainActivity : ComponentActivity() {
                     },
                     canPlay = { lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) }
                 )
+            }
             }
         }
     }
@@ -485,16 +499,18 @@ internal fun liveStreamPosition(player: Player): Long {
     return window.positionInFirstPeriodMs + player.currentPosition
 }
 
-internal fun playerColors(accent: AccentChoice) = darkColorScheme(
-    primary = accent.color,
-    onPrimary = accent.onColor,
-    primaryContainer = accent.container,
+internal fun playerColors(accent: AccentChoice) = playerColors(accent.color, accent.onColor, accent.container)
+
+internal fun playerColors(color: Color, onColor: Color, container: Color) = darkColorScheme(
+    primary = color,
+    onPrimary = onColor,
+    primaryContainer = container,
     onPrimaryContainer = Color(0xFFFFDADB),
     secondary = Color(0xFFF5C451),
     onSecondary = Color(0xFF241900),
     secondaryContainer = Color(0xFF302818),
     onSecondaryContainer = Color(0xFFFFEFC4),
-    tertiary = accent.color,
+    tertiary = color,
     surface = Color(0xFF080808),
     surfaceContainerLowest = Color(0xFF050505),
     surfaceContainerLow = Color(0xFF0D0D0D),
@@ -505,7 +521,7 @@ internal fun playerColors(accent: AccentChoice) = darkColorScheme(
     onSurfaceVariant = Color(0xFFB3B3B3),
     outline = Color(0xFF646464),
     outlineVariant = Color(0xFF383838),
-    tertiaryContainer = accent.container,
+    tertiaryContainer = container,
     onTertiaryContainer = Color(0xFFFFFFFF)
 )
 
@@ -674,6 +690,8 @@ private fun PlayerHome(
     player: ExoPlayer? = null,
     storage: PortalStorage? = null,
     accentChoice: AccentChoice = AccentChoice.RED,
+    accentGradient: AccentGradient? = null,
+    onAccentGradientChange: (AccentGradient) -> Unit = {},
     onAccentChoiceChange: (AccentChoice) -> Unit = {},
     registerLongBack: (((() -> Boolean)?) -> Unit) = {},
     registerScreenBack: ((((Boolean) -> Boolean)?) -> Unit) = {},
@@ -5730,7 +5748,7 @@ private fun PlayerHome(
             val available = (countries + knownCountries).toList()
             return RemoteState(
                 device = if (isTelevision) "StreamWatch (TV)" else "StreamWatch",
-                accent = accentChoice.hex,
+                accent = accentGradient?.hex ?: accentChoice.hex,
                 settings = entries(),
                 portals = savedSources.mapIndexed { index, source ->
                     val host = runCatching { java.net.URI(source.address).host }.getOrNull().orEmpty()
@@ -7566,8 +7584,15 @@ private fun PlayerHome(
                                                 stringResource(R.string.kids_profile_color, profiles.kidsName.orEmpty()),
                                                 { ui.kidsColorOpen = false }
                                             ) {
-                                                AccentPalette(kidsAccent) { choice ->
-                                                    preferences?.edit()?.putString(UserProfiles.accentKey(true), choice.name)?.apply()
+                                                val kidsGradient = remember(ui.kidsAccentVersion) {
+                                                    AccentGradient.parse(preferences?.getString(AccentGradient.key(true), null))
+                                                }
+                                                AccentPalette(kidsAccent, kidsGradient, { choice ->
+                                                    preferences?.edit()?.putString(UserProfiles.accentKey(true), choice.name)
+                                                        ?.remove(AccentGradient.key(true))?.apply()
+                                                    ui.kidsAccentVersion++
+                                                }) { gradient ->
+                                                    preferences?.edit()?.putString(AccentGradient.key(true), gradient.name)?.apply()
                                                     ui.kidsAccentVersion++
                                                 }
                                             }
@@ -7614,7 +7639,9 @@ private fun PlayerHome(
                                                 )
                                             }
                                         } }
-                                        ui.accentPaletteOpen -> { { AccentPalette(accentChoice, onAccentChoiceChange) } }
+                                        ui.accentPaletteOpen -> { {
+                                            AccentPalette(accentChoice, accentGradient, onAccentChoiceChange, onAccentGradientChange)
+                                        } }
                                         else -> guideAppearancePage?.let { page -> { guideAppearanceSettingsPage(page) } }
                                     }
                                     if (subpage != null) {
@@ -7690,7 +7717,7 @@ private fun PlayerHome(
                                     SettingRow(stringResource(R.string.epg_settings), Modifier) { openSettingsPage { ui.epgSettingsOpen = true } }
                                 SettingsSection.APPEARANCE -> {
                                     SettingRow(
-                                stringResource(R.string.accent_color_setting, stringResource(accentChoice.label)),
+                                stringResource(R.string.accent_color_setting, accentGradient?.label ?: stringResource(accentChoice.label)),
                                 Modifier
                             ) { openSettingsPage { ui.accentPaletteOpen = true } }
                             SettingRow(
@@ -8884,6 +8911,9 @@ private fun PlayerHome(
                                             }
                                         }
                                 ) {
+                                    // A tap on another section closes an open page (D-pad focus does this already).
+                                    if (settingsSection != item) closeSettingsPages()
+                                    if (selected != Destination.SETTINGS) selected = Destination.SETTINGS
                                     lastSettingsSection = item
                                     settingsSection = item
                                 }
@@ -10475,7 +10505,7 @@ internal fun MenuButton(
         },
         shape = RoundedCornerShape(12.dp),
         border = when {
-            enabled && highlighted -> BorderStroke(2.dp, colors.primary)
+            enabled && highlighted -> BorderStroke(2.dp, accentBrush())
             else -> null
         }
     ) {
@@ -10485,7 +10515,7 @@ internal fun MenuButton(
         ) {
             if (selected) {
                 Box(Modifier.padding(end = 8.dp).width(3.dp).height(18.dp)
-                    .background(colors.primary))
+                    .background(accentBrush()))
             }
             ChannelLogo(logo, Modifier.padding(end = 8.dp))
             providerIcon?.let { icon ->
@@ -10561,7 +10591,7 @@ internal fun TextButton(
         modifier = Modifier.heightIn(min = 48.dp).hoverable(interactions, enabled).onFocusChanged { focused = it.isFocused },
         interactionSource = interactions,
         shape = RoundedCornerShape(12.dp),
-        border = if (highlighted) BorderStroke(2.dp, colors.primary) else null,
+        border = if (highlighted) BorderStroke(2.dp, accentBrush()) else null,
         colors = ButtonDefaults.textButtonColors(
             containerColor = if (highlighted) colors.tertiaryContainer else Color.Transparent,
             contentColor = if (highlighted) colors.onTertiaryContainer else colors.primary

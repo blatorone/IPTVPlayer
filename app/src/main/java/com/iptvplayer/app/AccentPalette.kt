@@ -45,8 +45,19 @@ import androidx.compose.ui.unit.dp
  */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-internal fun AccentPalette(current: AccentChoice, onChoose: (AccentChoice) -> Unit) {
+internal fun AccentPalette(
+    current: AccentChoice, currentGradient: AccentGradient?,
+    onChoose: (AccentChoice) -> Unit, onChooseGradient: (AccentGradient) -> Unit
+) {
+    // Two palettes: plain colours and colour gradients (same number); the example shows either.
+    var gradients by remember { mutableStateOf(currentGradient != null) }
     var preview by remember { mutableStateOf(current) }
+    var previewGradient by remember { mutableStateOf(currentGradient ?: AccentGradient.entries.first()) }
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        MenuButton(stringResource(R.string.accent_palette_plain), Modifier, selected = !gradients) { gradients = false }
+        MenuButton(stringResource(R.string.accent_palette_gradients), Modifier, selected = gradients) { gradients = true }
+    }
+    if (gradients) return GradientPalette(currentGradient, previewGradient, { previewGradient = it }, onChooseGradient)
     // Focus starts on the colour that is set, so the remote can move through the palette at once.
     val currentFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) {
@@ -56,8 +67,8 @@ internal fun AccentPalette(current: AccentChoice, onChoose: (AccentChoice) -> Un
     Text(stringResource(R.string.accent_palette_hint), style = MaterialTheme.typography.bodySmall)
     @Composable
     fun swatch(choice: AccentChoice) = AccentSwatch(
-        choice, selected = choice == current, onFocus = { preview = choice },
-        modifier = if (choice == current) Modifier.focusRequester(currentFocus) else Modifier
+        choice, selected = currentGradient == null && choice == current, onFocus = { preview = choice },
+        modifier = if (choice == current && currentGradient == null) Modifier.focusRequester(currentFocus) else Modifier
     ) {
         preview = choice
         onChoose(choice)
@@ -80,7 +91,7 @@ internal fun AccentPalette(current: AccentChoice, onChoose: (AccentChoice) -> Un
     }
     Text(
         stringResource(preview.label) +
-            if (preview == current) " · " + stringResource(R.string.accent_palette_active) else "",
+            if (preview == current && currentGradient == null) " · " + stringResource(R.string.accent_palette_active) else "",
         style = MaterialTheme.typography.titleSmall
     )
 }
@@ -149,13 +160,13 @@ private fun AccentPreview(modifier: Modifier) {
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(
-                    Modifier.clip(RoundedCornerShape(10.dp)).background(colors.primary).padding(horizontal = 14.dp, vertical = 7.dp)
+                    Modifier.clip(RoundedCornerShape(10.dp)).background(accentBrush()).padding(horizontal = 14.dp, vertical = 7.dp)
                 ) { Text(stringResource(R.string.play_movie), color = colors.onPrimary, style = MaterialTheme.typography.labelLarge) }
                 Box(
                     Modifier.border(2.dp, colors.primary, RoundedCornerShape(10.dp)).padding(horizontal = 14.dp, vertical = 7.dp)
                 ) { Text(stringResource(R.string.watchlist), color = Color.White, style = MaterialTheme.typography.labelLarge) }
                 Box(
-                    Modifier.size(40.dp, 22.dp).clip(CircleShape).background(colors.primary).padding(3.dp),
+                    Modifier.size(40.dp, 22.dp).clip(CircleShape).background(accentBrush()).padding(3.dp),
                     contentAlignment = Alignment.CenterEnd
                 ) { Box(Modifier.size(16.dp).clip(CircleShape).background(Color.White)) }
             }
@@ -172,5 +183,67 @@ private fun PreviewPill(text: String, active: Boolean) {
             .padding(horizontal = 10.dp, vertical = 4.dp)
     ) {
         Text(text, color = if (active) colors.onPrimary else Color.White, style = MaterialTheme.typography.labelMedium)
+    }
+}
+
+/** Second palette: the colour gradients, laid out like the plain colours. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun GradientPalette(
+    current: AccentGradient?, preview: AccentGradient, onPreview: (AccentGradient) -> Unit, onChoose: (AccentGradient) -> Unit
+) {
+    val currentFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        runCatching { currentFocus.requestFocus() }
+    }
+    @Composable
+    fun swatch(choice: AccentGradient) = GradientSwatch(
+        choice, selected = choice == current, onFocus = { onPreview(choice) },
+        modifier = if (choice == (current ?: AccentGradient.entries.first())) Modifier.focusRequester(currentFocus) else Modifier
+    ) {
+        onPreview(choice)
+        onChoose(choice)
+    }
+    val besidePreview = AccentGradient.entries.take(20)
+    Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            besidePreview.chunked(5).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) { row.forEach { swatch(it) } }
+            }
+        }
+        MaterialTheme(colorScheme = playerColors(preview)) {
+            androidx.compose.runtime.CompositionLocalProvider(LocalAccentGradient provides preview) {
+                AccentPreview(Modifier.weight(1f))
+            }
+        }
+    }
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        AccentGradient.entries.drop(besidePreview.size).forEach { swatch(it) }
+    }
+    Text(
+        preview.label + if (preview == current) " · " + stringResource(R.string.accent_palette_active) else "",
+        style = MaterialTheme.typography.titleSmall
+    )
+}
+
+@Composable
+private fun GradientSwatch(
+    choice: AccentGradient, selected: Boolean, onFocus: () -> Unit, modifier: Modifier = Modifier, onClick: () -> Unit
+) {
+    var focused by remember { mutableStateOf(false) }
+    Box(
+        modifier
+            .size(50.dp)
+            .border(3.dp, if (focused) Color.White else if (selected) Color(0xFF9E9E9E) else Color.Transparent, CircleShape)
+            .padding(5.dp)
+            .clip(CircleShape)
+            .background(choice.brush)
+            .onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocus() }
+            .clickable(onClick = onClick)
+            .semantics { contentDescription = choice.label; this.selected = selected },
+        contentAlignment = Alignment.Center
+    ) {
+        if (selected) Text("✓", color = choice.onColor, style = MaterialTheme.typography.titleMedium)
     }
 }

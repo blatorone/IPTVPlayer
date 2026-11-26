@@ -387,7 +387,7 @@ private fun PinKey(label: String, modifier: Modifier, enabled: Boolean = true, o
         color = if (focused) colors.surfaceContainerHighest else colors.surfaceContainerHigh,
         contentColor = if (enabled) colors.onSurface else colors.onSurface.copy(alpha = 0.38f),
         shape = RoundedCornerShape(12.dp),
-        border = if (focused) BorderStroke(2.dp, colors.primary) else null
+        border = if (focused) BorderStroke(2.dp, accentBrush()) else null
     ) {
         Box(contentAlignment = Alignment.Center) {
             Text(label, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)

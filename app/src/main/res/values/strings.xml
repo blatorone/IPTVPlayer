@@ -871,4 +871,5 @@
     <string name="start_in_fullscreen">Letzten Sender im Vollbild starten</string>
     <string name="diagnostics_save_downloads">Diagnosebericht in „Download“ speichern</string>
     <string name="diagnostics_saved_downloads">Gespeichert im Ordner „Download“: %1$s</string>
+    <string name="trakt_app_change">Trakt-API ändern</string>
 </resources>

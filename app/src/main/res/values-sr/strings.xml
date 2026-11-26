@@ -876,4 +876,5 @@
     <string name="start_in_fullscreen">Покрени последњи канал преко целог екрана</string>
     <string name="diagnostics_save_downloads">Сачувај дијагностички извештај у „Download”</string>
     <string name="diagnostics_saved_downloads">Сачувано у фасцикли „Download”: %1$s</string>
+    <string name="trakt_app_change">Промени Trakt API</string>
 </resources>

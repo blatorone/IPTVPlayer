@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -117,6 +118,9 @@ internal fun RemoteScrollText(text: String, modifier: Modifier = Modifier, focus
     Text(
         text,
         modifier
+            // A scrolling text needs a height limit: inside the (scrolling) settings panel it had
+            // none, and opening the terms there crashed the app.
+            .heightIn(max = 520.dp)
             .border(2.dp, if (focused) MaterialTheme.colorScheme.primary else Color.Transparent, RoundedCornerShape(10.dp))
             .padding(8.dp)
             .verticalScroll(scroll)

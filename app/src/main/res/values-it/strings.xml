@@ -876,4 +876,5 @@
     <string name="start_in_fullscreen">Avvia l\'ultimo canale a schermo intero</string>
     <string name="diagnostics_save_downloads">Salva il rapporto diagnostico in «Download»</string>
     <string name="diagnostics_saved_downloads">Salvato nella cartella «Download»: %1$s</string>
+    <string name="trakt_app_change">Cambia API Trakt</string>
 </resources>

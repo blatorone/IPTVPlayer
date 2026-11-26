@@ -9,6 +9,9 @@
 - Obere Leiste: Die aktuelle Seite zeigt das Symbol in der Akzentfarbe (ohne Symbole die Schrift) statt des Strichs.
 - Live-TV: Senderliste wird beim Start etwas schneller aufbereitet.
 - Diagnose: „Diagnosebericht in ‚Download‘ speichern“ legt den Bericht ohne Ordnerauswahl im Download-Ordner ab – auch auf Fire TV, das keine Ordnerauswahl hat.
+- Trakt: Ist schon eine Trakt-API gespeichert (beim Kinderkonto die des Admins), erscheint direkt der QR-Code statt der Eingabefelder; „Trakt-API ändern“ zeigt sie bei Bedarf.
+- Einstellungen: Nach rechts in die Zeilen geht es beim ersten Mal zur obersten Zeile, danach zur zuletzt benutzten des Bereichs (vorher sprang der Fokus z. B. bei „Sperren“ nach unten). Nach dem Schließen einer Seite steht der Fokus wieder auf der Zeile, die sie geöffnet hat; neu geöffnete Einstellungen beginnen wieder oben.
+- Behoben: Absturz beim Öffnen der Nutzungsbedingungen in den Einstellungen.
 
 ## 1.0.96
 

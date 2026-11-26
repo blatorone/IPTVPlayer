@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,12 +45,23 @@ internal fun TraktSettings(
         Text(stringResource(R.string.trakt_intro), style = MaterialTheme.typography.bodyMedium)
         if (accountName == null) {
             // Every user connects with their own Trakt API app; the QR code comes only after that.
-            TraktAppForm(app, enabled = !busy && deviceCode == null, onSaveApp)
+            // With an API already saved (also the admin's for the kids account) only the QR code
+            // is shown; the fields come back with "Trakt-API ändern".
+            var editApp by rememberSaveable { mutableStateOf(false) }
+            if (app == null || editApp) TraktAppForm(app, enabled = !busy && deviceCode == null) { id, secret ->
+                onSaveApp(id, secret).also { if (it == null) editApp = false }
+            }
+            LaunchedEffect(app) {
+                if (app != null && !editApp && deviceCode == null && !busy) onConnect()
+            }
             SettingRow(
                 stringResource(if (busy) R.string.trakt_connecting else R.string.trakt_connect),
                                 enabled = !busy && deviceCode == null && app != null,
                 onClick = onConnect
             )
+            if (app != null && !editApp) SettingRow(
+                stringResource(R.string.trakt_app_change), enabled = !busy && deviceCode == null
+            ) { editApp = true }
         } else {
             Text(stringResource(R.string.trakt_connected_as, accountName), fontWeight = FontWeight.SemiBold)
             SettingRow(

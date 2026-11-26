@@ -876,4 +876,5 @@
     <string name="start_in_fullscreen">Pornește ultimul canal pe tot ecranul</string>
     <string name="diagnostics_save_downloads">Salvează raportul de diagnosticare în „Download”</string>
     <string name="diagnostics_saved_downloads">Salvat în folderul „Download”: %1$s</string>
+    <string name="trakt_app_change">Schimbă API-ul Trakt</string>
 </resources>

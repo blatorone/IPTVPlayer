@@ -881,4 +881,5 @@
     <string name="start_in_fullscreen">Запускати останній канал на весь екран</string>
     <string name="diagnostics_save_downloads">Зберегти діагностичний звіт у «Download»</string>
     <string name="diagnostics_saved_downloads">Збережено в теці «Download»: %1$s</string>
+    <string name="trakt_app_change">Змінити API Trakt</string>
 </resources>

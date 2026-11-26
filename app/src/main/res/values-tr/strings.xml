@@ -871,4 +871,5 @@
     <string name="start_in_fullscreen">Son kanalı tam ekranda başlat</string>
     <string name="diagnostics_save_downloads">Tanılama raporunu “Download” klasörüne kaydet</string>
     <string name="diagnostics_saved_downloads">“Download” klasörüne kaydedildi: %1$s</string>
+    <string name="trakt_app_change">Trakt API\'sini değiştir</string>
 </resources>

@@ -820,6 +820,7 @@ private fun PlayerHome(
     // Settings: whether focus is in the rows on the right, and a request to move it there.
     var settingsContentFocusRequest by remember { mutableIntStateOf(0) }
     val settingsContentFocus = remember { FocusRequester() }
+    val settingsFocusMemory = remember { SettingsFocusMemory() }
     val ageRatings = remember { HashMap<String, Int?>() }
     var traktDeviceCode by remember { mutableStateOf<TraktDeviceCode?>(null) }
     var traktStatus by remember { mutableStateOf<String?>(null) }
@@ -4965,7 +4966,9 @@ private fun PlayerHome(
         settingsReturnDestination = current.takeUnless {
             it == Destination.SETTINGS || it == Destination.SOURCES || it == Destination.CATEGORIES
         } ?: Destination.LIVE
-        // Settings open on their first section, focused in the section bar at the top.
+        // Settings open on their first section, focused in the section bar at the top; every
+        // section starts again at its top row.
+        settingsFocusMemory.reset()
         settingsSection = SettingsSection.entries.first()
         lastSettingsSection = SettingsSection.entries.first()
         guidePanel = GuidePanel.GRID
@@ -9179,6 +9182,15 @@ private fun PlayerHome(
                                 .onFocusChanged { ui.settingsContentFocused = it.hasFocus }
                                 .focusRequester(settingsContentFocus)
                                 .focusProperties {
+                                    // Into the rows: the row used last in this section, the first
+                                    // time the top row (not the row nearest to the section bar item,
+                                    // which made "Sperren" land in the middle).
+                                    enter = { direction ->
+                                        settingsFocusMemory.target() ?: if (direction == FocusDirection.Right) {
+                                            settingsContentFocusRequest++
+                                            FocusRequester.Cancel
+                                        } else FocusRequester.Default
+                                    }
                                     // Left out of the rows works like Back: one step at a time, and
                                     // to the section that is open (not the one nearest on screen).
                                     exit = { direction ->
@@ -9193,7 +9205,13 @@ private fun PlayerHome(
                                 .focusGroup()
                                 .verticalScroll(contentScroll),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) { content() }
+                        ) {
+                            settingsFocusMemory.section = if (destination == Destination.SETTINGS) settingsSection else destination
+                            settingsFocusMemory.pageOpen = settingsPageOpen()
+                            androidx.compose.runtime.CompositionLocalProvider(LocalSettingsFocusMemory provides settingsFocusMemory) {
+                                content()
+                            }
+                        }
                         LaunchedEffect(settingsContentFocusRequest) {
                             if (settingsContentFocusRequest == 0) return@LaunchedEffect
                             withFrameNanos { }

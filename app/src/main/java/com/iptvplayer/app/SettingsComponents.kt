@@ -19,6 +19,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,6 +42,28 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 
 /**
+ * Remembers, per settings section, which row had focus last. Entering the rows from the section
+ * bar (or after a page closes) returns there; the first time it is the top row. Reset whenever
+ * the settings are opened anew.
+ */
+internal class SettingsFocusMemory {
+    /** The section whose rows are shown. */
+    var section: Any? = null
+    /** While a settings page is open its rows are not remembered: closing it returns to the row that opened it. */
+    var pageOpen: Boolean = false
+    private val lastRow = mutableMapOf<Any, String>()
+    private val rows = mutableMapOf<String, FocusRequester>()
+
+    fun register(key: String, requester: FocusRequester) { rows[key] = requester }
+    fun unregister(key: String, requester: FocusRequester) { if (rows[key] === requester) rows.remove(key) }
+    fun focused(key: String) { if (!pageOpen) section?.let { lastRow[it] = key } }
+    fun target(): FocusRequester? = section?.let(lastRow::get)?.let(rows::get)
+    fun reset() { lastRow.clear() }
+}
+
+internal val LocalSettingsFocusMemory = staticCompositionLocalOf<SettingsFocusMemory?> { null }
+
+/**
  * One line of a settings page. With [selected] it is an on/off switch; otherwise it opens or
  * cycles something, and a "Name: Wert" label shows its value on the right.
  */
@@ -55,9 +80,20 @@ internal fun SettingRow(
     val split = label.indexOf(": ").takeIf { selected == null && it > 0 }
     val title = split?.let { label.substring(0, it) } ?: label
     val value = split?.let { label.substring(it + 2) }
+    // The title stays the same when a value row is switched, so the row is still found again.
+    val memory = LocalSettingsFocusMemory.current
+    val requester = remember { FocusRequester() }
+    if (memory != null) DisposableEffect(memory, title) {
+        memory.register(title, requester)
+        onDispose { memory.unregister(title, requester) }
+    }
     Surface(
         modifier = modifier.fillMaxWidth()
-            .onFocusChanged { focused = it.isFocused }
+            .focusRequester(requester)
+            .onFocusChanged {
+                focused = it.isFocused
+                if (it.isFocused) memory?.focused(title)
+            }
             .focusProperties { canFocus = enabled }
             .clickable(enabled = enabled, onClick = onClick),
         color = if (focused) colors.surfaceContainerHighest else colors.surfaceContainerHigh,

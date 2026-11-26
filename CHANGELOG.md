@@ -2,6 +2,8 @@
 
 ## 1.0.99
 
+- Filme und Serien: Kategorien wie „Beliebt“ oder „Im Kino“ laden deutlich schneller; einmal geöffnet erscheinen sie beim nächsten Mal sofort.
+- Live-TV: Die gespeicherte Senderliste bleibt nach App-Updates erhalten (kein langes Neuaufbereiten mehr nach jedem Update).
 - Wiedergabeleiste: alle Knöpfe einheitlich gestaltet und mit links/rechts erreichbar; nicht nutzbare Knöpfe (z. B. Spulen bei Live-TV, nicht vorhandene Folgen) werden ausgeblendet.
 - Untertitel: „Forced“-Untertitel werden auch dann automatisch gewählt, wenn die Spuren schon vor dem Start bekannt waren.
 - Ton: Ist kein Ton abspielbar und gibt es kein weiteres Portal, endet die Wiedergabe und das Vollbild schließt sich. Ist nur fremdsprachiger Ton da und kein anderes Portal, erscheint ein Hinweis (Filme und Serien).

@@ -128,3 +128,10 @@ input, select { border-radius: 12px; }
 .segments { overflow-x: auto; padding-bottom: 2px; }
 #toast { bottom: calc(var(--bar) + 18px + env(safe-area-inset-bottom)); }
 .sticky-actions { bottom: calc(var(--bar) + env(safe-area-inset-bottom)); }
+/* Header: brand and "Fertig" in one line, the connection status as a thin line below */
+header { flex-wrap: wrap; row-gap: 2px; }
+.header-right { display: contents; }
+#status { order: 3; width: 100%; text-align: left; font-size: .75rem; line-height: 1.2; }
+#status::before { content: "● "; }
+#finish { order: 2; max-width: 58%; overflow: hidden; text-overflow: ellipsis; }
+.row-actions .badge { align-self: center; padding: 4px 10px; }

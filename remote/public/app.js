@@ -6,6 +6,11 @@
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 const $ = (id) => document.getElementById(id);
+// Empty entries (null/false, e.g. optional notices) are left out instead of showing as "null".
+const nativeReplaceChildren = Element.prototype.replaceChildren;
+Element.prototype.replaceChildren = function (...nodes) {
+  return nativeReplaceChildren.apply(this, nodes.flat(Infinity).filter((node) => node != null && node !== false));
+};
 
 // ---------- crypto ----------
 const b64url = {

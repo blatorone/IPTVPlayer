@@ -2034,6 +2034,9 @@ private fun PlayerHome(
             }
         }.filterValues { it.isNotEmpty() }
     }
+    // Read through this holder where a callback may outlive the composition that created it
+    // (the fullscreen player keeps its key handler): it always sees the current channel list.
+    val currentLiveCategories = rememberUpdatedState(liveCategories)
     val currentYear = remember { java.time.Year.now().value }
     val vodCategoryNames = VodCategory.entries.associate {
         val label = when {
@@ -5265,6 +5268,8 @@ private fun PlayerHome(
     }
     var playerControlsRequest by remember { mutableIntStateOf(0) }
     fun changeLiveChannel(step: Int): Boolean {
+        // Current list, not the one from when fullscreen was opened (empty after a fullscreen start).
+        val liveCategories = currentLiveCategories.value
         val groups = withCategoryOrder(PortalSection.LIVE, liveCategories.keys
             .filter { visibleCategory(PortalSection.LIVE, it, it) }
             .sortedBy { categoryNames.values.indexOf(it) }) { it }

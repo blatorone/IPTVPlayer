@@ -220,6 +220,12 @@ internal fun rememberAppUpdates(): AppUpdateUi {
             try {
                 release = checkRelease(context, beta)
                 if (manual && release != null) dialogOpen = true
+                // A new version found at start asks once (per version) whether to update now.
+                val found = release
+                if (!manual && found != null && preferences.getString("asked_version", null) != found.tag) {
+                    preferences.edit().putString("asked_version", found.tag).apply()
+                    dialogOpen = true
+                }
                 lastCheck = System.currentTimeMillis()
                 preferences.edit().putLong("last_check", lastCheck).apply()
                 if (release == null) result = R.string.update_current
@@ -233,11 +239,8 @@ internal fun rememberAppUpdates(): AppUpdateUi {
         }
     }
     LaunchedEffect(auto) {
-        val now = System.currentTimeMillis()
-        // Every start, at most once an hour.
-        if (auto && now - preferences.getLong("last_check", 0L) >= 3_600_000L) {
-            check(manual = false)
-        }
+        // Every start of the app (with the switch on).
+        if (auto) check(manual = false)
     }
     fun install(available: AppRelease) {
         scope.launch {

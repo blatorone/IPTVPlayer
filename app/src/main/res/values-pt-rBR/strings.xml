@@ -874,4 +874,6 @@
     <string name="recently_watched">Assistidos recentemente</string>
     <string name="start_destination_setting">Página inicial: %1$s</string>
     <string name="start_in_fullscreen">Iniciar o último canal em tela cheia</string>
+    <string name="diagnostics_save_downloads">Salvar relatório de diagnóstico em “Download”</string>
+    <string name="diagnostics_saved_downloads">Salvo na pasta “Download”: %1$s</string>
 </resources>

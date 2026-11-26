@@ -8,6 +8,7 @@
 - Zurück-Taste: In Filmen und Serien bleibt immer eine Kategorie offen (vorher wurde der untere Bereich schwarz). Zurück führt zur Startseite und von dort aus der App.
 - Obere Leiste: Die aktuelle Seite zeigt das Symbol in der Akzentfarbe (ohne Symbole die Schrift) statt des Strichs.
 - Live-TV: Senderliste wird beim Start etwas schneller aufbereitet.
+- Diagnose: „Diagnosebericht in ‚Download‘ speichern“ legt den Bericht ohne Ordnerauswahl im Download-Ordner ab – auch auf Fire TV, das keine Ordnerauswahl hat.
 
 ## 1.0.96
 

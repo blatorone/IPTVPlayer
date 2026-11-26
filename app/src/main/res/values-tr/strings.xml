@@ -869,4 +869,6 @@
     <string name="recently_watched">Son izlenenler</string>
     <string name="start_destination_setting">Başlangıç sayfası: %1$s</string>
     <string name="start_in_fullscreen">Son kanalı tam ekranda başlat</string>
+    <string name="diagnostics_save_downloads">Tanılama raporunu “Download” klasörüne kaydet</string>
+    <string name="diagnostics_saved_downloads">“Download” klasörüne kaydedildi: %1$s</string>
 </resources>

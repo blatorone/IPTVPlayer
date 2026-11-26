@@ -874,4 +874,6 @@
     <string name="recently_watched">Nedavno gledano</string>
     <string name="start_destination_setting">Početna stranica: %1$s</string>
     <string name="start_in_fullscreen">Pokreni zadnji kanal preko cijelog zaslona</string>
+    <string name="diagnostics_save_downloads">Spremi dijagnostičko izvješće u „Download”</string>
+    <string name="diagnostics_saved_downloads">Spremljeno u mapu „Download”: %1$s</string>
 </resources>

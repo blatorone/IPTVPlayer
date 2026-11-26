@@ -879,4 +879,6 @@
     <string name="recently_watched">Нещодавно переглянуті</string>
     <string name="start_destination_setting">Початкова сторінка: %1$s</string>
     <string name="start_in_fullscreen">Запускати останній канал на весь екран</string>
+    <string name="diagnostics_save_downloads">Зберегти діагностичний звіт у «Download»</string>
+    <string name="diagnostics_saved_downloads">Збережено в теці «Download»: %1$s</string>
 </resources>

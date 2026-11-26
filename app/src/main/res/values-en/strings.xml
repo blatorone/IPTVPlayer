@@ -869,4 +869,6 @@
     <string name="recently_watched">Recently watched</string>
     <string name="start_destination_setting">Start page: %1$s</string>
     <string name="start_in_fullscreen">Start last channel in fullscreen</string>
+    <string name="diagnostics_save_downloads">Save diagnostic report to “Download”</string>
+    <string name="diagnostics_saved_downloads">Saved in the “Download” folder: %1$s</string>
 </resources>

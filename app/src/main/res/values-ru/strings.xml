@@ -879,4 +879,6 @@
     <string name="recently_watched">Недавно просмотренные</string>
     <string name="start_destination_setting">Начальная страница: %1$s</string>
     <string name="start_in_fullscreen">Запускать последний канал на весь экран</string>
+    <string name="diagnostics_save_downloads">Сохранить диагностический отчёт в «Download»</string>
+    <string name="diagnostics_saved_downloads">Сохранено в папке «Download»: %1$s</string>
 </resources>

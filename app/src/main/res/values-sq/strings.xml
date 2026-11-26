@@ -869,4 +869,6 @@
     <string name="recently_watched">Parë së fundi</string>
     <string name="start_destination_setting">Faqja e nisjes: %1$s</string>
     <string name="start_in_fullscreen">Nis kanalin e fundit në ekran të plotë</string>
+    <string name="diagnostics_save_downloads">Ruaj raportin diagnostikues te „Download“</string>
+    <string name="diagnostics_saved_downloads">U ruajt në dosjen „Download“: %1$s</string>
 </resources>

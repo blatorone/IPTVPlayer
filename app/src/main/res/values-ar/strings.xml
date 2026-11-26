@@ -889,4 +889,6 @@
     <string name="recently_watched">شوهد مؤخرًا</string>
     <string name="start_destination_setting">صفحة البدء: %1$s</string>
     <string name="start_in_fullscreen">تشغيل آخر قناة بملء الشاشة</string>
+    <string name="diagnostics_save_downloads">حفظ تقرير التشخيص في مجلد \"Download\"</string>
+    <string name="diagnostics_saved_downloads">تم الحفظ في مجلد \"Download\": %1$s</string>
 </resources>

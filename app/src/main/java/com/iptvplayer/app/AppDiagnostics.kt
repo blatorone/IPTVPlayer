@@ -59,6 +59,33 @@ internal object AppDiagnostics {
 
     fun exportToDocument(context: Context, target: Uri) = writeReport(context, target)
 
+    /**
+     * Saves the report in the public "Download" folder (Android 10+). Needs no permission and no
+     * folder selection, which Fire TV does not offer. Returns the file name.
+     */
+    fun saveToDownloads(context: Context): String {
+        check(Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+        val name = "StreamWatch-Diagnose-${System.currentTimeMillis()}.txt"
+        val resolver = context.contentResolver
+        val values = android.content.ContentValues().apply {
+            put(android.provider.MediaStore.Downloads.DISPLAY_NAME, name)
+            put(android.provider.MediaStore.Downloads.MIME_TYPE, "text/plain")
+            put(android.provider.MediaStore.Downloads.IS_PENDING, 1)
+        }
+        val target = resolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+            ?: error(context.getString(R.string.diagnostics_file_create_failed))
+        try {
+            writeReport(context, target)
+            values.clear()
+            values.put(android.provider.MediaStore.Downloads.IS_PENDING, 0)
+            resolver.update(target, values, null, null)
+        } catch (error: Exception) {
+            runCatching { resolver.delete(target, null, null) }
+            throw error
+        }
+        return name
+    }
+
     private fun exportCrashToSelectedFolder(context: Context) {
         val value = context.getSharedPreferences(SETTINGS, Context.MODE_PRIVATE)
             .getString(TREE_KEY, null) ?: return

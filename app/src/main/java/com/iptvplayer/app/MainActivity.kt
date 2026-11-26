@@ -1997,6 +1997,8 @@ private fun PlayerHome(
         // them on Compose's main dispatcher made cold start and remote navigation
         // feel frozen even though the source data had already been restored locally.
         ui.liveGroupsLoading = true
+        // Start and end are both logged: a start without an end means the work was restarted.
+        AppDiagnostics.record(context, "live_groups_start ch:${sourcesForBrowsing.sumOf { it.channels.size }}")
         try {
             val started = SystemClock.elapsedRealtime()
             val groups = withContext(Dispatchers.Default) {
@@ -7998,6 +8000,22 @@ private fun PlayerHome(
                                         if (diagnosticsTree == null) R.string.diagnostics_folder_missing
                                         else R.string.diagnostics_folder_selected
                                     ))
+                                    // Works without a folder picker (Fire TV has none) and without a permission.
+                                    SettingRow(
+                                        stringResource(R.string.diagnostics_save_downloads), Modifier,
+                                        enabled = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q
+                                    ) {
+                                        scope.launch {
+                                            diagnosticsStatus = try {
+                                                val name = withContext(Dispatchers.IO) { AppDiagnostics.saveToDownloads(context) }
+                                                context.getString(R.string.diagnostics_saved_downloads, name)
+                                            } catch (error: CancellationException) {
+                                                throw error
+                                            } catch (_: Exception) {
+                                                context.getString(R.string.diagnostics_export_failed)
+                                            }
+                                        }
+                                    }
                                     SettingRow(stringResource(R.string.diagnostics_choose_folder), Modifier) {
                                         runCatching { chooseDiagnosticsFolder.launch(null) }
                                             .onFailure { diagnosticsStatus = context.getString(R.string.diagnostics_folder_open_failed) }

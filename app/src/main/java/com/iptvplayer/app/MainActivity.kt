@@ -3199,11 +3199,22 @@ private fun PlayerHome(
         startupSnapshotChecked = true
     }
 
+    /**
+     * The quick start plays a stand-in channel (only name and streams, from the last session)
+     * before the channel list exists. This finds its entry in the list: by its saved key, else
+     * by name. Without it the stand-in stayed: no programme info and switching channels did
+     * nothing until fullscreen was left and the channel opened again.
+     */
+    fun listedLiveChannel(channel: StalkerChannel?): StalkerChannel? {
+        if (channel == null || channel in liveGroups) return channel
+        val key = playbackAttempt?.liveRestoreKey
+        return liveGroups.keys.firstOrNull { key != null && (programmeKey(it) ?: liveGroups[it]?.identity) == key }
+            ?: liveGroups.keys.firstOrNull { key != null && liveGroups[it]?.identity == key }
+            ?: liveGroups.keys.firstOrNull { it.name.trim().equals(channel.name.trim(), ignoreCase = true) }
+    }
     LaunchedEffect(restoring, playing, playbackAttempt, liveGroups) {
         if (restoring || playing == null || playing in liveGroups || vodSection != null) return@LaunchedEffect
-        val key = playbackAttempt?.liveRestoreKey ?: return@LaunchedEffect
-        val restored = liveGroups.keys.firstOrNull { (programmeKey(it) ?: liveGroups[it]?.identity) == key }
-            ?: return@LaunchedEffect
+        val restored = listedLiveChannel(playing) ?: return@LaunchedEffect
         playing = restored
         programmeChannel = restored
     }
@@ -5252,7 +5263,7 @@ private fun PlayerHome(
         val groups = withCategoryOrder(PortalSection.LIVE, liveCategories.keys
             .filter { visibleCategory(PortalSection.LIVE, it, it) }
             .sortedBy { categoryNames.values.indexOf(it) }) { it }
-        val currentChannel = if (vodSection == null) starting ?: playing else null
+        val currentChannel = if (vodSection == null) listedLiveChannel(starting ?: playing) else null
         val group = guideChannelCategory(category, groups, liveCategories, currentChannel)
         val channels = liveCategories[group].orEmpty()
         if (channels.isEmpty()) return false
@@ -6626,6 +6637,16 @@ private fun PlayerHome(
             onDispose { registerPromptInput(null) }
         }
         val overlayFocus = remember { FocusRequester() }
+        // Started straight in fullscreen, the player did not get the focus: the remote's keys
+        // (switching channels) only worked after leaving and reopening fullscreen. Whenever the
+        // stream starts or changes and nothing else is open, the player takes the focus.
+        LaunchedEffect(starting, playing, fullscreenVideoSurface) {
+            if (fullscreenGuidePanel != GuidePanel.GRID || playbackControlsVisible) return@LaunchedEffect
+            withFrameNanos { }
+            var view: android.view.View? = fullscreenVideoSurface
+            while (view != null && view !is PlayerView) view = view.parent as? android.view.View
+            if (view != null && !view.hasFocus()) view.requestFocus()
+        }
         fun interceptDirection(input: GuideInput): Boolean {
             if (episodeAction != 0) return true
             if (playbackControlsVisible) return false

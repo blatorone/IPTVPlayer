@@ -81,7 +81,7 @@ function setStatus(text, kind = "") {
 function connect() {
   const url = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/v1/room/${session.roomId}?role=phone`;
   socket = new WebSocket(url);
-  socket.onopen = () => { retry = 0; setStatus("Verbunden, warte auf das Gerät …", "warn"); };
+  socket.onopen = () => { retry = 0; setStatus(t("status.connectedWaiting"), "warn"); };
   socket.onmessage = (event) => {
     if (typeof event.data !== "string") return;
     incoming = incoming.then(() => receive(event.data));
@@ -90,13 +90,13 @@ function connect() {
     socket = null;
     deviceThere = false;
     if (event.code === 4003) {
-      setStatus("Zugriff am Gerät beendet", "warn");
+      setStatus(t("status.accessEnded"), "warn");
       $("finish").hidden = true;
-      notice("Der Zugriff wurde am Gerät beendet oder ist abgelaufen. Starte ihn am Gerät neu und scanne den neuen QR-Code.");
-    } else setStatus("Verbindung unterbrochen – verbinde neu …", "warn");
+      notice(t("notice.accessEnded"));
+    } else setStatus(t("status.reconnecting"), "warn");
     if (ended) return;
     retry++;
-    if (retry > 40) { setStatus("Keine Verbindung", "warn"); return; }
+    if (retry > 40) { setStatus(t("status.noConnection"), "warn"); return; }
     setTimeout(connect, Math.min(1000 * 2 ** Math.min(retry - 1, 4), 15000));
   };
 }
@@ -106,13 +106,15 @@ async function receive(data) {
     const message = JSON.parse(data);
     if (message.relay === "peer") {
       deviceThere = !!message.present;
-      if (!deviceThere) setStatus("Gerät nicht verbunden – App am Gerät geöffnet?", "warn");
+      if (!deviceThere) setStatus(t("status.deviceAbsent"), "warn");
     }
     return;
   }
   const text = await session.open(data);
   if (!text) return;
   const message = JSON.parse(text);
+  // The device tells its app language; texts of this page follow it.
+  if (message.t === "state" && message.language) setLanguage(message.language);
   if (message.t === "state" && (message.mode === "pin" || message.mode === "pinNew")) {
     state = message;
     deviceThere = true;
@@ -123,12 +125,12 @@ async function receive(data) {
     deviceThere = true;
     renderUnlock();
   } else if (message.t === "result" && state && state.mode === "unlock") {
-    if (!message.ok) toast(message.message || "Falsch.", true);
+    if (!message.ok) toast(message.message || t("result.wrong"), true);
   } else if (message.t === "state") {
     state = message;
     applyAccent(message.accent);
     deviceThere = true;
-    setStatus(`Verbunden mit ${message.device}`, "ok");
+    setStatus(t("status.connectedTo", message.device), "ok");
     $("finish").hidden = false;
     show();
     render();
@@ -138,13 +140,13 @@ async function receive(data) {
     if (message.data && message.data.sections) { portalCategories = message.data; renderPortals(); }
     if (message.data && message.data.file) downloadBackup(message.data.name, message.data.file);
     if (message.data && message.data.backupParts) { backupImport = { ...backupImport, info: message.data, parts: message.data.backupParts.slice() }; renderBackup(); }
-    if (message.message || !message.ok) toast(message.message || "Das hat nicht geklappt.", !message.ok);
+    if (message.message || !message.ok) toast(message.message || t("result.failed"), !message.ok);
   }
 }
 
 async function send(command) {
   if (!socket || socket.readyState !== WebSocket.OPEN || !state) {
-    toast("Keine Verbindung zum Gerät.", true);
+    toast(t("toast.noDevice"), true);
     return;
   }
   socket.send(await session.seal(JSON.stringify({ ...command, epoch: state.epoch })));
@@ -176,11 +178,11 @@ const switchButton = (on, label, onClick) =>
   el("button", { class: "switch", role: "switch", "aria-checked": String(!!on), "aria-label": label, onclick: onClick });
 let toastTimer;
 function toast(text, error = false) {
-  const t = $("toast");
-  t.textContent = text;
-  t.className = "show" + (error ? " error" : "");
+  const box = $("toast");
+  box.textContent = text;
+  box.className = "show" + (error ? " error" : "");
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { t.className = ""; }, 3500);
+  toastTimer = setTimeout(() => { box.className = ""; }, 3500);
 }
 function notice(text) { $("portal-notice").replaceChildren(el("div", { class: "notice" }, text)); }
 function show() { $("intro").hidden = true; $("tabs").hidden = false; $("app").hidden = false; }
@@ -203,10 +205,10 @@ function askPin(title) {
   });
 }
 async function askNewPin(title) {
-  const first = await askPin(`${title} (mind. 4 Zeichen)`);
+  const first = await askPin(t("pin.withMin", title));
   if (!first) return null;
-  const second = await askPin("Neue PIN wiederholen");
-  if (first !== second) { toast("Die PINs stimmen nicht überein.", true); return null; }
+  const second = await askPin(t("pin.repeatNew"));
+  if (first !== second) { toast(t("pin.mismatch"), true); return null; }
   return first;
 }
 
@@ -233,37 +235,37 @@ function renderPortals() {
   $("portal-merge").replaceChildren(...(merge && state.portals.length > 1
     ? [settingRow(merge, (value) => send({ t: "set", id: merge.id, value })),
        el("p", { class: "hint" }, merge.value
-         ? "Alle aktiven Portale werden zu einer Liste zusammengeführt (Duplikate entfernt)."
-         : "Es wird jeweils nur das aktive Portal angezeigt.")]
+         ? t("portal.mergeOn")
+         : t("portal.mergeOff"))]
     : []));
   if (!state.portals.length) {
-    $("portal-list").replaceChildren(el("p", { class: "hint" }, "Noch kein Portal eingerichtet."));
+    $("portal-list").replaceChildren(el("p", { class: "hint" }, t("portal.none")));
     return;
   }
   $("portal-list").replaceChildren(...state.portals.map((p) => el("div", { class: "card" },
     el("div", { class: "row", style: "border:none;padding:0;margin:0;background:none" },
-      el("span", { class: "label" }, el("b", {}, p.label), p.active ? " · aktiv" : "",
+      el("span", { class: "label" }, el("b", {}, p.label), p.active ? " · " + t("portal.active") : "",
         el("span", { class: "sub" }, p.address),
-        el("span", { class: "sub" }, `MAC ${p.mac}`),
-        el("span", { class: "sub" }, p.expiry ? `Gültig bis ${p.expiry}` : "Ablaufdatum unbekannt")),
-      switchButton(p.enabled, p.enabled ? "Portal deaktivieren" : "Portal aktivieren",
+        el("span", { class: "sub" }, t("portal.macValue", p.mac)),
+        el("span", { class: "sub" }, p.expiry ? t("portal.expiry", p.expiry) : t("portal.expiryUnknown"))),
+      switchButton(p.enabled, p.enabled ? t("portal.disable") : t("portal.enable"),
         () => send({ t: "portalEnabled", id: p.id, enabled: !p.enabled }))),
     el("div", { class: "row-actions" },
       el("span", { class: "badge " + (p.reachable === true ? "ok" : p.reachable === false ? "bad" : "") },
-        p.reachable === true ? "erreichbar" : p.reachable === false ? "nicht erreichbar" : "unbekannt"),
+        p.reachable === true ? t("portal.reachable") : p.reachable === false ? t("portal.unreachable") : t("portal.unknown")),
       el("button", { class: p.preferred ? "preferred" : "", "aria-pressed": String(!!p.preferred),
-        title: "Wird für Live-TV, Filme und Serien zuerst verwendet",
+        title: t("portal.preferredTip"),
         onclick: () => send({ t: "portalPreferred", id: p.id, preferred: !p.preferred }) },
-        p.preferred ? "★ Bevorzugt" : "☆ Bevorzugen"),
+        p.preferred ? t("portal.preferred") : t("portal.prefer")),
       el("button", { onclick: () => {
         if (portalCategories && portalCategories.id === p.id) { portalCategories = null; renderPortals(); }
         else send({ t: "portalCategories", id: p.id });
-      } }, portalCategories && portalCategories.id === p.id ? "Kategorien schließen" : "Kategorien"),
+      } }, portalCategories && portalCategories.id === p.id ? t("portal.closeCategories") : t("portal.categories")),
       el("button", { onclick: () => { editingPortal = editingPortal === p.id ? null : p.id; renderPortals(); } },
-        editingPortal === p.id ? "Schließen" : "Bearbeiten"),
+        editingPortal === p.id ? t("portal.close") : t("portal.edit")),
       el("button", { class: "danger", onclick: () => {
-        if (confirm(`${p.label} wirklich entfernen?`)) send({ t: "portalRemove", id: p.id });
-      } }, "Entfernen")),
+        if (confirm(t("portal.removeConfirm", p.label))) send({ t: "portalRemove", id: p.id });
+      } }, t("portal.remove"))),
     editingPortal === p.id ? portalEditForm(p) : null,
     portalCategories && portalCategories.id === p.id ? categoryOverview(portalCategories) : null)));
 }
@@ -272,7 +274,7 @@ function renderPortals() {
 let portalCategories = null;
 let overviewSection = "LIVE";
 function categoryOverview(data) {
-  const names = { LIVE: "Live-TV", MOVIES: "Filme", SERIES: "Serien" };
+  const names = { LIVE: t("cat.live"), MOVIES: t("cat.movies"), SERIES: t("cat.series") };
   const list = data.sections[overviewSection] || [];
   const countries = new Map();
   for (const c of list) countries.set(c.country, (countries.get(c.country) || 0) + 1);
@@ -285,7 +287,7 @@ function categoryOverview(data) {
       ? [el("p", { class: "hint" }, summary),
          el("div", { class: "category-overview" }, list.map((c) => el("div", { class: "overview-row" },
            el("span", {}, c.name), el("span", { class: "sub" }, [c.country, c.count].filter((v) => v != null).join(" · ")))))]
-      : el("p", { class: "hint" }, "Für diesen Bereich hat das Portal keine Kategorien geliefert."));
+      : el("p", { class: "hint" }, t("overview.none")));
 }
 
 let editingPortal = null;
@@ -295,13 +297,13 @@ function portalEditForm(p) {
   return el("form", { class: "edit-form", autocomplete: "off", onsubmit: (e) => {
     e.preventDefault();
     const a = address.value.trim();
-    if (!/^https?:\/\//i.test(a)) { toast("Die Adresse muss mit http:// oder https:// beginnen.", true); return; }
+    if (!/^https?:\/\//i.test(a)) { toast(t("portal.addrInvalid"), true); return; }
     editingPortal = null;
     send({ t: "portalEdit", id: p.id, address: a, mac: mac.value.trim() });
   } },
-  el("label", {}, "Portal-Adresse", address),
-  el("label", {}, "MAC-Adresse", mac),
-  el("button", { type: "submit", class: "primary" }, "Speichern und neu laden"));
+  el("label", {}, t("portal.address"), address),
+  el("label", {}, t("portal.mac"), mac),
+  el("button", { type: "submit", class: "primary" }, t("portal.saveReload")));
 }
 
 // Countries are chosen here first and sent to the device only with "Übernehmen".
@@ -324,11 +326,11 @@ function renderCountries() {
   }
   askedBefore = state.askCountries;
   $("country-ask").replaceChildren(...(state.askCountries ? [el("div", { class: "notice ask" },
-    "Das Portal ist geladen. Wähle die Länder, die angezeigt werden sollen, und tippe auf „Übernehmen“.",
+    t("country.ask"),
     el("div", { class: "row-actions" }, el("button", { onclick: () => {
       countryDraft = null;
       send({ t: "countriesLater" });
-    } }, "Später")))] : []));
+    } }, t("country.later"))))] : []));
   const selected = countryDraft ?? savedCountries();
   const changed = countryDraft !== null && countryDraft.join() !== savedCountries().join();
   $("country-apply").disabled = !changed && !state.askCountries;
@@ -338,13 +340,13 @@ function renderCountries() {
   $("country-list").replaceChildren(...items.map((c) => {
     const on = selected.includes(c.code);
     return el("div", { class: "row" },
-      el("span", { class: "label" }, c.name, on ? el("span", { class: "sub" }, `Position ${selected.indexOf(c.code) + 1}`) : null),
+      el("span", { class: "label" }, c.name, on ? el("span", { class: "sub" }, t("country.position", selected.indexOf(c.code) + 1)) : null),
       switchButton(on, c.name, () => {
         countryDraft = on ? selected.filter((x) => x !== c.code) : [...selected, c.code];
         renderCountries();
       }));
   }));
-  if (!items.length) $("country-list").replaceChildren(el("p", { class: "hint" }, "Keine Länder gefunden."));
+  if (!items.length) $("country-list").replaceChildren(el("p", { class: "hint" }, t("country.none")));
 }
 
 function visibleCategories() {
@@ -358,15 +360,15 @@ function renderCategories() {
   const canLock = state.parental.hasPin;
   $("category-list").replaceChildren(...items.map((c) => el("div", { class: "row" },
     el("span", { class: "label" }, c.name),
-    canLock ? el("button", { class: "lock", "aria-pressed": String(c.locked), title: "Mit PIN sperren",
+    canLock ? el("button", { class: "lock", "aria-pressed": String(c.locked), title: t("cat.lockTip"),
       onclick: async () => {
-        const pin = c.locked ? await askPin("PIN zum Entsperren") : undefined;
+        const pin = c.locked ? await askPin(t("pin.unlockTitle")) : undefined;
         if (c.locked && !pin) return;
         send({ t: "categoryLock", section: categorySection, id: c.id, locked: !c.locked, pin });
       } }, c.locked ? "🔒" : "🔓") : null,
-    switchButton(!c.hidden, `${c.name} anzeigen`,
+    switchButton(!c.hidden, t("cat.showAria", c.name),
       () => send({ t: "categories", section: categorySection, ids: [c.id], hidden: !c.hidden })))));
-  if (!items.length) $("category-list").replaceChildren(el("p", { class: "hint" }, "Keine Kategorien."));
+  if (!items.length) $("category-list").replaceChildren(el("p", { class: "hint" }, t("cat.none")));
 }
 
 // A setting with "showIf" is shown only while the other setting has that value.
@@ -414,9 +416,9 @@ function settingRow(s, onChange) {
       s.options.map((o) => el("option", { value: o.value, selected: o.value === s.value }, o.label)));
   } else {
     control = el("div", { class: "stepper" },
-      el("button", { "aria-label": "weniger", disabled: s.value - s.step < s.min, onclick: () => onChange(s.value - s.step) }, "−"),
+      el("button", { "aria-label": t("stepper.less"), disabled: s.value - s.step < s.min, onclick: () => onChange(s.value - s.step) }, "−"),
       el("span", {}, `${s.value} ${s.unit}`),
-      el("button", { "aria-label": "mehr", disabled: s.value + s.step > s.max, onclick: () => onChange(s.value + s.step) }, "+"));
+      el("button", { "aria-label": t("stepper.more"), disabled: s.value + s.step > s.max, onclick: () => onChange(s.value + s.step) }, "+"));
   }
   return el("div", { class: "row" }, el("span", { class: "label" }, s.label), control);
 }
@@ -426,11 +428,11 @@ function renderParental() {
   const box = $("parental");
   if (!p.hasPin) {
     box.replaceChildren(
-      el("p", { class: "hint" }, "Lege zuerst eine PIN fest. Damit kannst du Einstellungen schützen, Kategorien sperren und den Kindermodus nutzen."),
+      el("p", { class: "hint" }, t("parental.setPinFirst")),
       el("button", { class: "primary", onclick: async () => {
-        const pin = await askNewPin("Neue PIN");
+        const pin = await askNewPin(t("pin.new"));
         if (pin) send({ t: "pin", pin });
-      } }, "PIN festlegen"));
+      } }, t("parental.setPin")));
     return;
   }
   const fields = state.settings.filter((s) => s.id.startsWith("parental."));
@@ -441,47 +443,47 @@ function renderParental() {
     (field === "lockAdult" && value === false) || (field === "kidsMode" && value === false) ||
     (p.hasSettingsPin && settingsField(field) && !(field === "protectSettings" && value === true));
   box.replaceChildren(
-    p.kidsMode ? el("div", { class: "notice" }, "Der Kindermodus ist am Gerät aktiv.") : null,
+    p.kidsMode ? el("div", { class: "notice" }, t("parental.kidsActive")) : null,
     ...fields.map((s) => settingRow(s, async (value) => {
       const field = s.id.slice("parental.".length);
       let pin;
       if (needsPin(field, value)) {
-        pin = await askPin(field === "kidsMode" ? "PIN zum Beenden des Kindermodus"
-          : settingsField(field) ? "PIN der Einstellungen" : "PIN eingeben");
+        pin = await askPin(field === "kidsMode" ? t("pin.endKids")
+          : settingsField(field) ? t("pin.settings") : t("pin.enter"));
         if (!pin) return;
       }
       send({ t: "parental", field, value, pin });
     })),
-    el("h3", {}, "PIN"),
+    el("h3", {}, t("pin.heading")),
     el("div", { class: "row-actions" },
       el("button", { onclick: async () => {
-        const current = await askPin("Aktuelle PIN"); if (!current) return;
-        const pin = await askNewPin("Neue PIN"); if (pin) send({ t: "pin", pin, current });
-      } }, "PIN ändern"),
+        const current = await askPin(t("pin.current")); if (!current) return;
+        const pin = await askNewPin(t("pin.new")); if (pin) send({ t: "pin", pin, current });
+      } }, t("parental.changePin")),
       el("button", { onclick: async () => {
-        const current = await askPin("Aktuelle PIN"); if (!current) return;
+        const current = await askPin(t("pin.current")); if (!current) return;
         if (p.separateKidsPin) send({ t: "kidsPin", pin: null, current });
-        else { const pin = await askNewPin("PIN zum Beenden des Kindermodus"); if (pin) send({ t: "kidsPin", pin, current }); }
-      } }, p.separateKidsPin ? "Eigene Kindermodus-PIN entfernen" : "Eigene Kindermodus-PIN festlegen"),
+        else { const pin = await askNewPin(t("pin.endKids")); if (pin) send({ t: "kidsPin", pin, current }); }
+      } }, p.separateKidsPin ? t("parental.kidsPinRemove") : t("parental.kidsPinSet")),
       el("button", { class: "danger", onclick: async () => {
-        if (!confirm("PIN und Kinderschutz wirklich entfernen?")) return;
-        const current = await askPin("Aktuelle PIN"); if (current) send({ t: "pinRemove", current });
-      } }, "PIN entfernen")),
-    p.hasSettingsPin ? null : el("p", { class: "hint" }, "Eine PIN für die Einstellungen (Einstellungsschutz) legst du am Gerät unter Sperren fest."),
-    el("h3", {}, "Kinderkonto"),
+        if (!confirm(t("parental.removePinConfirm"))) return;
+        const current = await askPin(t("pin.current")); if (current) send({ t: "pinRemove", current });
+      } }, t("parental.removePin"))),
+    p.hasSettingsPin ? null : el("p", { class: "hint" }, t("parental.settingsPinHint")),
+    el("h3", {}, t("parental.kidsAccountHeading")),
     el("p", { class: "hint" }, p.kidsAccount
-      ? `„${p.kidsAccount}“ sieht nur die freigegebenen Bereiche passend zur Altersgrenze. Gewechselt wird am Gerät über „Abmelden“.`
-      : "Ein eigenes Konto für Kinder mit Altersgrenze und ohne Einstellungen."),
+      ? t("parental.kidsAccountInfo", p.kidsAccount)
+      : t("parental.kidsAccountNone")),
     el("div", { class: "row-actions" },
       el("button", { onclick: () => {
-        const name = (prompt("Name des Kinderkontos", p.kidsAccount || "") || "").trim();
+        const name = (prompt(t("parental.kidsNamePrompt"), p.kidsAccount || "") || "").trim();
         if (name) send({ t: "parental", field: "kidsName", value: name });
-      } }, p.kidsAccount ? "Umbenennen" : "Kinderkonto anlegen"),
+      } }, p.kidsAccount ? t("parental.rename") : t("parental.createKids")),
       p.kidsAccount ? el("button", { class: "danger", onclick: async () => {
-        if (!confirm(`Kinderkonto „${p.kidsAccount}“ wirklich entfernen?`)) return;
-        const pin = await askPin("PIN eingeben"); if (pin) send({ t: "parental", field: "kidsRemove", value: true, pin });
-      } }, "Kinderkonto entfernen") : null),
-    el("p", { class: "hint" }, "Einzelne Kategorien sperrst du unter „Kategorien“ mit dem Schloss."));
+        if (!confirm(t("parental.removeKidsConfirm", p.kidsAccount))) return;
+        const pin = await askPin(t("pin.enter")); if (pin) send({ t: "parental", field: "kidsRemove", value: true, pin });
+      } }, t("parental.removeKids")) : null),
+    el("p", { class: "hint" }, t("parental.categoriesHint")));
 }
 
 function renderSettings() {
@@ -527,22 +529,23 @@ $("category-show-all").addEventListener("click", () => {
 });
 $("category-hide-all").addEventListener("click", () => {
   const ids = visibleCategories().map((c) => c.id);
-  if (ids.length && confirm(`${ids.length} Kategorien ausblenden?`)) send({ t: "categories", section: categorySection, ids, hidden: true });
+  if (ids.length && confirm(t("cat.hideConfirm", ids.length))) send({ t: "categories", section: categorySection, ids, hidden: true });
 });
 $("portal-form").addEventListener("submit", (e) => {
   e.preventDefault();
   const form = e.target;
   const address = form.address.value.trim();
   const mac = form.mac.value.trim();
-  if (!/^https?:\/\//i.test(address)) { toast("Die Adresse muss mit http:// oder https:// beginnen.", true); return; }
+  if (!/^https?:\/\//i.test(address)) { toast(t("portal.addrInvalid"), true); return; }
   send({ t: "portalAdd", address, mac });
   form.reset();
 });
 
 // ---------- start ----------
 (async () => {
+  setStatus(t("status.connecting"));
   if (!window.isSecureContext || !crypto.subtle) {
-    setStatus("Nicht unterstützt", "warn");
+    setStatus(t("status.unsupported"), "warn");
     return;
   }
   const fromHash = new URLSearchParams(location.hash.slice(1)).get("s");
@@ -550,12 +553,12 @@ $("portal-form").addEventListener("submit", (e) => {
   // Keep the secret out of the address bar, history and screenshots.
   if (location.hash) history.replaceState(null, "", location.pathname);
   const secret = sessionStorage.getItem("sw-secret");
-  if (!secret) { setStatus("Kein Zugang"); return; }
+  if (!secret) { setStatus(t("status.noAccess")); return; }
   try {
     session = await Session.create(secret);
   } catch {
     sessionStorage.removeItem("sw-secret");
-    setStatus("Ungültiger QR-Code", "warn");
+    setStatus(t("status.invalidQr"), "warn");
     return;
   }
   connect();
@@ -563,7 +566,7 @@ $("portal-form").addEventListener("submit", (e) => {
 
 // "Fertig": ends the session on the device, which then returns to Live-TV.
 $("finish").addEventListener("click", async () => {
-  if (!confirm("Alles erledigt? Der Zugriff wird beendet und das Gerät wechselt zu Live-TV.")) return;
+  if (!confirm(t("finish.confirm"))) return;
   await send({ t: "finish" });
   ended = true;
   sessionStorage.removeItem("sw-secret");
@@ -571,33 +574,33 @@ $("finish").addEventListener("click", async () => {
   $("tabs").hidden = true;
   $("app").hidden = true;
   $("intro").hidden = false;
-  $("intro").replaceChildren(el("h1", {}, "Fertig"),
-    el("p", {}, "Der Zugriff ist beendet. Für weitere Änderungen am Gerät erneut „Per Handy einstellen“ öffnen und den neuen QR-Code scannen."));
-  setStatus("Zugriff beendet");
+  $("intro").replaceChildren(el("h1", {}, t("common.done")),
+    el("p", {}, t("finish.doneText")));
+  setStatus(t("status.ended"));
 });
 
 // ---------- PIN only (from the PIN window on the TV) ----------
 // Only a PIN field: the TV sends no settings; the PIN never appears on the TV screen.
 function renderPinOnly() {
-  setStatus("Verbunden", "ok");
+  setStatus(t("status.connected"), "ok");
   $("finish").hidden = true;
   $("tabs").hidden = true;
   $("app").hidden = true;
   $("intro").hidden = false;
   const newPin = state.mode === "pinNew";
-  const hint = el("p", { class: "hint" }, "Die Eingabe wird verschlüsselt an das Gerät geschickt und dort nicht angezeigt.");
+  const hint = el("p", { class: "hint" }, t("pin.hintInput"));
   // A password (letters allowed) is typed with the keyboard.
   if (state.password && !newPin) {
-    $("intro").replaceChildren(el("h1", {}, "Passwort eingeben"), hint,
-      passwordForm("Passwort", (pin) => send({ t: "pinEntry", pin })));
+    $("intro").replaceChildren(el("h1", {}, t("pin.enterPassword")), hint,
+      passwordForm(t("pw.label"), (pin) => send({ t: "pinEntry", pin })));
     return;
   }
   const newPassword = () => {
-    $("intro").replaceChildren(el("h1", {}, "Neues Passwort festlegen"), hint,
-      passwordForm("Neues Passwort", (first) => {
-        $("intro").replaceChildren(el("h1", {}, "Passwort wiederholen"), hint,
-          passwordForm("Passwort wiederholen", (second) => {
-            if (first !== second) { toast("Die beiden Passwörter stimmen nicht überein.", true); newPassword(); return; }
+    $("intro").replaceChildren(el("h1", {}, t("pin.newPasswordTitle")), hint,
+      passwordForm(t("pw.new"), (first) => {
+        $("intro").replaceChildren(el("h1", {}, t("pw.repeat")), hint,
+          passwordForm(t("pw.repeat"), (second) => {
+            if (first !== second) { toast(t("pw.mismatch"), true); newPassword(); return; }
             send({ t: "pinEntry", pin: first });
           }));
       }));
@@ -609,18 +612,18 @@ function renderPinOnly() {
   const dots = el("div", { class: "pin-dots" });
   const title = el("h1", {});
   const draw = () => {
-    title.textContent = !newPin ? "PIN eingeben" : first === null ? "Neue PIN festlegen" : "Neue PIN wiederholen";
+    title.textContent = !newPin ? t("pin.enter") : first === null ? t("pin.newTitle") : t("pin.repeatNew");
     dots.textContent = Array.from({ length: length || Math.max(4, pin.length) }, (_, i) => (i < pin.length ? "●" : "–")).join(" ");
     lengths.hidden = !choosing;
     dots.hidden = choosing;
     pad.hidden = choosing;
-    if (choosing) title.textContent = "Wie lang soll die PIN sein?";
+    if (choosing) title.textContent = t("pin.lengthQ");
   };
   const submit = () => {
-    if (pin.length < 4) { toast("Die PIN hat mindestens 4 Ziffern.", true); return; }
+    if (pin.length < 4) { toast(t("pin.min4"), true); return; }
     if (newPin && first === null) { first = pin; pin = ""; draw(); return; }
     // A new PIN is typed twice here, so a typo cannot lock the device.
-    if (newPin && first !== pin) { toast("Die beiden PINs stimmen nicht überein.", true); first = null; pin = ""; draw(); return; }
+    if (newPin && first !== pin) { toast(t("pin.mismatchBoth"), true); first = null; pin = ""; draw(); return; }
     send({ t: "pinEntry", pin });
     pin = ""; first = null; draw();
   };
@@ -630,16 +633,16 @@ function renderPinOnly() {
     else if (pin.length < (length || 12)) pin += label;
     draw();
     if (length && pin.length === length) submit();
-  } }, label);
+  } }, label === "OK" ? t("common.ok") : label);
   const pad = el("div", { class: "pin-pad" }, ["1","2","3","4","5","6","7","8","9","⌫","0","OK"].map(key));
-  const lengths = el("div", { class: "pin-lengths" }, [[4, "4 Ziffern"], [6, "6 Ziffern"], [8, "8 Ziffern"], [null, "Eigene Länge (mind. 4)"], ["pw", "Passwort statt Ziffern"]]
+  const lengths = el("div", { class: "pin-lengths" }, [[4, t("pin.digits", 4)], [6, t("pin.digits", 6)], [8, t("pin.digits", 8)], [null, t("pin.lenCustom")], ["pw", t("pin.lenPassword")]]
     .map(([n, label]) => el("button", { class: "pin-key", onclick: () => {
       if (n === "pw") { newPassword(); return; }
       length = n; choosing = false; draw();
     } }, label)));
   // Checking an existing PIN: no fixed length (OK confirms).
   $("intro").replaceChildren(title,
-    el("p", { class: "hint" }, "Die PIN wird verschlüsselt an das Gerät geschickt und dort nicht angezeigt."),
+    el("p", { class: "hint" }, t("pin.hintPin")),
     lengths, dots, pad);
   draw();
 }
@@ -647,11 +650,11 @@ function renderPinOnly() {
 // A text field for a password (or a PIN typed with the keyboard).
 function passwordForm(label, onSubmit, numeric = false) {
   const input = el("input", { type: "password", autocomplete: "off", inputmode: numeric ? "numeric" : "text", maxlength: "64" });
-  const form = el("form", { class: "card" }, el("label", {}, label, input), el("button", { type: "submit", class: "primary" }, "OK"));
+  const form = el("form", { class: "card" }, el("label", {}, label, input), el("button", { type: "submit", class: "primary" }, t("common.ok")));
   form.addEventListener("submit", (e) => {
     e.preventDefault();
     const value = input.value;
-    if (!/^[^\x00-\x1f]{4,64}$/.test(value)) { toast("Mindestens 4 Zeichen.", true); return; }
+    if (!/^[^\x00-\x1f]{4,64}$/.test(value)) { toast(t("pw.min4"), true); return; }
     input.value = "";
     onSubmit(value);
   });
@@ -661,17 +664,17 @@ function passwordForm(label, onSubmit, numeric = false) {
 
 // Settings protected by a PIN or password: unlock first (checked on the device).
 function renderUnlock() {
-  setStatus("Verbunden", "ok");
+  setStatus(t("status.connected"), "ok");
   $("finish").hidden = true;
   $("tabs").hidden = true;
   $("app").hidden = true;
   $("intro").hidden = false;
   $("intro").replaceChildren(
-    el("h1", {}, "Entsperren"),
+    el("h1", {}, t("unlock.title")),
     el("p", { class: "hint" }, state.password
-      ? "Die Einstellungen sind mit einem Passwort geschützt. Gib es ein, um sie zu bearbeiten."
-      : "Die Einstellungen sind mit einer PIN geschützt. Gib sie ein, um sie zu bearbeiten."),
-    passwordForm(state.password ? "Passwort" : "PIN", (pin) => send({ t: "pinEntry", pin }), !state.password));
+      ? t("unlock.hintPw")
+      : t("unlock.hintPin")),
+    passwordForm(state.password ? t("pw.label") : t("pin.heading"), (pin) => send({ t: "pinEntry", pin }), !state.password));
 }
 
 // ---------- backup ----------
@@ -685,14 +688,14 @@ function downloadBackup(name, file) {
   link.click();
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10000);
-  toast("Backup heruntergeladen.");
+  toast(t("backup.downloaded"));
 }
 function partChoice(parts, chosen, onChange) {
   const labels = new Map((state.backupParts || []).map((p) => [p.value, p.label]));
   const all = parts.length > 0 && parts.every((p) => chosen.includes(p));
   return [
-    el("div", { class: "row" }, el("span", { class: "label" }, el("b", {}, "Alles")),
-      switchButton(all, "Alles", () => onChange(all ? [] : parts.slice()))),
+    el("div", { class: "row" }, el("span", { class: "label" }, el("b", {}, t("backup.all"))),
+      switchButton(all, t("backup.all"), () => onChange(all ? [] : parts.slice()))),
     ...parts.map((p) => el("div", { class: "row" }, el("span", { class: "label" }, labels.get(p) || p),
       switchButton(chosen.includes(p), labels.get(p) || p,
         () => onChange(chosen.includes(p) ? chosen.filter((x) => x !== p) : [...chosen, p])))),
@@ -701,13 +704,13 @@ function partChoice(parts, chosen, onChange) {
 function renderBackup() {
   if (!state || !$("backup")) return;
   const parts = (state.backupParts || []).map((p) => p.value);
-  if (!parts.length) { $("backup").replaceChildren(el("p", { class: "hint" }, "Auf diesem Gerät ist kein Backup möglich.")); return; }
+  if (!parts.length) { $("backup").replaceChildren(el("p", { class: "hint" }, t("backup.unavailable"))); return; }
   if (!backupChoice) backupChoice = parts.slice();
   const fileInput = el("input", { type: "file", accept: ".swbackup,.json,application/octet-stream,application/json" });
   fileInput.addEventListener("change", () => {
     const file = fileInput.files && fileInput.files[0];
     if (!file) return;
-    if (file.size > 270000) { toast("Die Datei ist zu groß für die Übertragung.", true); return; }
+    if (file.size > 270000) { toast(t("backup.tooBig"), true); return; }
     const reader = new FileReader();
     reader.onload = () => {
       const bytes = new Uint8Array(reader.result);
@@ -721,28 +724,28 @@ function renderBackup() {
   const imported = backupImport && backupImport.info;
   $("backup").replaceChildren(
     el("div", { class: "card" },
-      el("h2", {}, "Backup erstellen"),
-      el("p", { class: "hint" }, "Die Datei ist verschlüsselt und wird auf dieses Handy heruntergeladen."),
+      el("h2", {}, t("backup.createTitle")),
+      el("p", { class: "hint" }, t("backup.createHint")),
       ...partChoice(parts, backupChoice, (next) => { backupChoice = next; renderBackup(); }),
       el("button", { class: "primary", disabled: !backupChoice.length,
-        onclick: () => send({ t: "backupCreate", parts: backupChoice }) }, "Backup herunterladen")),
+        onclick: () => send({ t: "backupCreate", parts: backupChoice }) }, t("backup.download"))),
     el("div", { class: "card" },
-      el("h2", {}, "Backup importieren"),
-      el("label", {}, "Backup-Datei wählen", fileInput),
+      el("h2", {}, t("backup.importTitle")),
+      el("label", {}, t("backup.chooseFile"), fileInput),
       imported ? [
-        el("p", { class: "hint" }, imported.createdAt ? `Backup vom ${imported.createdAt} (Version ${imported.appVersion})` : backupImport.name),
+        el("p", { class: "hint" }, imported.createdAt ? t("backup.info", imported.createdAt, imported.appVersion) : backupImport.name),
         ...partChoice(imported.backupParts, backupImport.parts, (next) => { backupImport.parts = next; renderBackup(); }),
-        el("p", { class: "hint" }, "Danach startet die App am Gerät neu. Portale werden hinzugefügt, die ausgewählten Einstellungen ersetzt."),
+        el("p", { class: "hint" }, t("backup.importHint")),
         el("button", { class: "primary", disabled: !backupImport.parts.length, onclick: () => {
-          if (confirm("Backup jetzt importieren? Die App startet danach neu.")) send({ t: "backupRestore", file: backupImport.file, parts: backupImport.parts });
-        } }, "Jetzt importieren"),
+          if (confirm(t("backup.importConfirm"))) send({ t: "backupRestore", file: backupImport.file, parts: backupImport.parts });
+        } }, t("backup.importNow")),
       ] : null));
 }
 
 function pinResult(message) {
   if (message.ok) {
     sessionStorage.removeItem("sw-secret");
-    $("intro").replaceChildren(el("h1", {}, state.mode === "pinNew" ? "PIN festgelegt" : "PIN bestätigt"), el("p", {}, "Du kannst diese Seite schließen."));
-    setStatus("Fertig");
-  } else toast(message.message || "Die PIN ist falsch.", true);
+    $("intro").replaceChildren(el("h1", {}, state.mode === "pinNew" ? t("pin.set") : t("pin.confirmed")), el("p", {}, t("pin.closePage")));
+    setStatus(t("common.done"));
+  } else toast(message.message || t("pin.wrong"), true);
 }

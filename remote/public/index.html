@@ -6,8 +6,9 @@
   <meta name="referrer" content="no-referrer">
   <meta name="robots" content="noindex, nofollow">
   <meta name="theme-color" content="#0b0b0d">
-  <title>StreamWatch Fernverwaltung</title>
+  <title data-i18n="page.title">StreamWatch Fernverwaltung</title>
   <link rel="stylesheet" href="style.css">
+  <script src="i18n.js"></script>
   <script src="app.js" defer></script>
 </head>
 <body>
@@ -27,22 +28,22 @@
     </div>
     <div class="header-right">
       <div id="status" class="status">Verbinde …</div>
-      <button id="finish" class="primary" hidden>Fertig – Zugriff beenden</button>
+      <button id="finish" class="primary" hidden data-i18n="finish.btn">Fertig – Zugriff beenden</button>
     </div>
   </header>
 
   <main id="intro" class="panel">
-    <h1>Fernverwaltung</h1>
-    <p>Öffne diese Seite über den QR-Code unter <b>Einstellungen → Allgemein → Per Handy einstellen</b> in StreamWatch.</p>
+    <h1 data-i18n="intro.title">Fernverwaltung</h1>
+    <p data-i18n-html="intro.text">Öffne diese Seite über den QR-Code unter <b>Einstellungen → Allgemein → Per Handy einstellen</b> in StreamWatch.</p>
   </main>
 
   <nav id="tabs" hidden>
-    <button data-tab="portals" class="active">Portale</button>
-    <button data-tab="countries">Länder</button>
-    <button data-tab="categories">Kategorien</button>
-    <button data-tab="parental">Sperren</button>
-    <button data-tab="settings">Einstellungen</button>
-    <button data-tab="backup">Backup</button>
+    <button data-tab="portals" class="active" data-i18n="tab.portals">Portale</button>
+    <button data-tab="countries" data-i18n="tab.countries">Länder</button>
+    <button data-tab="categories" data-i18n="tab.categories">Kategorien</button>
+    <button data-tab="parental" data-i18n="tab.parental">Sperren</button>
+    <button data-tab="settings" data-i18n="tab.settings">Einstellungen</button>
+    <button data-tab="backup" data-i18n="tab.backup">Backup</button>
   </nav>
 
   <main id="app" hidden>
@@ -51,34 +52,34 @@
       <div id="portal-merge"></div>
       <div id="portal-list"></div>
       <form id="portal-form" class="card" autocomplete="off">
-        <h2>Portal hinzufügen</h2>
-        <label>Portal-Adresse <input name="address" type="url" inputmode="url" placeholder="http://portal.example:8080/c/" required></label>
-        <label>MAC-Adresse <input name="mac" placeholder="00:1A:79:XX:XX:XX" required autocapitalize="characters"></label>
-        <button type="submit" class="primary">Hinzufügen und laden</button>
+        <h2 data-i18n="portal.addTitle">Portal hinzufügen</h2>
+        <label><span data-i18n="portal.address">Portal-Adresse</span> <input name="address" type="url" inputmode="url" placeholder="http://portal.example:8080/c/" required></label>
+        <label><span data-i18n="portal.mac">MAC-Adresse</span> <input name="mac" placeholder="00:1A:79:XX:XX:XX" required autocapitalize="characters"></label>
+        <button type="submit" class="primary" data-i18n="portal.addBtn">Hinzufügen und laden</button>
       </form>
     </section>
 
     <section id="tab-countries" hidden>
       <div id="country-ask"></div>
-      <p class="hint">Gewählte Länder werden in dieser Reihenfolge angezeigt. Ohne Auswahl erscheinen alle Länder.</p>
-      <input id="country-search" type="search" placeholder="Land suchen">
+      <p class="hint" data-i18n="country.hint">Gewählte Länder werden in dieser Reihenfolge angezeigt. Ohne Auswahl erscheinen alle Länder.</p>
+      <input id="country-search" type="search" placeholder="Land suchen" data-i18n-placeholder="country.search">
       <div id="country-list"></div>
       <div class="row-actions sticky-actions">
-        <button id="country-apply" class="primary">Übernehmen und an Gerät senden</button>
-        <button id="country-reset">Verwerfen</button>
+        <button id="country-apply" class="primary" data-i18n="country.apply">Übernehmen und an Gerät senden</button>
+        <button id="country-reset" data-i18n="country.reset">Verwerfen</button>
       </div>
     </section>
 
     <section id="tab-categories" hidden>
       <div class="segments" id="category-sections">
-        <button data-section="LIVE" class="active">Live-TV</button>
-        <button data-section="MOVIES">Filme</button>
-        <button data-section="SERIES">Serien</button>
+        <button data-section="LIVE" class="active" data-i18n="cat.live">Live-TV</button>
+        <button data-section="MOVIES" data-i18n="cat.movies">Filme</button>
+        <button data-section="SERIES" data-i18n="cat.series">Serien</button>
       </div>
-      <input id="category-search" type="search" placeholder="Kategorie suchen">
+      <input id="category-search" type="search" placeholder="Kategorie suchen" data-i18n-placeholder="cat.search">
       <div class="row-actions">
-        <button id="category-show-all">Alle gezeigten einblenden</button>
-        <button id="category-hide-all">Alle gezeigten ausblenden</button>
+        <button id="category-show-all" data-i18n="cat.showAll">Alle gezeigten einblenden</button>
+        <button id="category-hide-all" data-i18n="cat.hideAll">Alle gezeigten ausblenden</button>
       </div>
       <div id="category-list"></div>
     </section>
@@ -98,11 +99,11 @@
 
   <dialog id="pin-dialog">
     <form method="dialog">
-      <h2 id="pin-title">PIN</h2>
+      <h2 id="pin-title" data-i18n="pin.heading">PIN</h2>
       <input id="pin-input" type="password" inputmode="numeric" autocomplete="off" minlength="4" maxlength="64">
       <div class="row-actions">
-        <button value="cancel">Abbrechen</button>
-        <button value="ok" class="primary">OK</button>
+        <button value="cancel" data-i18n="common.cancel">Abbrechen</button>
+        <button value="ok" class="primary" data-i18n="common.ok">OK</button>
       </div>
     </form>
   </dialog>

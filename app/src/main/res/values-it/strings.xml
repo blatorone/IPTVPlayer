@@ -934,4 +934,5 @@
     <string name="smooth_switch_setting">Cambio portale fluido (sperimentale)</string>
     <string name="smooth_switch_hint">Prima fase: passando a un altro portale, l\'app misura quanto sono sfasati gli stream (compare nel rapporto diagnostico). In seguito riprenderà il nuovo stream dallo stesso punto.</string>
     <string name="smooth_switch_weak_device">Questo dispositivo potrebbe essere troppo debole: uso a proprio rischio.</string>
+    <string name="timeshift_live">Diretta</string>
 </resources>

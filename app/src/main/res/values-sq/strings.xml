@@ -929,4 +929,5 @@
     <string name="smooth_switch_setting">Ndërrim i butë i portalit (eksperimental)</string>
     <string name="smooth_switch_hint">Faza e parë: kur kalon në një portal tjetër, aplikacioni mat sa larg janë transmetimet (shfaqet në raportin diagnostikues). Më vonë do ta vazhdojë transmetimin e ri nga i njëjti vend.</string>
     <string name="smooth_switch_weak_device">Kjo pajisje mund të jetë shumë e dobët për këtë – përdorim me përgjegjësinë tënde.</string>
+    <string name="timeshift_live">Live</string>
 </resources>

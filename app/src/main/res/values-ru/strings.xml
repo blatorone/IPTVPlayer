@@ -939,4 +939,5 @@
     <string name="smooth_switch_setting">Плавная смена портала (экспериментально)</string>
     <string name="smooth_switch_hint">Первый этап: при переходе на другой портал приложение измеряет, насколько потоки сдвинуты (видно в диагностическом отчёте). Позже оно будет продолжать новый поток с того же места.</string>
     <string name="smooth_switch_weak_device">Это устройство может быть для этого слишком слабым – на свой страх и риск.</string>
+    <string name="timeshift_live">Эфир</string>
 </resources>

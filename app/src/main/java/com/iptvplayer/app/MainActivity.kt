@@ -246,6 +246,8 @@ class MainActivity : ComponentActivity() {
                     ?.let { EpisodeAudioTapSink(it, decodeEncoded = decodeAudioForIntro) }
         }
         SmoothSwitch.enabled = smoothSwitchEnabled(this)
+        // Timeshift recordings are only temporary: whatever an earlier run left behind is deleted.
+        Thread { java.io.File(cacheDir, "timeshift").listFiles()?.forEach { it.delete() } }.start()
         // Optional buffer (Wiedergabe → Puffer); off keeps the player's usual values.
         player = ExoPlayer.Builder(this, renderers).setLoadControl(bufferLoadControl(chosenBuffer(this))).build().also { activePlayer ->
             activePlayer.trackSelectionParameters = activePlayer.trackSelectionParameters
@@ -334,6 +336,8 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        // Closing the app ends the timeshift recording and deletes it.
+        if (isFinishing) Timeshift.stop()
         player.release()
         super.onDestroy()
     }
@@ -10149,9 +10153,15 @@ internal fun PlayerFrame(
         val row = view.findViewById<LinearLayout>(androidx.media3.ui.R.id.exo_center_controls) ?: return
         val progress = view.findViewById<android.view.View>(androidx.media3.ui.R.id.exo_progress)
         val pause = view.findViewById<android.view.View>(androidx.media3.ui.R.id.exo_play_pause)
-        val buttons = (0 until row.childCount).map(row::getChildAt).filter { button ->
-            button.visibility == android.view.View.VISIBLE && button.isEnabled && button !is LinearLayout
+        // Media3 puts the seek buttons into a frame together with their seconds label: the
+        // button inside is the one that takes the focus (and gets the round look).
+        fun target(child: android.view.View): android.view.View? = when {
+            child.isFocusable || child !is android.view.ViewGroup -> child
+            else -> (0 until child.childCount).map(child::getChildAt).firstOrNull { it.isFocusable && it.visibility == android.view.View.VISIBLE }
         }
+        val buttons = (0 until row.childCount).map(row::getChildAt).filter { child ->
+            child.visibility == android.view.View.VISIBLE && child !is LinearLayout
+        }.mapNotNull(::target).filter { it.isEnabled }
         buttons.forEach { button ->
             if (button.id == android.view.View.NO_ID) button.id = android.view.View.generateViewId()
             if (button.foreground == null) enableRemoteFocus(button)
@@ -10174,6 +10184,7 @@ internal fun PlayerFrame(
         val bottomButtons = listOf(
             view.findViewById(androidx.media3.ui.R.id.exo_settings),
             view.findViewWithTag<android.view.View>("player_subtitles_action"),
+            view.findViewWithTag<android.view.View>("player_live_action"),
             view.findViewById(androidx.media3.ui.R.id.exo_fullscreen),
             view.findViewById(androidx.media3.ui.R.id.exo_overflow_show)
         ).filterNotNull()
@@ -10473,11 +10484,12 @@ internal fun PlayerFrame(
                             progress.isFocusableInTouchMode = true
                             progress.defaultFocusHighlightEnabled = false
                             (progress as? DefaultTimeBar)?.let { timeBar ->
+                                // The point on the bar is always in the accent colour: with timeshift it
+                                // shows that something is recorded and can be moved with left/right.
+                                timeBar.setScrubberColor(accentArgb)
+                                timeBar.setPlayedColor(accentArgb)
                                 progress.setOnFocusChangeListener { _, focused ->
-                                    timeBar.setScrubberColor(
-                                        if (focused) accentArgb
-                                        else android.graphics.Color.WHITE
-                                    )
+                                    timeBar.setScrubberColor(if (focused) android.graphics.Color.WHITE else accentArgb)
                                     timeBar.setPlayedColor(accentArgb)
                                 }
                             }
@@ -10504,6 +10516,54 @@ internal fun PlayerFrame(
                                 intArrayOf(android.graphics.Color.TRANSPARENT, android.graphics.Color.argb(40, 0, 0, 0),
                                     android.graphics.Color.argb(210, 0, 0, 0))
                             )
+                        // "● Live" at the far right: only with timeshift and when behind live.
+                        val playerView = this
+                        (findViewById<android.view.View>(androidx.media3.ui.R.id.exo_basic_controls) as? LinearLayout)?.let { bar ->
+                            if (bar.findViewWithTag<android.view.View>("player_live_action") == null) {
+                                val live = android.widget.TextView(context).apply {
+                                    id = android.view.View.generateViewId()
+                                    tag = "player_live_action"
+                                    text = android.text.SpannableString("●  " + context.getString(R.string.timeshift_live)).apply {
+                                        setSpan(android.text.style.ForegroundColorSpan(android.graphics.Color.rgb(229, 9, 20)), 0, 1, 0)
+                                    }
+                                    setTextColor(android.graphics.Color.WHITE)
+                                    textSize = 15f
+                                    gravity = android.view.Gravity.CENTER
+                                    val padding = (14 * context.resources.displayMetrics.density).toInt()
+                                    setPadding(padding, 0, padding, 0)
+                                    background = android.graphics.drawable.GradientDrawable().apply {
+                                        cornerRadius = 100f
+                                        setColor(android.graphics.Color.argb(120, 0, 0, 0))
+                                    }
+                                    visibility = android.view.View.GONE
+                                    isFocusable = true
+                                    isFocusableInTouchMode = true
+                                    setOnClickListener { Timeshift.goLive(playerView.player) }
+                                }
+                                val height = (44 * context.resources.displayMetrics.density).toInt()
+                                bar.addView(live, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, height))
+                                live.foreground = android.graphics.drawable.StateListDrawable().apply {
+                                    addState(intArrayOf(android.R.attr.state_focused), android.graphics.drawable.GradientDrawable().apply {
+                                        cornerRadius = 100f
+                                        setStroke((2 * context.resources.displayMetrics.density).toInt(), accentArgb)
+                                    })
+                                }
+                                // Shows itself once playback is more than a few seconds behind live.
+                                val tick = object : Runnable {
+                                    override fun run() {
+                                        val behind = Timeshift.behindLive(playerView.player)
+                                        val show = behind != null && behind > 6_000
+                                        val visibility = if (show) android.view.View.VISIBLE else android.view.View.GONE
+                                        if (live.visibility != visibility) {
+                                            live.visibility = visibility
+                                            configureBottomFocus(playerView)
+                                        }
+                                        live.postDelayed(this, 1_000)
+                                    }
+                                }
+                                live.post(tick)
+                            }
+                        }
                         arrangePlayerButtons(this)
                         // Subtitles only when the stream has some.
                         val view = this

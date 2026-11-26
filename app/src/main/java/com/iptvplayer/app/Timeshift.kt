@@ -265,6 +265,19 @@ internal object Timeshift {
         exo.playWhenReady = playing
     }
 
+    /** How far behind live playback is (ms), or null without a running timeshift. */
+    fun behindLive(player: Player?): Long? {
+        val active = recorder ?: return null
+        val position = player?.let { (it as? ForwardingPlayer)?.wrappedPlayer ?: it }?.currentPosition ?: return null
+        return (active.window().second - (sourceStart + position.coerceAtLeast(0L))).coerceAtLeast(0L)
+    }
+
+    /** Back to the live edge of the recording. */
+    fun goLive(player: Player?) {
+        val exo = (player as? ForwardingPlayer)?.wrappedPlayer ?: player ?: return
+        jump(exo, timeshiftNow())
+    }
+
     /** The player for the controls: plain [player] without timeshift. */
     fun controls(player: ExoPlayer?): Player? {
         if (player == null) return null
@@ -289,10 +302,13 @@ internal object Timeshift {
             override fun getContentDuration(): Long = duration
             override fun getBufferedPosition(): Long = if (active()) duration else super.getBufferedPosition()
             override fun getContentBufferedPosition(): Long = bufferedPosition
+            // Without the timeline command the control view takes the length and the seeks from
+            // this player (the recorded span); a live timeline has no length, so the bar stayed empty.
             override fun getAvailableCommands(): Player.Commands =
                 if (!active()) super.getAvailableCommands()
                 else super.getAvailableCommands().buildUpon()
                     .addAll(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM, Player.COMMAND_SEEK_BACK, Player.COMMAND_SEEK_FORWARD)
+                    .remove(Player.COMMAND_GET_TIMELINE)
                     .build()
             override fun isCommandAvailable(command: Int): Boolean = availableCommands.contains(command)
             override fun seekTo(positionMs: Long) {

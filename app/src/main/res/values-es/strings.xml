@@ -934,4 +934,5 @@
     <string name="smooth_switch_setting">Cambio de portal fluido (experimental)</string>
     <string name="smooth_switch_hint">Primera fase: al pasar a otro portal, la app mide cuánto se desfasan los streams (aparece en el informe de diagnóstico). Más adelante continuará el nuevo stream en el mismo punto.</string>
     <string name="smooth_switch_weak_device">Este dispositivo puede ser demasiado débil para esto: úsalo bajo tu propia responsabilidad.</string>
+    <string name="timeshift_live">En directo</string>
 </resources>

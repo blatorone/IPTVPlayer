@@ -934,4 +934,5 @@
     <string name="smooth_switch_setting">Glatka promjena portala (eksperimentalno)</string>
     <string name="smooth_switch_hint">Prva faza: pri prelasku na drugi portal aplikacija mjeri koliko su streamovi pomjereni (vidi se u dijagnostičkom izvještaju). Kasnije će nastaviti novi stream na istom mjestu.</string>
     <string name="smooth_switch_weak_device">Ovaj uređaj je možda preslab za to – korištenje na vlastitu odgovornost.</string>
+    <string name="timeshift_live">Uživo</string>
 </resources>

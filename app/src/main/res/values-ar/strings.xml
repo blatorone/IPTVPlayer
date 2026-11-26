@@ -949,4 +949,5 @@
     <string name="smooth_switch_setting">تبديل سلس للبوابة (تجريبي)</string>
     <string name="smooth_switch_hint">المرحلة الأولى: عند التبديل إلى بوابة أخرى يقيس التطبيق مقدار الفرق بين البثين (يظهر في تقرير التشخيص). لاحقًا سيُكمل البث الجديد من الموضع نفسه.</string>
     <string name="smooth_switch_weak_device">قد يكون هذا الجهاز ضعيفًا لذلك – الاستخدام على مسؤوليتك.</string>
+    <string name="timeshift_live">مباشر</string>
 </resources>

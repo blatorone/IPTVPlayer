@@ -929,4 +929,5 @@
     <string name="smooth_switch_setting">Fließender Portalwechsel (experimentell)</string>
     <string name="smooth_switch_hint">Erste Stufe: Beim Wechsel zu einem anderen Portal misst die App, wie weit die Streams auseinanderliegen (steht im Diagnosebericht). Später setzt sie den neuen Stream an derselben Stelle fort.</string>
     <string name="smooth_switch_weak_device">Dieses Gerät ist dafür eventuell zu schwach – Nutzung auf eigene Gefahr.</string>
+    <string name="timeshift_live">Live</string>
 </resources>

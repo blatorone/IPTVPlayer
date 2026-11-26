@@ -939,4 +939,5 @@
     <string name="smooth_switch_setting">Плавна зміна порталу (експериментально)</string>
     <string name="smooth_switch_hint">Перший етап: під час переходу на інший портал застосунок вимірює, наскільки потоки зсунуті (видно в діагностичному звіті). Згодом він продовжуватиме новий потік з того самого місця.</string>
     <string name="smooth_switch_weak_device">Цей пристрій може бути для цього заслабким – використання на власний ризик.</string>
+    <string name="timeshift_live">Наживо</string>
 </resources>

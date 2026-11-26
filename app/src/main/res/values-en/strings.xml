@@ -929,4 +929,5 @@
     <string name="smooth_switch_setting">Smooth portal switch (experimental)</string>
     <string name="smooth_switch_hint">First stage: when switching to another portal, the app measures how far apart the streams are (shown in the diagnostic report). Later it will continue the new stream at the same spot.</string>
     <string name="smooth_switch_weak_device">This device may be too weak for this – use at your own risk.</string>
+    <string name="timeshift_live">Live</string>
 </resources>

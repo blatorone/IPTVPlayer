@@ -929,4 +929,5 @@
     <string name="smooth_switch_setting">Akıcı portal geçişi (deneysel)</string>
     <string name="smooth_switch_hint">İlk aşama: Başka bir portala geçerken uygulama yayınlar arasındaki farkı ölçer (tanılama raporunda görünür). Daha sonra yeni yayını aynı yerden sürdürecek.</string>
     <string name="smooth_switch_weak_device">Bu cihaz bunun için yetersiz olabilir – kullanım kendi sorumluluğunuzdadır.</string>
+    <string name="timeshift_live">Canlı</string>
 </resources>

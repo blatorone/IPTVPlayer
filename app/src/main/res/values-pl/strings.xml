@@ -939,4 +939,5 @@
     <string name="smooth_switch_setting">Płynna zmiana portalu (eksperymentalna)</string>
     <string name="smooth_switch_hint">Pierwszy etap: przy przejściu na inny portal aplikacja mierzy, jak bardzo strumienie są przesunięte (widać w raporcie diagnostycznym). Później będzie kontynuować nowy strumień w tym samym miejscu.</string>
     <string name="smooth_switch_weak_device">To urządzenie może być na to za słabe – używasz na własne ryzyko.</string>
+    <string name="timeshift_live">Na żywo</string>
 </resources>

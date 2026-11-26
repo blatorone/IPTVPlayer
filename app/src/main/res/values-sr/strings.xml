@@ -934,4 +934,5 @@
     <string name="smooth_switch_setting">Глатка промена портала (експериментално)</string>
     <string name="smooth_switch_hint">Прва фаза: при преласку на други портал апликација мери колико су стримови померени (види се у дијагностичком извештају). Касније ће наставити нови стрим на истом месту.</string>
     <string name="smooth_switch_weak_device">Овај уређај је можда преслаб за то – коришћење на сопствену одговорност.</string>
+    <string name="timeshift_live">Уживо</string>
 </resources>

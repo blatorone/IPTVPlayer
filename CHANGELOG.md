@@ -2,6 +2,10 @@
 
 ## 1.0.99
 
+- Wiedergabeleiste: alle Knöpfe einheitlich gestaltet und mit links/rechts erreichbar; nicht nutzbare Knöpfe (z. B. Spulen bei Live-TV, nicht vorhandene Folgen) werden ausgeblendet.
+- Untertitel: „Forced“-Untertitel werden auch dann automatisch gewählt, wenn die Spuren schon vor dem Start bekannt waren.
+- Ton: Ist kein Ton abspielbar und gibt es kein weiteres Portal, endet die Wiedergabe und das Vollbild schließt sich. Ist nur fremdsprachiger Ton da und kein anderes Portal, erscheint ein Hinweis (Filme und Serien).
+- Filme und Serien: Zurück von der Detailseite setzt den Fokus zuverlässig auf den zuletzt gewählten Titel – auch aus der Vorschau oben und „Neue Folgen“. Kategorien werden im Hintergrund zusammengeführt, damit die Bedienung nicht stockt.
 - Live-TV: Beim Umschalten im Vollbild erscheint jedes Mal oben links die Senderinfo; Hoch/Runter schalten dabei weiter.
 - Neu unter Wiedergabe: Puffer (standardmäßig aus) mit festen Stufen Klein, Mittel (empfohlen), Groß und Sehr groß. Gilt ab dem nächsten Start der App.
 - Wiedergabeleiste überarbeitet: runde Knöpfe mit Akzentfarbe beim Fokus, dunkler Verlauf unten, der Fortschrittsbalken bleibt. Knöpfe, die nicht nutzbar sind, werden ausgeblendet; Untertitel erscheint nur, wenn der Stream welche hat.

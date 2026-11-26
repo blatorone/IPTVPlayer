@@ -36,11 +36,15 @@ import androidx.lifecycle.LifecycleOwner
 @Composable
 internal fun RemoteAccessPage(
     handler: RemoteHandler,
+    storage: PortalStorage? = null,
     unlock: ((String) -> Boolean)? = null,
     unlockPassword: Boolean = false,
     onPinReset: () -> Unit, onFinished: () -> Unit, onDismiss: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    // The phone's backup page: create (download) and import (upload) a backup.
+    val sessionHandler = remember(handler, storage) { backupRemoteHandler(handler, storage, context) }
     var session by remember { mutableStateOf<RemoteSession?>(null) }
     fun stop() {
         session?.end()
@@ -67,7 +71,7 @@ internal fun RemoteAccessPage(
     LaunchedEffect(current) {
         val active = current ?: return@LaunchedEffect
         // Every change on the device (or from the phone) is sent to the phone right away.
-        snapshotFlow { RemoteProtocol.encodeState(handler.remoteState(), "") }.collect { active.publish() }
+        snapshotFlow { RemoteProtocol.encodeState(sessionHandler.remoteState(), "") }.collect { active.publish() }
     }
     SettingsDialog(stringResource(R.string.remote_access), onDismiss) {
         val status = current?.status?.collectAsState()?.value ?: RemoteStatus.ENDED
@@ -77,7 +81,7 @@ internal fun RemoteAccessPage(
             SettingRow(stringResource(R.string.remote_access_start), Modifier.focusRequester(startFocus)) {
                 onPinReset()
                 session = RemoteSession(
-                    scope, handler, endedMessage, failedMessage, onFinished,
+                    scope, sessionHandler, endedMessage, failedMessage, onFinished,
                     unlock = unlock, unlockPassword = unlockPassword, wrongPinMessage = wrongPin
                 ).also { it.start() }
             }
@@ -102,3 +106,60 @@ internal fun RemoteAccessPage(
         }
     }
 }
+
+/** Largest backup the phone can download or upload (the relay forwards frames up to 512 KB). */
+private const val PHONE_BACKUP_LIMIT = 270_000
+
+/**
+ * Adds the backup commands of the phone page to [base]: they run off the main thread, and the
+ * state names the backup parts in the app language.
+ */
+internal fun backupRemoteHandler(base: RemoteHandler, storage: PortalStorage?, context: android.content.Context) =
+    object : RemoteHandler {
+        override fun remoteState(): RemoteState = base.remoteState().copy(
+            backupParts = if (storage == null) emptyList()
+            else BackupPart.entries.map { RemoteOption(it.name, context.getString(it.label)) },
+            language = chosenLanguage(context) ?: java.util.Locale.getDefault().language
+        )
+
+        override fun applyRemote(command: RemoteCommand): RemoteReply = base.applyRemote(command)
+
+        override suspend fun applyRemoteSuspending(command: RemoteCommand): RemoteReply? {
+            val store = storage ?: return null
+            fun parts(names: List<String>) = BackupPart.entries.filter { it.name in names }.toSet()
+            fun decode(file: String): BackupDocument {
+                val bytes = java.util.Base64.getDecoder().decode(file)
+                return if (isBackupFile(bytes)) decodeBackup(bytes)
+                else legacyPortalBackup(bytes.toString(Charsets.UTF_8)) ?: error("not a backup")
+            }
+            return when (command) {
+                is RemoteCommand.BackupCreate -> {
+                    val chosen = parts(command.parts).ifEmpty { return RemoteReply(false, context.getString(R.string.backup_failed)) }
+                    val bytes = createBackup(context, store, chosen)
+                    if (bytes.size > PHONE_BACKUP_LIMIT) RemoteReply(false, context.getString(R.string.backup_too_large_phone))
+                    else RemoteReply(true, null, com.google.gson.JsonObject().apply {
+                        addProperty("name", backupFileName())
+                        addProperty("file", java.util.Base64.getEncoder().encodeToString(bytes))
+                    })
+                }
+                is RemoteCommand.BackupInspect -> {
+                    val document = runCatching { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { decode(command.file) } }
+                        .getOrElse { return RemoteReply(false, context.getString(R.string.backup_failed)) }
+                    RemoteReply(true, null, com.google.gson.JsonObject().apply {
+                        add("backupParts", com.google.gson.JsonArray().apply { document.parts.keys.forEach { add(it.name) } })
+                        addProperty("createdAt", document.createdAt.replace('T', ' '))
+                        addProperty("appVersion", document.appVersion)
+                    })
+                }
+                is RemoteCommand.BackupRestore -> {
+                    val document = runCatching { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { decode(command.file) } }
+                        .getOrElse { return RemoteReply(false, context.getString(R.string.backup_failed)) }
+                    restoreBackup(context, store, document, parts(command.parts))
+                    // Answer first, then restart: the phone shows that the import worked.
+                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ restartApp(context) }, 1_500)
+                    RemoteReply(true, context.getString(R.string.backup_imported_restart))
+                }
+                else -> null
+            }
+        }
+    }

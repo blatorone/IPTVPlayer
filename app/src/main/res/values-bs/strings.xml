@@ -915,4 +915,8 @@
     <string name="input_remote_only">Unos samo putem mobitela</string>
     <string name="input_remote_only_hint">PIN-ovi, lozinke, portali i pristupni podaci tada se unose samo na mobitelu putem QR koda – niko kod televizora ih ne vidi. Pretraga i dalje radi s tastaturom.</string>
     <string name="input_remote_only_trakt">Trakt API unesi na mobitelu (uključen je „Unos samo putem mobitela”).</string>
+    <string name="backup_too_large_phone">Kopija je prevelika za mobitel. Spremi je u folder Download ili odaberi manje dijelova.</string>
+    <string name="backup_imported_restart">Kopija uvezena – aplikacija se ponovo pokreće.</string>
+    <string name="backup_via_phone">Preuzmi ili učitaj putem mobitela</string>
+    <string name="remote_gradient_none">Bez prelaza boja</string>
 </resources>

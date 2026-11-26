@@ -910,4 +910,8 @@
     <string name="input_remote_only">Input only on the phone</string>
     <string name="input_remote_only_hint">PINs, passwords, portals and credentials are then entered only on the phone via QR code – nobody at the TV sees them. Search keeps working with the keyboard.</string>
     <string name="input_remote_only_trakt">Enter the Trakt API on your phone (\"Input only on the phone\" is on).</string>
+    <string name="backup_too_large_phone">The backup is too large for the phone. Save it to the Download folder or choose fewer parts.</string>
+    <string name="backup_imported_restart">Backup imported – the app restarts.</string>
+    <string name="backup_via_phone">Download or upload via the phone</string>
+    <string name="remote_gradient_none">No gradient</string>
 </resources>

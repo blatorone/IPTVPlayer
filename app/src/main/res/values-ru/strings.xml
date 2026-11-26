@@ -920,4 +920,8 @@
     <string name="input_remote_only">Ввод только с телефона</string>
     <string name="input_remote_only_hint">PIN-коды, пароли, порталы и данные доступа вводятся только на телефоне через QR-код – у телевизора их никто не видит. Поиск по-прежнему работает с клавиатуры.</string>
     <string name="input_remote_only_trakt">Введите API Trakt на телефоне (включён «Ввод только с телефона»).</string>
+    <string name="backup_too_large_phone">Копия слишком велика для телефона. Сохраните её в папку Download или выберите меньше частей.</string>
+    <string name="backup_imported_restart">Копия импортирована – приложение перезапускается.</string>
+    <string name="backup_via_phone">Скачать или загрузить через телефон</string>
+    <string name="remote_gradient_none">Без градиента</string>
 </resources>

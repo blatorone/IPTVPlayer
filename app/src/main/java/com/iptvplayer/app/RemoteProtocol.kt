@@ -113,7 +113,9 @@ internal data class RemoteParental(
     /** A PIN protects the settings (Einstellungsschutz): its changes need that PIN. */
     val hasSettingsPin: Boolean = false,
     /** Name of the kids account, if one exists. */
-    val kidsAccount: String? = null
+    val kidsAccount: String? = null,
+    /** The PIN is a password: the phone asks with a text field instead of digits. */
+    val pinPassword: Boolean = false
 )
 
 internal data class RemoteState(
@@ -129,7 +131,11 @@ internal data class RemoteState(
     val askCountries: Boolean = false,
     val error: String?,
     /** The app's accent colour ("#RRGGBB"), used by the page. */
-    val accent: String? = null
+    val accent: String? = null,
+    /** Parts a backup can hold (id and name in the app language), for the phone's backup page. */
+    val backupParts: List<RemoteOption> = emptyList(),
+    /** Language of the app, so the phone page can follow it. */
+    val language: String? = null
 )
 
 internal sealed interface RemoteCommand {
@@ -155,10 +161,17 @@ internal sealed interface RemoteCommand {
     data class PortalCategories(val id: String) : RemoteCommand
     data class Action(val id: String) : RemoteCommand
     data class Input(val id: String, val value: String) : RemoteCommand
+    /** Creates a backup of [parts]; the file comes back in "result" as data (name, file). */
+    data class BackupCreate(val parts: List<String>) : RemoteCommand
+    /** Reads a backup file from the phone; answers with the parts it holds. */
+    data class BackupInspect(val file: String) : RemoteCommand
+    /** Imports [parts] of a backup file from the phone; the app restarts afterwards. */
+    data class BackupRestore(val file: String, val parts: List<String>) : RemoteCommand
 }
 
 internal object RemoteProtocol {
     private const val MAX_TEXT = 2_048
+    private const val MAX_FILE_TEXT = 400_000
     private const val MAX_IDS = 5_000
     /** Digits (4–12) or a password (4–64 characters, no control characters). */
     private val PIN = Regex("^[^\\p{Cntrl}]{4,64}$")
@@ -279,8 +292,15 @@ internal object RemoteProtocol {
             addProperty("separateKidsPin", state.parental.separateKidsPin)
             addProperty("kidsMode", state.parental.kidsMode)
             addProperty("hasSettingsPin", state.parental.hasSettingsPin)
+            addProperty("pinPassword", state.parental.pinPassword)
             state.parental.kidsAccount?.let { addProperty("kidsAccount", it) }
         })
+        if (state.backupParts.isNotEmpty()) add("backupParts", JsonArray().apply {
+            state.backupParts.forEach { part ->
+                add(JsonObject().apply { addProperty("value", part.value); addProperty("label", part.label) })
+            }
+        })
+        state.language?.let { addProperty("language", it) }
     }.toString()
 
     fun encodeResult(ok: Boolean, message: String?, data: JsonObject? = null): String = JsonObject().apply {
@@ -339,6 +359,9 @@ internal object RemoteProtocol {
                 val pin = if (requested == null || requested.isJsonNull) null else root.pin("pin") ?: return null
                 RemoteCommand.KidsPin(pin, root.pin("current"))
             }
+            "backupCreate" -> RemoteCommand.BackupCreate(root.names("parts") ?: return null)
+            "backupInspect" -> RemoteCommand.BackupInspect(root.file() ?: return null)
+            "backupRestore" -> RemoteCommand.BackupRestore(root.file() ?: return null, root.names("parts") ?: return null)
             "parental" -> RemoteCommand.Parental(
                 root.text("field")?.takeIf { it in PARENTAL_FIELDS } ?: return null,
                 root.get("value"), root.pin("pin")
@@ -350,6 +373,16 @@ internal object RemoteProtocol {
     private fun JsonObject.text(name: String): String? =
         get(name)?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isString }?.asString
             ?.takeIf { it.length <= MAX_TEXT }
+
+    /** A backup file as base64 (larger than other texts). */
+    private fun JsonObject.file(): String? =
+        get("file")?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isString }?.asString
+            ?.takeIf { it.length <= MAX_FILE_TEXT && it.isNotEmpty() }
+
+    private fun JsonObject.names(name: String): List<String>? =
+        get(name)?.takeIf { it.isJsonArray }?.asJsonArray?.mapNotNull { element ->
+            element.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isString }?.asString?.take(40)
+        }?.take(20)
 
     private fun JsonObject.flag(name: String): Boolean? =
         get(name)?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isBoolean }?.asBoolean

@@ -39,6 +39,8 @@ internal interface RemoteHandler {
     fun remoteState(): RemoteState
     /** Applies a command; returns a message for the phone (null = success without message). */
     fun applyRemote(command: RemoteCommand): RemoteReply
+    /** Longer work (backup) off the main thread; null hands the command to [applyRemote]. */
+    suspend fun applyRemoteSuspending(command: RemoteCommand): RemoteReply? = null
 }
 
 /** [data] is an optional answer for the phone (for example a portal's category list). */
@@ -194,8 +196,13 @@ internal class RemoteSession(
                 }
                 continue
             }
-            val reply = runCatching { handler.applyRemote(command) }
-                .getOrElse { RemoteReply(false, failedMessage) }
+            val reply = try {
+                handler.applyRemoteSuspending(command) ?: handler.applyRemote(command)
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                RemoteReply(false, failedMessage)
+            }
             send(RemoteProtocol.encodeResult(reply.ok, reply.message, reply.data))
             lastSentState = null
             publish()

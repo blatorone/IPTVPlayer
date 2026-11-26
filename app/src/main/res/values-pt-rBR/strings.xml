@@ -915,4 +915,8 @@
     <string name="input_remote_only">Entrada só pelo celular</string>
     <string name="input_remote_only_hint">PINs, senhas, portais e dados de acesso passam a ser digitados só no celular via QR code – ninguém perto da TV os vê. A busca continua funcionando com o teclado.</string>
     <string name="input_remote_only_trakt">Digite a API do Trakt no celular (“Entrada só pelo celular” está ativada).</string>
+    <string name="backup_too_large_phone">O backup é grande demais para o celular. Salve na pasta Download ou escolha menos partes.</string>
+    <string name="backup_imported_restart">Backup importado – o app reinicia.</string>
+    <string name="backup_via_phone">Baixar ou enviar pelo celular</string>
+    <string name="remote_gradient_none">Sem degradê</string>
 </resources>

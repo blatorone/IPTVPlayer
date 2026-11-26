@@ -930,4 +930,8 @@
     <string name="input_remote_only">الإدخال من الهاتف فقط</string>
     <string name="input_remote_only_hint">عندها تُدخل رموز PIN وكلمات المرور والبوابات وبيانات الدخول على الهاتف فقط عبر رمز QR، ولا يراها أحد عند التلفاز. يبقى البحث بلوحة المفاتيح.</string>
     <string name="input_remote_only_trakt">أدخل Trakt API على الهاتف (خيار \"الإدخال من الهاتف فقط\" مفعّل).</string>
+    <string name="backup_too_large_phone">النسخة الاحتياطية كبيرة جدًا للهاتف. احفظها في مجلد Download أو اختر أجزاء أقل.</string>
+    <string name="backup_imported_restart">تم استيراد النسخة – يُعاد تشغيل التطبيق.</string>
+    <string name="backup_via_phone">التنزيل أو الرفع عبر الهاتف</string>
+    <string name="remote_gradient_none">بدون تدرج لوني</string>
 </resources>

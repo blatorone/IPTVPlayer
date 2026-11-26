@@ -910,4 +910,8 @@
     <string name="input_remote_only">Futja vetëm nga telefoni</string>
     <string name="input_remote_only_hint">PIN-et, fjalëkalimet, portalet dhe të dhënat e hyrjes futen atëherë vetëm në telefon me kod QR – askush pranë televizorit nuk i sheh. Kërkimi vazhdon të punojë me tastierë.</string>
     <string name="input_remote_only_trakt">API-n e Trakt fute në telefon (është aktivizuar „Futja vetëm nga telefoni“).</string>
+    <string name="backup_too_large_phone">Kopja është shumë e madhe për telefonin. Ruaje në dosjen Download ose zgjidh më pak pjesë.</string>
+    <string name="backup_imported_restart">Kopja u importua – aplikacioni po rinis.</string>
+    <string name="backup_via_phone">Shkarko ose ngarko përmes telefonit</string>
+    <string name="remote_gradient_none">Pa gradient</string>
 </resources>

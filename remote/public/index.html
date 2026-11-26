@@ -42,6 +42,7 @@
     <button data-tab="categories">Kategorien</button>
     <button data-tab="parental">Sperren</button>
     <button data-tab="settings">Einstellungen</button>
+    <button data-tab="backup">Backup</button>
   </nav>
 
   <main id="app" hidden>
@@ -89,12 +90,16 @@
     <section id="tab-settings" hidden>
       <div id="settings"></div>
     </section>
+
+    <section id="tab-backup" hidden>
+      <div id="backup"></div>
+    </section>
   </main>
 
   <dialog id="pin-dialog">
     <form method="dialog">
       <h2 id="pin-title">PIN</h2>
-      <input id="pin-input" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" minlength="4" maxlength="12">
+      <input id="pin-input" type="password" inputmode="numeric" autocomplete="off" minlength="4" maxlength="64">
       <div class="row-actions">
         <button value="cancel">Abbrechen</button>
         <button value="ok" class="primary">OK</button>

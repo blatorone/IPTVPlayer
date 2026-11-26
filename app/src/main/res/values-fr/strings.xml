@@ -915,4 +915,8 @@
     <string name="input_remote_only">Saisie uniquement sur le téléphone</string>
     <string name="input_remote_only_hint">Les codes PIN, mots de passe, portails et identifiants se saisissent alors uniquement sur le téléphone via QR code – personne devant la TV ne les voit. La recherche fonctionne toujours au clavier.</string>
     <string name="input_remote_only_trakt">Saisis l\'API Trakt sur le téléphone (« Saisie uniquement sur le téléphone » est activée).</string>
+    <string name="backup_too_large_phone">La sauvegarde est trop volumineuse pour le téléphone. Enregistre-la dans le dossier Download ou choisis moins de parties.</string>
+    <string name="backup_imported_restart">Sauvegarde importée – l\'app redémarre.</string>
+    <string name="backup_via_phone">Télécharger ou envoyer via le téléphone</string>
+    <string name="remote_gradient_none">Sans dégradé</string>
 </resources>

@@ -915,4 +915,8 @@
     <string name="input_remote_only">Унос само преко телефона</string>
     <string name="input_remote_only_hint">ПИН-ови, лозинке, портали и приступни подаци тада се уносе само на телефону преко QR кода – нико код телевизора их не види. Претрага и даље ради са тастатуром.</string>
     <string name="input_remote_only_trakt">Trakt API унеси на телефону (укључен је „Унос само преко телефона”).</string>
+    <string name="backup_too_large_phone">Копија је превелика за телефон. Сачувај је у фасциклу Download или изабери мање делова.</string>
+    <string name="backup_imported_restart">Копија увезена – апликација се поново покреће.</string>
+    <string name="backup_via_phone">Преузми или отпреми преко телефона</string>
+    <string name="remote_gradient_none">Без прелаза боја</string>
 </resources>

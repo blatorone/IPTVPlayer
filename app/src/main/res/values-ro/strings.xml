@@ -915,4 +915,8 @@
     <string name="input_remote_only">Introducere doar de pe telefon</string>
     <string name="input_remote_only_hint">PIN-urile, parolele, portalurile și datele de acces se introduc atunci doar pe telefon prin cod QR – nimeni de lângă televizor nu le vede. Căutarea funcționează în continuare cu tastatura.</string>
     <string name="input_remote_only_trakt">Introdu API-ul Trakt pe telefon (este activată „Introducere doar de pe telefon”).</string>
+    <string name="backup_too_large_phone">Backup-ul este prea mare pentru telefon. Salvează-l în folderul Download sau alege mai puține părți.</string>
+    <string name="backup_imported_restart">Backup importat – aplicația repornește.</string>
+    <string name="backup_via_phone">Descarcă sau încarcă prin telefon</string>
+    <string name="remote_gradient_none">Fără gradient</string>
 </resources>

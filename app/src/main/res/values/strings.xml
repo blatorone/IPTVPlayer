@@ -910,4 +910,8 @@
     <string name="input_remote_only">Eingaben nur per Handy</string>
     <string name="input_remote_only_hint">PINs, Passwörter, Portale und Zugangsdaten werden dann nur am Handy per QR-Code eingegeben – am Fernseher sieht sie niemand. Die Suche funktioniert weiter mit der Tastatur.</string>
     <string name="input_remote_only_trakt">Die Trakt-API gibst du am Handy ein („Eingaben nur per Handy“ ist eingeschaltet).</string>
+    <string name="backup_too_large_phone">Das Backup ist zu groß für das Handy. Speichere es im Download-Ordner oder wähle weniger Teile.</string>
+    <string name="backup_imported_restart">Backup importiert – die App startet neu.</string>
+    <string name="backup_via_phone">Über das Handy herunterladen oder hochladen</string>
+    <string name="remote_gradient_none">Kein Farbverlauf</string>
 </resources>

@@ -910,4 +910,8 @@
     <string name="input_remote_only">Girişler yalnızca telefondan</string>
     <string name="input_remote_only_hint">PIN\'ler, şifreler, portallar ve erişim bilgileri yalnızca telefonda QR kodla girilir – TV başında kimse görmez. Arama klavyeyle çalışmaya devam eder.</string>
     <string name="input_remote_only_trakt">Trakt API\'sini telefonda gir (\"Girişler yalnızca telefondan\" açık).</string>
+    <string name="backup_too_large_phone">Yedek telefon için çok büyük. Download klasörüne kaydet veya daha az bölüm seç.</string>
+    <string name="backup_imported_restart">Yedek içe aktarıldı – uygulama yeniden başlıyor.</string>
+    <string name="backup_via_phone">Telefonla indir veya yükle</string>
+    <string name="remote_gradient_none">Renk geçişi yok</string>
 </resources>

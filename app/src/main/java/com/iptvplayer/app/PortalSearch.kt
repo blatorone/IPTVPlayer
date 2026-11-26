@@ -45,7 +45,7 @@ internal val SEARCH_HISTORY_SIZES = listOf(5, 10, 15, 20, 30)
 private const val SEARCH_HISTORY_ENABLED = "search_history_enabled"
 private const val SEARCH_HISTORY_SIZE = "search_history_size"
 /** Admin and kids account each keep their own list; settings act on both. */
-private val SEARCH_HISTORY_KEYS = listOf("search_history", "kids:search_history")
+internal val SEARCH_HISTORY_KEYS = listOf("search_history", "kids:search_history")
 
 /** The newest term first, without duplicates (ignoring case); very short terms are not kept. */
 internal fun updatedSearchHistory(entries: List<String>, term: String, max: Int = SEARCH_HISTORY_DEFAULT_SIZE): List<String> {
@@ -414,3 +414,8 @@ internal fun matchesSearch(name: String, term: String): Boolean {
 internal fun portalSearchTerm(term: String): String =
     term.trim().split(Regex("""\s+""")).maxByOrNull { word -> searchWords(word).sumOf { it.length } }
         ?.trim { !it.isLetterOrDigit() }?.takeIf { it.isNotEmpty() } ?: term.trim()
+
+/** Deletes the search history of the admin and the kids account. */
+internal fun clearSearchHistories(preferences: android.content.SharedPreferences) {
+    preferences.edit().apply { SEARCH_HISTORY_KEYS.forEach(::remove) }.apply()
+}

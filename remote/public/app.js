@@ -117,6 +117,13 @@ async function receive(data) {
     state = message;
     deviceThere = true;
     renderPinOnly();
+  } else if (message.t === "state" && message.mode === "unlock") {
+    // A PIN or password protects the settings: nothing is shown before it was entered.
+    state = message;
+    deviceThere = true;
+    renderUnlock();
+  } else if (message.t === "result" && state && state.mode === "unlock") {
+    if (!message.ok) toast(message.message || "Falsch.", true);
   } else if (message.t === "state") {
     state = message;
     applyAccent(message.accent);
@@ -129,6 +136,8 @@ async function receive(data) {
     pinResult(message);
   } else if (message.t === "result") {
     if (message.data && message.data.sections) { portalCategories = message.data; renderPortals(); }
+    if (message.data && message.data.file) downloadBackup(message.data.name, message.data.file);
+    if (message.data && message.data.backupParts) { backupImport = { ...backupImport, info: message.data, parts: message.data.backupParts.slice() }; renderBackup(); }
     if (message.message || !message.ok) toast(message.message || "Das hat nicht geklappt.", !message.ok);
   }
 }
@@ -182,17 +191,19 @@ function askPin(title) {
     $("pin-title").textContent = title;
     const input = $("pin-input");
     input.value = "";
+    // Digits get the number pad; a password (letters allowed) the normal keyboard.
+    input.setAttribute("inputmode", state && state.parental && state.parental.pinPassword ? "text" : "numeric");
     dialog.onclose = () => {
-      const pin = input.value.trim();
+      const pin = input.value;
       input.value = "";
-      resolve(dialog.returnValue === "ok" && /^[0-9]{4,12}$/.test(pin) ? pin : null);
+      resolve(dialog.returnValue === "ok" && /^[^\x00-\x1f]{4,64}$/.test(pin) ? pin : null);
     };
     dialog.showModal();
     input.focus();
   });
 }
 async function askNewPin(title) {
-  const first = await askPin(`${title} (4–12 Ziffern)`);
+  const first = await askPin(`${title} (mind. 4 Zeichen)`);
   if (!first) return null;
   const second = await askPin("Neue PIN wiederholen");
   if (first !== second) { toast("Die PINs stimmen nicht überein.", true); return null; }
@@ -210,6 +221,7 @@ function render() {
   renderCategories();
   renderParental();
   renderSettings();
+  renderBackup();
 }
 
 function renderPortals() {
@@ -300,7 +312,7 @@ const savedCountries = () => state.countries.filter((c) => c.selected).map((c) =
 function switchTab(name) {
   tab = name;
   for (const b of $("tabs").children) b.classList.toggle("active", b.dataset.tab === name);
-  for (const n of ["portals", "countries", "categories", "parental", "settings"]) $(`tab-${n}`).hidden = n !== name;
+  for (const n of ["portals", "countries", "categories", "parental", "settings", "backup"]) $(`tab-${n}`).hidden = n !== name;
   window.scrollTo(0, 0);
 }
 
@@ -573,6 +585,23 @@ function renderPinOnly() {
   $("app").hidden = true;
   $("intro").hidden = false;
   const newPin = state.mode === "pinNew";
+  const hint = el("p", { class: "hint" }, "Die Eingabe wird verschlüsselt an das Gerät geschickt und dort nicht angezeigt.");
+  // A password (letters allowed) is typed with the keyboard.
+  if (state.password && !newPin) {
+    $("intro").replaceChildren(el("h1", {}, "Passwort eingeben"), hint,
+      passwordForm("Passwort", (pin) => send({ t: "pinEntry", pin })));
+    return;
+  }
+  const newPassword = () => {
+    $("intro").replaceChildren(el("h1", {}, "Neues Passwort festlegen"), hint,
+      passwordForm("Neues Passwort", (first) => {
+        $("intro").replaceChildren(el("h1", {}, "Passwort wiederholen"), hint,
+          passwordForm("Passwort wiederholen", (second) => {
+            if (first !== second) { toast("Die beiden Passwörter stimmen nicht überein.", true); newPassword(); return; }
+            send({ t: "pinEntry", pin: first });
+          }));
+      }));
+  };
   // The same digit pad as on the TV: dots for the digits, 1–9, ⌫, 0, OK.
   // Like on the device: a new PIN first asks for its length (4, 6, 8 or own length);
   // with a fixed length the PIN is taken as soon as it is reached.
@@ -603,13 +632,111 @@ function renderPinOnly() {
     if (length && pin.length === length) submit();
   } }, label);
   const pad = el("div", { class: "pin-pad" }, ["1","2","3","4","5","6","7","8","9","⌫","0","OK"].map(key));
-  const lengths = el("div", { class: "pin-lengths" }, [[4, "4 Ziffern"], [6, "6 Ziffern"], [8, "8 Ziffern"], [null, "Eigene Länge (mind. 4)"]]
-    .map(([n, label]) => el("button", { class: "pin-key", onclick: () => { length = n; choosing = false; draw(); } }, label)));
+  const lengths = el("div", { class: "pin-lengths" }, [[4, "4 Ziffern"], [6, "6 Ziffern"], [8, "8 Ziffern"], [null, "Eigene Länge (mind. 4)"], ["pw", "Passwort statt Ziffern"]]
+    .map(([n, label]) => el("button", { class: "pin-key", onclick: () => {
+      if (n === "pw") { newPassword(); return; }
+      length = n; choosing = false; draw();
+    } }, label)));
   // Checking an existing PIN: no fixed length (OK confirms).
   $("intro").replaceChildren(title,
     el("p", { class: "hint" }, "Die PIN wird verschlüsselt an das Gerät geschickt und dort nicht angezeigt."),
     lengths, dots, pad);
   draw();
+}
+
+// A text field for a password (or a PIN typed with the keyboard).
+function passwordForm(label, onSubmit, numeric = false) {
+  const input = el("input", { type: "password", autocomplete: "off", inputmode: numeric ? "numeric" : "text", maxlength: "64" });
+  const form = el("form", { class: "card" }, el("label", {}, label, input), el("button", { type: "submit", class: "primary" }, "OK"));
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const value = input.value;
+    if (!/^[^\x00-\x1f]{4,64}$/.test(value)) { toast("Mindestens 4 Zeichen.", true); return; }
+    input.value = "";
+    onSubmit(value);
+  });
+  setTimeout(() => input.focus(), 0);
+  return form;
+}
+
+// Settings protected by a PIN or password: unlock first (checked on the device).
+function renderUnlock() {
+  setStatus("Verbunden", "ok");
+  $("finish").hidden = true;
+  $("tabs").hidden = true;
+  $("app").hidden = true;
+  $("intro").hidden = false;
+  $("intro").replaceChildren(
+    el("h1", {}, "Entsperren"),
+    el("p", { class: "hint" }, state.password
+      ? "Die Einstellungen sind mit einem Passwort geschützt. Gib es ein, um sie zu bearbeiten."
+      : "Die Einstellungen sind mit einer PIN geschützt. Gib sie ein, um sie zu bearbeiten."),
+    passwordForm(state.password ? "Passwort" : "PIN", (pin) => send({ t: "pinEntry", pin }), !state.password));
+}
+
+// ---------- backup ----------
+let backupChoice = null;
+let backupImport = null;
+function downloadBackup(name, file) {
+  const bytes = Uint8Array.from(atob(file), (c) => c.charCodeAt(0));
+  const url = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
+  const link = el("a", { href: url, download: name || "StreamWatch-Backup.swbackup" });
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  toast("Backup heruntergeladen.");
+}
+function partChoice(parts, chosen, onChange) {
+  const labels = new Map((state.backupParts || []).map((p) => [p.value, p.label]));
+  const all = parts.length > 0 && parts.every((p) => chosen.includes(p));
+  return [
+    el("div", { class: "row" }, el("span", { class: "label" }, el("b", {}, "Alles")),
+      switchButton(all, "Alles", () => onChange(all ? [] : parts.slice()))),
+    ...parts.map((p) => el("div", { class: "row" }, el("span", { class: "label" }, labels.get(p) || p),
+      switchButton(chosen.includes(p), labels.get(p) || p,
+        () => onChange(chosen.includes(p) ? chosen.filter((x) => x !== p) : [...chosen, p])))),
+  ];
+}
+function renderBackup() {
+  if (!state || !$("backup")) return;
+  const parts = (state.backupParts || []).map((p) => p.value);
+  if (!parts.length) { $("backup").replaceChildren(el("p", { class: "hint" }, "Auf diesem Gerät ist kein Backup möglich.")); return; }
+  if (!backupChoice) backupChoice = parts.slice();
+  const fileInput = el("input", { type: "file", accept: ".swbackup,.json,application/octet-stream,application/json" });
+  fileInput.addEventListener("change", () => {
+    const file = fileInput.files && fileInput.files[0];
+    if (!file) return;
+    if (file.size > 270000) { toast("Die Datei ist zu groß für die Übertragung.", true); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const bytes = new Uint8Array(reader.result);
+      let text = "";
+      for (let i = 0; i < bytes.length; i += 8192) text += String.fromCharCode(...bytes.subarray(i, i + 8192));
+      backupImport = { file: btoa(text), name: file.name };
+      send({ t: "backupInspect", file: backupImport.file });
+    };
+    reader.readAsArrayBuffer(file);
+  });
+  const imported = backupImport && backupImport.info;
+  $("backup").replaceChildren(
+    el("div", { class: "card" },
+      el("h2", {}, "Backup erstellen"),
+      el("p", { class: "hint" }, "Die Datei ist verschlüsselt und wird auf dieses Handy heruntergeladen."),
+      ...partChoice(parts, backupChoice, (next) => { backupChoice = next; renderBackup(); }),
+      el("button", { class: "primary", disabled: !backupChoice.length,
+        onclick: () => send({ t: "backupCreate", parts: backupChoice }) }, "Backup herunterladen")),
+    el("div", { class: "card" },
+      el("h2", {}, "Backup importieren"),
+      el("label", {}, "Backup-Datei wählen", fileInput),
+      imported ? [
+        el("p", { class: "hint" }, imported.createdAt ? `Backup vom ${imported.createdAt} (Version ${imported.appVersion})` : backupImport.name),
+        ...partChoice(imported.backupParts, backupImport.parts, (next) => { backupImport.parts = next; renderBackup(); }),
+        el("p", { class: "hint" }, "Danach startet die App am Gerät neu. Portale werden hinzugefügt, die ausgewählten Einstellungen ersetzt."),
+        el("button", { class: "primary", disabled: !backupImport.parts.length, onclick: () => {
+          if (confirm("Backup jetzt importieren? Die App startet danach neu.")) send({ t: "backupRestore", file: backupImport.file, parts: backupImport.parts });
+        } }, "Jetzt importieren"),
+      ] : null));
 }
 
 function pinResult(message) {

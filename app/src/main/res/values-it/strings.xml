@@ -915,4 +915,8 @@
     <string name="input_remote_only">Inserimento solo dal telefono</string>
     <string name="input_remote_only_hint">PIN, password, portali e credenziali si inseriscono allora solo sul telefono tramite codice QR: nessuno davanti alla TV li vede. La ricerca continua a funzionare con la tastiera.</string>
     <string name="input_remote_only_trakt">Inserisci l\'API Trakt sul telefono (è attivo «Inserimento solo dal telefono»).</string>
+    <string name="backup_too_large_phone">Il backup è troppo grande per il telefono. Salvalo nella cartella Download o scegli meno parti.</string>
+    <string name="backup_imported_restart">Backup importato: l\'app si riavvia.</string>
+    <string name="backup_via_phone">Scarica o carica tramite il telefono</string>
+    <string name="remote_gradient_none">Nessuna sfumatura</string>
 </resources>

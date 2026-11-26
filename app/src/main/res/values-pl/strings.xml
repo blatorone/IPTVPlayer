@@ -920,4 +920,8 @@
     <string name="input_remote_only">Wprowadzanie tylko na telefonie</string>
     <string name="input_remote_only_hint">PIN-y, hasła, portale i dane dostępowe wpisuje się wtedy tylko na telefonie przez kod QR – nikt przy telewizorze ich nie widzi. Wyszukiwanie działa dalej z klawiaturą.</string>
     <string name="input_remote_only_trakt">API Trakt wpisz na telefonie (włączone jest „Wprowadzanie tylko na telefonie”).</string>
+    <string name="backup_too_large_phone">Kopia jest za duża dla telefonu. Zapisz ją w folderze Download lub wybierz mniej części.</string>
+    <string name="backup_imported_restart">Kopia zaimportowana – aplikacja uruchamia się ponownie.</string>
+    <string name="backup_via_phone">Pobierz lub wyślij przez telefon</string>
+    <string name="remote_gradient_none">Bez gradientu</string>
 </resources>

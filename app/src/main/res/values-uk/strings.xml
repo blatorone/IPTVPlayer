@@ -920,4 +920,8 @@
     <string name="input_remote_only">Введення лише з телефона</string>
     <string name="input_remote_only_hint">PIN-коди, паролі, портали й дані доступу тоді вводяться лише на телефоні через QR-код – біля телевізора їх ніхто не бачить. Пошук і далі працює з клавіатурою.</string>
     <string name="input_remote_only_trakt">Введіть API Trakt на телефоні (увімкнено «Введення лише з телефона»).</string>
+    <string name="backup_too_large_phone">Копія завелика для телефона. Збережіть її в теку Download або виберіть менше частин.</string>
+    <string name="backup_imported_restart">Копію імпортовано – застосунок перезапускається.</string>
+    <string name="backup_via_phone">Завантажити або надіслати через телефон</string>
+    <string name="remote_gradient_none">Без градієнта</string>
 </resources>

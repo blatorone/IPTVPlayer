@@ -5573,6 +5573,34 @@ private fun PlayerHome(
                     startDestination = START_DESTINATIONS.firstOrNull { it.name == value } ?: Destination.LIVE
                     preferences?.edit()?.putString("start_destination", startDestination.name)?.apply()
                 })
+                // App language: the app is built again in the new language (the phone reconnects).
+                add(RemoteEntry.Choice("language", general, text(R.string.app_language),
+                    listOf(RemoteOption("system", text(R.string.app_language_system_short))) +
+                        APP_LANGUAGES.map { RemoteOption(it.tag, "${it.flag} ${it.name}") },
+                    { chosenLanguage(context) ?: "system" }
+                ) { value ->
+                    saveLanguage(context, value.takeUnless { it == "system" })
+                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                        (context as? android.app.Activity)?.recreate()
+                    }, 800)
+                })
+                add(toggle("inputRemote", general, text(R.string.input_remote_only),
+                    { preferences?.getBoolean("input_remote_only", false) == true }, "input_remote_only") { })
+                add(toggle("searchHistory", general, text(R.string.search_history_setting),
+                    { preferences?.getBoolean("search_history_enabled", true) != false }, "search_history_enabled") { on ->
+                    if (!on) preferences?.let(::clearSearchHistories)
+                })
+                add(RemoteEntry.Choice("searchHistorySize", general,
+                    context.getString(R.string.search_history_size, 0).substringBefore(':').trim(),
+                    SEARCH_HISTORY_SIZES.map { RemoteOption(it.toString(), it.toString()) },
+                    { (preferences?.getInt("search_history_size", SEARCH_HISTORY_DEFAULT_SIZE) ?: SEARCH_HISTORY_DEFAULT_SIZE).toString() }
+                ) { value -> preferences?.edit()?.putInt("search_history_size", value.toInt())?.apply() }
+                    .shownIf("searchHistory", true))
+                add(RemoteEntry.Action("searchHistoryClear", general, text(R.string.clear_search_history),
+                    text(R.string.clear_search_history)) {
+                    preferences?.let(::clearSearchHistories)
+                    text(R.string.search_history_cleared)
+                }.shownIf("searchHistory", true))
                 // Playing the last channel (and fullscreen) only exists with Live-TV as the start page.
                 if (startDestination == Destination.LIVE) {
                     add(toggle("lastChannel", general, text(R.string.start_last_channel), { playLastChannelAtStartup },
@@ -5703,6 +5731,15 @@ private fun PlayerHome(
                 add(RemoteEntry.Choice("accent", appearance, name(R.string.accent_color_setting),
                     AccentChoice.entries.map { RemoteOption(it.name, text(it.label), it.hex) }, { accentChoice.name }
                 ) { value -> AccentChoice.entries.firstOrNull { it.name == value }?.let(onAccentChoiceChange) })
+                // Farbverläufe: "none" goes back to the plain accent colour.
+                add(RemoteEntry.Choice("gradient", appearance, text(R.string.accent_palette_gradients),
+                    listOf(RemoteOption("none", text(R.string.remote_gradient_none))) + AccentGradient.entries.map {
+                        RemoteOption(it.name, text(it.label), "#%06X".format(it.start.toArgb() and 0xFFFFFF))
+                    }, { accentGradient?.name ?: "none" }
+                ) { value ->
+                    val gradient = AccentGradient.entries.firstOrNull { it.name == value }
+                    if (gradient == null) onAccentChoiceChange(accentChoice) else onAccentGradientChange(gradient)
+                })
                 add(RemoteEntry.Choice("menuStyle", appearance, name(R.string.menu_style_setting),
                     options(MainMenuStyle.entries) { it.label }, { mainMenuStyle.name }
                 ) { value ->
@@ -5904,7 +5941,8 @@ private fun PlayerHome(
                 })).map { RemoteCountry(it, countryName(it), it in countries) },
                 parental = RemoteParental(
                     parental.hasPin, parental.separateKidsPin, parental.kidsMode,
-                    hasSettingsPin = parental.hasSettingsPin, kidsAccount = profiles.kidsName
+                    hasSettingsPin = parental.hasSettingsPin, kidsAccount = profiles.kidsName,
+                    pinPassword = (if (parental.hasSettingsPin) parental.settingsPinLength else parental.pinLength) == PIN_PASSWORD
                 ),
                 busy = if (connecting) text(R.string.remote_busy_portals) else null,
                 askCountries = ui.askForCountries || ui.choosingCountries,
@@ -5926,6 +5964,8 @@ private fun PlayerHome(
             RemoteCommand.Hello -> RemoteReply(true)
             // Only the PIN-only phone session (from a PIN window) answers this.
             is RemoteCommand.PinEntry -> RemoteReply(false)
+            // Backup commands run in the remote access page (off the main thread).
+            is RemoteCommand.BackupCreate, is RemoteCommand.BackupInspect, is RemoteCommand.BackupRestore -> RemoteReply(false)
             is RemoteCommand.Set ->
                 if (command.id.startsWith("parental.")) RemoteReply(false)
                 else if (entries().applyRemoteValue(command.id, command.value)) RemoteReply(true)
@@ -6074,6 +6114,7 @@ private fun PlayerHome(
     val remoteAccessPage: @Composable () -> Unit = {
         RemoteAccessPage(
             remoteHandler,
+            storage = storage,
             // With a PIN or password set, the phone has to enter it before it sees any setting.
             unlock = when {
                 parental.hasSettingsPin -> parental::checkSettingsPin
@@ -8013,7 +8054,9 @@ private fun PlayerHome(
                                 }
                                 SettingsSection.DIAGNOSTICS -> {
                                     // The backup holds portals and accounts, so it follows the portal lock.
-                                    BackupSettings(storage) { action -> withSettingsPin(parental.lockPortals, action = action) }
+                                    BackupSettings(storage, guard = { action -> withSettingsPin(parental.lockPortals, action = action) }) {
+                                        openSettingsPage { ui.remoteAccessOpen = true }
+                                    }
                                     Text(stringResource(R.string.diagnostics_title), style = MaterialTheme.typography.titleSmall,
                                         color = MaterialTheme.colorScheme.primary)
                                     Text(stringResource(R.string.diagnostics_description))

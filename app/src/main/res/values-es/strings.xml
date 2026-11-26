@@ -915,4 +915,8 @@
     <string name="input_remote_only">Entrada solo con el móvil</string>
     <string name="input_remote_only_hint">Los PIN, contraseñas, portales y datos de acceso se introducen entonces solo en el móvil mediante código QR; nadie junto al televisor los ve. La búsqueda sigue funcionando con el teclado.</string>
     <string name="input_remote_only_trakt">Introduce la API de Trakt en el móvil (está activada «Entrada solo con el móvil»).</string>
+    <string name="backup_too_large_phone">La copia es demasiado grande para el móvil. Guárdala en la carpeta Download o elige menos partes.</string>
+    <string name="backup_imported_restart">Copia importada: la app se reinicia.</string>
+    <string name="backup_via_phone">Descargar o subir con el móvil</string>
+    <string name="remote_gradient_none">Sin degradado</string>
 </resources>

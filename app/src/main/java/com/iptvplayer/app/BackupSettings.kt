@@ -30,7 +30,7 @@ private enum class BackupStage { IDLE, EXPORT, IMPORT_SOURCE, IMPORT }
  * device offers one. [guard] asks for the settings PIN when portals are locked.
  */
 @Composable
-internal fun BackupSettings(storage: PortalStorage?, guard: (() -> Unit) -> Unit) {
+internal fun BackupSettings(storage: PortalStorage?, guard: (() -> Unit) -> Unit, onPhone: () -> Unit = {}) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var stage by remember { mutableStateOf(BackupStage.IDLE) }
@@ -180,6 +180,10 @@ internal fun BackupSettings(storage: PortalStorage?, guard: (() -> Unit) -> Unit
             }
         }
         SettingRow(stringResource(android.R.string.cancel)) { go(BackupStage.IDLE); loaded = null }
+    }
+    // On the phone: the backup page of "Per Handy einstellen" (download and upload).
+    if (stage == BackupStage.IDLE) SettingRow(stringResource(R.string.backup_via_phone), enabled = storage != null) {
+        guard { onPhone() }
     }
     if (working) androidx.compose.material3.LinearProgressIndicator()
     status?.let { Text(it, color = MaterialTheme.colorScheme.primary) }

@@ -932,4 +932,5 @@
     <string name="buffer_very_large">Bardzo duży (15 s)</string>
     <string name="buffer_hint">Bufor startuje nieco później, ale rzadziej się zacina przy niestabilnych strumieniach. Zalecany: średni.</string>
     <string name="buffer_restart_hint">Obowiązuje od następnego uruchomienia aplikacji.</string>
+    <string name="playback_foreign_audio_only">Ten strumień ma dźwięk tylko w niewybranym języku – innej wersji nie ma.</string>
 </resources>

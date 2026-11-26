@@ -927,4 +927,5 @@
     <string name="buffer_very_large">Muy grande (15 s)</string>
     <string name="buffer_hint">Con búfer la reproducción empieza un poco más tarde, pero se corta menos en streams inestables. Recomendado: medio.</string>
     <string name="buffer_restart_hint">Se aplica a partir del próximo inicio de la app.</string>
+    <string name="playback_foreign_audio_only">Este stream solo tiene audio en un idioma no elegido; no hay otra versión.</string>
 </resources>

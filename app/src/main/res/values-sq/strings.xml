@@ -922,4 +922,5 @@
     <string name="buffer_very_large">Shumë i madh (15 s)</string>
     <string name="buffer_hint">Me buferin luajtja nis pak më vonë, por ngec më rrallë te transmetimet e paqëndrueshme. I rekomanduar: mesatar.</string>
     <string name="buffer_restart_hint">Vlen nga nisja e ardhshme e aplikacionit.</string>
+    <string name="playback_foreign_audio_only">Ky transmetim ka zë vetëm në një gjuhë të pazgjedhur – nuk ka version tjetër.</string>
 </resources>

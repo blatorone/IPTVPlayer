@@ -922,4 +922,5 @@
     <string name="buffer_very_large">Very large (15 s)</string>
     <string name="buffer_hint">A buffer starts a little later but stutters less on unsteady streams. Recommended: Medium.</string>
     <string name="buffer_restart_hint">Applies from the next start of the app.</string>
+    <string name="playback_foreign_audio_only">This stream only has audio in a language you did not choose – there is no other version.</string>
 </resources>

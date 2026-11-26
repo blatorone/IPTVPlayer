@@ -942,4 +942,5 @@
     <string name="buffer_very_large">كبير جدًا (15 ث)</string>
     <string name="buffer_hint">يبدأ التشغيل مع التخزين المؤقت متأخرًا قليلًا لكنه يتقطع أقل مع البث غير المستقر. الموصى به: متوسط.</string>
     <string name="buffer_restart_hint">يسري من التشغيل التالي للتطبيق.</string>
+    <string name="playback_foreign_audio_only">هذا البث يحتوي على صوت بلغة غير مختارة فقط – ولا توجد نسخة أخرى.</string>
 </resources>

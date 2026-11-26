@@ -932,4 +932,5 @@
     <string name="buffer_very_large">Очень большой (15 с)</string>
     <string name="buffer_hint">С буфером воспроизведение начинается чуть позже, но реже подтормаживает на нестабильных потоках. Рекомендуется: средний.</string>
     <string name="buffer_restart_hint">Действует со следующего запуска приложения.</string>
+    <string name="playback_foreign_audio_only">В этом потоке звук только на невыбранном языке – другой версии нет.</string>
 </resources>

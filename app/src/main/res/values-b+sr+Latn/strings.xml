@@ -927,4 +927,5 @@
     <string name="buffer_very_large">Veoma veliki (15 s)</string>
     <string name="buffer_hint">Sa baferom reprodukcija kreće malo kasnije, ali ređe zastaje kod nestabilnih strimova. Preporučeno: srednji.</string>
     <string name="buffer_restart_hint">Važi od sledećeg pokretanja aplikacije.</string>
+    <string name="playback_foreign_audio_only">Ovaj strim ima zvuk samo na neizabranom jeziku – druge verzije nema.</string>
 </resources>

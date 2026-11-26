@@ -927,4 +927,5 @@
     <string name="buffer_very_large">Foarte mare (15 s)</string>
     <string name="buffer_hint">Cu buffer redarea pornește puțin mai târziu, dar se blochează mai rar la fluxuri instabile. Recomandat: mediu.</string>
     <string name="buffer_restart_hint">Se aplică de la următoarea pornire a aplicației.</string>
+    <string name="playback_foreign_audio_only">Acest flux are sunet doar într-o limbă neselectată – nu există altă versiune.</string>
 </resources>

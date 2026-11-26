@@ -3098,6 +3098,9 @@ private fun PlayerHome(
             player?.stop()
             starting = null
             playbackError = if (attempt.variants.size > 1) R.string.playback_all_variants_failed else message
+            // Nothing playable (e.g. no sound): playback ends and fullscreen closes, so the message
+            // is shown on the page below instead of a stream that cannot even be stopped.
+            fullscreen = false
             return
         }
         savePlaybackPosition(onFailure = true)
@@ -4580,16 +4583,20 @@ private fun PlayerHome(
                     val allowed = allowedAudioLanguages(countries)
                     // Only decided when the stream names its languages; unnamed tracks are kept.
                     if (attempt.selection.section == PortalSection.LIVE || languages.isEmpty() || allowed.isEmpty() ||
-                        languages.any { it in allowed } || attempt.index + 1 >= attempt.variants.size
+                        languages.any { it in allowed }
                     ) return
+                    // No other portal left: it keeps playing, but says that only a foreign language is there.
+                    if (attempt.index + 1 >= attempt.variants.size) {
+                        android.widget.Toast.makeText(context, R.string.playback_foreign_audio_only, android.widget.Toast.LENGTH_LONG).show()
+                        return
+                    }
                     AppDiagnostics.record(context, "playback_foreign_audio")
                     scope.launch { failPlayback(attempt, R.string.playback_foreign_audio) }
                     return
                 }
                 AppDiagnostics.record(context, "playback_without_audio")
-                if (attempt.index + 1 < attempt.variants.size) {
-                    scope.launch { failPlayback(attempt, R.string.playback_no_audio) }
-                } else android.widget.Toast.makeText(context, R.string.playback_no_audio, android.widget.Toast.LENGTH_LONG).show()
+                // The next portal is tried; without one, playback ends and fullscreen closes.
+                scope.launch { failPlayback(attempt, R.string.playback_no_audio) }
             }
 
             override fun onTracksChanged(tracks: Tracks) = checkAudio(tracks)
@@ -10012,6 +10019,9 @@ internal fun PlayerFrame(
             }
         }
         activePlayer.addListener(listener)
+        // Tracks known before this listener existed (e.g. a film that was already prepared)
+        // never reported a change: choose the forced subtitles for them right away too.
+        if (!activePlayer.currentTracks.isEmpty) listener.onTracksChanged(activePlayer.currentTracks)
         onDispose { activePlayer.removeListener(listener) }
     }
     val stop by rememberUpdatedState(onStop)
@@ -10060,6 +10070,35 @@ internal fun PlayerFrame(
         }
         view.nextFocusUpId = view.id
         view.nextFocusDownId = view.id
+    }
+    /**
+     * The row of play buttons: unusable ones are hidden (not greyed out), all look the same, and
+     * left/right reach every visible one in on-screen order; down leads to the time bar.
+     */
+    fun arrangePlayerButtons(view: PlayerView) {
+        val seekable = !livePlayback && view.player?.isCurrentMediaItemSeekable == true
+        // Media3's playlist buttons are not used (episodes have their own buttons).
+        view.setShowPreviousButton(false)
+        view.setShowNextButton(false)
+        view.setShowRewindButton(seekable)
+        view.setShowFastForwardButton(seekable)
+        val row = view.findViewById<LinearLayout>(androidx.media3.ui.R.id.exo_center_controls) ?: return
+        val progress = view.findViewById<android.view.View>(androidx.media3.ui.R.id.exo_progress)
+        val pause = view.findViewById<android.view.View>(androidx.media3.ui.R.id.exo_play_pause)
+        val buttons = (0 until row.childCount).map(row::getChildAt).filter { button ->
+            button.visibility == android.view.View.VISIBLE && button.isEnabled && button !is LinearLayout
+        }
+        buttons.forEach { button ->
+            if (button.id == android.view.View.NO_ID) button.id = android.view.View.generateViewId()
+            if (button.foreground == null) enableRemoteFocus(button)
+        }
+        buttons.forEachIndexed { index, button ->
+            button.nextFocusLeftId = buttons.getOrNull(index - 1)?.id ?: button.id
+            button.nextFocusRightId = buttons.getOrNull(index + 1)?.id ?: button.id
+            button.nextFocusUpId = button.id
+            button.nextFocusDownId = progress?.id ?: button.id
+        }
+        if (progress != null && pause != null) progress.nextFocusUpId = pause.id
     }
     fun configureBottomFocus(view: PlayerView) {
         val progress = view.findViewById<android.view.View>(androidx.media3.ui.R.id.exo_progress) ?: return
@@ -10266,15 +10305,6 @@ internal fun PlayerFrame(
                     }.apply {
                         useController = true
                         controllerAutoShow = false
-                        listOf(
-                            androidx.media3.ui.R.id.exo_prev,
-                            androidx.media3.ui.R.id.exo_next,
-                            androidx.media3.ui.R.id.exo_rew,
-                            androidx.media3.ui.R.id.exo_ffwd
-                        ).forEach { id ->
-                            findViewById<android.view.View>(id)?.visibility =
-                                if (livePlayback) android.view.View.GONE else android.view.View.VISIBLE
-                        }
                         findViewById<LinearLayout>(androidx.media3.ui.R.id.exo_center_controls)?.let { row ->
                             val size = (48 * context.resources.displayMetrics.density).toInt()
                             fun actionButton(icon: Int, label: Int, action: () -> Unit) = ImageButton(context).apply {
@@ -10410,6 +10440,7 @@ internal fun PlayerFrame(
                                 intArrayOf(android.graphics.Color.TRANSPARENT, android.graphics.Color.argb(40, 0, 0, 0),
                                     android.graphics.Color.argb(210, 0, 0, 0))
                             )
+                        arrangePlayerButtons(this)
                         // Subtitles only when the stream has some.
                         val view = this
                         fun showSubtitleButton(tracks: Tracks) {
@@ -10422,6 +10453,10 @@ internal fun PlayerFrame(
                             showSubtitleButton(activePlayer.currentTracks)
                             val listener = object : Player.Listener {
                                 override fun onTracksChanged(tracks: Tracks) = showSubtitleButton(tracks)
+                                // Seekable or not is only known once the stream runs.
+                                override fun onEvents(player: Player, events: Player.Events) {
+                                    view.post { arrangePlayerButtons(view) }
+                                }
                             }
                             activePlayer.addListener(listener)
                             setTag(R.string.subtitle_tracks, listener)
@@ -10443,15 +10478,7 @@ internal fun PlayerFrame(
                     onSurface?.invoke(view.videoSurfaceView as? SurfaceView)
                     // Live TV keeps the last picture while another stream or channel starts (no black cut).
                     view.setKeepContentOnPlayerReset(livePlayback)
-                    listOf(
-                        androidx.media3.ui.R.id.exo_prev,
-                        androidx.media3.ui.R.id.exo_next,
-                        androidx.media3.ui.R.id.exo_rew,
-                        androidx.media3.ui.R.id.exo_ffwd
-                    ).forEach { id ->
-                        view.findViewById<android.view.View>(id)?.visibility =
-                            if (livePlayback) android.view.View.GONE else android.view.View.VISIBLE
-                    }
+                    arrangePlayerButtons(view)
                     view.findViewWithTag<android.view.View>("previous_episode_action")?.let { button ->
                         button.visibility = if (!livePlayback && canPreviousEpisode) android.view.View.VISIBLE else android.view.View.GONE
                         button.isEnabled = canPreviousEpisode

@@ -927,4 +927,5 @@
     <string name="buffer_very_large">Très grand (15 s)</string>
     <string name="buffer_hint">Avec un tampon, la lecture démarre un peu plus tard mais saccade moins sur les flux instables. Recommandé : moyen.</string>
     <string name="buffer_restart_hint">S\'applique au prochain démarrage de l\'app.</string>
+    <string name="playback_foreign_audio_only">Ce flux n\'a de son que dans une langue non choisie – il n\'existe pas d\'autre version.</string>
 </resources>

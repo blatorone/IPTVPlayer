@@ -922,4 +922,5 @@
     <string name="buffer_very_large">Çok büyük (15 sn)</string>
     <string name="buffer_hint">Arabellek biraz daha geç başlar ama dengesiz yayınlarda daha az takılır. Önerilen: Orta.</string>
     <string name="buffer_restart_hint">Uygulamanın bir sonraki açılışından itibaren geçerli.</string>
+    <string name="playback_foreign_audio_only">Bu yayında yalnızca seçilmemiş bir dilde ses var – başka bir sürümü yok.</string>
 </resources>

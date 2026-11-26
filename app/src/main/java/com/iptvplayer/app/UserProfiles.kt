@@ -137,7 +137,7 @@ internal fun ProfileNameDialog(initial: String, onSave: (String) -> Unit, onDism
 @Composable
 internal fun KidsProfileSettings(
     profiles: UserProfiles, parental: ParentalControls,
-    onCreate: () -> Unit, onRename: () -> Unit, onColor: () -> Unit, onTrakt: () -> Unit, kidsTraktName: String?,
+    onCreate: () -> Unit, onRename: () -> Unit, onColor: () -> Unit, onTrakt: () -> Unit, kidsTraktName: String?, adminTraktConnected: Boolean,
     onRemove: () -> Unit
 ) {
     Text(stringResource(R.string.kids_profile), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
@@ -166,7 +166,8 @@ internal fun KidsProfileSettings(
         stringResource(if (profiles.kidsShareData) R.string.kids_profile_share_on else R.string.kids_profile_share_off, name),
         style = MaterialTheme.typography.bodySmall
     )
-    if (!profiles.kidsShareData) SettingRow(
+    // Only offered when the admin has Trakt set up; the kids account uses the same Trakt API app.
+    if (!profiles.kidsShareData && adminTraktConnected) SettingRow(
         listOf(
             stringResource(R.string.kids_profile_trakt, name),
             kidsTraktName?.let { stringResource(R.string.trakt_row_connected, it) } ?: stringResource(R.string.trakt_row_not_connected)

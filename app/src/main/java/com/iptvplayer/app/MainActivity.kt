@@ -7669,6 +7669,7 @@ private fun PlayerHome(
                                                     onColor = { openSettingsPage { ui.kidsColorOpen = true } },
                                                     onTrakt = { openSettingsPage { ui.traktForKids = true; ui.traktSettingsOpen = true } },
                                                     kidsTraktName = ui.kidsTraktName,
+                                                    adminTraktConnected = traktSession != null,
                                                     onRemove = {
                                                         pinRequest = PinRequest(context.getString(R.string.pin_enter), null,
                                                             check = parental::checkPin, length = parental.pinLength) { profiles.removeKids() }

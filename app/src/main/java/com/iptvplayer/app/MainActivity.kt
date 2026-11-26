@@ -9144,9 +9144,11 @@ private fun PlayerHome(
                         // Continue watching, watchlist, upcoming episodes and history in one place.
                         MenuButton(
                             stringResource(R.string.my_area), Modifier,
+                            leadingIcon = R.drawable.ic_menu_my_area,
                             selected = myAreaSection == section && !movieHistoryOpen && !movieWatchlistOpen &&
                                 seriesActivityView == null,
-                            count = if (section == PortalSection.SERIES) {
+                            // New episodes of followed series: a number in a circle, like at "Einstellungen".
+                            badge = if (section == PortalSection.SERIES) {
                                 seriesActivity.filter { it.saved || it.viewed }.sumOf { it.unseen.size }.takeIf { it > 0 }
                             } else null
                         ) {

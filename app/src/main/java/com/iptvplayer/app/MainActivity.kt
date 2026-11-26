@@ -1161,7 +1161,6 @@ private fun PlayerHome(
         sourceContentCounts = counts.first
         combinedContentCounts = counts.second
     }
-    var portalTransferStatus by remember { mutableStateOf<String?>(null) }
     var diagnosticsTree by remember(context) {
         mutableStateOf(context.getSharedPreferences("diagnostics_settings", Context.MODE_PRIVATE)
             .getString("tree_uri", null)?.let(Uri::parse))
@@ -1187,32 +1186,6 @@ private fun PlayerHome(
         if (uri != null) runCatching { AppDiagnostics.exportToDocument(context, uri) }
             .onSuccess { diagnosticsStatus = context.getString(R.string.diagnostics_export_complete) }
             .onFailure { diagnosticsStatus = context.getString(R.string.diagnostics_export_failed) }
-    }
-    val exportPortals = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
-        if (uri != null) runCatching {
-            context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { writer ->
-                writer.write(exportPortalCredentials(savedSources))
-            } ?: error("Datei konnte nicht erstellt werden")
-        }.onSuccess { portalTransferStatus = context.getString(R.string.portals_exported) }
-            .onFailure { portalTransferStatus = context.getString(R.string.portal_transfer_failed) }
-    }
-    val importPortals = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) runCatching {
-            val json = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
-                ?: error("Datei konnte nicht geöffnet werden")
-            val credentials = importPortalCredentials(json)
-            val added = credentials.map { credential ->
-                SavedPortal(credential.address, credential.mac, emptyList(), emptyMap(), emptyMap())
-            }
-            val merged = (savedSources + added).distinctBy { it.identity }
-            savedSources = merged
-            scope.launch {
-                storage?.write(SavedPortals(merged, storedSource?.identity ?: merged.first().identity))
-            }
-            added.size
-        }.onSuccess { count ->
-            portalTransferStatus = context.resources.getQuantityString(R.plurals.portals_imported, count, count)
-        }.onFailure { portalTransferStatus = context.getString(R.string.portal_transfer_failed) }
     }
     val secondarySessions = remember { mutableMapOf<String, StalkerPortal>() }
     val sourcesForBrowsing = remember(sourceContentKeys, storedSource?.identity, mergeSources) {
@@ -7984,19 +7957,8 @@ private fun PlayerHome(
                                     SettingRow(stringResource(R.string.disclaimer_title), Modifier) { openSettingsPage { ui.termsOpen = true } }
                                 }
                                 SettingsSection.DIAGNOSTICS -> {
-                                    // Portal backup: the file holds addresses and MACs, so it follows the portal lock.
-                                    Text(stringResource(R.string.portal_transfer_title), style = MaterialTheme.typography.titleSmall,
-                                        color = MaterialTheme.colorScheme.primary)
-                                    if (savedSources.isNotEmpty()) {
-                                        SettingRow(stringResource(R.string.export_portals), Modifier) {
-                                            withSettingsPin(parental.lockPortals) { exportPortals.launch("streamwatch-portals.json") }
-                                        }
-                                    }
-                                    SettingRow(stringResource(R.string.import_portals), Modifier) {
-                                        withSettingsPin(parental.lockPortals) { importPortals.launch(arrayOf("application/json", "text/plain")) }
-                                    }
-                                    Text(stringResource(R.string.portal_transfer_privacy), style = MaterialTheme.typography.bodySmall)
-                                    portalTransferStatus?.let { Text(it) }
+                                    // The backup holds portals and accounts, so it follows the portal lock.
+                                    BackupSettings(storage) { action -> withSettingsPin(parental.lockPortals, action = action) }
                                     Text(stringResource(R.string.diagnostics_title), style = MaterialTheme.typography.titleSmall,
                                         color = MaterialTheme.colorScheme.primary)
                                     Text(stringResource(R.string.diagnostics_description))

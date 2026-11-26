@@ -13,6 +13,7 @@
 - Einstellungen: Nach rechts in die Zeilen geht es beim ersten Mal zur obersten Zeile, danach zur zuletzt benutzten des Bereichs (vorher sprang der Fokus z. B. bei „Sperren“ nach unten). Nach dem Schließen einer Seite steht der Fokus wieder auf der Zeile, die sie geöffnet hat; neu geöffnete Einstellungen beginnen wieder oben.
 - Behoben: Absturz beim Öffnen der Nutzungsbedingungen in den Einstellungen.
 - Suche: Bei leerem Suchfeld stehen die letzten Suchen (Standard 10). OK sucht erneut, langes OK entfernt einen Eintrag, „Suchverlauf löschen“ leert die Liste. Unter Allgemein: Suchverlauf speichern (aus löscht ihn), Anzahl der Einträge (5–30) und Suchverlauf löschen. Das Kinderkonto hat einen eigenen Verlauf.
+- Backup (Daten & Diagnose, ersetzt „Portale sichern“): „Backup erstellen“ und „Backup importieren“, jeweils mit Auswahl – Alles oder einzeln Portale, Einstellungen, Kategorien und Länder, Sperren/PINs/Kinderkonto, Trakt und TMDB, EPG-Quellen sowie Fortschritt/Verlauf/Merkliste/Favoriten. Die Datei ist verschlüsselt und wird im Download-Ordner gespeichert (oder an einem gewählten Ort, wo das Gerät eine Auswahl hat). Nach dem Import startet die App neu; Portale kommen zu den vorhandenen hinzu. Alte Portal-Dateien lassen sich weiterhin importieren.
 
 ## 1.0.96
 

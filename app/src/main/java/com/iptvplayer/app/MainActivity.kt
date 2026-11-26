@@ -10035,12 +10035,20 @@ internal fun PlayerFrame(
         val focused = android.graphics.drawable.GradientDrawable().apply {
             shape = android.graphics.drawable.GradientDrawable.OVAL
             setColor(android.graphics.Color.argb(
-                85,
+                150,
                 android.graphics.Color.red(accentArgb),
                 android.graphics.Color.green(accentArgb),
                 android.graphics.Color.blue(accentArgb)
             ))
             setStroke((2 * view.resources.displayMetrics.density).toInt().coerceAtLeast(2), accentArgb)
+        }
+        // Round, softly dark buttons on the picture (the time bar keeps its own look).
+        if (view is android.widget.ImageView) {
+            view.background = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.OVAL
+                setColor(android.graphics.Color.argb(120, 0, 0, 0))
+            }
+            view.imageTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.WHITE)
         }
         val idle = android.graphics.drawable.GradientDrawable().apply {
             shape = android.graphics.drawable.GradientDrawable.OVAL
@@ -10388,6 +10396,36 @@ internal fun PlayerFrame(
                             findViewById<android.view.View>(id)?.let(::enableRemoteFocus)
                         }
                         findViewWithTag<android.view.View>("player_subtitles_action")?.let(::enableRemoteFocus)
+                        // Buttons that cannot be used are hidden (not greyed out).
+                        listOf(
+                            androidx.media3.ui.R.id.exo_vr,
+                            androidx.media3.ui.R.id.exo_shuffle,
+                            androidx.media3.ui.R.id.exo_repeat_toggle,
+                            androidx.media3.ui.R.id.exo_fullscreen
+                        ).forEach { id -> findViewById<android.view.View>(id)?.visibility = android.view.View.GONE }
+                        // A soft dark fade at the bottom instead of dimming the whole picture.
+                        findViewById<android.view.View>(androidx.media3.ui.R.id.exo_controls_background)?.background =
+                            android.graphics.drawable.GradientDrawable(
+                                android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+                                intArrayOf(android.graphics.Color.TRANSPARENT, android.graphics.Color.argb(40, 0, 0, 0),
+                                    android.graphics.Color.argb(210, 0, 0, 0))
+                            )
+                        // Subtitles only when the stream has some.
+                        val view = this
+                        fun showSubtitleButton(tracks: Tracks) {
+                            view.findViewWithTag<android.view.View>("player_subtitles_action")?.visibility =
+                                if (tracks.groups.any { it.type == C.TRACK_TYPE_TEXT }) android.view.View.VISIBLE
+                                else android.view.View.GONE
+                            configureBottomFocus(view)
+                        }
+                        player?.let { activePlayer ->
+                            showSubtitleButton(activePlayer.currentTracks)
+                            val listener = object : Player.Listener {
+                                override fun onTracksChanged(tracks: Tracks) = showSubtitleButton(tracks)
+                            }
+                            activePlayer.addListener(listener)
+                            setTag(R.string.subtitle_tracks, listener)
+                        }
                         configureBottomFocus(this)
                         this.player = player
                         if (fullscreen) post { if (allowControls) requestFocus() }
@@ -10397,6 +10435,7 @@ internal fun PlayerFrame(
                 onReset = null,
                 onRelease = {
                     if (fullscreen) controlsVisibility?.invoke(false)
+                    (it.getTag(R.string.subtitle_tracks) as? Player.Listener)?.let { listener -> it.player?.removeListener(listener) }
                     it.player = null
                     onSurface?.invoke(null)
                 },

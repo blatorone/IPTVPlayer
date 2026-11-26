@@ -35,7 +35,10 @@ import androidx.lifecycle.LifecycleOwner
  */
 @Composable
 internal fun RemoteAccessPage(
-    handler: RemoteHandler, onPinReset: () -> Unit, onFinished: () -> Unit, onDismiss: () -> Unit
+    handler: RemoteHandler,
+    unlock: ((String) -> Boolean)? = null,
+    unlockPassword: Boolean = false,
+    onPinReset: () -> Unit, onFinished: () -> Unit, onDismiss: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
     var session by remember { mutableStateOf<RemoteSession?>(null) }
@@ -52,6 +55,7 @@ internal fun RemoteAccessPage(
     val current = session
     val endedMessage = stringResource(R.string.remote_msg_ended)
     val failedMessage = stringResource(R.string.remote_msg_change_failed)
+    val wrongPin = stringResource(R.string.pin_wrong)
     val startFocus = remember { FocusRequester() }
     val endFocus = remember { FocusRequester() }
     val running = current != null && current.status.collectAsState().value != RemoteStatus.ENDED
@@ -72,7 +76,10 @@ internal fun RemoteAccessPage(
             Text(stringResource(R.string.remote_access_hint), style = MaterialTheme.typography.bodyMedium)
             SettingRow(stringResource(R.string.remote_access_start), Modifier.focusRequester(startFocus)) {
                 onPinReset()
-                session = RemoteSession(scope, handler, endedMessage, failedMessage, onFinished).also { it.start() }
+                session = RemoteSession(
+                    scope, handler, endedMessage, failedMessage, onFinished,
+                    unlock = unlock, unlockPassword = unlockPassword, wrongPinMessage = wrongPin
+                ).also { it.start() }
             }
         } else {
             Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {

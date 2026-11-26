@@ -907,4 +907,12 @@
     <string name="backup_restart_hint">Apoi aplicația repornește. Portalurile se adaugă celor existente, setările alese sunt înlocuite.</string>
     <string name="backup_picker_missing">Acest dispozitiv nu are selector de fișiere. Folosește folderul Download.</string>
     <string name="backup_file_info">Backup din %1$s (versiunea %2$s)</string>
+    <string name="pin_kind_password">Parolă în loc de cifre</string>
+    <string name="password_enter_new">Introdu parola nouă</string>
+    <string name="password_repeat">Repetă parola</string>
+    <string name="password_label">Parolă (min. 4 caractere)</string>
+    <string name="remote_access_from_pin">Configurează de pe telefon</string>
+    <string name="input_remote_only">Introducere doar de pe telefon</string>
+    <string name="input_remote_only_hint">PIN-urile, parolele, portalurile și datele de acces se introduc atunci doar pe telefon prin cod QR – nimeni de lângă televizor nu le vede. Căutarea funcționează în continuare cu tastatura.</string>
+    <string name="input_remote_only_trakt">Introdu API-ul Trakt pe telefon (este activată „Introducere doar de pe telefon”).</string>
 </resources>

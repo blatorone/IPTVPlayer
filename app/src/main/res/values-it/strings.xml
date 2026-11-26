@@ -907,4 +907,12 @@
     <string name="backup_restart_hint">Poi l\'app si riavvia. I portali vengono aggiunti a quelli esistenti, le impostazioni scelte sostituite.</string>
     <string name="backup_picker_missing">Questo dispositivo non ha un selettore di file. Usa la cartella Download.</string>
     <string name="backup_file_info">Backup del %1$s (versione %2$s)</string>
+    <string name="pin_kind_password">Password invece di cifre</string>
+    <string name="password_enter_new">Inserisci la nuova password</string>
+    <string name="password_repeat">Ripeti la password</string>
+    <string name="password_label">Password (min. 4 caratteri)</string>
+    <string name="remote_access_from_pin">Configura dal telefono</string>
+    <string name="input_remote_only">Inserimento solo dal telefono</string>
+    <string name="input_remote_only_hint">PIN, password, portali e credenziali si inseriscono allora solo sul telefono tramite codice QR: nessuno davanti alla TV li vede. La ricerca continua a funzionare con la tastiera.</string>
+    <string name="input_remote_only_trakt">Inserisci l\'API Trakt sul telefono (è attivo «Inserimento solo dal telefono»).</string>
 </resources>

@@ -39,7 +39,10 @@ internal fun TraktSettings(
     status: String?,
     onConnect: () -> Unit,
     onSync: () -> Unit,
-    onDisconnect: () -> Unit
+    onDisconnect: () -> Unit,
+    /** "Eingaben nur per Handy": the API is entered on the phone. */
+    remoteOnly: Boolean = false,
+    onRemote: () -> Unit = {}
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(stringResource(R.string.trakt_intro), style = MaterialTheme.typography.bodyMedium)
@@ -48,7 +51,11 @@ internal fun TraktSettings(
             // With an API already saved (also the admin's for the kids account) only the QR code
             // is shown; the fields come back with "Trakt-API ändern".
             var editApp by rememberSaveable { mutableStateOf(false) }
-            if (app == null || editApp) TraktAppForm(app, enabled = !busy && deviceCode == null) { id, secret ->
+            if ((app == null || editApp) && remoteOnly) {
+                Text(stringResource(R.string.trakt_app_title), fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.input_remote_only_trakt), style = MaterialTheme.typography.bodySmall)
+                SettingRow(stringResource(R.string.remote_access_from_pin), onClick = onRemote)
+            } else if (app == null || editApp) TraktAppForm(app, enabled = !busy && deviceCode == null) { id, secret ->
                 onSaveApp(id, secret).also { if (it == null) editApp = false }
             }
             LaunchedEffect(app) {

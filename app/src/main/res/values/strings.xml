@@ -902,4 +902,12 @@
     <string name="backup_restart_hint">Danach startet die App neu. Portale werden zu den vorhandenen hinzugefügt, die ausgewählten Einstellungen ersetzt.</string>
     <string name="backup_picker_missing">Dieses Gerät bietet keine Dateiauswahl. Nutze den Download-Ordner.</string>
     <string name="backup_file_info">Backup vom %1$s (Version %2$s)</string>
+    <string name="pin_kind_password">Passwort statt Ziffern</string>
+    <string name="password_enter_new">Neues Passwort eingeben</string>
+    <string name="password_repeat">Passwort wiederholen</string>
+    <string name="password_label">Passwort (mind. 4 Zeichen)</string>
+    <string name="remote_access_from_pin">Per Handy einstellen</string>
+    <string name="input_remote_only">Eingaben nur per Handy</string>
+    <string name="input_remote_only_hint">PINs, Passwörter, Portale und Zugangsdaten werden dann nur am Handy per QR-Code eingegeben – am Fernseher sieht sie niemand. Die Suche funktioniert weiter mit der Tastatur.</string>
+    <string name="input_remote_only_trakt">Die Trakt-API gibst du am Handy ein („Eingaben nur per Handy“ ist eingeschaltet).</string>
 </resources>

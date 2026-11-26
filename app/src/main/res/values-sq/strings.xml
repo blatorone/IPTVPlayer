@@ -902,4 +902,12 @@
     <string name="backup_restart_hint">Pastaj aplikacioni rinis. Portalet shtohen te ekzistueset, cilësimet e zgjedhura zëvendësohen.</string>
     <string name="backup_picker_missing">Kjo pajisje nuk ka zgjedhës skedarësh. Përdor dosjen Download.</string>
     <string name="backup_file_info">Kopje nga %1$s (versioni %2$s)</string>
+    <string name="pin_kind_password">Fjalëkalim në vend të shifrave</string>
+    <string name="password_enter_new">Shkruaj fjalëkalimin e ri</string>
+    <string name="password_repeat">Përsërit fjalëkalimin</string>
+    <string name="password_label">Fjalëkalimi (min. 4 karaktere)</string>
+    <string name="remote_access_from_pin">Konfiguro nga telefoni</string>
+    <string name="input_remote_only">Futja vetëm nga telefoni</string>
+    <string name="input_remote_only_hint">PIN-et, fjalëkalimet, portalet dhe të dhënat e hyrjes futen atëherë vetëm në telefon me kod QR – askush pranë televizorit nuk i sheh. Kërkimi vazhdon të punojë me tastierë.</string>
+    <string name="input_remote_only_trakt">API-n e Trakt fute në telefon (është aktivizuar „Futja vetëm nga telefoni“).</string>
 </resources>

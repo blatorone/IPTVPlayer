@@ -116,7 +116,7 @@ internal class ParentalControls(private val preferences: SharedPreferences?) {
         else settingsPinShared && checkPin(pin)
 
     val settingsPinLength: Int? get() =
-        if (ownSettingsPin) preferences?.getInt("settings_pin_length", 0)?.takeIf { it >= 4 } else pinLength
+        if (ownSettingsPin) storedPinLength("settings_pin_length") else pinLength
 
     /** Own settings PIN ([pin]) or the Kindersicherung PIN ([pin] null, shared). */
     fun setSettingsPin(pin: String?) {
@@ -124,7 +124,7 @@ internal class ParentalControls(private val preferences: SharedPreferences?) {
         if (pin == null) {
             editor?.remove("settings_pin_hash")?.putBoolean("settings_pin_shared", true)
         } else {
-            editor?.putString("settings_pin_hash", hash(pin, "settings_pin_salt"))?.putInt("settings_pin_length", pin.length)
+            editor?.putString("settings_pin_hash", hash(pin, "settings_pin_salt"))?.putInt("settings_pin_length", pinLengthToStore(pin))
                 ?.putBoolean("settings_pin_shared", false)
         }
         editor?.apply()
@@ -186,20 +186,24 @@ internal class ParentalControls(private val preferences: SharedPreferences?) {
         if (separateKidsPin) preferences?.getString("kids_pin_hash", null) == hash(pin, "kids_pin_salt") else checkPin(pin)
 
     /** Length of the stored PINs: entering one is confirmed as soon as it is reached. */
-    val pinLength: Int? get() = preferences?.getInt("parental_pin_length", 0)?.takeIf { it >= 4 }
+    val pinLength: Int? get() = storedPinLength("parental_pin_length")
     val kidsExitPinLength: Int? get() =
-        if (separateKidsPin) preferences?.getInt("kids_pin_length", 0)?.takeIf { it >= 4 } else pinLength
+        if (separateKidsPin) storedPinLength("kids_pin_length") else pinLength
+
+    /** Digits: their number; a password: [PIN_PASSWORD]; unknown: null. */
+    private fun storedPinLength(key: String): Int? =
+        preferences?.getInt(key, 0)?.takeIf { it >= 4 || it == PIN_PASSWORD }
 
     fun setPin(pin: String) {
         preferences?.edit()?.putString("parental_pin_hash", hash(pin, "parental_pin_salt"))
-            ?.putInt("parental_pin_length", pin.length)?.apply()
+            ?.putInt("parental_pin_length", pinLengthToStore(pin))?.apply()
         hasPin = true
     }
 
     fun setKidsPin(pin: String?) {
         if (pin == null) preferences?.edit()?.remove("kids_pin_hash")?.apply()
         else preferences?.edit()?.putString("kids_pin_hash", hash(pin, "kids_pin_salt"))
-            ?.putInt("kids_pin_length", pin.length)?.apply()
+            ?.putInt("kids_pin_length", pinLengthToStore(pin))?.apply()
         separateKidsPin = pin != null
     }
 
@@ -255,23 +259,39 @@ internal class ParentalControls(private val preferences: SharedPreferences?) {
     fun allowsAge(age: Int?): Boolean = !kidsMode || (age != null && age <= kidsAge)
 }
 
-/** PIN entry with a digit pad, usable with the remote's D-pad. */
+/** Stored as the "length" of a PIN that is a password (letters allowed); asked with a text field. */
+internal const val PIN_PASSWORD = -1
+internal const val PIN_PASSWORD_MIN = 4
+
+internal fun pinLengthToStore(pin: String): Int = if (pin.all(Char::isDigit)) pin.length else PIN_PASSWORD
+
+/** Whether entering PINs and passwords happens only on the phone ("Eingaben nur per Handy"). */
+internal fun remoteInputOnly(context: android.content.Context): Boolean =
+    context.getSharedPreferences("catalog_visibility", android.content.Context.MODE_PRIVATE)
+        .getBoolean("input_remote_only", false)
+
+/** PIN entry with a digit pad (or a text field for a password), usable with the remote's D-pad. */
 @Composable
 internal fun PinDialog(
     title: String,
     message: String?,
     confirmTwice: Boolean = false,
     length: Int? = null,
+    onRemoteSetup: (() -> Unit)? = null,
     onPin: (String) -> Boolean,
     onDismiss: () -> Unit
 ) {
     // A new PIN first asks for its length; an existing one is confirmed when its length is reached.
-    var chosenLength by remember { mutableStateOf(if (confirmTwice) null else length) }
+    var chosenLength by remember { mutableStateOf(if (confirmTwice) null else length?.takeIf { it > 0 }) }
     var choosing by remember { mutableStateOf(confirmTwice) }
+    // A password (instead of digits): typed in a text field, any length from 4.
+    var password by remember { mutableStateOf(!confirmTwice && length == PIN_PASSWORD) }
     var pin by remember { mutableStateOf("") }
     var first by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    var phoneEntry by remember { mutableStateOf(false) }
+    // "Eingaben nur per Handy": only the QR code, no pad on the TV.
+    val phoneOnly = remoteInputOnly(androidx.compose.ui.platform.LocalContext.current)
+    var phoneEntry by remember { mutableStateOf(phoneOnly) }
     val wrong = stringResource(R.string.pin_wrong)
     val mismatch = stringResource(R.string.pin_mismatch)
     val firstKey = remember { FocusRequester() }
@@ -311,7 +331,7 @@ internal fun PinDialog(
             Column(
                 Modifier.fillMaxWidth().onPreviewKeyEvent { event ->
                     // The number keys of a remote (or keyboard) type the PIN directly.
-                    if (choosing || event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    if (choosing || password || phoneOnly || event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                     val code = event.nativeKeyEvent.keyCode
                     when (code) {
                         in android.view.KeyEvent.KEYCODE_0..android.view.KeyEvent.KEYCODE_9 -> {
@@ -329,7 +349,8 @@ internal fun PinDialog(
             ) {
                 message?.let { Text(it, textAlign = TextAlign.Center) }
                 // A new PIN is typed twice on the phone and compared there.
-                if (phoneEntry) PhonePinEntry(confirmTwice, onPin)
+                if (phoneEntry) PhonePinEntry(confirmTwice, onPin, password = password)
+                if (phoneOnly) return@Column
                 if (choosing) {
                     Text(stringResource(R.string.pin_length_question), style = MaterialTheme.typography.labelLarge)
                     listOf(4, 6, 8, null).forEachIndexed { index, option ->
@@ -338,9 +359,35 @@ internal fun PinDialog(
                             Modifier.width(220.dp).then(if (index == 0) Modifier.focusRequester(firstKey) else Modifier)
                         ) {
                             chosenLength = option
+                            password = false
                             choosing = false
                         }
                     }
+                    PinKey(stringResource(R.string.pin_kind_password), Modifier.width(220.dp)) {
+                        chosenLength = null
+                        password = true
+                        choosing = false
+                    }
+                    return@Column
+                }
+                if (password) {
+                    if (confirmTwice) Text(
+                        stringResource(if (first == null) R.string.password_enter_new else R.string.password_repeat),
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                    androidx.compose.material3.OutlinedTextField(
+                        value = pin, onValueChange = { pin = it.take(64) }, singleLine = true,
+                        label = { Text(stringResource(R.string.password_label)) },
+                        modifier = Modifier.fillMaxWidth().focusRequester(firstKey),
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Password,
+                            imeAction = androidx.compose.ui.text.input.ImeAction.Done
+                        ),
+                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { submit() })
+                    )
+                    error?.let { Text(it, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center) }
+                    PinKey("OK", Modifier.width(220.dp), enabled = pin.length >= PIN_PASSWORD_MIN) { submit() }
                     return@Column
                 }
                 if (confirmTwice) Text(
@@ -375,8 +422,12 @@ internal fun PinDialog(
         },
         confirmButton = {
             // Typing the PIN on the phone: nobody next to the TV sees it (only when checking a PIN).
-            TextButton(onClick = { phoneEntry = !phoneEntry }) {
+            if (!phoneOnly) TextButton(onClick = { phoneEntry = !phoneEntry }) {
                 Text(stringResource(if (phoneEntry) R.string.pin_phone_close else R.string.pin_phone))
+            }
+            // Locked settings: set everything up on the phone instead (nothing shows on the TV).
+            if (onRemoteSetup != null) TextButton(onClick = onRemoteSetup) {
+                Text(stringResource(R.string.remote_access_from_pin))
             }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(android.R.string.cancel)) } }
@@ -385,7 +436,7 @@ internal fun PinDialog(
 
 /** A PIN-only phone session: its QR code, and every PIN typed there is checked with [onPin]. */
 @Composable
-private fun PhonePinEntry(newPin: Boolean, onPin: (String) -> Boolean) {
+private fun PhonePinEntry(newPin: Boolean, onPin: (String) -> Boolean, password: Boolean = false) {
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val wrongMessage = stringResource(R.string.pin_wrong)
     val ended = stringResource(R.string.remote_msg_ended)
@@ -403,7 +454,9 @@ private fun PhonePinEntry(newPin: Boolean, onPin: (String) -> Boolean) {
                 return if (onPin(entry.pin)) RemoteReply(true) else RemoteReply(false, wrongMessage)
             }
         }
-        RemoteSession(scope, handler, ended, failed, pinMode = if (newPin) "pinNew" else "pin").also { self = it; it.start() }
+        RemoteSession(
+            scope, handler, ended, failed, pinMode = if (newPin) "pinNew" else "pin", pinPassword = password
+        ).also { self = it; it.start() }
     }
     androidx.compose.runtime.DisposableEffect(session) { onDispose { session.end() } }
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -547,4 +600,23 @@ internal fun SettingsProtection(
     if (parental.hasSettingsPin) SettingRow(stringResource(R.string.settings_pin_remove)) {
         withSettingsPin { parental.removeSettingsPin() }
     }
+}
+
+/**
+ * "Eingaben nur per Handy" (off by default): PINs, passwords, portals and API keys are then
+ * entered only on the phone via QR code, so nobody near the TV sees them. The search keeps the
+ * normal keyboard.
+ */
+@Composable
+internal fun InputModeSetting() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val preferences = remember(context) {
+        context.getSharedPreferences("catalog_visibility", android.content.Context.MODE_PRIVATE)
+    }
+    var remoteOnly by remember { mutableStateOf(preferences.getBoolean("input_remote_only", false)) }
+    SettingRow(stringResource(R.string.input_remote_only), selected = remoteOnly) {
+        remoteOnly = !remoteOnly
+        preferences.edit().putBoolean("input_remote_only", remoteOnly).apply()
+    }
+    Text(stringResource(R.string.input_remote_only_hint), style = MaterialTheme.typography.bodySmall)
 }

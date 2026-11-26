@@ -907,4 +907,12 @@
     <string name="backup_restart_hint">Después la app se reinicia. Los portales se añaden a los existentes; los ajustes elegidos se sustituyen.</string>
     <string name="backup_picker_missing">Este dispositivo no tiene selector de archivos. Usa la carpeta Download.</string>
     <string name="backup_file_info">Copia del %1$s (versión %2$s)</string>
+    <string name="pin_kind_password">Contraseña en lugar de cifras</string>
+    <string name="password_enter_new">Introduce la nueva contraseña</string>
+    <string name="password_repeat">Repite la contraseña</string>
+    <string name="password_label">Contraseña (mín. 4 caracteres)</string>
+    <string name="remote_access_from_pin">Configurar con el móvil</string>
+    <string name="input_remote_only">Entrada solo con el móvil</string>
+    <string name="input_remote_only_hint">Los PIN, contraseñas, portales y datos de acceso se introducen entonces solo en el móvil mediante código QR; nadie junto al televisor los ve. La búsqueda sigue funcionando con el teclado.</string>
+    <string name="input_remote_only_trakt">Introduce la API de Trakt en el móvil (está activada «Entrada solo con el móvil»).</string>
 </resources>

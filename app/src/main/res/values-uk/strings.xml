@@ -912,4 +912,12 @@
     <string name="backup_restart_hint">Після цього застосунок перезапуститься. Портали додаються до наявних, вибрані налаштування замінюються.</string>
     <string name="backup_picker_missing">На цьому пристрої немає вибору файлів. Використовуйте теку Download.</string>
     <string name="backup_file_info">Копія від %1$s (версія %2$s)</string>
+    <string name="pin_kind_password">Пароль замість цифр</string>
+    <string name="password_enter_new">Введіть новий пароль</string>
+    <string name="password_repeat">Повторіть пароль</string>
+    <string name="password_label">Пароль (щонайменше 4 символи)</string>
+    <string name="remote_access_from_pin">Налаштувати з телефона</string>
+    <string name="input_remote_only">Введення лише з телефона</string>
+    <string name="input_remote_only_hint">PIN-коди, паролі, портали й дані доступу тоді вводяться лише на телефоні через QR-код – біля телевізора їх ніхто не бачить. Пошук і далі працює з клавіатурою.</string>
+    <string name="input_remote_only_trakt">Введіть API Trakt на телефоні (увімкнено «Введення лише з телефона»).</string>
 </resources>

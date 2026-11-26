@@ -907,4 +907,12 @@
     <string name="backup_restart_hint">Након тога апликација се поново покреће. Портали се додају постојећим, изабрана подешавања се замењују.</string>
     <string name="backup_picker_missing">Овај уређај нема избор датотека. Користи фасциклу Download.</string>
     <string name="backup_file_info">Копија од %1$s (верзија %2$s)</string>
+    <string name="pin_kind_password">Лозинка уместо цифара</string>
+    <string name="password_enter_new">Унеси нову лозинку</string>
+    <string name="password_repeat">Понови лозинку</string>
+    <string name="password_label">Лозинка (најмање 4 знака)</string>
+    <string name="remote_access_from_pin">Подеси преко телефона</string>
+    <string name="input_remote_only">Унос само преко телефона</string>
+    <string name="input_remote_only_hint">ПИН-ови, лозинке, портали и приступни подаци тада се уносе само на телефону преко QR кода – нико код телевизора их не види. Претрага и даље ради са тастатуром.</string>
+    <string name="input_remote_only_trakt">Trakt API унеси на телефону (укључен је „Унос само преко телефона”).</string>
 </resources>

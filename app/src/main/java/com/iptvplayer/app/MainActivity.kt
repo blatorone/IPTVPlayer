@@ -345,6 +345,8 @@ internal class PinRequest(
     val newPin: Boolean = false,
     val check: (String) -> Boolean,
     val length: Int? = null,
+    /** Offers "Per Handy einstellen" (locked settings: everything is set up on the phone). */
+    val remoteSetup: Boolean = false,
     val onSuccess: (String) -> Unit
 )
 
@@ -698,6 +700,8 @@ private class PlayerHomeFlags {
     var controlSettingsOpen by mutableStateOf<Boolean>(false)
     var settingsPageOpenedAt by mutableStateOf<Long>(0L)
     var remoteAccessOpen by mutableStateOf<Boolean>(false)
+    /** "Per Handy einstellen" opened from the PIN prompt: a window over the current screen. */
+    var remoteAccessStandalone by mutableStateOf<Boolean>(false)
     var expiryLeadPickerOpen by mutableStateOf<Boolean>(false)
     var metadataBusy by mutableStateOf<Boolean>(false)
     var metadataError by mutableStateOf<Boolean>(false)
@@ -4983,7 +4987,8 @@ private fun PlayerHome(
             if (pinRequest == null) pinRequest = PinRequest(
                 context.getString(if (kids) R.string.kids_mode_exit else R.string.pin_enter), null,
                 check = if (kids) parental::checkKidsPin else parental::checkSettingsPin,
-                length = if (kids) parental.kidsExitPinLength else parental.settingsPinLength
+                length = if (kids) parental.kidsExitPinLength else parental.settingsPinLength,
+                remoteSetup = !kids
             ) {
                 if (kids) parental.updateKidsMode(false) else parental.settingsUnlocked = true
                 openSettingsNow()
@@ -5468,6 +5473,7 @@ private fun PlayerHome(
     pinRequest?.let { request ->
         PinDialog(
             request.title, request.message, confirmTwice = request.newPin, length = request.length,
+            onRemoteSetup = if (request.remoteSetup) { { pinRequest = null; ui.remoteAccessStandalone = true } } else null,
             onPin = { pin ->
                 val ok = request.check(pin)
                 if (ok) {
@@ -6057,17 +6063,27 @@ private fun PlayerHome(
     val remoteAccessPage: @Composable () -> Unit = {
         RemoteAccessPage(
             remoteHandler,
+            // With a PIN or password set, the phone has to enter it before it sees any setting.
+            unlock = when {
+                parental.hasSettingsPin -> parental::checkSettingsPin
+                parental.hasPin -> parental::checkPin
+                else -> null
+            },
+            unlockPassword = (if (parental.hasSettingsPin) parental.settingsPinLength else parental.pinLength) == PIN_PASSWORD,
             onPinReset = { remotePinFailures.set(0) },
             onFinished = {
                 // Finished on the phone: back to Live-TV (or the first available area).
                 ui.remoteAccessOpen = false
+                ui.remoteAccessStandalone = false
                 selected = Destination.LIVE.takeIf { it in visibleDestinations } ?: settingsReturnDestination
                 lastFocused = selected ?: Destination.LIVE
                 guidePanel = GuidePanel.GRID
                 lastBack = 0L
             }
-        ) { ui.remoteAccessOpen = false }
+        ) { ui.remoteAccessOpen = false; ui.remoteAccessStandalone = false }
     }
+    // Opened from the PIN prompt of locked settings: a window over the current screen.
+    if (ui.remoteAccessStandalone) remoteAccessPage()
     LaunchedEffect(playbackAttempt, manualIntro, manualCredits) {
         val attempt = playbackAttempt ?: return@LaunchedEffect
         val active = player ?: return@LaunchedEffect
@@ -7219,7 +7235,7 @@ private fun PlayerHome(
                     initialPortalPromptDismissed = true
                     openRemoteAccess()
                 }) { Text(stringResource(R.string.remote_setup_portal)) }
-                TextButton(onClick = {
+                if (!remoteInputOnly(context)) TextButton(onClick = {
                     initialPortalPromptDismissed = true
                     withSettingsPin(parental.lockPortals) {
                         selected = Destination.SOURCES
@@ -7755,7 +7771,13 @@ private fun PlayerHome(
                                                         if (ui.traktForKids) traktStatus = context.getString(R.string.kids_profile_trakt_sync, profiles.kidsName.orEmpty())
                                                         else syncTrakt(forceSeriesHistory = true)
                                                     },
-                                                    onDisconnect = ::disconnectTrakt
+                                                    onDisconnect = ::disconnectTrakt,
+                                                    remoteOnly = remoteInputOnly(context),
+                                                    onRemote = {
+                                                        ui.traktSettingsOpen = false
+                                                        ui.traktForKids = false
+                                                        openSettingsPage { ui.remoteAccessOpen = true }
+                                                    }
                                                 )
                                             }
                                         } }
@@ -7816,6 +7838,7 @@ private fun PlayerHome(
                                         preferences?.edit()?.putString("exit_confirmation", exitConfirmation.name)?.apply()
                                     }
                                     SearchHistorySettings()
+                                    InputModeSetting()
                                     SettingRow(stringResource(R.string.key_sounds), Modifier, selected = keySounds) {
                                         keySounds = !keySounds
                                         preferences?.edit()?.putBoolean("key_sounds", keySounds)?.apply()
@@ -8211,7 +8234,9 @@ private fun PlayerHome(
                                 }
                             }
                         }
-                        if (editing) PortalEditor(
+                        // "Eingaben nur per Handy": portals are entered on the phone, not here.
+                        if (editing && remoteInputOnly(context)) LaunchedEffect(Unit) { openRemoteAccess() }
+                        else if (editing) PortalEditor(
                             address = address,
                             mac = mac,
                             existingSources = savedSources,

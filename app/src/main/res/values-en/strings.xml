@@ -902,4 +902,12 @@
     <string name="backup_restart_hint">The app restarts afterwards. Portals are added to the existing ones; the selected settings are replaced.</string>
     <string name="backup_picker_missing">This device has no file picker. Use the Download folder.</string>
     <string name="backup_file_info">Backup from %1$s (version %2$s)</string>
+    <string name="pin_kind_password">Password instead of digits</string>
+    <string name="password_enter_new">Enter new password</string>
+    <string name="password_repeat">Repeat password</string>
+    <string name="password_label">Password (at least 4 characters)</string>
+    <string name="remote_access_from_pin">Set up on the phone</string>
+    <string name="input_remote_only">Input only on the phone</string>
+    <string name="input_remote_only_hint">PINs, passwords, portals and credentials are then entered only on the phone via QR code – nobody at the TV sees them. Search keeps working with the keyboard.</string>
+    <string name="input_remote_only_trakt">Enter the Trakt API on your phone (\"Input only on the phone\" is on).</string>
 </resources>

@@ -912,4 +912,12 @@
     <string name="backup_restart_hint">Potem aplikacja uruchomi się ponownie. Portale zostaną dodane do istniejących, wybrane ustawienia zastąpione.</string>
     <string name="backup_picker_missing">To urządzenie nie ma wyboru plików. Użyj folderu Download.</string>
     <string name="backup_file_info">Kopia z %1$s (wersja %2$s)</string>
+    <string name="pin_kind_password">Hasło zamiast cyfr</string>
+    <string name="password_enter_new">Wpisz nowe hasło</string>
+    <string name="password_repeat">Powtórz hasło</string>
+    <string name="password_label">Hasło (min. 4 znaki)</string>
+    <string name="remote_access_from_pin">Ustaw na telefonie</string>
+    <string name="input_remote_only">Wprowadzanie tylko na telefonie</string>
+    <string name="input_remote_only_hint">PIN-y, hasła, portale i dane dostępowe wpisuje się wtedy tylko na telefonie przez kod QR – nikt przy telewizorze ich nie widzi. Wyszukiwanie działa dalej z klawiaturą.</string>
+    <string name="input_remote_only_trakt">API Trakt wpisz na telefonie (włączone jest „Wprowadzanie tylko na telefonie”).</string>
 </resources>

@@ -48,7 +48,9 @@ class RemoteProtocolTest {
         )
         assertNull(decode("""{"t":"portalAdd","epoch":"e1","address":"javascript:alert(1)","mac":"x"}"""))
         assertEquals(RemoteCommand.Pin("1234", null), decode("""{"t":"pin","epoch":"e1","pin":"1234"}"""))
-        assertNull(decode("""{"t":"pin","epoch":"e1","pin":"12a4"}"""))
+        // A password (letters allowed) works as well; control characters do not.
+        assertEquals(RemoteCommand.Pin("Kino 2026", null), decode("""{"t":"pin","epoch":"e1","pin":"Kino 2026"}"""))
+        assertNull(decode("""{"t":"pin","epoch":"e1","pin":"ab\ncd"}"""))
         assertNull(decode("""{"t":"pin","epoch":"e1","pin":"123"}"""))
         assertEquals(RemoteCommand.KidsPin(null, "1234"), decode("""{"t":"kidsPin","epoch":"e1","pin":null,"current":"1234"}"""))
         assertNull(decode("""{"t":"parental","epoch":"e1","field":"somethingElse","value":true}"""))

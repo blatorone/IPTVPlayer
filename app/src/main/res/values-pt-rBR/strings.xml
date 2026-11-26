@@ -907,4 +907,12 @@
     <string name="backup_restart_hint">Depois o app reinicia. Os portais são adicionados aos existentes; as configurações escolhidas são substituídas.</string>
     <string name="backup_picker_missing">Este aparelho não tem seletor de arquivos. Use a pasta Download.</string>
     <string name="backup_file_info">Backup de %1$s (versão %2$s)</string>
+    <string name="pin_kind_password">Senha em vez de dígitos</string>
+    <string name="password_enter_new">Digite a nova senha</string>
+    <string name="password_repeat">Repita a senha</string>
+    <string name="password_label">Senha (mín. 4 caracteres)</string>
+    <string name="remote_access_from_pin">Configurar pelo celular</string>
+    <string name="input_remote_only">Entrada só pelo celular</string>
+    <string name="input_remote_only_hint">PINs, senhas, portais e dados de acesso passam a ser digitados só no celular via QR code – ninguém perto da TV os vê. A busca continua funcionando com o teclado.</string>
+    <string name="input_remote_only_trakt">Digite a API do Trakt no celular (“Entrada só pelo celular” está ativada).</string>
 </resources>

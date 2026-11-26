@@ -30,6 +30,8 @@ internal const val REMOTE_BASE_URL = "https://streamwatch-remote.streamwatchiptv
 /** Ends a session nobody used for this long. */
 internal const val REMOTE_IDLE_LIMIT_MS = 15 * 60 * 1000L
 
+private const val UNLOCK_ATTEMPTS = 5
+
 internal enum class RemoteStatus { CONNECTING, WAITING, CONNECTED, OFFLINE, ENDED }
 
 /** What the session needs from the app; always called on the main thread. */
@@ -57,8 +59,19 @@ internal class RemoteSession(
      * "pin" (check a PIN) or "pinNew" (set a new one): only a PIN field on the phone, no settings
      * are sent, only the PIN comes back. Null for the normal settings session.
      */
-    private val pinMode: String? = null
+    private val pinMode: String? = null,
+    /** In a PIN-only session: the PIN is a password (the phone shows a text field). */
+    private val pinPassword: Boolean = false,
+    /**
+     * A PIN or password protects the settings: the phone has to enter it before it gets any
+     * setting (checked here on the device). Null when nothing is protected.
+     */
+    private val unlock: ((String) -> Boolean)? = null,
+    private val unlockPassword: Boolean = false,
+    private val wrongPinMessage: String = failedMessage
 ) {
+    private var unlocked = unlock == null
+    private var unlockAttempts = 0
     private val crypto = RemoteSessionCrypto.create()
     val pageUrl = "$baseUrl/#s=${crypto.encodedSecret}" + if (pinMode != null) "&m=pin" else ""
     private val socketUrl = baseUrl.replaceFirst("https://", "wss://") + "/v1/room/${crypto.roomId}?role=tv"
@@ -100,11 +113,12 @@ internal class RemoteSession(
     /** Sends the current state to the phone if it changed (called whenever app state changes). */
     fun publish() {
         if (_status.value != RemoteStatus.CONNECTED) return
-        val text = if (pinMode != null) {
+        val text = if (pinMode != null || !unlocked) {
             com.google.gson.JsonObject().apply {
                 addProperty("t", "state")
                 addProperty("epoch", epoch)
-                addProperty("mode", pinMode)
+                addProperty("mode", pinMode ?: "unlock")
+                addProperty("password", if (pinMode != null) pinPassword else unlockPassword)
             }.toString()
         } else runCatching { RemoteProtocol.encodeState(handler.remoteState(), epoch) }.getOrNull() ?: return
         if (text == lastSentState) return
@@ -164,6 +178,20 @@ internal class RemoteSession(
             if (command == RemoteCommand.Hello) {
                 lastSentState = null
                 publish()
+                continue
+            }
+            if (!unlocked) {
+                // Nothing but the PIN is accepted until it was right; a few tries per QR code.
+                val entry = command as? RemoteCommand.PinEntry
+                if (entry != null && unlock?.invoke(entry.pin) == true) {
+                    unlocked = true
+                    send(RemoteProtocol.encodeResult(true, null))
+                    lastSentState = null
+                    publish()
+                } else {
+                    send(RemoteProtocol.encodeResult(false, wrongPinMessage))
+                    if (++unlockAttempts >= UNLOCK_ATTEMPTS) { end(); onFinished(); return }
+                }
                 continue
             }
             val reply = runCatching { handler.applyRemote(command) }

@@ -160,7 +160,8 @@ internal sealed interface RemoteCommand {
 internal object RemoteProtocol {
     private const val MAX_TEXT = 2_048
     private const val MAX_IDS = 5_000
-    private val PIN = Regex("^[0-9]{4,12}$")
+    /** Digits (4–12) or a password (4–64 characters, no control characters). */
+    private val PIN = Regex("^[^\\p{Cntrl}]{4,64}$")
     private val COUNTRY = Regex("^([A-Z]{2}|$UNKNOWN_COUNTRY)$")
     val PARENTAL_FIELDS = setOf(
         "protectSettings", "lockAdult", "kidsMode", "kidsAge",

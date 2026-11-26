@@ -907,4 +907,12 @@
     <string name="backup_restart_hint">L\'app redémarre ensuite. Les portails s\'ajoutent aux existants, les réglages choisis sont remplacés.</string>
     <string name="backup_picker_missing">Cet appareil n\'a pas de sélecteur de fichiers. Utilise le dossier Download.</string>
     <string name="backup_file_info">Sauvegarde du %1$s (version %2$s)</string>
+    <string name="pin_kind_password">Mot de passe au lieu de chiffres</string>
+    <string name="password_enter_new">Saisis le nouveau mot de passe</string>
+    <string name="password_repeat">Répète le mot de passe</string>
+    <string name="password_label">Mot de passe (4 caractères min.)</string>
+    <string name="remote_access_from_pin">Configurer avec le téléphone</string>
+    <string name="input_remote_only">Saisie uniquement sur le téléphone</string>
+    <string name="input_remote_only_hint">Les codes PIN, mots de passe, portails et identifiants se saisissent alors uniquement sur le téléphone via QR code – personne devant la TV ne les voit. La recherche fonctionne toujours au clavier.</string>
+    <string name="input_remote_only_trakt">Saisis l\'API Trakt sur le téléphone (« Saisie uniquement sur le téléphone » est activée).</string>
 </resources>

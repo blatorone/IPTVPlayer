@@ -7633,25 +7633,7 @@ private fun PlayerHome(
                                                 }
                                             }
                                         } }
-                                        ui.kidsProtectionOpen -> { {
-                                            SettingsDialog(stringResource(R.string.kids_protection), { ui.kidsProtectionOpen = false }) {
-                                                ParentalSettings(parental, { pinRequest = it }, profiles.hasKids) { onShared, onOwn ->
-                                                    sharedPinQuestion = SharedPinQuestion(context.getString(R.string.parental_pin_same_question), onShared, onOwn)
-                                                }
-                                                KidsProfileSettings(
-                                                    profiles, parental,
-                                                    onCreate = { ui.kidsNameDialog = true },
-                                                    onRename = { ui.kidsNameDialog = true },
-                                                    onColor = { openSettingsPage { ui.kidsColorOpen = true } },
-                                                    onTrakt = { openSettingsPage { ui.traktForKids = true; ui.traktSettingsOpen = true } },
-                                                    kidsTraktName = ui.kidsTraktName,
-                                                    onRemove = {
-                                                        pinRequest = PinRequest(context.getString(R.string.pin_enter), null,
-                                                            check = parental::checkPin, length = parental.pinLength) { profiles.removeKids() }
-                                                    }
-                                                )
-                                            }
-                                        } }
+                                        // Opened from the Kinderschutz page (Trakt of the kids account): shown above it.
                                         ui.traktSettingsOpen -> { {
                                             SettingsDialog(
                                                 if (ui.traktForKids) stringResource(R.string.kids_profile_trakt, profiles.kidsName.orEmpty())
@@ -7672,6 +7654,25 @@ private fun PlayerHome(
                                                         else syncTrakt(forceSeriesHistory = true)
                                                     },
                                                     onDisconnect = ::disconnectTrakt
+                                                )
+                                            }
+                                        } }
+                                        ui.kidsProtectionOpen -> { {
+                                            SettingsDialog(stringResource(R.string.kids_protection), { ui.kidsProtectionOpen = false }) {
+                                                ParentalSettings(parental, { pinRequest = it }, profiles.hasKids) { onShared, onOwn ->
+                                                    sharedPinQuestion = SharedPinQuestion(context.getString(R.string.parental_pin_same_question), onShared, onOwn)
+                                                }
+                                                KidsProfileSettings(
+                                                    profiles, parental,
+                                                    onCreate = { ui.kidsNameDialog = true },
+                                                    onRename = { ui.kidsNameDialog = true },
+                                                    onColor = { openSettingsPage { ui.kidsColorOpen = true } },
+                                                    onTrakt = { openSettingsPage { ui.traktForKids = true; ui.traktSettingsOpen = true } },
+                                                    kidsTraktName = ui.kidsTraktName,
+                                                    onRemove = {
+                                                        pinRequest = PinRequest(context.getString(R.string.pin_enter), null,
+                                                            check = parental::checkPin, length = parental.pinLength) { profiles.removeKids() }
+                                                    }
                                                 )
                                             }
                                         } }

@@ -871,4 +871,7 @@
     <string name="gradient_aurora">Zorza polarna</string>
     <string name="gradient_dawn">Świt</string>
     <string name="gradient_caribbean">Karaiby</string>
+    <string name="pin_phone">Wpisz na telefonie</string>
+    <string name="pin_phone_close">Zamknij kod QR</string>
+    <string name="pin_phone_hint">Zeskanuj kod telefonem i wpisz tam PIN – nikt nie zobaczy go na telewizorze.</string>
 </resources>

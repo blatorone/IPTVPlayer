@@ -881,4 +881,7 @@
     <string name="gradient_aurora">الشفق القطبي</string>
     <string name="gradient_dawn">الفجر</string>
     <string name="gradient_caribbean">الكاريبي</string>
+    <string name="pin_phone">الإدخال عبر الهاتف</string>
+    <string name="pin_phone_close">إغلاق رمز QR</string>
+    <string name="pin_phone_hint">امسح الرمز بهاتفك وأدخل رمز PIN هناك – لن يراه أحد على التلفاز.</string>
 </resources>

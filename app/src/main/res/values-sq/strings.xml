@@ -861,4 +861,7 @@
     <string name="gradient_aurora">Aurora polare</string>
     <string name="gradient_dawn">Agim</string>
     <string name="gradient_caribbean">Karaibe</string>
+    <string name="pin_phone">Fute në telefon</string>
+    <string name="pin_phone_close">Mbyll kodin QR</string>
+    <string name="pin_phone_hint">Skano kodin me telefonin dhe fut PIN-in atje – askush nuk e sheh në televizor.</string>
 </resources>

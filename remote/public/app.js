@@ -113,7 +113,11 @@ async function receive(data) {
   const text = await session.open(data);
   if (!text) return;
   const message = JSON.parse(text);
-  if (message.t === "state") {
+  if (message.t === "state" && (message.mode === "pin" || message.mode === "pinNew")) {
+    state = message;
+    deviceThere = true;
+    renderPinOnly();
+  } else if (message.t === "state") {
     state = message;
     applyAccent(message.accent);
     deviceThere = true;
@@ -121,6 +125,8 @@ async function receive(data) {
     $("finish").hidden = false;
     show();
     render();
+  } else if (message.t === "result" && state && (state.mode === "pin" || state.mode === "pinNew")) {
+    pinResult(message);
   } else if (message.t === "result") {
     if (message.data && message.data.sections) { portalCategories = message.data; renderPortals(); }
     if (message.message || !message.ok) toast(message.message || "Das hat nicht geklappt.", !message.ok);
@@ -557,3 +563,59 @@ $("finish").addEventListener("click", async () => {
     el("p", {}, "Der Zugriff ist beendet. Für weitere Änderungen am Gerät erneut „Per Handy einstellen“ öffnen und den neuen QR-Code scannen."));
   setStatus("Zugriff beendet");
 });
+
+// ---------- PIN only (from the PIN window on the TV) ----------
+// Only a PIN field: the TV sends no settings; the PIN never appears on the TV screen.
+function renderPinOnly() {
+  setStatus("Verbunden", "ok");
+  $("finish").hidden = true;
+  $("tabs").hidden = true;
+  $("app").hidden = true;
+  $("intro").hidden = false;
+  const newPin = state.mode === "pinNew";
+  // The same digit pad as on the TV: dots for the digits, 1–9, ⌫, 0, OK.
+  // Like on the device: a new PIN first asks for its length (4, 6, 8 or own length);
+  // with a fixed length the PIN is taken as soon as it is reached.
+  let pin = "", first = null, length = null, choosing = newPin;
+  const dots = el("div", { class: "pin-dots" });
+  const title = el("h1", {});
+  const draw = () => {
+    title.textContent = !newPin ? "PIN eingeben" : first === null ? "Neue PIN festlegen" : "Neue PIN wiederholen";
+    dots.textContent = Array.from({ length: length || Math.max(4, pin.length) }, (_, i) => (i < pin.length ? "●" : "–")).join(" ");
+    lengths.hidden = !choosing;
+    dots.hidden = choosing;
+    pad.hidden = choosing;
+    if (choosing) title.textContent = "Wie lang soll die PIN sein?";
+  };
+  const submit = () => {
+    if (pin.length < 4) { toast("Die PIN hat mindestens 4 Ziffern.", true); return; }
+    if (newPin && first === null) { first = pin; pin = ""; draw(); return; }
+    // A new PIN is typed twice here, so a typo cannot lock the device.
+    if (newPin && first !== pin) { toast("Die beiden PINs stimmen nicht überein.", true); first = null; pin = ""; draw(); return; }
+    send({ t: "pinEntry", pin });
+    pin = ""; first = null; draw();
+  };
+  const key = (label) => el("button", { class: "pin-key", onclick: () => {
+    if (label === "⌫") pin = pin.slice(0, -1);
+    else if (label === "OK") return submit();
+    else if (pin.length < (length || 12)) pin += label;
+    draw();
+    if (length && pin.length === length) submit();
+  } }, label);
+  const pad = el("div", { class: "pin-pad" }, ["1","2","3","4","5","6","7","8","9","⌫","0","OK"].map(key));
+  const lengths = el("div", { class: "pin-lengths" }, [[4, "4 Ziffern"], [6, "6 Ziffern"], [8, "8 Ziffern"], [null, "Eigene Länge (mind. 4)"]]
+    .map(([n, label]) => el("button", { class: "pin-key", onclick: () => { length = n; choosing = false; draw(); } }, label)));
+  // Checking an existing PIN: no fixed length (OK confirms).
+  $("intro").replaceChildren(title,
+    el("p", { class: "hint" }, "Die PIN wird verschlüsselt an das Gerät geschickt und dort nicht angezeigt."),
+    lengths, dots, pad);
+  draw();
+}
+
+function pinResult(message) {
+  if (message.ok) {
+    sessionStorage.removeItem("sw-secret");
+    $("intro").replaceChildren(el("h1", {}, state.mode === "pinNew" ? "PIN festgelegt" : "PIN bestätigt"), el("p", {}, "Du kannst diese Seite schließen."));
+    setStatus("Fertig");
+  } else toast(message.message || "Die PIN ist falsch.", true);
+}

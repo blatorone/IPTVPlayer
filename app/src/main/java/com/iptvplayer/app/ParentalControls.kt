@@ -271,6 +271,7 @@ internal fun PinDialog(
     var pin by remember { mutableStateOf("") }
     var first by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    var phoneEntry by remember { mutableStateOf(false) }
     val wrong = stringResource(R.string.pin_wrong)
     val mismatch = stringResource(R.string.pin_mismatch)
     val firstKey = remember { FocusRequester() }
@@ -327,6 +328,8 @@ internal fun PinDialog(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 message?.let { Text(it, textAlign = TextAlign.Center) }
+                // A new PIN is typed twice on the phone and compared there.
+                if (phoneEntry) PhonePinEntry(confirmTwice, onPin)
                 if (choosing) {
                     Text(stringResource(R.string.pin_length_question), style = MaterialTheme.typography.labelLarge)
                     listOf(4, 6, 8, null).forEachIndexed { index, option ->
@@ -370,10 +373,46 @@ internal fun PinDialog(
                 }
             }
         },
-        confirmButton = {},
+        confirmButton = {
+            // Typing the PIN on the phone: nobody next to the TV sees it (only when checking a PIN).
+            TextButton(onClick = { phoneEntry = !phoneEntry }) {
+                Text(stringResource(if (phoneEntry) R.string.pin_phone_close else R.string.pin_phone))
+            }
+        },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(android.R.string.cancel)) } }
     )
 }
+
+/** A PIN-only phone session: its QR code, and every PIN typed there is checked with [onPin]. */
+@Composable
+private fun PhonePinEntry(newPin: Boolean, onPin: (String) -> Boolean) {
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val wrongMessage = stringResource(R.string.pin_wrong)
+    val ended = stringResource(R.string.remote_msg_ended)
+    val failed = stringResource(R.string.remote_msg_change_failed)
+    var attempts by remember { mutableStateOf(0) }
+    val session = remember {
+        var self: RemoteSession? = null
+        val handler = object : RemoteHandler {
+            override fun remoteState(): RemoteState = error("PIN-only session")
+            override fun applyRemote(command: RemoteCommand): RemoteReply {
+                val entry = command as? RemoteCommand.PinEntry ?: return RemoteReply(false)
+                // A few tries per QR code; then the code is worthless.
+                if (++attempts > PHONE_PIN_ATTEMPTS) { self?.end(); return RemoteReply(false, wrongMessage) }
+                // On success the PIN window closes; leaving it ends the session after this answer.
+                return if (onPin(entry.pin)) RemoteReply(true) else RemoteReply(false, wrongMessage)
+            }
+        }
+        RemoteSession(scope, handler, ended, failed, pinMode = if (newPin) "pinNew" else "pin").also { self = it; it.start() }
+    }
+    androidx.compose.runtime.DisposableEffect(session) { onDispose { session.end() } }
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        QrCode(session.pageUrl, Modifier.width(110.dp).height(110.dp))
+        Text(stringResource(R.string.pin_phone_hint), style = MaterialTheme.typography.bodySmall, modifier = Modifier.width(200.dp))
+    }
+}
+
+private const val PHONE_PIN_ATTEMPTS = 5
 
 /** One key of the PIN pad: label centred, focus frame like the other buttons. */
 @Composable

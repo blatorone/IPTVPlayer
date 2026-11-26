@@ -861,4 +861,7 @@
     <string name="gradient_aurora">Aurora</string>
     <string name="gradient_dawn">Dawn</string>
     <string name="gradient_caribbean">Caribbean</string>
+    <string name="pin_phone">Enter on phone</string>
+    <string name="pin_phone_close">Close QR code</string>
+    <string name="pin_phone_hint">Scan the code with your phone and enter the PIN there – nobody can see it on the TV.</string>
 </resources>

@@ -861,4 +861,7 @@
     <string name="gradient_aurora">Polarlicht</string>
     <string name="gradient_dawn">Morgenrot</string>
     <string name="gradient_caribbean">Karibik</string>
+    <string name="pin_phone">Mit dem Handy eingeben</string>
+    <string name="pin_phone_close">QR-Code schließen</string>
+    <string name="pin_phone_hint">Scanne den Code mit deinem Handy und gib die PIN dort ein – am Fernseher sieht sie niemand.</string>
 </resources>

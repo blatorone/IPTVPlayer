@@ -866,4 +866,7 @@
     <string name="gradient_aurora">Aurora boreal</string>
     <string name="gradient_dawn">Alvorada</string>
     <string name="gradient_caribbean">Caribe</string>
+    <string name="pin_phone">Digitar no celular</string>
+    <string name="pin_phone_close">Fechar código QR</string>
+    <string name="pin_phone_hint">Escaneie o código com o celular e digite o PIN lá – ninguém vê na TV.</string>
 </resources>

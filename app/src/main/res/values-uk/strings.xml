@@ -871,4 +871,7 @@
     <string name="gradient_aurora">Північне сяйво</string>
     <string name="gradient_dawn">Світанок</string>
     <string name="gradient_caribbean">Кариби</string>
+    <string name="pin_phone">Ввести на телефоні</string>
+    <string name="pin_phone_close">Закрити QR-код</string>
+    <string name="pin_phone_hint">Відскануй код телефоном і введи PIN там — на телевізорі його ніхто не побачить.</string>
 </resources>

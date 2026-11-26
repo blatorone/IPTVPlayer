@@ -80,3 +80,7 @@ button.primary, nav button.active, .segments button.active { color: var(--on-acc
 .overview-row { display: flex; justify-content: space-between; gap: 10px; padding: 7px 10px; border-bottom: 1px solid var(--line); }
 .overview-row:last-child { border-bottom: none; }
 .overview-row .sub { flex: none; color: var(--muted); font-size: .8rem; }
+.pin-dots { font-size: 1.8rem; letter-spacing: .3rem; text-align: center; margin: 12px 0; }
+.pin-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-width: 320px; margin: 0 auto; }
+.pin-key { font-size: 1.4rem; padding: 16px 0; border-radius: 14px; }
+.pin-lengths { display: grid; gap: 10px; max-width: 320px; margin: 0 auto; }

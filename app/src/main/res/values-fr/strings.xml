@@ -866,4 +866,7 @@
     <string name="gradient_aurora">Aurore boréale</string>
     <string name="gradient_dawn">Aube</string>
     <string name="gradient_caribbean">Caraïbes</string>
+    <string name="pin_phone">Saisir sur le téléphone</string>
+    <string name="pin_phone_close">Fermer le code QR</string>
+    <string name="pin_phone_hint">Scannez le code avec votre téléphone et saisissez-y le PIN : personne ne le voit sur la TV.</string>
 </resources>

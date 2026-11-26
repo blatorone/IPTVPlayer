@@ -866,4 +866,7 @@
     <string name="gradient_aurora">Aurora polară</string>
     <string name="gradient_dawn">Zori</string>
     <string name="gradient_caribbean">Caraibe</string>
+    <string name="pin_phone">Introdu pe telefon</string>
+    <string name="pin_phone_close">Închide codul QR</string>
+    <string name="pin_phone_hint">Scanează codul cu telefonul și introdu PIN-ul acolo – nimeni nu îl vede la televizor.</string>
 </resources>

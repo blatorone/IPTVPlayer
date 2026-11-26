@@ -52,10 +52,15 @@ internal class RemoteSession(
     private val endedMessage: String,
     private val failedMessage: String,
     private val onFinished: () -> Unit = {},
-    baseUrl: String = REMOTE_BASE_URL
+    baseUrl: String = REMOTE_BASE_URL,
+    /**
+     * "pin" (check a PIN) or "pinNew" (set a new one): only a PIN field on the phone, no settings
+     * are sent, only the PIN comes back. Null for the normal settings session.
+     */
+    private val pinMode: String? = null
 ) {
     private val crypto = RemoteSessionCrypto.create()
-    val pageUrl = "$baseUrl/#s=${crypto.encodedSecret}"
+    val pageUrl = "$baseUrl/#s=${crypto.encodedSecret}" + if (pinMode != null) "&m=pin" else ""
     private val socketUrl = baseUrl.replaceFirst("https://", "wss://") + "/v1/room/${crypto.roomId}?role=tv"
 
     private val _status = MutableStateFlow(RemoteStatus.CONNECTING)
@@ -95,7 +100,13 @@ internal class RemoteSession(
     /** Sends the current state to the phone if it changed (called whenever app state changes). */
     fun publish() {
         if (_status.value != RemoteStatus.CONNECTED) return
-        val text = runCatching { RemoteProtocol.encodeState(handler.remoteState(), epoch) }.getOrNull() ?: return
+        val text = if (pinMode != null) {
+            com.google.gson.JsonObject().apply {
+                addProperty("t", "state")
+                addProperty("epoch", epoch)
+                addProperty("mode", pinMode)
+            }.toString()
+        } else runCatching { RemoteProtocol.encodeState(handler.remoteState(), epoch) }.getOrNull() ?: return
         if (text == lastSentState) return
         lastSentState = text
         send(text)

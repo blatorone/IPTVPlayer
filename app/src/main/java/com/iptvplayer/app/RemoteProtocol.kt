@@ -141,6 +141,8 @@ internal sealed interface RemoteCommand {
     data object CountriesLater : RemoteCommand
     /** The phone is done: the session ends and the device returns to Live-TV. */
     data object Finish : RemoteCommand
+    /** PIN typed on the phone (PIN-only session, so people nearby cannot see it). */
+    data class PinEntry(val pin: String) : RemoteCommand
     data class PortalEdit(val id: String, val address: String, val mac: String) : RemoteCommand
     data class PortalAdd(val address: String, val mac: String) : RemoteCommand
     data class PortalEnabled(val id: String, val enabled: Boolean) : RemoteCommand
@@ -316,6 +318,7 @@ internal object RemoteProtocol {
             }
             "countriesLater" -> RemoteCommand.CountriesLater
             "finish" -> RemoteCommand.Finish
+            "pinEntry" -> RemoteCommand.PinEntry(root.pin("pin") ?: return null)
             "portalEdit" -> {
                 val address = root.text("address")?.trim() ?: return null
                 val mac = root.text("mac")?.trim() ?: return null

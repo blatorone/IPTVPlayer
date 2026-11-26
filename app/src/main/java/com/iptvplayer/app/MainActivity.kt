@@ -5802,6 +5802,8 @@ private fun PlayerHome(
 
         override fun applyRemote(command: RemoteCommand): RemoteReply = when (command) {
             RemoteCommand.Hello -> RemoteReply(true)
+            // Only the PIN-only phone session (from a PIN window) answers this.
+            is RemoteCommand.PinEntry -> RemoteReply(false)
             is RemoteCommand.Set ->
                 if (command.id.startsWith("parental.")) RemoteReply(false)
                 else if (entries().applyRemoteValue(command.id, command.value)) RemoteReply(true)

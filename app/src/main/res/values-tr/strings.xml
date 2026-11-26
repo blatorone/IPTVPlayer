@@ -861,4 +861,7 @@
     <string name="gradient_aurora">Kutup ışığı</string>
     <string name="gradient_dawn">Şafak</string>
     <string name="gradient_caribbean">Karayipler</string>
+    <string name="pin_phone">Telefonla gir</string>
+    <string name="pin_phone_close">QR kodu kapat</string>
+    <string name="pin_phone_hint">Kodu telefonunla tara ve PIN\'i orada gir – televizyonda kimse göremez.</string>
 </resources>

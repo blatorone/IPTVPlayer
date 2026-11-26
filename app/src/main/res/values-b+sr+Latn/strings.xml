@@ -866,4 +866,7 @@
     <string name="gradient_aurora">Polarna svetlost</string>
     <string name="gradient_dawn">Zora</string>
     <string name="gradient_caribbean">Karibi</string>
+    <string name="pin_phone">Unesi na telefonu</string>
+    <string name="pin_phone_close">Zatvori QR kod</string>
+    <string name="pin_phone_hint">Skeniraj kod telefonom i tamo unesi PIN – na televizoru ga niko ne vidi.</string>
 </resources>

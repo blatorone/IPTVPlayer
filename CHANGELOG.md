@@ -1,5 +1,12 @@
 # Änderungen
 
+## 1.0.99
+
+- Live-TV: Beim Umschalten im Vollbild erscheint jedes Mal oben links die Senderinfo; Hoch/Runter schalten dabei weiter.
+- Neu unter Wiedergabe: Puffer (standardmäßig aus) mit festen Stufen Klein, Mittel (empfohlen), Groß und Sehr groß. Gilt ab dem nächsten Start der App.
+- Wiedergabeleiste überarbeitet: runde Knöpfe mit Akzentfarbe beim Fokus, dunkler Verlauf unten, der Fortschrittsbalken bleibt. Knöpfe, die nicht nutzbar sind, werden ausgeblendet; Untertitel erscheint nur, wenn der Stream welche hat.
+- Handy-Seite im App-Stil: Symbolleiste unten, Seitentitel, Einstellungen als Liste mit Unterseiten; behoben: „null“ im Tab Sperren.
+
 ## 1.0.98
 
 - Behoben: Nach dem Start im Vollbild ließ sich nicht umschalten – die Tasten nutzten noch die beim Start leere Senderliste. Jetzt gilt immer die aktuelle Liste.

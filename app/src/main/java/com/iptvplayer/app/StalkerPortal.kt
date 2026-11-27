@@ -105,7 +105,9 @@ internal class StalkerPortal(address: String, macAddress: String) {
     private data class ProgrammeCache(
         val periodHours: Int,
         val fetchedAt: Long,
-        val byChannelId: Map<String, List<PortalProgramme>>
+        val byChannelId: Map<String, List<PortalProgramme>>,
+        /** The bulk request failed or came back empty: kept only briefly, then asked again. */
+        val incomplete: Boolean = false
     )
 
     private val mac = normalizePortalMac(macAddress)
@@ -536,9 +538,12 @@ internal class StalkerPortal(address: String, macAddress: String) {
             val now = System.currentTimeMillis()
             val maxAge = if (refreshHours > 0) refreshHours * 3_600_000L else Long.MAX_VALUE
             val cached = programmeMutex.withLock {
+                // A failed or empty answer was kept for the whole refresh interval (6 h): the guide then
+                // stayed thin until it was refreshed by hand. Now it is asked again after 10 minutes.
                 programmeCache?.takeIf {
-                    it.periodHours == periodHours && now - it.fetchedAt in 0..maxAge
+                    it.periodHours == periodHours && now - it.fetchedAt in 0..(if (it.incomplete) minOf(maxAge, INCOMPLETE_EPG_RETRY_MS) else maxAge)
                 } ?: run {
+                    var failed = false
                     val schedules = try {
                         parseProgrammeSchedules(request(
                             "itv", "get_epg_info", token, mapOf("period" to periodHours.toString())
@@ -546,9 +551,10 @@ internal class StalkerPortal(address: String, macAddress: String) {
                     } catch (error: kotlinx.coroutines.CancellationException) {
                         throw error
                     } catch (_: Exception) {
+                        failed = true
                         emptyMap()
                     }
-                    ProgrammeCache(periodHours, now, schedules).also { programmeCache = it }
+                    ProgrammeCache(periodHours, now, schedules, failed || schedules.isEmpty()).also { programmeCache = it }
                 }
             }
             cached.byChannelId[id]?.takeIf { it.isNotEmpty() }?.let { return@withContext it }
@@ -830,3 +836,6 @@ private class LimitedCatalogueStream(input: InputStream) : FilterInputStream(inp
         check(bytesRead <= 96L * 1024 * 1024)
     }
 }
+
+/** A failed or empty guide answer is asked for again after this long (not after the full interval). */
+internal const val INCOMPLETE_EPG_RETRY_MS = 10 * 60_000L

@@ -2766,7 +2766,10 @@ private fun PlayerHome(
             }
             check(answered)
             epgCache = epgCache + (key to entries)
-            ui.epgFetchedAt = ui.epgFetchedAt + (key to System.currentTimeMillis())
+            // Nothing came back: asked again after a few minutes, not only after the whole interval.
+            val now = System.currentTimeMillis()
+            val fetchedAt = if (entries.isEmpty() && maxAge != Long.MAX_VALUE) now - maxAge + INCOMPLETE_EPG_RETRY_MS else now
+            if (entries.isNotEmpty() || maxAge != Long.MAX_VALUE) ui.epgFetchedAt = ui.epgFetchedAt + (key to fetchedAt)
             true
         } catch (error: CancellationException) {
             throw error
@@ -2800,17 +2803,22 @@ private fun PlayerHome(
         loadProviderSchedule(channel)
     }
     val hasPortal = storedSource != null
+    // Every 15 minutes: what has grown older than the refresh interval (or came back empty) is
+    // loaded again. Before, this happened only once the whole interval had passed since the app
+    // started, and then for everything at once.
+    var epgStaleCheck by remember { mutableIntStateOf(0) }
+    val lastEpgReport = remember { arrayOf("") }
     LaunchedEffect(epgRefreshHours, hasPortal) {
         if (epgRefreshHours <= 0 || !hasPortal) return@LaunchedEffect
         while (true) {
-            delay(epgRefreshHours * 3_600_000L)
-            if (canPlay()) epgRefreshRequest++
+            delay(15 * 60_000L)
+            if (canPlay()) epgStaleCheck++
         }
     }
     LaunchedEffect(restoring, hasPortal, liveSession, useXmlTv, xmlTvSources, xmlTvSourcesLoaded, guideCacheLoaded,
-        epgHorizonHours, epgRefreshRequest, epgRefreshHours) {
+        epgHorizonHours, epgRefreshRequest, epgRefreshHours, epgStaleCheck) {
         if (restoring || !hasPortal || !xmlTvSourcesLoaded || !guideCacheLoaded) return@LaunchedEffect
-        val refresh = epgAtStartup || epgRefreshRequest > 0
+        val refresh = epgAtStartup || epgRefreshRequest > 0 || epgStaleCheck > 0
         ui.epgUpdateFailed = false
         ui.epgUpdating = true
         try {
@@ -2846,7 +2854,14 @@ private fun PlayerHome(
                 // must not make thousands of old channels refresh every cycle.
                 val refreshTargets = (selected + visibleEpgChannels.asSequence() + pinned.asSequence())
                     .filter { it in available }.distinct().toList()
-                ui.epgUpdateFailed = !loadProviderSchedules(refreshTargets, force = epgRefreshRequest > 0)
+                val complete = loadProviderSchedules(refreshTargets, force = epgRefreshRequest > 0)
+                // Counts only: whether the guide comes back and how much of it is empty.
+                val empty = refreshTargets.count { effectiveProgrammes(it).isNullOrEmpty() }
+                val report = "epg_refresh rows:${refreshTargets.size} empty:$empty complete:$complete"
+                // Only when something changed (rows without a guide would otherwise be noted every 15 minutes).
+                if ((!complete || empty > 0) && report != lastEpgReport[0]) AppDiagnostics.record(context, report)
+                lastEpgReport[0] = report
+                ui.epgUpdateFailed = !complete
             }
         } finally {
             ui.epgUpdating = false

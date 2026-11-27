@@ -10180,10 +10180,15 @@ internal fun PlayerFrame(
             button.setTextColor(android.graphics.Color.TRANSPARENT)
             button.minWidth = 0
             button.minHeight = 0
-            button.layoutParams = button.layoutParams?.apply {
-                width = (52 * density).toInt()
-                height = (52 * density).toInt()
+            // Media3 puts the button into a frame of its own size; both get the size of the other
+            // buttons, so the focus ring is just as large.
+            val size = (52 * density).toInt()
+            (button.parent as? android.view.ViewGroup)?.takeIf { it.id != androidx.media3.ui.R.id.exo_center_controls }?.let { frame ->
+                frame.layoutParams = frame.layoutParams?.apply { width = size; height = size }
             }
+            button.layoutParams = button.layoutParams?.apply { width = size; height = size }
+            button.setPadding(0, 0, 0, 0)
+            button.requestLayout()
         }
         styleSeek(androidx.media3.ui.R.id.exo_rew_with_amount, R.drawable.ic_player_jump_back)
         styleSeek(androidx.media3.ui.R.id.exo_ffwd_with_amount, R.drawable.ic_player_jump_forward)
@@ -11040,7 +11045,11 @@ internal fun MenuButton(
             .focusProperties { canFocus = enabled || focused }
             // The press and focus effect stays inside the rounded shape (no square corners).
             .clip(RoundedCornerShape(12.dp))
-            .combinedClickable(enabled = enabled, onClick = onClick, onLongClick = onLongPress),
+            // Disabled entries ignore clicks but keep their focus (see SettingRow).
+            .combinedClickable(
+                onClick = { if (enabled) onClick() },
+                onLongClick = onLongPress?.let { longPress -> { if (enabled) longPress() } }
+            ),
         color = container,
         contentColor = when {
             !enabled -> colors.onSurface.copy(alpha = 0.38f)

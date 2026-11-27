@@ -99,7 +99,9 @@ internal fun SettingRow(
             // the focus; otherwise it jumped to another category. Clicks stay off until it is enabled.
             .focusProperties { canFocus = enabled || focused }
             .clip(RoundedCornerShape(12.dp))
-            .clickable(enabled = enabled, onClick = onClick),
+            // Not clickable(enabled = …): that also makes the row unfocusable, and a row disabled while
+            // focused lost the focus to another section. Disabled rows ignore the click instead.
+            .clickable { if (enabled) onClick() },
         color = if (focused) colors.surfaceContainerHighest else colors.surfaceContainerHigh,
         contentColor = if (enabled) colors.onSurface else colors.onSurface.copy(alpha = 0.38f),
         shape = RoundedCornerShape(12.dp),
@@ -139,7 +141,7 @@ internal fun SettingToggleButton(on: Boolean, label: String, enabled: Boolean = 
             .onFocusChanged { focused = it.isFocused }
             .focusProperties { canFocus = enabled || focused }
             .clip(RoundedCornerShape(12.dp))
-            .clickable(enabled = enabled, onClickLabel = label, onClick = onClick)
+            .clickable(onClickLabel = label) { if (enabled) onClick() }
             .semantics { contentDescription = label },
         color = if (focused) colors.surfaceContainerHighest else colors.surfaceContainerHigh,
         shape = RoundedCornerShape(12.dp),

@@ -963,4 +963,5 @@
     <string name="stream_choice_title">Zgjidh transmetimin</string>
     <string name="stream_choice_failed">Transmetimi nuk luhet. Zgjidh një tjetër:</string>
     <string name="smart_home_light_hint">„Lëre siç është“: StreamWatch këtu nuk e ndërron fare këtë llambë. Me „ndezur“ shfaqen ndriçimi dhe – nëse llamba e mbështet – paleta për temperaturën e ngjyrës dhe ngjyrën.</string>
+    <string name="smart_home_action">Ndërrimi</string>
 </resources>

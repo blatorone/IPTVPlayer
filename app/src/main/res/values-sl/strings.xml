@@ -972,4 +972,5 @@
     <string name="stream_choice_title">Izberi pretok</string>
     <string name="stream_choice_failed">Pretok se ne predvaja. Izberi drugega:</string>
     <string name="smart_home_light_hint">„Pusti, kot je“: StreamWatch te luči tukaj sploh ne preklaplja. Pri „vklopljeno“ se prikažeta svetlost in – če luč to zmore – paleta za barvno temperaturo in barvo.</string>
+    <string name="smart_home_action">Preklop</string>
 </resources>

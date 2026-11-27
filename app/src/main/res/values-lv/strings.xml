@@ -967,4 +967,5 @@
     <string name="stream_choice_title">Izvēlēties plūsmu</string>
     <string name="stream_choice_failed">Plūsma nedarbojas. Izvēlies citu:</string>
     <string name="smart_home_light_hint">„Atstāt kā ir“: StreamWatch šeit šo lampu nepārslēdz. Izvēloties „ieslēgta“, parādās spilgtums un – ja lampa to atbalsta – krāsas temperatūras un krāsu palete.</string>
+    <string name="smart_home_action">Pārslēgšana</string>
 </resources>

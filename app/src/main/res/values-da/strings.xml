@@ -963,4 +963,5 @@
     <string name="stream_choice_title">Vælg stream</string>
     <string name="stream_choice_failed">Streamen spiller ikke. Vælg en anden:</string>
     <string name="smart_home_light_hint">„Lad være som det er“: StreamWatch skifter slet ikke denne lampe her. Ved „tændt“ vises lysstyrken og – hvis lampen kan – paletten til farvetemperatur og farve.</string>
+    <string name="smart_home_action">Skift</string>
 </resources>

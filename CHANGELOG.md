@@ -2,7 +2,7 @@
 
 ## 2.0.1
 
-- Raucherpause-Knopf im Vollbild ist jetzt mit der Fernbedienung erreichbar. Smart Home: „nicht ändern“ heißt jetzt „unverändert lassen“, und die Lampenseite erklärt, wann Helligkeit und Farbpalette erscheinen.
+- Raucherpause-Knopf im Vollbild ist jetzt mit der Fernbedienung erreichbar. Smart Home: Pro Lampe gibt es jetzt eine Zeile „Schalten“, die bei jedem Druck zwischen „unverändert lassen“, „aus“ und „an“ wechselt (vorher drei Schalter, von denen der aktive scheinbar nicht reagierte). Die Lampenseite erklärt, wann Helligkeit und Farbpalette erscheinen.
 - Vollbild: Startet gar kein Stream mehr, steht die Fehlermeldung jetzt auch im Vollbild – mit dem Grund (z. B. „HTTP 403“) – statt eines schwarzen Bildschirms. Beim Wechsel zwischen Streams erscheint nichts. Das betraf auch den Fall, dass schon der Stream-Link nicht geholt werden konnte.
 - Quellen: Die Anzahl von Live-TV, Filmen und Serien steht jetzt neben dem Status über dem Portal statt im Rahmen – so ist die Portaladresse wieder ganz zu sehen.
 - Neu: „Senderwechsel automatisch bei Fehlern“ (Wiedergabe, auch per Handy, Standard: an wie bisher). Ausgeschaltet wählst du beim Start eines Senders mit mehreren Streams selbst aus einer Liste, und StreamWatch wechselt nie von allein. Bei einem Fehler zeigt die App wahlweise wieder die Liste oder tut nichts; dann kommt die Liste beim nächsten Start. Die Einstellungen zum automatischen Wechsel erscheinen nur, wenn er an ist.

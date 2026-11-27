@@ -979,4 +979,5 @@
     <string name="stream_choice_title">اختر البث</string>
     <string name="stream_choice_failed">البث لا يعمل. اختر بثًا آخر:</string>
     <string name="smart_home_light_hint">„اتركه كما هو“: لا يبدّل StreamWatch هذا المصباح هنا إطلاقًا. عند „تشغيل“ يظهر السطوع و – إن كان المصباح يدعم ذلك – لوحة درجة حرارة اللون واللون.</string>
+    <string name="smart_home_action">التبديل</string>
 </resources>

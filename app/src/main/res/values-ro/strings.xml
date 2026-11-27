@@ -967,4 +967,5 @@
     <string name="stream_choice_title">Alege fluxul</string>
     <string name="stream_choice_failed">Fluxul nu merge. Alege altul:</string>
     <string name="smart_home_light_hint">„Lasă așa cum e“: StreamWatch nu comută deloc această lampă aici. La „aprinsă“ apar luminozitatea și – dacă lampa poate – paleta pentru temperatura culorii și culoare.</string>
+    <string name="smart_home_action">Comutare</string>
 </resources>

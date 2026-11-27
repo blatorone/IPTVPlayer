@@ -971,4 +971,5 @@
     <string name="stream_choice_title">Pasirinkti srautą</string>
     <string name="stream_choice_failed">Srautas neveikia. Pasirink kitą:</string>
     <string name="smart_home_light_hint">„Palikti kaip yra“: StreamWatch čia šios lempos visai neperjungia. Pasirinkus „įjungta“ atsiranda ryškumas ir – jei lempa palaiko – spalvos temperatūros ir spalvų paletė.</string>
+    <string name="smart_home_action">Perjungimas</string>
 </resources>

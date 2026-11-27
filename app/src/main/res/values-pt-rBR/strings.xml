@@ -967,4 +967,5 @@
     <string name="stream_choice_title">Escolher stream</string>
     <string name="stream_choice_failed">O stream não reproduz. Escolha outro:</string>
     <string name="smart_home_light_hint">„Deixar como está“: o StreamWatch não muda esta luz aqui. Com „ligada“ aparecem o brilho e – se a luz suportar – a paleta de temperatura de cor e cor.</string>
+    <string name="smart_home_action">Ação</string>
 </resources>

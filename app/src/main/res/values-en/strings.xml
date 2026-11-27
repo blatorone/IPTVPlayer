@@ -963,4 +963,5 @@
     <string name="stream_choice_title">Choose stream</string>
     <string name="stream_choice_failed">The stream does not play. Choose another one:</string>
     <string name="smart_home_light_hint">„Leave as is“: StreamWatch does not switch this light here at all. With „on“ the brightness and – if the light supports it – the palette for colour temperature and colour appear.</string>
+    <string name="smart_home_action">Switch</string>
 </resources>

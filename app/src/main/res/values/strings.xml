@@ -963,4 +963,5 @@
     <string name="stream_choice_title">Stream wählen</string>
     <string name="stream_choice_failed">Der Stream läuft nicht. Wähle einen anderen:</string>
     <string name="smart_home_light_hint">„Unverändert lassen“: StreamWatch schaltet diese Lampe hier gar nicht. Bei „an“ erscheinen die Helligkeit und – wenn die Lampe es kann – die Farbpalette für Farbtemperatur und Farbe.</string>
+    <string name="smart_home_action">Schalten</string>
 </resources>

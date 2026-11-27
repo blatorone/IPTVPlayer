@@ -310,10 +310,20 @@ private fun LightEditor(state: LightState, entity: HaEntity) {
     fun set(value: LightSetting?) = LightAutomation.update { it.withSetting(state, entity.id, value) }
     Text(stringResource(R.string.smart_home_light_hint), style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant)
-    SettingRow(stringResource(R.string.smart_home_unchanged), selected = setting == null) { set(null) }
-    if (entity.domain != "scene") SettingRow(stringResource(onLabel(entity, false)), selected = setting?.on == false) { set(LightSetting(false)) }
-    SettingRow(stringResource(onLabel(entity, true)), selected = setting?.on == true) {
-        if (setting?.on != true) set(LightSetting(true, if (entity.dimmable) 100 else null))
+    // One row that cycles: leave as is -> off -> on -> leave as is (scenes: only on). Three switch
+    // rows of which one was always on looked broken when the active one was pressed.
+    val mode = when { setting == null -> 0; !setting.on -> 1; else -> 2 }
+    val modeLabel = stringResource(when (mode) {
+        0 -> R.string.smart_home_unchanged
+        1 -> onLabel(entity, false)
+        else -> onLabel(entity, true)
+    })
+    SettingRow(stringResource(R.string.smart_home_action) + ": " + modeLabel) {
+        when (if (mode == 0 && entity.domain == "scene") 1 else mode) {
+            0 -> set(LightSetting(false))
+            1 -> set(LightSetting(true, if (entity.dimmable) 100 else null))
+            else -> set(null)
+        }
     }
     if (setting?.on != true) return
     if (entity.dimmable) {

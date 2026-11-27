@@ -971,4 +971,5 @@
     <string name="stream_choice_title">Vybrať stream</string>
     <string name="stream_choice_failed">Stream nehrá. Vyber iný:</string>
     <string name="smart_home_light_hint">„Ponechať bez zmeny“: StreamWatch toto svetlo tu vôbec neprepína. Pri „zapnuté“ sa zobrazí jas a – ak to svetlo podporuje – paleta pre teplotu farby a farbu.</string>
+    <string name="smart_home_action">Prepnutie</string>
 </resources>

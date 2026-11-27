@@ -967,4 +967,5 @@
     <string name="stream_choice_title">Choisir le flux</string>
     <string name="stream_choice_failed">Le flux ne fonctionne pas. Choisis-en un autre :</string>
     <string name="smart_home_light_hint">« Laisser tel quel » : StreamWatch ne change pas du tout cette lampe ici. Avec « allumée » apparaissent la luminosité et – si la lampe le permet – la palette de température de couleur et de couleur.</string>
+    <string name="smart_home_action">Action</string>
 </resources>

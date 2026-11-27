@@ -967,4 +967,5 @@
     <string name="stream_choice_title">Изабери стрим</string>
     <string name="stream_choice_failed">Стрим не ради. Изабери други:</string>
     <string name="smart_home_light_hint">„Остави како јесте“: StreamWatch овде уопште не пребацује ову лампу. Код „укључено“ појављују се осветљење и – ако лампа то подржава – палета за температуру боје и боју.</string>
+    <string name="smart_home_action">Пребацивање</string>
 </resources>

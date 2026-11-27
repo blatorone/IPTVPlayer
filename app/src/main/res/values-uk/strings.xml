@@ -971,4 +971,5 @@
     <string name="stream_choice_title">Обрати потік</string>
     <string name="stream_choice_failed">Потік не відтворюється. Обери інший:</string>
     <string name="smart_home_light_hint">«Залишити як є»: тут StreamWatch цю лампу взагалі не перемикає. При «увімк.» з\'являються яскравість і – якщо лампа вміє – палітра колірної температури та кольору.</string>
+    <string name="smart_home_action">Перемикання</string>
 </resources>

@@ -963,4 +963,5 @@
     <string name="stream_choice_title">Yayın seç</string>
     <string name="stream_choice_failed">Yayın oynatılamıyor. Başka birini seç:</string>
     <string name="smart_home_light_hint">„Olduğu gibi bırak“: StreamWatch bu lambayı burada hiç değiştirmez. „Açık“ seçilince parlaklık ve – lamba destekliyorsa – renk sıcaklığı ve renk paleti görünür.</string>
+    <string name="smart_home_action">Geçiş</string>
 </resources>

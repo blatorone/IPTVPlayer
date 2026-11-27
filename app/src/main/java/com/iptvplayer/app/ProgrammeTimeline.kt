@@ -5,6 +5,10 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
@@ -192,7 +196,23 @@ internal fun ProgrammeTimeline(
             }
         }
     }
-    Column(Modifier.fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(if (compact) 2.dp else 4.dp)) {
+    // One "now" line through the whole guide, from the row of times at the top down; the time
+    // already gone (left of it) lies under a dark veil.
+    val nowFraction = ((now - start).toFloat() / GUIDE_WINDOW).takeIf { now >= start && now < start + GUIDE_WINDOW }
+    val nowColor = appearance.nowColor.color
+    Column(
+        Modifier.fillMaxHeight().drawWithContent {
+            drawContent()
+            if (nowFraction != null && displayed.isNotEmpty()) {
+                val timelineStart = size.width * (1.25f / 4.25f)
+                val x = timelineStart + (size.width - timelineStart) * nowFraction
+                drawRect(Color.Black.copy(alpha = 0.45f), Offset(timelineStart, 0f), Size(x - timelineStart, size.height))
+                val line = 2.dp.toPx()
+                drawRect(nowColor, Offset(x - line / 2, 0f), Size(line, size.height))
+            }
+        },
+        verticalArrangement = Arrangement.spacedBy(if (compact) 2.dp else 4.dp)
+    ) {
     if (displayed.isEmpty()) {
         Text(stringResource(if (onlyPinned) R.string.guide_no_pinned else R.string.no_channels))
         return@Column
@@ -489,12 +509,6 @@ private fun TimelineRow(
                     maxLines = 1, overflow = TextOverflow.Ellipsis
                 )
             }
-        }
-        if (now in start until end) {
-            Box(
-                Modifier.offset(x = width * ((now - start).toFloat() / GUIDE_WINDOW))
-                    .width(2.dp).fillMaxHeight().background(colors.secondary)
-            )
         }
     }
 }

@@ -937,4 +937,5 @@
     <string name="timeshift_live">Diretta</string>
     <string name="player_jump_back">Indietro di 10 minuti</string>
     <string name="player_jump_forward">Avanti di 10 minuti</string>
+    <string name="guide_now_line_color">Colore della linea del tempo</string>
 </resources>

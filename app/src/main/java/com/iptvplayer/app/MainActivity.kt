@@ -5911,6 +5911,9 @@ private fun PlayerHome(
                 add(shown("guidePreview", grid, R.string.guide_preview_visible, { it.showPreview }) { a, v -> a.copy(showPreview = v) })
                 add(shown("guideNumbers", grid, R.string.guide_numbers_visible, { it.showNumbers }) { a, v -> a.copy(showNumbers = v) })
                 add(shown("guideLogos", grid, R.string.guide_logos_visible, { it.showLogos }) { a, v -> a.copy(showLogos = v) })
+                add(RemoteEntry.Choice("guideNowColor", grid, text(R.string.guide_now_line_color),
+                    options(GuideNowColor.entries) { it.label }, { guideAppearance.nowColor.name }
+                ) { value -> appearance { it.copy(nowColor = GuideNowColor.valueOf(value)) } })
                 add(size("listWidth", list, R.string.guide_list_width, { it.listWidth }) { a, v -> a.copy(listWidth = v) })
                 add(shown("listSchedule", list, R.string.guide_show_schedule, { it.showSchedule }) { a, v -> a.copy(showSchedule = v) })
                 add(shown("listDescription", list, R.string.guide_show_description, { it.showDescription }) { a, v ->

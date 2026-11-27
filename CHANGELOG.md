@@ -2,6 +2,7 @@
 
 ## 1.0.99
 
+- Programmführer: Die Zeitlinie geht jetzt durchgehend von der Zeile mit den Uhrzeiten bis ganz nach unten; die bereits abgelaufene Zeit links davon liegt unter einem dunklen Schleier. Die Farbe der Linie ist wählbar (Programmführer-Darstellung und Handy-Seite): Cyan (neu als Standard, gut sichtbar neben Rot), Türkis, Gelb, Limette oder Eisblau.
 - Einheitliche Knöpfe in der ganzen App nach dem Vorbild der Einstellungszeilen: Angewählt wird die Fläche heller und bekommt einen Rahmen in der Akzentfarbe; Ausgewähltes (z. B. die offene Kategorie) steht in der Akzentfarbe statt mit Streifen; Dialogknöpfe sind kleine Karten; die Player-Knöpfe bekommen beim Anwählen einen Akzentring. Keine eckigen Schatten mehr um runde Knöpfe.
 - Wiedergabeleiste neu geordnet wie bei Netflix und Prime: vorherige Folge – zurückspulen – Play/Pause – Stopp – vorspulen – nächste Folge, alle im selben runden Stil mit neuen Symbolen. Bei Filmen und Live-TV mit Timeshift springen die äußeren Knöpfe 10 Minuten zurück bzw. vor; was nicht geht, wird ausgeblendet.
 - Handy-Seite: Puffer, Timeshift und Fließender Portalwechsel lassen sich jetzt auch vom Handy aus einstellen.

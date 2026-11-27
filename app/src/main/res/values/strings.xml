@@ -932,4 +932,5 @@
     <string name="timeshift_live">Live</string>
     <string name="player_jump_back">10 Minuten zurück</string>
     <string name="player_jump_forward">10 Minuten vor</string>
+    <string name="guide_now_line_color">Farbe der Zeitlinie</string>
 </resources>

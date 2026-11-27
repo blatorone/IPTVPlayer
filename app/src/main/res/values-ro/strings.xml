@@ -937,4 +937,5 @@
     <string name="timeshift_live">Live</string>
     <string name="player_jump_back">Înapoi 10 minute</string>
     <string name="player_jump_forward">Înainte 10 minute</string>
+    <string name="guide_now_line_color">Culoarea liniei de timp</string>
 </resources>

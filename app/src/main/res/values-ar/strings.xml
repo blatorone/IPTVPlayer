@@ -952,4 +952,5 @@
     <string name="timeshift_live">مباشر</string>
     <string name="player_jump_back">رجوع 10 دقائق</string>
     <string name="player_jump_forward">تقديم 10 دقائق</string>
+    <string name="guide_now_line_color">لون خط الوقت</string>
 </resources>

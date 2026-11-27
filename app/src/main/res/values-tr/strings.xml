@@ -932,4 +932,5 @@
     <string name="timeshift_live">Canlı</string>
     <string name="player_jump_back">10 dakika geri</string>
     <string name="player_jump_forward">10 dakika ileri</string>
+    <string name="guide_now_line_color">Zaman çizgisi rengi</string>
 </resources>

@@ -9,6 +9,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 
 internal enum class GuideSize(val label: Int, val factor: Float) {
@@ -16,6 +17,17 @@ internal enum class GuideSize(val label: Int, val factor: Float) {
     MEDIUM(R.string.guide_size_medium, 1f),
     LARGE(R.string.guide_size_large, 1.2f),
     EXTRA_LARGE(R.string.guide_size_extra_large, 1.4f);
+
+    fun next() = entries[(ordinal + 1) % entries.size]
+}
+
+/** Colour of the "now" line in the guide; cyan stands out best next to a red accent. */
+internal enum class GuideNowColor(val label: Int, val color: Color) {
+    CYAN(R.string.accent_cyan, Color(0xFF00E5FF)),
+    TURQUOISE(R.string.accent_turquoise, Color(0xFF1DE9B6)),
+    YELLOW(R.string.accent_yellow, Color(0xFFF5C451)),
+    LIME(R.string.accent_lime, Color(0xFFC6FF00)),
+    ICE(R.string.accent_ice, Color(0xFF81D4FA));
 
     fun next() = entries[(ordinal + 1) % entries.size]
 }
@@ -33,7 +45,8 @@ internal data class GuideAppearance(
     val showDescription: Boolean = true,
     val keepChannelList: Boolean = false,
     val opacity: Int = 90,
-    val closeSeconds: Int = 15
+    val closeSeconds: Int = 15,
+    val nowColor: GuideNowColor = GuideNowColor.CYAN
 ) {
     fun save(preferences: SharedPreferences?) {
         preferences?.edit()
@@ -43,7 +56,7 @@ internal data class GuideAppearance(
             ?.putBoolean("guide_logos", showLogos)?.putBoolean("guide_progress", showProgress)
             ?.putBoolean("guide_schedule", showSchedule)?.putBoolean("guide_description", showDescription)
             ?.putBoolean("guide_keep_list", keepChannelList)?.putInt("guide_opacity", opacity)
-            ?.putInt("guide_close_seconds", closeSeconds)?.apply()
+            ?.putInt("guide_close_seconds", closeSeconds)?.putString("guide_now_color", nowColor.name)?.apply()
     }
 }
 
@@ -57,7 +70,8 @@ internal fun readGuideAppearance(preferences: SharedPreferences?): GuideAppearan
         enabled("guide_progress"), enabled("guide_schedule"), enabled("guide_description"),
         enabled("guide_keep_list", false),
         preferences?.getInt("guide_opacity", 90)?.coerceIn(60, 100) ?: 90,
-        preferences?.getInt("guide_close_seconds", 15)?.coerceIn(0, 60) ?: 15
+        preferences?.getInt("guide_close_seconds", 15)?.coerceIn(0, 60) ?: 15,
+        GuideNowColor.entries.firstOrNull { it.name == preferences?.getString("guide_now_color", null) } ?: GuideNowColor.CYAN
     )
 }
 
@@ -86,6 +100,10 @@ internal fun GuideAppearanceDialog(
                     }
                     AppearanceToggle(R.string.guide_logos_visible, appearance.showLogos) {
                         onChange(appearance.copy(showLogos = !appearance.showLogos))
+                    }
+                    SettingRow(stringResource(R.string.guide_setting_value, stringResource(R.string.guide_now_line_color),
+                        stringResource(appearance.nowColor.label))) {
+                        onChange(appearance.copy(nowColor = appearance.nowColor.next()))
                     }
                 } else {
                     AppearanceSize(R.string.guide_list_width, appearance.listWidth) { onChange(appearance.copy(listWidth = it)) }

@@ -937,4 +937,5 @@
     <string name="timeshift_live">Uživo</string>
     <string name="player_jump_back">10 minuta natrag</string>
     <string name="player_jump_forward">10 minuta naprijed</string>
+    <string name="guide_now_line_color">Boja vremenske crte</string>
 </resources>

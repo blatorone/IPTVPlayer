@@ -1,5 +1,6 @@
 package com.iptvplayer.app
 
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -95,6 +96,7 @@ internal fun SettingRow(
                 if (it.isFocused) memory?.focused(title)
             }
             .focusProperties { canFocus = enabled }
+            .clip(RoundedCornerShape(12.dp))
             .clickable(enabled = enabled, onClick = onClick),
         color = if (focused) colors.surfaceContainerHighest else colors.surfaceContainerHigh,
         contentColor = if (enabled) colors.onSurface else colors.onSurface.copy(alpha = 0.38f),
@@ -134,6 +136,7 @@ internal fun SettingToggleButton(on: Boolean, label: String, enabled: Boolean = 
         modifier = Modifier
             .onFocusChanged { focused = it.isFocused }
             .focusProperties { canFocus = enabled }
+            .clip(RoundedCornerShape(12.dp))
             .clickable(enabled = enabled, onClickLabel = label, onClick = onClick)
             .semantics { contentDescription = label },
         color = if (focused) colors.surfaceContainerHighest else colors.surfaceContainerHigh,
@@ -172,12 +175,15 @@ internal fun SettingsNavItem(
     var focused by remember { mutableStateOf(false) }
     val colors = MaterialTheme.colorScheme
     Surface(
-        modifier = modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused }.clickable(onClick = onClick),
-        color = when {
-            selected -> colors.primary.copy(alpha = 0.18f)
-            else -> Color.Transparent
+        modifier = modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused }
+            .clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick),
+        // Like the settings rows: brighter when focused; the open section in the accent colour.
+        color = if (focused) colors.surfaceContainerHighest else Color.Transparent,
+        contentColor = when {
+            selected -> colors.primary
+            focused -> colors.onSurface
+            else -> colors.onSurfaceVariant
         },
-        contentColor = if (selected || focused) colors.onSurface else colors.onSurfaceVariant,
         shape = RoundedCornerShape(12.dp),
         border = if (focused) BorderStroke(2.dp, accentBrush()) else null
     ) {

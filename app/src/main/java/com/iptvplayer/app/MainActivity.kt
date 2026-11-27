@@ -1,5 +1,6 @@
 package com.iptvplayer.app
 
+import androidx.compose.ui.draw.clip
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -10068,15 +10069,11 @@ internal fun PlayerFrame(
     fun enableRemoteFocus(view: android.view.View) {
         view.isFocusable = true
         view.isFocusableInTouchMode = true
+        // Like the settings rows: a lighter surface and an accent border when focused.
         val focused = android.graphics.drawable.GradientDrawable().apply {
             shape = android.graphics.drawable.GradientDrawable.OVAL
-            setColor(android.graphics.Color.argb(
-                150,
-                android.graphics.Color.red(accentArgb),
-                android.graphics.Color.green(accentArgb),
-                android.graphics.Color.blue(accentArgb)
-            ))
-            setStroke((2 * view.resources.displayMetrics.density).toInt().coerceAtLeast(2), accentArgb)
+            setColor(android.graphics.Color.argb(70, 255, 255, 255))
+            setStroke((2.5f * view.resources.displayMetrics.density).toInt().coerceAtLeast(2), accentArgb)
         }
         // Round, softly dark buttons on the picture (the time bar keeps its own look).
         if (view is android.widget.ImageView) {
@@ -10965,10 +10962,9 @@ internal fun MenuButton(
     val hovered by interactions.collectIsHoveredAsState()
     val highlighted = focused || hovered
     val colors = MaterialTheme.colorScheme
-    val container = when {
-        !enabled -> Color.Transparent
-        else -> Color.Transparent
-    }
+    // Same look as the settings rows: the focused entry gets a brighter surface and an accent
+    // border; the selected one is written in the accent colour (symbol and text).
+    val container = if (enabled && highlighted) colors.surfaceContainerHighest else Color.Transparent
     Surface(
         modifier = modifier
             .then(if (enabled) Modifier.hoverable(interactions) else Modifier)
@@ -10977,6 +10973,8 @@ internal fun MenuButton(
                 focused = it.isFocused
             }
             .focusProperties { canFocus = enabled }
+            // The press and focus effect stays inside the rounded shape (no square corners).
+            .clip(RoundedCornerShape(12.dp))
             .combinedClickable(enabled = enabled, onClick = onClick, onLongClick = onLongPress),
         color = container,
         contentColor = when {
@@ -10993,10 +10991,6 @@ internal fun MenuButton(
             modifier = Modifier.heightIn(min = 48.dp).padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (selected && !tintSelection) {
-                Box(Modifier.padding(end = 8.dp).width(3.dp).height(18.dp)
-                    .background(accentBrush()))
-            }
             ChannelLogo(logo, Modifier.padding(end = 8.dp))
             providerIcon?.let { icon ->
                 Icon(
@@ -11033,7 +11027,7 @@ internal fun MenuButton(
                     painterResource(icon),
                     contentDescription = label.takeIf { iconOnly },
                     modifier = Modifier.size(20.dp),
-                    tint = if (selected && tintSelection) colors.primary else LocalContentColor.current
+                    tint = if (selected) colors.primary else LocalContentColor.current
                 )
                 if (!iconOnly) Box(Modifier.width(9.dp))
             }
@@ -11044,7 +11038,8 @@ internal fun MenuButton(
             if ((!iconOnly || leadingIcon == null) && !providerMarkOnly) Text(
                 label,
                 modifier = if (count == null) Modifier else Modifier.weight(1f),
-                color = if (selected && tintSelection && leadingIcon == null) colors.primary else Color.Unspecified,
+                // The top bar marks only the symbol when it has one; elsewhere the text too.
+                color = if (selected && (!tintSelection || leadingIcon == null)) colors.primary else Color.Unspecified,
                 style = MaterialTheme.typography.labelLarge,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -11080,9 +11075,12 @@ internal fun TextButton(
         interactionSource = interactions,
         shape = RoundedCornerShape(12.dp),
         border = if (highlighted) BorderStroke(2.dp, accentBrush()) else null,
+        // Small cards like the settings rows: brighter with an accent border when focused.
         colors = ButtonDefaults.textButtonColors(
-            containerColor = if (highlighted) colors.tertiaryContainer else Color.Transparent,
-            contentColor = if (highlighted) colors.onTertiaryContainer else colors.primary
+            // One step lighter than the dialog (which has surfaceContainerHigh), lighter still when focused.
+            containerColor = if (highlighted) colors.onSurface.copy(alpha = 0.14f).compositeOver(colors.surfaceContainerHighest)
+                else colors.surfaceContainerHighest,
+            contentColor = colors.onSurface
         ),
         content = content
     )

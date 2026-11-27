@@ -2,6 +2,7 @@
 
 ## 1.0.99
 
+- Live-TV: Springt ein Portal um viele Sekunden zurück (manche wiederholen jede Minute die letzten 55 Sekunden), wechselt die App sofort zum nächsten Portal, statt erst beim zweiten Rücksprung. Das gilt auch mit Timeshift; hat man selbst zurückgespult oder pausiert, wird nicht gewechselt, damit die Aufnahme erhalten bleibt.
 - Diagnose: Jeder automatische Portalwechsel nennt seinen Grund (Abspielfehler, Stream beendet, Zeitüberschreitung). Springt das Bild eines Portals von selbst zurück, wird das mit der Länge festgehalten; ebenso, wenn nach einem Wechsel der Hinweis „Quelle“ erscheint.
 - Timeshift: Der Fortschrittsbalken zeigt die Aufnahme mit einem Punkt in der Akzentfarbe; nach unten auf den Balken und mit links/rechts spulen. Ganz rechts erscheint „● Live“, sobald man zurückgespult hat – ein Klick springt zurück zu live. Spul-Knöpfe sind jetzt anwählbar. Aufnahmen gelten nur für den laufenden Sender und werden beim Senderwechsel und beim Beenden der App gelöscht.
 - Neu unter Wiedergabe: „Fließender Portalwechsel (experimentell)“, standardmäßig aus. Erste Stufe: Beim Wechsel zu einem anderen Portal misst die App, wie weit die Streams auseinanderliegen (im Diagnosebericht) – über den Ton und, wenn der Ton per Dolby direkt an Fernseher oder Receiver geht, über die Bildhelligkeit. Auf schwachen Geräten erscheint ein Hinweis, die Option bleibt aber wählbar.

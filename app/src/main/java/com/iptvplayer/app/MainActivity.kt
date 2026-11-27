@@ -515,6 +515,7 @@ private const val SETTINGS_PAGE_FOCUS_GRACE_MS = 800L
 private const val REMOTE_PIN_ATTEMPTS = 5
 /** Live-TV watchdog: long buffering or jumps only count within this window. */
 private const val STALL_WINDOW_MS = 3 * 60_000L
+private const val LONG_JUMP_BACK_MS = 10_000L
 /** Picture (or picture and sound) standing still this long while "playing" counts as a hang. */
 private const val FROZEN_LIMIT_MS = 8_000L
 /** A stream that played this long without trouble is remembered as a good one for the channel. */
@@ -4800,6 +4801,7 @@ private fun PlayerHome(
         var fluentVideo = false
         var playedMs = 0L
         var successRecorded = false
+        var rewound = false
         fun fail(event: String) {
             AppDiagnostics.record(context, event)
             scope.launch { failPlayback(attempt, R.string.playback_timeout) }
@@ -4827,7 +4829,13 @@ private fun PlayerHome(
                 bufferingSince = null
                 countedThisBuffer = false
             }
-            if (live && activePlayer.isPlaying) {
+            // Rewound with timeshift: the picture comes from the recording, and a switch would throw
+            // the recording (and the spot in it) away, so the stream is only watched at live. Only
+            // the viewer's own seeks and pauses count: a portal jumping back by itself also ends up behind live.
+            val behind = Timeshift.behindLive(activePlayer) ?: 0L
+            if (now - playerPositionResetAt.get() < 5_000 || !activePlayer.playWhenReady) rewound = behind > 6_000
+            else if (behind < 3_000) rewound = false
+            if (live && activePlayer.isPlaying && !rewound) {
                 playedMs += 250
                 val position = liveStreamPosition(activePlayer)
                 val reset = now - playerPositionResetAt.get() < 5_000
@@ -4836,7 +4844,11 @@ private fun PlayerHome(
                     AppDiagnostics.record(context, "playback_jump_back ms:${lastPosition - position}")
                     jumps.addLast(now)
                     prepareNextLiveVariant(attempt)
-                    if (jumps.size >= 2) return@LaunchedEffect fail("playback_stream_loop")
+                    // A jump of many seconds is a source replaying a whole stretch (seen: 55 s every
+                    // minute): it switches at once instead of showing the same minute again.
+                    if (jumps.size >= 2 || lastPosition - position >= LONG_JUMP_BACK_MS) {
+                        return@LaunchedEffect fail("playback_stream_loop")
+                    }
                 }
                 if (position != lastPosition) positionMovedAt = now
                 lastPosition = position

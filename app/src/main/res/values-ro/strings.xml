@@ -951,4 +951,12 @@
     <string name="smart_home_smoke_hint">Pe tot ecranul cu OK: pune pauză și pornește această scenă (de ex. jaluzeaua sus). La redare totul revine la starea de dinainte – indiferent de oră și zi.</string>
     <string name="smart_home_open">deschis</string>
     <string name="smart_home_close">închis</string>
+    <string name="autostart_boot">Pornește la aprinderea dispozitivului</string>
+    <string name="autostart_wake">Pornește la trezirea din standby</string>
+    <string name="autostart_permission">Acordă „Afișare peste alte aplicații“</string>
+    <string name="autostart_permission_missing">Pentru asta, StreamWatch are nevoie de permisiunea „Afișare peste alte aplicații“.</string>
+    <string name="autostart_fire_tv">Fire TV nu oferă această permisiune în setări. Poate fi setată o dată de pe un computer: adb shell appops set com.iptvplayer.app SYSTEM_ALERT_WINDOW allow</string>
+    <string name="autostart_permission_device">Acord-o pe dispozitiv în Setări → General.</string>
+    <string name="autostart_notification">Pornește StreamWatch când dispozitivul se trezește.</string>
+    <string name="autostart_channel">Pornire automată</string>
 </resources>

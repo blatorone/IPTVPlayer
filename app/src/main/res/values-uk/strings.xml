@@ -955,4 +955,12 @@
     <string name="smart_home_smoke_hint">У повноекранному режимі через OK: пауза і запуск цієї сцени (наприклад, штора вгору). Під час відтворення все повертається як було – незалежно від часу та дня.</string>
     <string name="smart_home_open">відкрито</string>
     <string name="smart_home_close">закрито</string>
+    <string name="autostart_boot">Запускати при ввімкненні пристрою</string>
+    <string name="autostart_wake">Запускати при виході з режиму очікування</string>
+    <string name="autostart_permission">Надати дозвіл «Поверх інших програм»</string>
+    <string name="autostart_permission_missing">Для цього StreamWatch потрібен дозвіл «Поверх інших програм».</string>
+    <string name="autostart_fire_tv">Fire TV не пропонує цей дозвіл у налаштуваннях. Його можна один раз задати з комп\'ютера: adb shell appops set com.iptvplayer.app SYSTEM_ALERT_WINDOW allow</string>
+    <string name="autostart_permission_device">Надай його на пристрої в Налаштування → Загальні.</string>
+    <string name="autostart_notification">Запускає StreamWatch, коли пристрій прокидається.</string>
+    <string name="autostart_channel">Автозапуск</string>
 </resources>

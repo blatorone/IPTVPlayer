@@ -951,4 +951,12 @@
     <string name="smart_home_smoke_hint">Em tela cheia com OK: pausa e inicia esta cena (ex.: persiana aberta). Ao reproduzir, tudo volta ao estado anterior, independentemente do horário e do dia.</string>
     <string name="smart_home_open">aberto</string>
     <string name="smart_home_close">fechado</string>
+    <string name="autostart_boot">Iniciar ao ligar o aparelho</string>
+    <string name="autostart_wake">Iniciar ao sair do modo de espera</string>
+    <string name="autostart_permission">Conceder „Sobrepor a outros apps“</string>
+    <string name="autostart_permission_missing">Para isso o StreamWatch precisa da permissão „Sobrepor a outros apps“.</string>
+    <string name="autostart_fire_tv">O Fire TV não oferece essa permissão nas configurações. Ela pode ser definida uma vez por um computador: adb shell appops set com.iptvplayer.app SYSTEM_ALERT_WINDOW allow</string>
+    <string name="autostart_permission_device">Conceda no aparelho em Configurações → Geral.</string>
+    <string name="autostart_notification">Inicia o StreamWatch quando o aparelho acorda.</string>
+    <string name="autostart_channel">Início automático</string>
 </resources>

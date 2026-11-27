@@ -955,4 +955,12 @@
     <string name="smart_home_smoke_hint">Na celej obrazovke cez OK: pozastaví a spustí túto scénu (napr. roletu hore). Pri prehrávaní sa všetko vráti do predchádzajúceho stavu – bez ohľadu na čas a deň.</string>
     <string name="smart_home_open">otvorené</string>
     <string name="smart_home_close">zatvorené</string>
+    <string name="autostart_boot">Spustiť pri zapnutí zariadenia</string>
+    <string name="autostart_wake">Spustiť pri prebudení z pohotovosti</string>
+    <string name="autostart_permission">Udeliť povolenie „Zobrazenie cez iné aplikácie“</string>
+    <string name="autostart_permission_missing">StreamWatch na to potrebuje povolenie „Zobrazenie cez iné aplikácie“.</string>
+    <string name="autostart_fire_tv">Fire TV toto povolenie v nastaveniach neponúka. Dá sa raz nastaviť z počítača: adb shell appops set com.iptvplayer.app SYSTEM_ALERT_WINDOW allow</string>
+    <string name="autostart_permission_device">Udeľ ho v zariadení v Nastavenia → Všeobecné.</string>
+    <string name="autostart_notification">Spustí StreamWatch, keď sa zariadenie prebudí.</string>
+    <string name="autostart_channel">Automatické spustenie</string>
 </resources>

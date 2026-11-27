@@ -951,4 +951,12 @@
     <string name="smart_home_smoke_hint">En pantalla completa con OK: pausa e inicia esta escena (p. ej. subir la persiana). Al reproducir todo vuelve a como estaba, sin importar la hora ni el día.</string>
     <string name="smart_home_open">abierto</string>
     <string name="smart_home_close">cerrado</string>
+    <string name="autostart_boot">Iniciar al encender el dispositivo</string>
+    <string name="autostart_wake">Iniciar al salir del modo de espera</string>
+    <string name="autostart_permission">Conceder „Mostrar sobre otras apps“</string>
+    <string name="autostart_permission_missing">Para ello StreamWatch necesita el permiso „Mostrar sobre otras apps“.</string>
+    <string name="autostart_fire_tv">Fire TV no ofrece este permiso en sus ajustes. Se puede activar una vez desde un ordenador: adb shell appops set com.iptvplayer.app SYSTEM_ALERT_WINDOW allow</string>
+    <string name="autostart_permission_device">Concédelo en el dispositivo en Ajustes → General.</string>
+    <string name="autostart_notification">Inicia StreamWatch cuando el dispositivo se activa.</string>
+    <string name="autostart_channel">Inicio automático</string>
 </resources>

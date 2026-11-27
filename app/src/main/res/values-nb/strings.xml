@@ -947,4 +947,12 @@
     <string name="smart_home_smoke_hint">I fullskjerm via OK: pauser og starter denne scenen (f.eks. rullegardin opp). Ved avspilling går alt tilbake til slik det var – uansett tid og ukedag.</string>
     <string name="smart_home_open">åpen</string>
     <string name="smart_home_close">lukket</string>
+    <string name="autostart_boot">Start når enheten slås på</string>
+    <string name="autostart_wake">Start ved oppvåkning fra hvilemodus</string>
+    <string name="autostart_permission">Gi tillatelsen «Vis over andre apper»</string>
+    <string name="autostart_permission_missing">StreamWatch trenger tillatelsen «Vis over andre apper» for dette.</string>
+    <string name="autostart_fire_tv">Fire TV tilbyr ikke denne tillatelsen i innstillingene. Den kan settes én gang fra en datamaskin: adb shell appops set com.iptvplayer.app SYSTEM_ALERT_WINDOW allow</string>
+    <string name="autostart_permission_device">Gi den på enheten under Innstillinger → Generelt.</string>
+    <string name="autostart_notification">Starter StreamWatch når enheten våkner.</string>
+    <string name="autostart_channel">Autostart</string>
 </resources>

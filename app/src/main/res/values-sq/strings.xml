@@ -947,4 +947,12 @@
     <string name="smart_home_smoke_hint">Në ekran të plotë me OK: ndalon dhe nis këtë skenë (p.sh. grila lart). Kur luhet sërish, gjithçka kthehet si ishte – pavarësisht orës dhe ditës.</string>
     <string name="smart_home_open">hapur</string>
     <string name="smart_home_close">mbyllur</string>
+    <string name="autostart_boot">Nis kur ndizet pajisja</string>
+    <string name="autostart_wake">Nis kur zgjohet nga gatishmëria</string>
+    <string name="autostart_permission">Jep lejen „Shfaq mbi aplikacionet e tjera“</string>
+    <string name="autostart_permission_missing">Për këtë StreamWatch ka nevojë për lejen „Shfaq mbi aplikacionet e tjera“.</string>
+    <string name="autostart_fire_tv">Fire TV nuk e ofron këtë leje te cilësimet. Mund të vendoset një herë nga një kompjuter: adb shell appops set com.iptvplayer.app SYSTEM_ALERT_WINDOW allow</string>
+    <string name="autostart_permission_device">Jepe në pajisje te Cilësimet → Të përgjithshme.</string>
+    <string name="autostart_notification">Nis StreamWatch kur pajisja zgjohet.</string>
+    <string name="autostart_channel">Nisje automatike</string>
 </resources>

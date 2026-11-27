@@ -947,4 +947,12 @@
     <string name="smart_home_smoke_hint">Op volledig scherm via OK: pauzeert en start deze scène (bijv. rolluik omhoog). Bij afspelen gaat alles terug naar hoe het was – ongeacht tijd en dag.</string>
     <string name="smart_home_open">open</string>
     <string name="smart_home_close">dicht</string>
+    <string name="autostart_boot">Starten bij inschakelen van het apparaat</string>
+    <string name="autostart_wake">Starten bij ontwaken uit stand-by</string>
+    <string name="autostart_permission">Toestemming „Weergeven boven andere apps“ geven</string>
+    <string name="autostart_permission_missing">Hiervoor heeft StreamWatch de toestemming „Weergeven boven andere apps“ nodig.</string>
+    <string name="autostart_fire_tv">Fire TV biedt deze toestemming niet in de instellingen aan. Ze kan eenmalig vanaf een computer worden ingesteld: adb shell appops set com.iptvplayer.app SYSTEM_ALERT_WINDOW allow</string>
+    <string name="autostart_permission_device">Geef ze op het apparaat onder Instellingen → Algemeen.</string>
+    <string name="autostart_notification">Start StreamWatch wanneer het apparaat ontwaakt.</string>
+    <string name="autostart_channel">Automatisch starten</string>
 </resources>

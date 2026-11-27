@@ -951,4 +951,12 @@
     <string name="smart_home_smoke_hint">Pilnekrānā ar OK: aptur un palaiž šo ainu (piem., žalūzijas augšā). Atskaņojot viss atgriežas iepriekšējā stāvoklī – neatkarīgi no laika un dienas.</string>
     <string name="smart_home_open">atvērts</string>
     <string name="smart_home_close">aizvērts</string>
+    <string name="autostart_boot">Palaist, ieslēdzot ierīci</string>
+    <string name="autostart_wake">Palaist, pamostoties no gaidstāves</string>
+    <string name="autostart_permission">Piešķirt atļauju „Rādīt pāri citām lietotnēm“</string>
+    <string name="autostart_permission_missing">Lai to izdarītu, StreamWatch vajag atļauju „Rādīt pāri citām lietotnēm“.</string>
+    <string name="autostart_fire_tv">Fire TV šo atļauju iestatījumos nepiedāvā. To var vienreiz iestatīt no datora: adb shell appops set com.iptvplayer.app SYSTEM_ALERT_WINDOW allow</string>
+    <string name="autostart_permission_device">Piešķir to ierīcē: Iestatījumi → Vispārīgi.</string>
+    <string name="autostart_notification">Palaiž StreamWatch, kad ierīce pamostas.</string>
+    <string name="autostart_channel">Automātiska palaišana</string>
 </resources>

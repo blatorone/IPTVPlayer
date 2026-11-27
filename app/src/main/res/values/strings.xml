@@ -947,4 +947,12 @@
     <string name="smart_home_smoke_hint">Im Vollbild über OK: pausiert und startet diese Szene (z. B. Rollo auf). Bei Play kommt alles auf den vorherigen Stand zurück – unabhängig von Uhrzeit und Wochentag.</string>
     <string name="smart_home_open">auf</string>
     <string name="smart_home_close">zu</string>
+    <string name="autostart_boot">Beim Einschalten des Geräts starten</string>
+    <string name="autostart_wake">Beim Aufwecken aus dem Standby starten</string>
+    <string name="autostart_permission">Berechtigung „Über anderen Apps einblenden“ erteilen</string>
+    <string name="autostart_permission_missing">Dafür braucht StreamWatch die Berechtigung „Über anderen Apps einblenden“.</string>
+    <string name="autostart_fire_tv">Fire TV bietet diese Berechtigung nicht in den Einstellungen an. Sie lässt sich einmalig über einen Computer setzen: adb shell appops set com.iptvplayer.app SYSTEM_ALERT_WINDOW allow</string>
+    <string name="autostart_permission_device">Erteile sie am Gerät unter Einstellungen → Allgemein.</string>
+    <string name="autostart_notification">Startet StreamWatch, wenn das Gerät aufwacht.</string>
+    <string name="autostart_channel">Autostart</string>
 </resources>

@@ -239,6 +239,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Log.setLogLevel(Log.LOG_LEVEL_OFF)
+        // Optional: keep listening for the device waking from standby (also without a restart).
+        AutoStart.sync(this)
         // The audio sink is wrapped so that series openings can also be recognised by their theme music.
         // Passthrough audio (Dolby to the TV or receiver) is never decoded by the app; users may
         // choose to decode it so that the theme music can be analysed as well.
@@ -5939,6 +5941,8 @@ private fun PlayerHome(
                     preferences?.let(::clearSearchHistories)
                     text(R.string.search_history_cleared)
                 }.shownIf("searchHistory", true))
+                // Start with the device and on waking.
+                addAll(autoStartRemoteEntries(context, general))
                 // Playing the last channel (and fullscreen) only exists with Live-TV as the start page.
                 if (startDestination == Destination.LIVE) {
                     add(toggle("lastChannel", general, text(R.string.start_last_channel), { playLastChannelAtStartup },
@@ -8280,6 +8284,7 @@ private fun PlayerHome(
                                             openSettingsPage { ui.remoteAccessOpen = true }
                                         }
                                     }
+                                    AutoStartSettings()
                                     SettingRow(
                                         stringResource(R.string.show_touch_back_button), Modifier,
                                         selected = showSettingsBackButton

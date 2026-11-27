@@ -947,4 +947,12 @@
     <string name="smart_home_smoke_hint">Tam ekranda OK ile: duraklatır ve bu sahneyi başlatır (ör. panjur yukarı). Oynatınca her şey önceki haline döner – saatten ve günden bağımsız.</string>
     <string name="smart_home_open">açık</string>
     <string name="smart_home_close">kapalı</string>
+    <string name="autostart_boot">Cihaz açılınca başlat</string>
+    <string name="autostart_wake">Bekleme modundan uyanınca başlat</string>
+    <string name="autostart_permission">„Diğer uygulamaların üzerinde göster“ iznini ver</string>
+    <string name="autostart_permission_missing">Bunun için StreamWatch\'un „Diğer uygulamaların üzerinde göster“ iznine ihtiyacı var.</string>
+    <string name="autostart_fire_tv">Fire TV bu izni ayarlarda sunmuyor. Bir kez bilgisayardan ayarlanabilir: adb shell appops set com.iptvplayer.app SYSTEM_ALERT_WINDOW allow</string>
+    <string name="autostart_permission_device">Cihazda Ayarlar → Genel altında ver.</string>
+    <string name="autostart_notification">Cihaz uyandığında StreamWatch\'u başlatır.</string>
+    <string name="autostart_channel">Otomatik başlatma</string>
 </resources>

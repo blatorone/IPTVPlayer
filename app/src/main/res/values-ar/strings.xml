@@ -963,4 +963,12 @@
     <string name="smart_home_smoke_hint">في ملء الشاشة عبر OK: يوقف مؤقتًا ويشغّل هذا المشهد (مثل فتح الستارة). عند التشغيل يعود كل شيء إلى ما كان عليه – بغض النظر عن الوقت واليوم.</string>
     <string name="smart_home_open">مفتوح</string>
     <string name="smart_home_close">مغلق</string>
+    <string name="autostart_boot">البدء عند تشغيل الجهاز</string>
+    <string name="autostart_wake">البدء عند الاستيقاظ من وضع الاستعداد</string>
+    <string name="autostart_permission">منح إذن „العرض فوق التطبيقات الأخرى“</string>
+    <string name="autostart_permission_missing">يحتاج StreamWatch لذلك إلى إذن „العرض فوق التطبيقات الأخرى“.</string>
+    <string name="autostart_fire_tv">لا يوفّر Fire TV هذا الإذن في الإعدادات. يمكن ضبطه مرة واحدة من حاسوب: adb shell appops set com.iptvplayer.app SYSTEM_ALERT_WINDOW allow</string>
+    <string name="autostart_permission_device">امنحه على الجهاز ضمن الإعدادات ← عام.</string>
+    <string name="autostart_notification">يشغّل StreamWatch عند استيقاظ الجهاز.</string>
+    <string name="autostart_channel">التشغيل التلقائي</string>
 </resources>

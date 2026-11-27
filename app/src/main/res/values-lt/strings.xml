@@ -955,4 +955,12 @@
     <string name="smart_home_smoke_hint">Viso ekrano režimu per OK: pristabdo ir paleidžia šią sceną (pvz., žaliuzės aukštyn). Atkuriant viskas grįžta į ankstesnę būseną – nepriklausomai nuo laiko ir dienos.</string>
     <string name="smart_home_open">atidaryta</string>
     <string name="smart_home_close">uždaryta</string>
+    <string name="autostart_boot">Paleisti įjungus įrenginį</string>
+    <string name="autostart_wake">Paleisti pabudus iš budėjimo</string>
+    <string name="autostart_permission">Suteikti leidimą „Rodyti virš kitų programų“</string>
+    <string name="autostart_permission_missing">Tam StreamWatch reikia leidimo „Rodyti virš kitų programų“.</string>
+    <string name="autostart_fire_tv">Fire TV šio leidimo nustatymuose nesiūlo. Jį galima vieną kartą nustatyti iš kompiuterio: adb shell appops set com.iptvplayer.app SYSTEM_ALERT_WINDOW allow</string>
+    <string name="autostart_permission_device">Suteik jį įrenginyje: Nustatymai → Bendrieji.</string>
+    <string name="autostart_notification">Paleidžia StreamWatch, kai įrenginys pabunda.</string>
+    <string name="autostart_channel">Automatinis paleidimas</string>
 </resources>

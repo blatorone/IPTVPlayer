@@ -855,6 +855,14 @@
     <string name="backup_none_found">У фасцикли Download није пронађена копија ове апликације.</string>
     <string name="backup_saved">Копија сачувана: %1$s</string>
     <string name="backup_failed">Копија није могла да се сачува ни прочита.</string>
+    <string name="backup_protect">Заштити лозинком</string>
+    <string name="backup_protect_hint">Без ове лозинке датотека се не може отворити – ни StreamWatch је тада не може вратити.</string>
+    <string name="backup_password_label">Лозинка (најмање 8 знакова)</string>
+    <string name="backup_password_mismatch">Лозинке се не подударају.</string>
+    <string name="backup_password_needed">Ова датотека је заштићена лозинком.</string>
+    <string name="backup_password_open">Отвори</string>
+    <string name="backup_password_wrong">Погрешна лозинка.</string>
+    <string name="backup_password_phone">Ова датотека је заштићена лозинком и може се вратити само директно на уређају.</string>
     <string name="backup_import_now">Увези сада</string>
     <string name="backup_restart_hint">Након тога апликација се поново покреће. Портали се додају постојећим, изабрана подешавања се замењују.</string>
     <string name="backup_picker_missing">Овај уређај нема избор датотека. Користи фасциклу Download.</string>

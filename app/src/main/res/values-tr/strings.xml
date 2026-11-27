@@ -851,6 +851,14 @@
     <string name="backup_none_found">Download klasöründe bu uygulamaya ait yedek bulunamadı.</string>
     <string name="backup_saved">Yedek kaydedildi: %1$s</string>
     <string name="backup_failed">Yedek kaydedilemedi veya okunamadı.</string>
+    <string name="backup_protect">Parola ile koru</string>
+    <string name="backup_protect_hint">Bu parola olmadan dosya açılamaz – StreamWatch de onu geri yükleyemez.</string>
+    <string name="backup_password_label">Parola (en az 8 karakter)</string>
+    <string name="backup_password_mismatch">Parolalar eşleşmiyor.</string>
+    <string name="backup_password_needed">Bu dosya parola ile korunuyor.</string>
+    <string name="backup_password_open">Aç</string>
+    <string name="backup_password_wrong">Yanlış parola.</string>
+    <string name="backup_password_phone">Bu dosya parola ile korunuyor ve yalnızca doğrudan cihazda geri yüklenebilir.</string>
     <string name="backup_import_now">Şimdi içe aktar</string>
     <string name="backup_restart_hint">Ardından uygulama yeniden başlar. Portallar mevcutlara eklenir, seçilen ayarlar değiştirilir.</string>
     <string name="backup_picker_missing">Bu cihazda dosya seçici yok. Download klasörünü kullan.</string>

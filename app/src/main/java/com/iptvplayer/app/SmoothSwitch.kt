@@ -237,7 +237,7 @@ internal object SmoothSwitch {
         val reliable = measured.score >= if (measured.source == "audio") 0.6 else 0.7
         val channel = switchChannel
         val savable = reliable && channel != null && from != null && to != null && from != to
-        if (savable) rememberLag(channel!!, from!!, to!!, portalLag)
+        if (savable) rememberLag(channel, from, to, portalLag)
         return measured.copy(portalLagMs = portalLag, saved = savable)
     }
 }

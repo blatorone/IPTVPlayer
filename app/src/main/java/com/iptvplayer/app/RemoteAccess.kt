@@ -144,7 +144,9 @@ internal fun backupRemoteHandler(base: RemoteHandler, storage: PortalStorage?, c
                 }
                 is RemoteCommand.BackupInspect -> {
                     val document = runCatching { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { decode(command.file) } }
-                        .getOrElse { return RemoteReply(false, context.getString(R.string.backup_failed)) }
+                        .getOrElse { error -> return RemoteReply(false, context.getString(
+                            if (error is BackupPasswordException) R.string.backup_password_phone else R.string.backup_failed
+                        )) }
                     RemoteReply(true, null, com.google.gson.JsonObject().apply {
                         add("backupParts", com.google.gson.JsonArray().apply { document.parts.keys.forEach { add(it.name) } })
                         addProperty("createdAt", document.createdAt.replace('T', ' '))
@@ -153,7 +155,9 @@ internal fun backupRemoteHandler(base: RemoteHandler, storage: PortalStorage?, c
                 }
                 is RemoteCommand.BackupRestore -> {
                     val document = runCatching { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { decode(command.file) } }
-                        .getOrElse { return RemoteReply(false, context.getString(R.string.backup_failed)) }
+                        .getOrElse { error -> return RemoteReply(false, context.getString(
+                            if (error is BackupPasswordException) R.string.backup_password_phone else R.string.backup_failed
+                        )) }
                     restoreBackup(context, store, document, parts(command.parts))
                     // Answer first, then restart: the phone shows that the import worked.
                     android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ restartApp(context) }, 1_500)

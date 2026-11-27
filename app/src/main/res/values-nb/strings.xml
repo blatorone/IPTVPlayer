@@ -851,6 +851,14 @@
     <string name="backup_none_found">Ingen sikkerhetskopi for denne appen ble funnet i Nedlastinger-mappen.</string>
     <string name="backup_saved">Sikkerhetskopi lagret: %1$s</string>
     <string name="backup_failed">Sikkerhetskopien kunne ikke lagres eller leses.</string>
+    <string name="backup_protect">Beskytt med passord</string>
+    <string name="backup_protect_hint">Uten dette passordet kan filen ikke åpnes – heller ikke StreamWatch kan gjenopprette den.</string>
+    <string name="backup_password_label">Passord (minst 8 tegn)</string>
+    <string name="backup_password_mismatch">Passordene er ikke like.</string>
+    <string name="backup_password_needed">Denne filen er beskyttet med passord.</string>
+    <string name="backup_password_open">Åpne</string>
+    <string name="backup_password_wrong">Feil passord.</string>
+    <string name="backup_password_phone">Denne filen er beskyttet med passord og kan bare gjenopprettes direkte på enheten.</string>
     <string name="backup_import_now">Importer nå</string>
     <string name="backup_restart_hint">Deretter starter appen på nytt. Portaler legges til de eksisterende, de valgte innstillingene erstattes.</string>
     <string name="backup_picker_missing">Denne enheten har ingen filvelger. Bruk Nedlastinger-mappen.</string>

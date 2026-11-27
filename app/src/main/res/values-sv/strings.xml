@@ -851,6 +851,14 @@
     <string name="backup_none_found">Ingen säkerhetskopia för den här appen hittades i mappen Nedladdningar.</string>
     <string name="backup_saved">Säkerhetskopia sparad: %1$s</string>
     <string name="backup_failed">Säkerhetskopian kunde inte sparas eller läsas.</string>
+    <string name="backup_protect">Skydda med lösenord</string>
+    <string name="backup_protect_hint">Utan det här lösenordet kan filen inte öppnas – inte ens StreamWatch kan återställa den.</string>
+    <string name="backup_password_label">Lösenord (minst 8 tecken)</string>
+    <string name="backup_password_mismatch">Lösenorden stämmer inte överens.</string>
+    <string name="backup_password_needed">Den här filen är skyddad med lösenord.</string>
+    <string name="backup_password_open">Öppna</string>
+    <string name="backup_password_wrong">Fel lösenord.</string>
+    <string name="backup_password_phone">Den här filen är skyddad med lösenord och kan bara återställas direkt på enheten.</string>
     <string name="backup_import_now">Importera nu</string>
     <string name="backup_restart_hint">Därefter startar appen om. Portaler läggs till de befintliga, de valda inställningarna ersätts.</string>
     <string name="backup_picker_missing">Den här enheten har ingen filväljare. Använd mappen Nedladdningar.</string>

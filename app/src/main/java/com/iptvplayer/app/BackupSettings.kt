@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.getValue
@@ -22,7 +23,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private enum class BackupStage { IDLE, EXPORT, IMPORT_SOURCE, IMPORT }
+private enum class BackupStage { IDLE, EXPORT, IMPORT_SOURCE, IMPORT_PASSWORD, IMPORT }
 
 /**
  * "Backup" in Daten & Diagnose: export or import everything or chosen parts. Files go to the
@@ -39,6 +40,12 @@ internal fun BackupSettings(storage: PortalStorage?, guard: (() -> Unit) -> Unit
     var status by remember { mutableStateOf<String?>(null) }
     var working by remember { mutableStateOf(false) }
     var found by remember { mutableStateOf(emptyList<StoredBackup>()) }
+    // Optional password: asked when saving; a protected file asks for it when opened.
+    var protect by remember { mutableStateOf(false) }
+    var password by remember { mutableStateOf("") }
+    var passwordAgain by remember { mutableStateOf("") }
+    var lockedFile by remember { mutableStateOf<android.net.Uri?>(null) }
+    val passwordReady = !protect || password.length >= BACKUP_PASSWORD_MIN && password == passwordAgain
 
     // The two main rows stay; the steps open below them. Before a step changes, focus moves to a
     // row that stays, so it never falls back to the section bar (which would switch the section).
@@ -57,22 +64,42 @@ internal fun BackupSettings(storage: PortalStorage?, guard: (() -> Unit) -> Unit
 
 
     fun fail() { status = context.getString(R.string.backup_failed) }
-    fun open(uri: android.net.Uri) {
+    fun open(uri: android.net.Uri, key: String? = null) {
+        if (working) return
         scope.launch {
+            working = true
             try {
-                val document = withContext(Dispatchers.IO) { readBackup(context, uri) }
+                val document = withContext(Dispatchers.IO) { readBackup(context, uri, key?.toCharArray()) }
                 loaded = document
                 chosen = document.parts.keys
+                lockedFile = null
+                password = ""
                 go(BackupStage.IMPORT)
                 status = null
             } catch (error: CancellationException) {
                 throw error
+            } catch (error: BackupPasswordException) {
+                if (error.missing) {
+                    lockedFile = uri
+                    password = ""
+                    status = null
+                    go(BackupStage.IMPORT_PASSWORD)
+                } else status = context.getString(R.string.backup_password_wrong)
             } catch (_: Exception) {
                 fail()
+            } finally {
+                working = false
             }
         }
     }
-    suspend fun build(): ByteArray = createBackup(context, requireNotNull(storage), chosen)
+    suspend fun build(): ByteArray =
+        createBackup(context, requireNotNull(storage), chosen, password.takeIf { protect }?.toCharArray())
+    fun saved(name: String) {
+        status = context.getString(R.string.backup_saved, name)
+        password = ""
+        passwordAgain = ""
+        go(BackupStage.IDLE)
+    }
 
     val saveElsewhere = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(BACKUP_MIME)) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
@@ -83,8 +110,7 @@ internal fun BackupSettings(storage: PortalStorage?, guard: (() -> Unit) -> Unit
                 withContext(Dispatchers.IO) {
                     context.contentResolver.openOutputStream(uri)?.use { it.write(bytes) } ?: error("no stream")
                 }
-                status = context.getString(R.string.backup_saved, uri.lastPathSegment?.substringAfterLast('/') ?: "")
-                go(BackupStage.IDLE)
+                saved(uri.lastPathSegment?.substringAfterLast('/') ?: "")
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
@@ -107,6 +133,9 @@ internal fun BackupSettings(storage: PortalStorage?, guard: (() -> Unit) -> Unit
     SettingRow(stringResource(R.string.backup_create), Modifier.focusRequester(createRow), enabled = storage != null) {
         if (stage == BackupStage.EXPORT) go(BackupStage.IDLE) else guard {
             chosen = BackupPart.entries.toSet()
+            protect = false
+            password = ""
+            passwordAgain = ""
             status = null
             go(BackupStage.EXPORT)
         }
@@ -114,18 +143,25 @@ internal fun BackupSettings(storage: PortalStorage?, guard: (() -> Unit) -> Unit
     if (stage == BackupStage.EXPORT) {
         Text(stringResource(R.string.backup_pick_export))
         PartChoice(BackupPart.entries, chosen, firstStepRow) { chosen = it }
+        SettingRow(stringResource(R.string.backup_protect), selected = protect) { protect = !protect }
+        if (protect) {
+            Text(stringResource(R.string.backup_protect_hint), style = MaterialTheme.typography.bodySmall)
+            SecretField(password, { password = it.take(64) }, stringResource(R.string.backup_password_label), Modifier.fillMaxWidth())
+            SecretField(passwordAgain, { passwordAgain = it.take(64) }, stringResource(R.string.password_repeat), Modifier.fillMaxWidth())
+            if (passwordAgain.isNotEmpty() && password != passwordAgain) {
+                Text(stringResource(R.string.backup_password_mismatch), color = MaterialTheme.colorScheme.error)
+            }
+        }
         SettingRow(
             stringResource(R.string.backup_save_downloads),
-            enabled = chosen.isNotEmpty() && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q
+            enabled = chosen.isNotEmpty() && passwordReady && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q
         ) {
             // Rows stay enabled while saving: a disabled row would lose the focus.
             if (!working) scope.launch {
                 working = true
                 try {
                     val bytes = build()
-                    val name = withContext(Dispatchers.IO) { saveBackupToDownloads(context, bytes) }
-                    status = context.getString(R.string.backup_saved, name)
-                    go(BackupStage.IDLE)
+                    saved(withContext(Dispatchers.IO) { saveBackupToDownloads(context, bytes) })
                 } catch (error: CancellationException) {
                     throw error
                 } catch (_: Exception) {
@@ -135,13 +171,13 @@ internal fun BackupSettings(storage: PortalStorage?, guard: (() -> Unit) -> Unit
                 }
             }
         }
-        SettingRow(stringResource(R.string.backup_save_choose), enabled = chosen.isNotEmpty()) {
+        SettingRow(stringResource(R.string.backup_save_choose), enabled = chosen.isNotEmpty() && passwordReady) {
             picker { saveElsewhere.launch(backupFileName()) }
         }
         SettingRow(stringResource(android.R.string.cancel)) { go(BackupStage.IDLE) }
     }
     SettingRow(stringResource(R.string.backup_import), Modifier.focusRequester(importRow), enabled = storage != null) {
-        if (stage == BackupStage.IMPORT_SOURCE || stage == BackupStage.IMPORT) go(BackupStage.IDLE) else guard {
+        if (stage == BackupStage.IMPORT_SOURCE || stage == BackupStage.IMPORT_PASSWORD || stage == BackupStage.IMPORT) go(BackupStage.IDLE) else guard {
             status = null
             found = backupsInDownloads(context)
             go(BackupStage.IMPORT_SOURCE)
@@ -156,6 +192,17 @@ internal fun BackupSettings(storage: PortalStorage?, guard: (() -> Unit) -> Unit
             stringResource(R.string.backup_from_file), if (found.isEmpty()) Modifier.focusRequester(firstStepRow) else Modifier
         ) { picker { openFile.launch(arrayOf("*/*")) } }
         SettingRow(stringResource(android.R.string.cancel)) { go(BackupStage.IDLE) }
+    }
+    val locked = lockedFile
+    if (stage == BackupStage.IMPORT_PASSWORD && locked != null) {
+        Text(stringResource(R.string.backup_password_needed))
+        SecretField(
+            password, { password = it.take(64) }, stringResource(R.string.backup_password_label),
+            Modifier.fillMaxWidth().focusRequester(firstStepRow),
+            imeAction = androidx.compose.ui.text.input.ImeAction.Done, onDone = { if (password.isNotEmpty()) open(locked, password) }
+        )
+        SettingRow(stringResource(R.string.backup_password_open), enabled = password.isNotEmpty()) { open(locked, password) }
+        SettingRow(stringResource(android.R.string.cancel)) { go(BackupStage.IDLE); lockedFile = null; password = "" }
     }
     val document = loaded
     if (stage == BackupStage.IMPORT && document != null) {

@@ -99,7 +99,30 @@ private val backupKey: SecretKeySpec by lazy {
     SecretKeySpec(digest, "AES")
 }
 
-internal fun encodeBackup(document: BackupDocument): ByteArray {
+/*
+ * With a password ("SWB2"): the key comes from the password (PBKDF2-HMAC-SHA256, own random salt
+ * per file, the number of rounds stored in the file). Without the password the file cannot be
+ * opened, not even by the app; the password is not stored anywhere.
+ */
+private val PROTECTED_MAGIC = "SWB2".toByteArray(Charsets.US_ASCII)
+private const val SALT_BYTES = 16
+private const val PASSWORD_ROUNDS = 120_000
+internal const val BACKUP_PASSWORD_MIN = 8
+
+/** The file is protected with a password that is missing or wrong. */
+internal class BackupPasswordException(val missing: Boolean) : Exception()
+
+private fun passwordKey(password: CharArray, salt: ByteArray, rounds: Int): SecretKeySpec {
+    val spec = javax.crypto.spec.PBEKeySpec(password, salt, rounds, 256)
+    try {
+        val key = javax.crypto.SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded
+        return SecretKeySpec(key, "AES")
+    } finally {
+        spec.clearPassword()
+    }
+}
+
+private fun pack(document: BackupDocument): ByteArray {
     val json = JsonObject().apply {
         addProperty("format", BACKUP_FORMAT)
         addProperty("version", 1)
@@ -107,9 +130,52 @@ internal fun encodeBackup(document: BackupDocument): ByteArray {
         addProperty("appVersion", document.appVersion)
         add("parts", JsonObject().apply { document.parts.forEach { (part, value) -> add(part.name, value) } })
     }
-    val packed = ByteArrayOutputStream().also { out ->
+    return ByteArrayOutputStream().also { out ->
         GZIPOutputStream(out).use { it.write(json.toString().toByteArray(Charsets.UTF_8)) }
     }.toByteArray()
+}
+
+private fun unpack(packed: ByteArray): BackupDocument =
+    parseBackupJson(GZIPInputStream(ByteArrayInputStream(packed)).use { it.readBytes() }.toString(Charsets.UTF_8))
+
+/** [password] null: the file opens without one (fixed app key, as before). */
+internal fun encodeBackup(document: BackupDocument, password: CharArray?): ByteArray {
+    if (password == null) return encodeBackup(document)
+    val salt = ByteArray(SALT_BYTES).also(SecureRandom()::nextBytes)
+    val nonce = ByteArray(NONCE_BYTES).also(SecureRandom()::nextBytes)
+    val header = PROTECTED_MAGIC + salt + java.nio.ByteBuffer.allocate(4).putInt(PASSWORD_ROUNDS).array() + nonce
+    val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+    cipher.init(Cipher.ENCRYPT_MODE, passwordKey(password, salt, PASSWORD_ROUNDS), GCMParameterSpec(128, nonce))
+    cipher.updateAAD(header)
+    return header + cipher.doFinal(pack(document))
+}
+
+internal fun isProtectedBackup(bytes: ByteArray): Boolean =
+    bytes.size > PROTECTED_MAGIC.size + SALT_BYTES + 4 + NONCE_BYTES &&
+        bytes.copyOfRange(0, PROTECTED_MAGIC.size).contentEquals(PROTECTED_MAGIC)
+
+/** Opens a backup; a protected one needs [password] (else [BackupPasswordException]). */
+internal fun decodeBackup(bytes: ByteArray, password: CharArray?): BackupDocument {
+    if (!isProtectedBackup(bytes)) return decodeBackup(bytes)
+    if (password == null) throw BackupPasswordException(missing = true)
+    var at = PROTECTED_MAGIC.size
+    val salt = bytes.copyOfRange(at, at + SALT_BYTES).also { at += SALT_BYTES }
+    val rounds = java.nio.ByteBuffer.wrap(bytes, at, 4).int.also { at += 4 }
+    require(rounds in 10_000..10_000_000)
+    val nonce = bytes.copyOfRange(at, at + NONCE_BYTES).also { at += NONCE_BYTES }
+    val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+    cipher.init(Cipher.DECRYPT_MODE, passwordKey(password, salt, rounds), GCMParameterSpec(128, nonce))
+    cipher.updateAAD(bytes, 0, at)
+    val packed = try {
+        cipher.doFinal(bytes, at, bytes.size - at)
+    } catch (_: javax.crypto.AEADBadTagException) {
+        throw BackupPasswordException(missing = false)
+    }
+    return unpack(packed)
+}
+
+internal fun encodeBackup(document: BackupDocument): ByteArray {
+    val packed = pack(document)
     val nonce = ByteArray(NONCE_BYTES).also(SecureRandom()::nextBytes)
     val cipher = Cipher.getInstance("AES/GCM/NoPadding")
     cipher.init(Cipher.ENCRYPT_MODE, backupKey, GCMParameterSpec(128, nonce))
@@ -117,18 +183,17 @@ internal fun encodeBackup(document: BackupDocument): ByteArray {
     return BACKUP_MAGIC + nonce + cipher.doFinal(packed)
 }
 
-internal fun isBackupFile(bytes: ByteArray): Boolean =
+internal fun isBackupFile(bytes: ByteArray): Boolean = isProtectedBackup(bytes) ||
     bytes.size > BACKUP_MAGIC.size + NONCE_BYTES && bytes.copyOfRange(0, BACKUP_MAGIC.size).contentEquals(BACKUP_MAGIC)
 
 internal fun decodeBackup(bytes: ByteArray): BackupDocument {
+    if (isProtectedBackup(bytes)) throw BackupPasswordException(missing = true)
     require(isBackupFile(bytes))
     val nonce = bytes.copyOfRange(BACKUP_MAGIC.size, BACKUP_MAGIC.size + NONCE_BYTES)
     val cipher = Cipher.getInstance("AES/GCM/NoPadding")
     cipher.init(Cipher.DECRYPT_MODE, backupKey, GCMParameterSpec(128, nonce))
     cipher.updateAAD(BACKUP_MAGIC)
-    val packed = cipher.doFinal(bytes, BACKUP_MAGIC.size + NONCE_BYTES, bytes.size - BACKUP_MAGIC.size - NONCE_BYTES)
-    val text = GZIPInputStream(ByteArrayInputStream(packed)).use { it.readBytes() }.toString(Charsets.UTF_8)
-    return parseBackupJson(text)
+    return unpack(cipher.doFinal(bytes, BACKUP_MAGIC.size + NONCE_BYTES, bytes.size - BACKUP_MAGIC.size - NONCE_BYTES))
 }
 
 private fun parseBackupJson(text: String): BackupDocument {

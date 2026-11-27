@@ -568,11 +568,7 @@ internal class StalkerPortal(address: String, macAddress: String) {
         while (keys.hasNext()) {
             val channelId = keys.next()
             val value = channels.opt(channelId)
-            val rows = when (value) {
-                is JSONArray -> value
-                is JSONObject -> value.optJSONArray("data")
-                else -> null
-            } ?: continue
+            val rows = (value as? JSONArray) ?: (value as? JSONObject)?.optJSONArray("data") ?: continue
             val programmes = parseProgrammeRows(rows)
             if (programmes.isNotEmpty()) result[channelId] = programmes
         }

@@ -22,7 +22,9 @@ private fun appVersion(context: Context): String = runCatching {
 }.getOrNull().orEmpty()
 
 /** Collects the chosen parts of this device into an encrypted backup file. */
-internal suspend fun createBackup(context: Context, storage: PortalStorage, parts: Set<BackupPart>): ByteArray {
+internal suspend fun createBackup(
+    context: Context, storage: PortalStorage, parts: Set<BackupPart>, password: CharArray? = null
+): ByteArray {
     val settings = context.getSharedPreferences(MAIN_SETTINGS, Context.MODE_PRIVATE).all
     fun settingsOf(part: BackupPart) = preferencesToJson(settings.filterKeys { backupPartOfSetting(it) == part })
     val collected = buildMap<BackupPart, JsonElement> {
@@ -75,7 +77,7 @@ internal suspend fun createBackup(context: Context, storage: PortalStorage, part
         }
     }
     val created = java.time.LocalDateTime.now().withNano(0).toString()
-    return withContext(Dispatchers.Default) { encodeBackup(BackupDocument(created, appVersion(context), collected)) }
+    return withContext(Dispatchers.Default) { encodeBackup(BackupDocument(created, appVersion(context), collected), password) }
 }
 
 /**
@@ -206,9 +208,9 @@ internal fun backupsInDownloads(context: Context): List<StoredBackup> {
 }
 
 /** Reads a backup, or a portal file of the earlier "Portale sichern" export. */
-internal fun readBackup(context: Context, uri: android.net.Uri): BackupDocument {
+internal fun readBackup(context: Context, uri: android.net.Uri, password: CharArray? = null): BackupDocument {
     val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: error("no stream")
-    return if (isBackupFile(bytes)) decodeBackup(bytes)
+    return if (isBackupFile(bytes)) decodeBackup(bytes, password)
     else legacyPortalBackup(bytes.toString(Charsets.UTF_8)) ?: error("not a backup")
 }
 

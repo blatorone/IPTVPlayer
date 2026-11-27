@@ -1909,7 +1909,7 @@ private fun PlayerHome(
                             .remove("manual_watched:$key").remove("trakt_percent:$key")
                     }
                     importedProgress.forEach { (key, percent) ->
-                        if (key !in completedEpisodes && progressPreferences?.contains("manual_watched:$key") != true) {
+                        if (key !in completedEpisodes && progressPreferences.contains("manual_watched:$key") != true) {
                             putFloat("trakt_percent:$key", percent).putLong(key, 1L)
                                 .remove("completed:$key")
                         }
@@ -3676,7 +3676,7 @@ private fun PlayerHome(
         } else episodes.mapTo(linkedSetOf()) { (season, episode) -> titleSelection(section, episode, season).progressKey }
         val previous = if (section == PortalSection.SERIES) trackedSeries(title) else null
         val marked = keys + listOfNotNull(previous?.lastEpisode?.progressKey?.takeIf {
-            episodes.any { (season, episode) -> seriesEpisodeKey(season, episode) == previous.lastEpisode?.episodeKey }
+            episodes.any { (season, episode) -> seriesEpisodeKey(season, episode) == previous.lastEpisode.episodeKey }
         })
         prefs.edit {
             marked.forEach { key ->
@@ -4241,7 +4241,7 @@ private fun PlayerHome(
             // must be committed as one snapshot at a time so one section cannot
             // overwrite another section's newer in-memory catalogue.
             val snapshotMutex = Mutex()
-            val keepEnabled = activate || previous?.enabled != false || previous?.autoDisabled == true
+            val keepEnabled = activate || previous?.enabled != false || previous.autoDisabled
             val initialSnapshot = SavedPortal(
                 enteredAddress, enteredMac, refreshedChannels, refreshedGenres, refreshedCatalogs,
                 previous?.epgChannelIds.orEmpty(), previous?.subscriptionExpiry,
@@ -4811,7 +4811,7 @@ private fun PlayerHome(
                 val attempt = playbackAttempt ?: return
                 if (item?.mediaId != attempt.mediaId) return
                 val startingChannel = starting
-                val uri = item?.localConfiguration?.uri
+                val uri = item.localConfiguration?.uri
                 val formatError = error.errorCode in setOf(
                     PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED,
                     PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED
@@ -4973,11 +4973,11 @@ private fun PlayerHome(
                     bufferingSince = now
                     countedThisBuffer = false
                 }
-                if (now - bufferingSince!! >= 1_500) prepareNextLiveVariant(attempt, trouble = true)
-                if (!countedThisBuffer && now - bufferingSince!! >= 4_000) {
+                if (now - bufferingSince >= 1_500) prepareNextLiveVariant(attempt, trouble = true)
+                if (!countedThisBuffer && now - bufferingSince >= 4_000) {
                     countedThisBuffer = true
                     bufferEpisodes.addLast(now)
-                    if (bufferEpisodes.size >= 3) return@LaunchedEffect fail("playback_repeated_buffering", now - (bufferingSince ?: now))
+                    if (bufferEpisodes.size >= 3) return@LaunchedEffect fail("playback_repeated_buffering", now - bufferingSince)
                 }
             } else if (activePlayer.playbackState != Player.STATE_BUFFERING) {
                 bufferingSince = null
@@ -8875,7 +8875,7 @@ private fun PlayerHome(
                                 val savedResume = trackedResume
                                 val savedEpisode = savedResume?.let { resumeEpisode(seasons.orEmpty(), it) }
                                 if (savedResume == null || savedEpisode == null) null
-                                else if (!isPlaybackCompleted(savedResume.progressKey, savedResume.episodeKey in trackedEntry?.watchedEpisodes.orEmpty())) {
+                                else if (!isPlaybackCompleted(savedResume.progressKey, savedResume.episodeKey in trackedEntry.watchedEpisodes)) {
                                     // An interrupted local/Trakt playback resumes at its exact episode,
                                     // including a start at position zero.
                                     savedResume
@@ -8884,7 +8884,7 @@ private fun PlayerHome(
                                     // Continue with the next episode that is not already completed.
                                     nextEpisodeAfter(seasons.orEmpty(), savedResume) { season, episode ->
                                         val key = titleSelection(section, episode, season).progressKey
-                                        isPlaybackCompleted(key, seriesEpisodeKey(season, episode) in trackedEntry?.watchedEpisodes.orEmpty())
+                                        isPlaybackCompleted(key, seriesEpisodeKey(season, episode) in trackedEntry.watchedEpisodes)
                                     }?.let { (season, episode) ->
                                         EpisodeResume(
                                             seriesEpisodeKey(season, episode), season.number, episode.episode,
@@ -10052,7 +10052,7 @@ internal fun PlayerFrame(
                     }
                     playbackStarted && player.playWhenReady && player.playbackState == Player.STATE_BUFFERING -> {
                         if (bufferingStartedAt == null) bufferingStartedAt = now
-                        value = now - bufferingStartedAt!! >= 1_500L
+                        value = now - bufferingStartedAt >= 1_500L
                     }
                     else -> {
                         bufferingStartedAt = null
@@ -10390,12 +10390,12 @@ internal fun PlayerFrame(
                                 if (!livePlayback && !controlsVisible && event.keyCode in setOf(
                                         android.view.KeyEvent.KEYCODE_DPAD_LEFT,
                                         android.view.KeyEvent.KEYCODE_DPAD_RIGHT
-                                    ) && player?.isCurrentMediaItemSeekable == true
+                                    ) && player.isCurrentMediaItemSeekable
                                 ) {
                                     val delta = if (event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_LEFT) -10_000L else 10_000L
                                     if (event.action == android.view.KeyEvent.ACTION_DOWN) {
-                                        val duration = player?.duration?.takeIf { it > 0L } ?: Long.MAX_VALUE
-                                        player?.seekTo((player.currentPosition + delta).coerceIn(0L, duration))
+                                        val duration = player.duration.takeIf { it > 0L } ?: Long.MAX_VALUE
+                                        player.seekTo((player.currentPosition + delta).coerceIn(0L, duration))
                                         if (!controlsVisible) {
                                             showController()
                                             post {
@@ -10438,7 +10438,7 @@ internal fun PlayerFrame(
                                             event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN && !progressUsable &&
                                                 focused !in bottomTargets -> bottom?.requestFocus() == true
                                             event.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP && bottom != null &&
-                                            focused in bottomTargets -> if (progressUsable) progress?.requestFocus() == true else
+                                            focused in bottomTargets -> if (progressUsable) progress.requestFocus() else
                                                 (findViewById<android.view.View>(androidx.media3.ui.R.id.exo_play_pause)
                                                     ?.takeIf { it.isShown } ?: findViewWithTag<android.view.View>("stop_playback_action"))
                                                     ?.requestFocus() == true
@@ -10636,7 +10636,7 @@ internal fun PlayerFrame(
                                 else android.view.View.GONE
                             configureBottomFocus(view)
                         }
-                        player?.let { activePlayer ->
+                        player.let { activePlayer ->
                             showSubtitleButton(activePlayer.currentTracks)
                             val listener = object : Player.Listener {
                                 override fun onTracksChanged(tracks: Tracks) = showSubtitleButton(tracks)

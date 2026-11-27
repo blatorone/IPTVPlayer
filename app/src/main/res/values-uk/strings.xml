@@ -859,6 +859,14 @@
     <string name="backup_none_found">У теці Download не знайдено копій цього застосунку.</string>
     <string name="backup_saved">Копію збережено: %1$s</string>
     <string name="backup_failed">Не вдалося зберегти або прочитати копію.</string>
+    <string name="backup_protect">Захистити паролем</string>
+    <string name="backup_protect_hint">Без цього пароля файл не відкрити – навіть StreamWatch не зможе його відновити.</string>
+    <string name="backup_password_label">Пароль (щонайменше 8 символів)</string>
+    <string name="backup_password_mismatch">Паролі не збігаються.</string>
+    <string name="backup_password_needed">Цей файл захищено паролем.</string>
+    <string name="backup_password_open">Відкрити</string>
+    <string name="backup_password_wrong">Неправильний пароль.</string>
+    <string name="backup_password_phone">Цей файл захищено паролем, відновити його можна лише безпосередньо на пристрої.</string>
     <string name="backup_import_now">Імпортувати зараз</string>
     <string name="backup_restart_hint">Після цього застосунок перезапуститься. Портали додаються до наявних, вибрані налаштування замінюються.</string>
     <string name="backup_picker_missing">На цьому пристрої немає вибору файлів. Використовуйте теку Download.</string>

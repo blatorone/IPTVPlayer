@@ -855,6 +855,14 @@
     <string name="backup_none_found">Mapē Lejupielādes nav atrasts šīs lietotnes dublējums.</string>
     <string name="backup_saved">Dublējums saglabāts: %1$s</string>
     <string name="backup_failed">Dublējumu neizdevās saglabāt vai nolasīt.</string>
+    <string name="backup_protect">Aizsargāt ar paroli</string>
+    <string name="backup_protect_hint">Bez šīs paroles failu nevar atvērt – arī StreamWatch to nevarēs atjaunot.</string>
+    <string name="backup_password_label">Parole (vismaz 8 rakstzīmes)</string>
+    <string name="backup_password_mismatch">Paroles nesakrīt.</string>
+    <string name="backup_password_needed">Šis fails ir aizsargāts ar paroli.</string>
+    <string name="backup_password_open">Atvērt</string>
+    <string name="backup_password_wrong">Nepareiza parole.</string>
+    <string name="backup_password_phone">Šis fails ir aizsargāts ar paroli, un to var atjaunot tikai tieši ierīcē.</string>
     <string name="backup_import_now">Importēt tagad</string>
     <string name="backup_restart_hint">Pēc tam lietotne restartēsies. Portāli tiek pievienoti esošajiem, izvēlētie iestatījumi tiek aizstāti.</string>
     <string name="backup_picker_missing">Šajā ierīcē nav failu izvēles. Izmanto mapi Lejupielādes.</string>

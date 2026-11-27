@@ -851,6 +851,14 @@
     <string name="backup_none_found">Der blev ikke fundet nogen backup af denne app i mappen Download.</string>
     <string name="backup_saved">Backup gemt: %1$s</string>
     <string name="backup_failed">Backuppen kunne ikke gemmes eller læses.</string>
+    <string name="backup_protect">Beskyt med adgangskode</string>
+    <string name="backup_protect_hint">Uden denne adgangskode kan filen ikke åbnes – heller ikke StreamWatch kan gendanne den.</string>
+    <string name="backup_password_label">Adgangskode (mindst 8 tegn)</string>
+    <string name="backup_password_mismatch">Adgangskoderne er ikke ens.</string>
+    <string name="backup_password_needed">Denne fil er beskyttet med en adgangskode.</string>
+    <string name="backup_password_open">Åbn</string>
+    <string name="backup_password_wrong">Forkert adgangskode.</string>
+    <string name="backup_password_phone">Denne fil er beskyttet med en adgangskode og kan kun gendannes direkte på enheden.</string>
     <string name="backup_import_now">Importér nu</string>
     <string name="backup_restart_hint">Derefter genstarter appen. Portaler føjes til de eksisterende, de valgte indstillinger erstattes.</string>
     <string name="backup_picker_missing">Denne enhed tilbyder ikke filvalg. Brug mappen Download.</string>

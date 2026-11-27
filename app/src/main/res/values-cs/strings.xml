@@ -859,6 +859,14 @@
     <string name="backup_none_found">Ve složce Stažené nebyla nalezena žádná záloha této aplikace.</string>
     <string name="backup_saved">Záloha uložena: %1$s</string>
     <string name="backup_failed">Zálohu se nepodařilo uložit nebo přečíst.</string>
+    <string name="backup_protect">Chránit heslem</string>
+    <string name="backup_protect_hint">Bez tohoto hesla soubor nelze otevřít – ani StreamWatch ho pak neobnoví.</string>
+    <string name="backup_password_label">Heslo (alespoň 8 znaků)</string>
+    <string name="backup_password_mismatch">Hesla se neshodují.</string>
+    <string name="backup_password_needed">Tento soubor je chráněn heslem.</string>
+    <string name="backup_password_open">Otevřít</string>
+    <string name="backup_password_wrong">Nesprávné heslo.</string>
+    <string name="backup_password_phone">Tento soubor je chráněn heslem a lze ho obnovit jen přímo v zařízení.</string>
     <string name="backup_import_now">Importovat nyní</string>
     <string name="backup_restart_hint">Poté se aplikace restartuje. Portály se přidají k existujícím, vybraná nastavení se nahradí.</string>
     <string name="backup_picker_missing">Toto zařízení nenabízí výběr souborů. Použijte složku Stažené.</string>

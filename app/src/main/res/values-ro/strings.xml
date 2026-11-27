@@ -855,6 +855,14 @@
     <string name="backup_none_found">Nu s-a găsit niciun backup al acestei aplicații în folderul Download.</string>
     <string name="backup_saved">Backup salvat: %1$s</string>
     <string name="backup_failed">Backup-ul nu a putut fi salvat sau citit.</string>
+    <string name="backup_protect">Protejează cu parolă</string>
+    <string name="backup_protect_hint">Fără această parolă fișierul nu poate fi deschis – nici StreamWatch nu îl mai poate restaura.</string>
+    <string name="backup_password_label">Parolă (minimum 8 caractere)</string>
+    <string name="backup_password_mismatch">Parolele nu se potrivesc.</string>
+    <string name="backup_password_needed">Acest fișier este protejat cu parolă.</string>
+    <string name="backup_password_open">Deschide</string>
+    <string name="backup_password_wrong">Parolă greșită.</string>
+    <string name="backup_password_phone">Acest fișier este protejat cu parolă și poate fi restaurat doar direct pe dispozitiv.</string>
     <string name="backup_import_now">Importă acum</string>
     <string name="backup_restart_hint">Apoi aplicația repornește. Portalurile se adaugă celor existente, setările alese sunt înlocuite.</string>
     <string name="backup_picker_missing">Acest dispozitiv nu are selector de fișiere. Folosește folderul Download.</string>

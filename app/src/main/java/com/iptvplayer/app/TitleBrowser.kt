@@ -281,11 +281,11 @@ private fun TitleShelf(
             itemsIndexed(titles, key = { index, item -> "${posterShelfKey(item)}-$index" }) { index, item ->
                 val shouldRestore = index == focusIndex && focusRequester != null
                 if (shouldRestore) LaunchedEffect(item) {
-                    if (requestFocusSoon(focusRequester!!)) onFocusRestored()
+                    if (requestFocusSoon(focusRequester)) onFocusRestored()
                 }
                 PosterShelfCard(
                     item, cardWidth, newEpisodes(item),
-                    modifier = if (shouldRestore) Modifier.focusRequester(focusRequester!!) else Modifier,
+                    modifier = if (shouldRestore) Modifier.focusRequester(focusRequester) else Modifier,
                     onFocused = if (shouldRestore) onFocusRestored else null,
                     onSelect = { onSelect(item) }
                 )

@@ -851,6 +851,14 @@
     <string name="backup_none_found">Në dosjen Download nuk u gjet asnjë kopje e këtij aplikacioni.</string>
     <string name="backup_saved">Kopja u ruajt: %1$s</string>
     <string name="backup_failed">Kopja nuk mund të ruhej ose lexohej.</string>
+    <string name="backup_protect">Mbro me fjalëkalim</string>
+    <string name="backup_protect_hint">Pa këtë fjalëkalim skedari nuk hapet – as StreamWatch nuk mund ta rikthejë.</string>
+    <string name="backup_password_label">Fjalëkalimi (të paktën 8 karaktere)</string>
+    <string name="backup_password_mismatch">Fjalëkalimet nuk përputhen.</string>
+    <string name="backup_password_needed">Ky skedar është i mbrojtur me fjalëkalim.</string>
+    <string name="backup_password_open">Hap</string>
+    <string name="backup_password_wrong">Fjalëkalim i gabuar.</string>
+    <string name="backup_password_phone">Ky skedar është i mbrojtur me fjalëkalim dhe mund të rikthehet vetëm drejtpërdrejt në pajisje.</string>
     <string name="backup_import_now">Importo tani</string>
     <string name="backup_restart_hint">Pastaj aplikacioni rinis. Portalet shtohen te ekzistueset, cilësimet e zgjedhura zëvendësohen.</string>
     <string name="backup_picker_missing">Kjo pajisje nuk ka zgjedhës skedarësh. Përdor dosjen Download.</string>

@@ -46,7 +46,7 @@ android {
 
 // "Neuigkeiten" in the app shows CHANGELOG.md: it is copied into the assets at build time.
 val changelogAssets = layout.buildDirectory.dir("generated/changelogAssets")
-val copyChangelog by tasks.registering(Copy::class) {
+val copyChangelog = tasks.register<Copy>("copyChangelog") {
     from(rootProject.file("CHANGELOG.md"))
     into(changelogAssets)
 }

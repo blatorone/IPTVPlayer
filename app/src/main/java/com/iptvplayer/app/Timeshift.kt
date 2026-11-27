@@ -51,6 +51,8 @@ internal class TimeshiftRecorder(
     /** How much is kept; can grow when a stand-in recording becomes the timeshift. */
     @Volatile var windowMs: Long
 ) {
+    // A Java monitor: wait/notifyAll are used on it.
+    @Suppress("PLATFORM_CLASS_MAPPED_TO_KOTLIN")
     private val lock = Object()
     /** First byte still kept, and the number of bytes written so far. */
     @Volatile var firstOffset = 0L

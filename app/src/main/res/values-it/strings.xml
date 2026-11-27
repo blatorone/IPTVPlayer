@@ -855,6 +855,14 @@
     <string name="backup_none_found">Nessun backup di questa app trovato nella cartella Download.</string>
     <string name="backup_saved">Backup salvato: %1$s</string>
     <string name="backup_failed">Impossibile salvare o leggere il backup.</string>
+    <string name="backup_protect">Proteggi con password</string>
+    <string name="backup_protect_hint">Senza questa password il file non si può aprire: nemmeno StreamWatch potrà ripristinarlo.</string>
+    <string name="backup_password_label">Password (almeno 8 caratteri)</string>
+    <string name="backup_password_mismatch">Le password non coincidono.</string>
+    <string name="backup_password_needed">Questo file è protetto da password.</string>
+    <string name="backup_password_open">Apri</string>
+    <string name="backup_password_wrong">Password errata.</string>
+    <string name="backup_password_phone">Questo file è protetto da password e si può ripristinare solo direttamente sul dispositivo.</string>
     <string name="backup_import_now">Importa ora</string>
     <string name="backup_restart_hint">Poi l\'app si riavvia. I portali vengono aggiunti a quelli esistenti, le impostazioni scelte sostituite.</string>
     <string name="backup_picker_missing">Questo dispositivo non ha un selettore di file. Usa la cartella Download.</string>

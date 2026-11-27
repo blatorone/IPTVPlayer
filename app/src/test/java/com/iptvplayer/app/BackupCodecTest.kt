@@ -24,6 +24,24 @@ class BackupCodecTest {
         assertEquals(parts[BackupPart.EPG], decoded.parts[BackupPart.EPG])
     }
 
+    @Test
+    fun passwordProtectedBackupOpensOnlyWithItsPassword() {
+        val parts = mapOf(BackupPart.EPG to JsonObject().apply { add("sources", jsonStrings(listOf("https://guide.example/epg.xml"))) })
+        val bytes = encodeBackup(BackupDocument("2026-11-27T18:00", "2.0.1", parts), "geheim-123".toCharArray())
+        assertTrue(isBackupFile(bytes))
+        assertTrue(isProtectedBackup(bytes))
+        assertFalse(String(bytes, Charsets.ISO_8859_1).contains("guide.example"))
+        val missing = runCatching { decodeBackup(bytes, null) }.exceptionOrNull() as BackupPasswordException
+        assertTrue(missing.missing)
+        val wrong = runCatching { decodeBackup(bytes, "falsch-123".toCharArray()) }.exceptionOrNull() as BackupPasswordException
+        assertFalse(wrong.missing)
+        assertEquals(parts[BackupPart.EPG], decodeBackup(bytes, "geheim-123".toCharArray()).parts[BackupPart.EPG])
+        // Without a password nothing changes: the earlier format, readable with or without one given.
+        val plain = encodeBackup(BackupDocument("", "", parts), null)
+        assertFalse(isProtectedBackup(plain))
+        assertEquals(parts.keys, decodeBackup(plain, "egal".toCharArray()).parts.keys)
+    }
+
     @Test(expected = Exception::class)
     fun changedFileIsRejected() {
         val bytes = encodeBackup(BackupDocument("", "", emptyMap()))

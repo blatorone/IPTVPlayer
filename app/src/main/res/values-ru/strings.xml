@@ -859,6 +859,14 @@
     <string name="backup_none_found">В папке Download не найдено копий этого приложения.</string>
     <string name="backup_saved">Копия сохранена: %1$s</string>
     <string name="backup_failed">Не удалось сохранить или прочитать копию.</string>
+    <string name="backup_protect">Защитить паролем</string>
+    <string name="backup_protect_hint">Без этого пароля файл не открыть – даже StreamWatch не сможет его восстановить.</string>
+    <string name="backup_password_label">Пароль (не менее 8 символов)</string>
+    <string name="backup_password_mismatch">Пароли не совпадают.</string>
+    <string name="backup_password_needed">Этот файл защищён паролем.</string>
+    <string name="backup_password_open">Открыть</string>
+    <string name="backup_password_wrong">Неверный пароль.</string>
+    <string name="backup_password_phone">Этот файл защищён паролем, восстановить его можно только непосредственно на устройстве.</string>
     <string name="backup_import_now">Импортировать</string>
     <string name="backup_restart_hint">После этого приложение перезапустится. Порталы добавятся к существующим, выбранные настройки будут заменены.</string>
     <string name="backup_picker_missing">На этом устройстве нет выбора файлов. Используйте папку Download.</string>

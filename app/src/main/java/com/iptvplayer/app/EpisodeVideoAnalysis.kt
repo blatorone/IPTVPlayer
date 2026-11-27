@@ -39,9 +39,13 @@ internal data class EpisodeVideoAnalysis(
     val closing: List<EpisodeFrame> = emptyList()
 )
 
-/** Openings are searched within the first minutes; long cold opens are common. */
-internal const val OPENING_SCAN_LIMIT_MS = 300_000L
-private const val MAX_REFERENCE_FRAMES = 300
+/**
+ * Openings are searched within the first 10 minutes: long cold opens are common, and some series
+ * (e.g. Tulsa King) show their title only after more than 5 minutes.
+ */
+internal const val OPENING_SCAN_LIMIT_MS = 600_000L
+/** One frame per second at most (HLS), so the whole window fits. */
+private const val MAX_REFERENCE_FRAMES = 600
 private const val MAX_LEARNED_FRAMES = 120
 private const val SAMPLE_WIDTH = 144
 private const val SAMPLE_HEIGHT = 80

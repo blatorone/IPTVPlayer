@@ -38,7 +38,8 @@ internal object TvmazeClient {
         )
     }
 
-    suspend fun airedEpisodes(title: PortalTitle): Set<String>? = withContext(Dispatchers.IO) {
+    /** Aired episodes plus the next episode and the next season start (same shape as Trakt's feed). */
+    suspend fun episodeFeed(title: PortalTitle): TraktEpisodeFeed? = withContext(Dispatchers.IO) {
         val imdb = title.imdbId?.takeIf { it.matches(Regex("tt[0-9]+")) }
         val name = displayVodTitle(title)
         val show = if (imdb != null) {
@@ -58,15 +59,21 @@ internal object TvmazeClient {
         val body = request("shows/$id/episodes") ?: return@withContext null
         val episodes = JSONArray(body)
         val today = LocalDate.now()
-        buildSet {
-            for (index in 0 until episodes.length()) {
-                val row = episodes.optJSONObject(index) ?: continue
-                val airdate = runCatching { LocalDate.parse(row.optString("airdate")) }.getOrNull() ?: continue
-                val season = row.optInt("season", -1)
-                val number = row.optInt("number", -1)
-                if (season >= 0 && number >= 0 && !airdate.isAfter(today)) add("$season:$number")
-            }
+        val aired = linkedSetOf<String>()
+        val upcoming = mutableListOf<Pair<LocalDate, TraktUpcomingEpisode>>()
+        for (index in 0 until episodes.length()) {
+            val row = episodes.optJSONObject(index) ?: continue
+            val airdate = runCatching { LocalDate.parse(row.optString("airdate")) }.getOrNull() ?: continue
+            val season = row.optInt("season", -1)
+            val number = row.optInt("number", -1)
+            if (season < 0 || number < 0) continue
+            if (!airdate.isAfter(today)) aired += "$season:$number"
+            else upcoming += airdate to TraktUpcomingEpisode(row.optString("name").ifBlank { null }, season, number, airdate.toString())
         }
+        TraktEpisodeFeed(
+            aired, upcoming.minByOrNull { it.first }?.second,
+            upcoming.filter { (_, episode) -> episode.number == 1 && (episode.season ?: 0) >= 1 }.minByOrNull { it.first }?.second
+        )
     }
 
     private fun request(path: String): String? = request(URI("https://api.tvmaze.com/$path"), 0)

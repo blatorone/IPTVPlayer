@@ -146,18 +146,36 @@ internal class TmdbClient(private val token: String) {
         return TmdbPage(items, (page + 1).takeIf { it <= result.optInt("total_pages") && it <= 500 })
     }
 
-    suspend fun airedEpisodes(title: PortalTitle): Set<String>? {
+    /**
+     * Aired episodes of the latest season, the next episode and the next season start (same shape
+     * as Trakt's feed). The season start comes from the season list, which TMDB fills early.
+     */
+    suspend fun episodeFeed(title: PortalTitle): TraktEpisodeFeed? {
         val item = lookup(PortalSection.SERIES, title) ?: return null
         val series = request("tv/${item.id}")
-        val last = series.optJSONObject("last_episode_to_air") ?: return emptySet()
-        val number = last.optInt("season_number", -1)
-        if (number < 0) return emptySet()
         val today = LocalDate.now()
-        return request("tv/${item.id}/season/$number").optJSONArray("episodes").objects().mapNotNull { episode ->
-            val date = runCatching { LocalDate.parse(episode.optString("air_date")) }.getOrNull()
+        fun date(raw: String?) = runCatching { LocalDate.parse(raw) }.getOrNull()
+        val next = series.optJSONObject("next_episode_to_air")?.let { episode ->
+            date(episode.optString("air_date"))?.takeIf { !it.isBefore(today) }?.let {
+                TraktUpcomingEpisode(
+                    episode.optString("name").ifBlank { null }, episode.optInt("season_number", -1).takeIf { n -> n >= 0 },
+                    episode.optInt("episode_number", -1).takeIf { n -> n > 0 }, it.toString()
+                )
+            }
+        }
+        val season = series.optJSONArray("seasons").objects().mapNotNull { row ->
+            val number = row.optInt("season_number", -1).takeIf { it >= 1 } ?: return@mapNotNull null
+            date(row.optString("air_date"))?.takeIf { it.isAfter(today) }?.let { it to TraktUpcomingEpisode(null, number, 1, it.toString()) }
+        }.minByOrNull { it.first }?.second
+        val last = series.optJSONObject("last_episode_to_air") ?: return TraktEpisodeFeed(emptySet(), next, season)
+        val number = last.optInt("season_number", -1)
+        if (number < 0) return TraktEpisodeFeed(emptySet(), next, season)
+        val aired = request("tv/${item.id}/season/$number").optJSONArray("episodes").objects().mapNotNull { episode ->
+            val aired = date(episode.optString("air_date"))
             val index = episode.optInt("episode_number", -1)
-            if (date != null && !date.isAfter(today) && index >= 0) "$number:$index" else null
+            if (aired != null && !aired.isAfter(today) && index >= 0) "$number:$index" else null
         }.toSet()
+        return TraktEpisodeFeed(aired, next, season)
     }
 
     suspend fun episodeDetails(seriesId: Int, season: Int): Map<Int, TmdbEpisodeDetails> =

@@ -8,8 +8,9 @@
 - Timeshift und fließender Portalwechsel: Die Aufnahme ruft den Stream jetzt genauso ab wie der Player. Manche Portale hatten die Aufnahme abgelehnt („HTTP 406“), sodass der Sender sofort auf ein anderes Portal sprang. Die Verbindung wird beim Umschalten gleich geschlossen.
 - Hakt das Bild während Timeshift (Dekodierfehler), startet die Wiedergabe einmal neu am Live-Rand der Aufnahme, statt das Portal zu wechseln. Ist die Aufnahme selbst beendet, wird sofort gewechselt statt erst neu geladen.
 - Serien → „Weiter schauen“: Ist diese Woche eine neue Folge erschienen und schon im Portal, steht die Serie vorne und zeigt „Neue Folgen“. Fehlt die Folge im Portal noch, gibt es keinen Hinweis (die App schaut alle 3 Stunden nach). „Zuletzt gesehen“ bleibt nach dem letzten Anschauen sortiert.
-- Serien → „Bald verfügbar“: zeigt jetzt den Start der nächsten Staffel (z. B. „S3 · Do, 04.12.“), nur bei Serien, die du schaust. Nur ein Hinweis – ob das Portal sie dann gleich hat, ist noch offen.
+- Serien → „Bald verfügbar“: zeigt jetzt den Start der nächsten Staffel (z. B. „S3 · Do, 04.12.“), nur bei Serien, die du schaust. Das klappt mit Trakt, mit TMDB und ohne beides über TVmaze. Nur ein Hinweis – ob das Portal sie dann gleich hat, ist noch offen.
 - Backup: Beim Speichern kann die Datei mit einem Passwort geschützt werden (mind. 8 Zeichen). Dann ist sie wirklich verschlüsselt, und ohne das Passwort lässt sie sich nicht öffnen. Ohne Passwort bleibt alles wie bisher; alte Backups lassen sich weiter einspielen.
+- Intro-Erkennung: Der Vorspann wird jetzt in den ersten 10 Minuten gesucht (vorher 5) – für Serien mit langem Einstieg wie Tulsa King.
 - Technik: Kotlin 2.4.
 - Diagnose: Die Suche nach neuen Folgen vermerkt Funde und Fehler (nur Anzahlen, keine Serientitel).
 - Aufgeräumt: alle Warnungen des Compilers und von Android Lint behoben (u. a. Passwortfelder auf die neue sichere Eingabe umgestellt, Fokussteuerung der Einstellungen auf die neue Schnittstelle, ungenutzte Startsymbole entfernt, slowenische Mehrzahl korrigiert).

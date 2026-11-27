@@ -2433,17 +2433,16 @@ private fun PlayerHome(
                         val title = PortalTitle(
                             tracked.name, year = tracked.year, imdbId = tracked.imdb, tmdbId = tracked.tmdb
                         )
-                        val feed = if (provider == "trakt") {
-                            withTraktSession { api, session -> api.episodeFeed(title, session.accessToken) }
-                        } else null
-                        val keys = when (provider) {
-                            "trakt" -> feed?.airedKeys
-                            "tmdb" -> client?.airedEpisodes(title)
-                            else -> TvmazeClient.airedEpisodes(title)
+                        // All three deliver the aired episodes, the next episode and the next season start.
+                        val feed = when (provider) {
+                            "trakt" -> withTraktSession { api, session -> api.episodeFeed(title, session.accessToken) }
+                            "tmdb" -> client?.episodeFeed(title)
+                            else -> TvmazeClient.episodeFeed(title)
                         }
+                        val keys = feed?.airedKeys
                         if (keys != null && seriesActivity.any { it.key == tracked.key }) {
                             val before = seriesActivity.firstOrNull { it.key == tracked.key }?.unseen?.size ?: 0
-                            observeEpisodeProvider(tracked.key, keys, provider, feed?.upcoming, feed?.upcomingSeason)
+                            observeEpisodeProvider(tracked.key, keys, provider, feed.upcoming, feed.upcomingSeason)
                             val after = seriesActivity.firstOrNull { it.key == tracked.key }?.unseen?.size ?: 0
                             // Counts only (no series names): shows whether checks run and find something.
                             if (after > before) AppDiagnostics.record(context, "episode_check p:$provider aired:${keys.size} new:${after - before}")

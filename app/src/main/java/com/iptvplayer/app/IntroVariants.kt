@@ -121,7 +121,7 @@ internal fun learnIntroVariant(
 }
 
 /** The closing part of an episode that is compared between episodes, counted back from its end. */
-internal const val CLOSING_WINDOW_MS = OPENING_SCAN_LIMIT_MS
+internal const val CLOSING_WINDOW_MS = 300_000L // the last 5 minutes (the opening search reaches further)
 
 /** Footage after recurring end credits for at least this long counts as a post-credits scene. */
 private const val POST_CREDITS_MIN_MS = 20_000L

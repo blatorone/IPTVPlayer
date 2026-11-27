@@ -3412,7 +3412,7 @@ private fun PlayerHome(
                 // "Portal 2 · FHD · host": portal number, quality and portal, so it is clear which stream plays.
                 val number = savedSources.indexOfFirst { it.identity == item.source.identity } + 1
                 val quality = variant.description.qualities.joinToString(" / ")
-                val label = listOf("Portal $number", quality, playbackSourceLabel(item.source, portal)).filter { it.isNotBlank() }.joinToString(" · ")
+                val label = listOf("Portal $number", quality, portal.sourceLabel).filter { it.isNotBlank() }.joinToString(" · ")
                 PlaybackVariant(label, sourceId = item.source.identity, streamKey = liveStreamKey(item.source.identity, item.value.id)) {
                     portal.resolve(item.value, portal.openSession())
                 }

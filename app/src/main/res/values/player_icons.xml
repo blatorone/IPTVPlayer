@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Play/pause in the same plain style as the other player buttons (Media3 draws a white
+         circle around them otherwise). -->
+    <drawable name="exo_styled_controls_play">@drawable/ic_player_play</drawable>
+    <drawable name="exo_styled_controls_pause">@drawable/ic_player_pause</drawable>
+</resources>

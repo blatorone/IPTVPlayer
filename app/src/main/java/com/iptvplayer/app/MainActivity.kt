@@ -10170,9 +10170,11 @@ internal fun PlayerFrame(
             val drawable = androidx.core.content.ContextCompat.getDrawable(button.context, icon) ?: return
             if (button.id == android.view.View.NO_ID) button.id = android.view.View.generateViewId()
             enableRemoteFocus(button)
+            // The focus ring first: a layer list insets every layer by the padding of the ones
+            // before it, so with the (inset) icon first the ring came out smaller than the button.
             button.foreground = android.graphics.drawable.LayerDrawable(arrayOf(
-                android.graphics.drawable.InsetDrawable(drawable, (13 * density).toInt()), button.foreground
-            ))
+                button.foreground, android.graphics.drawable.InsetDrawable(drawable, (13 * density).toInt())
+            )).apply { paddingMode = android.graphics.drawable.LayerDrawable.PADDING_MODE_STACK }
             button.background = android.graphics.drawable.GradientDrawable().apply {
                 shape = android.graphics.drawable.GradientDrawable.OVAL
                 setColor(android.graphics.Color.argb(120, 0, 0, 0))
@@ -10189,6 +10191,18 @@ internal fun PlayerFrame(
             button.layoutParams = button.layoutParams?.apply { width = size; height = size }
             button.setPadding(0, 0, 0, 0)
             button.requestLayout()
+        }
+        // Play/pause: the same size and inner spacing as the other round buttons.
+        view.findViewById<android.widget.ImageView>(androidx.media3.ui.R.id.exo_play_pause)?.let { pause ->
+            if (pause.getTag(R.string.player_jump_back) != true) {
+                pause.setTag(R.string.player_jump_back, true)
+                val density = pause.resources.displayMetrics.density
+                val size = (52 * density).toInt()
+                val padding = (13 * density).toInt()
+                pause.scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+                pause.setPadding(padding, padding, padding, padding)
+                pause.layoutParams = pause.layoutParams?.apply { width = size; height = size }
+            }
         }
         styleSeek(androidx.media3.ui.R.id.exo_rew_with_amount, R.drawable.ic_player_jump_back)
         styleSeek(androidx.media3.ui.R.id.exo_ffwd_with_amount, R.drawable.ic_player_jump_forward)

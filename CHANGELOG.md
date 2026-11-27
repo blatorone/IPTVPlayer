@@ -4,7 +4,7 @@
 
 - Version 2.0.0: Die Oberfläche hat sich seit dem Anfang komplett geändert – neue Player-Leiste, einheitliche Knöpfe, neuer Programmführer und vieles mehr aus den Betas von 1.0.99.
 - Behoben: „Nach Updates suchen“ (und andere Zeilen, die während einer Aktion kurz gesperrt sind) ließ den Fokus in einen anderen Bereich springen, z. B. „Quellen und Bibliothek“. Der Fokus bleibt jetzt auf der Zeile; ist ein Update da, öffnet sich das Fenster, sonst erscheint darunter der Hinweis.
-- Wiedergabeleiste: Die Spul-Knöpfe haben jetzt denselben Fokusrahmen wie die anderen Knöpfe.
+- Wiedergabeleiste: Die Spul-Knöpfe haben jetzt denselben, genau auf dem Kreis liegenden Fokusrahmen wie die anderen Knöpfe. Play/Pause hat keinen weißen Kreis mehr und ist so groß wie die übrigen Knöpfe.
 - Wiedergabeleiste: Spulen zeigt jetzt zwei Pfeile statt des runden Pfeils mit Sekundenzahl, im selben runden Stil wie die anderen Knöpfe. Außen: bei Serien die Pfeile mit Strich für vorherige/nächste Folge, bei Filmen und Timeshift drei Pfeile für 10 Minuten zurück/vor.
 - Zurück aus dem Vollbild führt nie in die Einstellungen, sondern dorthin, wo der Titel geöffnet wurde: Programmführer, Film (danach dessen Kategorie) oder Serie.
 - Behoben: Beim Öffnen und Schließen des Update-Fensters sprang die Einstellungsseite in einen anderen Bereich (z. B. „Quellen und Bibliothek“).

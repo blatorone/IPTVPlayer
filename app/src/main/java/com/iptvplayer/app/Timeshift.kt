@@ -72,6 +72,13 @@ internal class TimeshiftRecorder(
         thread.start()
     }
 
+    /** Why the recording stopped, without addresses: own reasons as text, others by type. */
+    val problem: String?
+        get() = failure?.let { error ->
+            error.message?.takeIf { it.matches(Regex("stream ended|no body|HTTP \\d{3}|timeshift stalled")) }
+                ?: error.javaClass.simpleName
+        }
+
     /** Still recording and something arrived. */
     val healthy: Boolean get() = !stopped && failure == null && written > 0
 
@@ -286,6 +293,12 @@ internal object Timeshift {
         exo.setMediaSource(ProgressiveMediaSource.Factory { TimeshiftDataSource(active, offset) }.createMediaSource(media))
         exo.prepare()
         exo.playWhenReady = playing
+    }
+
+    /** For the diagnostic report: age of the running recording and why it stopped, if it did. */
+    fun describe(): String? {
+        val active = recorder ?: return null
+        return "rec_age_s:${(timeshiftNow() - active.startedAt) / 1000}" + (active.problem?.let { " rec:$it" } ?: "")
     }
 
     /** How far behind live playback is (ms), or null without a running timeshift. */

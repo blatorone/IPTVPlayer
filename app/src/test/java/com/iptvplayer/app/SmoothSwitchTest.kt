@@ -20,13 +20,13 @@ class SmoothSwitchTest {
 
     @Test
     fun holdsOnlyWhenTheNewPortalIsKnownToBeBehind() {
-        assertEquals(3_200L, smoothHoldMs(3_200L, 0L))
+        assertEquals(2_500L, smoothHoldMs(2_500L, 0L))
         // The picture already stood still for a while: that much less to wait.
         assertEquals(1_200L, smoothHoldMs(3_200L, 2_000L))
         assertNull(smoothHoldMs(null, 0L))          // not known yet: switch at once
         assertNull(smoothHoldMs(-2_000L, 0L))       // ahead: nothing to wait for
         assertNull(smoothHoldMs(3_200L, 8_000L))    // stood still longer than the distance
-        assertNull(smoothHoldMs(60_000L, 0L))       // implausibly far: no long frozen picture
+        assertEquals(MAX_HOLD_MS, smoothHoldMs(9_000L, 0L)) // never longer than 3 s
     }
 
     @Test
@@ -37,6 +37,17 @@ class SmoothSwitchTest {
         assertEquals(102_000L, standbyStart(100_000L, 1_000L, 3_000L))
         // Distance unknown: taken as none.
         assertEquals(99_000L, standbyStart(100_000L, 1_000L, null))
+    }
+
+    @Test
+    fun aDistanceCountsOnlyOnceTwoMeasurementsAgree() {
+        val first = nextLagRecord(null, 5_000L)
+        assertEquals(LagRecord(5_000L, false), first)
+        val second = nextLagRecord(first, 6_000L)          // within 2 s: confirmed, averaged
+        assertEquals(LagRecord(5_500L, true), second)
+        val outlier = nextLagRecord(second, 17_000L)       // far off: starts over, not used
+        assertEquals(LagRecord(17_000L, false), outlier)
+        assertEquals(second, LagRecord.parse(second.format()))
     }
 
     @Test

@@ -1,5 +1,12 @@
 # Änderungen
 
+## 2.0.1
+
+- Neue App-Sprachen: Lettisch, Litauisch, Ungarisch und Niederländisch.
+- Fließender Portalwechsel: Der Abstand zwischen zwei Portalen wird jetzt pro Sender gelernt und erst verwendet, wenn zwei Messungen übereinstimmen. Das Standbild beim Wechsel dauert höchstens 3 Sekunden (vorher bis zu 9).
+- Diagnose: Bricht ein Stream nach dem Wechsel ab, steht dabei, wie lange seine Aufnahme lief und warum sie endete.
+- Aufgeräumt: über 40 nicht mehr verwendete Texte in allen Sprachen entfernt.
+
 ## 2.0.0
 
 Neue Oberfläche: StreamWatch wurde seit dem Anfang komplett überarbeitet.

@@ -99,6 +99,7 @@ internal object SmoothSwitch {
 
     private var lagStore: android.content.SharedPreferences? = null
     private var switchFrom: String? = null
+    private var switchChannel: String? = null
     private var switchTo: String? = null
     private var holdMs = 0L
     @Volatile private var playingAt = Long.MIN_VALUE
@@ -109,30 +110,35 @@ internal object SmoothSwitch {
         lagStore = context.getSharedPreferences(LAG_FILE, Context.MODE_PRIVATE)
     }
 
+    // The same two portals lie differently far apart from channel to channel (seen: 0 to 17 s),
+    // so the distance is kept per channel and portal pair, in one direction (a < b).
+    private fun lagKey(channel: String, from: String, to: String) =
+        if (from < to) "$channel|$from>$to" else "$channel|$to>$from"
+
+    private fun storedLag(channel: String, from: String, to: String): LagRecord? {
+        val raw = lagStore?.getString(lagKey(channel, from, to), null) ?: return null
+        val record = LagRecord.parse(raw) ?: return null
+        return if (from < to) record else record.copy(lagMs = -record.lagMs)
+    }
+
     /**
-     * How far [to] runs behind [from] (ms, negative: ahead), from earlier switches between
-     * these two portals; null when not known yet.
+     * How far [to] runs behind [from] on [channel] (ms, negative: ahead); only once two
+     * measurements agreed, null before.
      */
-    fun knownLag(from: String, to: String): Long? {
-        val store = lagStore ?: return null
-        return when {
-            store.contains("$from>$to") -> store.getLong("$from>$to", 0L)
-            store.contains("$to>$from") -> -store.getLong("$to>$from", 0L)
-            else -> null
-        }
-    }
+    fun knownLag(channel: String, from: String, to: String): Long? =
+        storedLag(channel, from, to)?.takeIf { it.confirmed }?.lagMs
 
-    private fun rememberLag(from: String, to: String, lagMs: Long) {
+    private fun rememberLag(channel: String, from: String, to: String, lagMs: Long) {
         val store = lagStore ?: return
-        val previous = knownLag(from, to)
-        // Averaged with what was known, so one odd measurement does not throw it off.
-        val value = if (previous == null) lagMs else (previous + lagMs) / 2
-        store.edit().remove("$to>$from").putLong("$from>$to", value).apply()
+        val next = nextLagRecord(storedLag(channel, from, to), lagMs)
+        val stored = if (from < to) next else next.copy(lagMs = -next.lagMs)
+        store.edit().putString(lagKey(channel, from, to), stored.format()).apply()
     }
 
-    /** A switch from portal [from] to [to]; the new stream starts after [waitMs]. */
-    fun markSwitch(from: String?, to: String?, waitMs: Long) {
+    /** A switch from portal [from] to [to] on [channel]; the new stream starts after [waitMs]. */
+    fun markSwitch(from: String?, to: String?, waitMs: Long, channel: String?) {
         if (!enabled) return
+        switchChannel = channel
         switchFrom = from
         switchTo = to
         holdMs = waitMs
@@ -228,14 +234,40 @@ internal object SmoothSwitch {
         val from = switchFrom
         val to = switchTo
         val reliable = measured.score >= if (measured.source == "audio") 0.6 else 0.7
-        if (reliable && from != null && to != null && from != to) rememberLag(from, to, portalLag)
-        return measured.copy(portalLagMs = portalLag, saved = reliable && from != null && to != null && from != to)
+        val channel = switchChannel
+        val savable = reliable && channel != null && from != null && to != null && from != to
+        if (savable) rememberLag(channel!!, from!!, to!!, portalLag)
+        return measured.copy(portalLagMs = portalLag, saved = savable)
     }
 }
 
 /** Time the new stream is held back so it continues where the old one stopped (null: switch at once). */
 internal fun smoothHoldMs(knownLagMs: Long?, staleMs: Long): Long? =
-    knownLagMs?.minus(staleMs)?.takeIf { it in 300L..20_000L }
+    knownLagMs?.minus(staleMs)?.takeIf { it >= 300L }?.coerceAtMost(MAX_HOLD_MS)
+
+/** The longest frozen picture at a switch: a longer one felt like a hang (seen: 9 s). */
+internal const val MAX_HOLD_MS = 3_000L
+
+/** A learned distance; [confirmed] once two measurements agreed within [LAG_AGREE_MS]. */
+internal data class LagRecord(val lagMs: Long, val confirmed: Boolean) {
+    fun format() = "$lagMs;${if (confirmed) 1 else 0}"
+
+    companion object {
+        fun parse(raw: String): LagRecord? {
+            val parts = raw.split(';')
+            val lag = parts.getOrNull(0)?.toLongOrNull() ?: return null
+            return LagRecord(lag, parts.getOrNull(1) == "1")
+        }
+    }
+}
+
+internal const val LAG_AGREE_MS = 2_000L
+
+/** Two measurements close together confirm the distance; one far off starts over. */
+internal fun nextLagRecord(previous: LagRecord?, measuredMs: Long): LagRecord =
+    if (previous != null && kotlin.math.abs(previous.lagMs - measuredMs) <= LAG_AGREE_MS) {
+        LagRecord((previous.lagMs + measuredMs) / 2, true)
+    } else LagRecord(measuredMs, false)
 
 private const val LAG_FILE = "smooth_switch_lags"
 private const val STANDBY_WINDOW_MS = 90_000L

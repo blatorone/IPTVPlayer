@@ -3219,7 +3219,9 @@ private fun PlayerHome(
         if (attempt.selection.section == PortalSection.LIVE && SmoothSwitch.enabled) {
             val from = attempt.variants[attempt.index].sourceId
             val to = next.variants[next.index].sourceId
-            val lag = if (from == null || to == null || from == to) null else SmoothSwitch.knownLag(from, to)
+            val channelKey = attempt.liveRestoreKey
+            val lag = if (channelKey == null || from == null || to == null || from == to) null
+                else SmoothSwitch.knownLag(channelKey, from, to)
             val standby = SmoothSwitch.standby?.takeIf { it.variant === next.variants[next.index] && it.recorder.healthy }
             val now = timeshiftNow()
             val hold = if (standby != null && !stillStarting) {
@@ -3227,12 +3229,12 @@ private fun PlayerHome(
                 SmoothSwitch.standbyTarget = target
                 AppDiagnostics.record(context, "smooth_standby recorded_ms:${now - standby.recorder.startedAt} start_ms:${target - now}" +
                     if (lag == null) " lag:unknown" else " lag_ms:$lag")
-                (target - now).takeIf { it in 300L..20_000L }
+                (target - now).takeIf { it >= 300L }?.coerceAtMost(MAX_HOLD_MS)
             } else {
                 SmoothSwitch.standbyTarget = null
                 if (stillStarting) null else smoothHoldMs(lag, staleMs)
             }
-            SmoothSwitch.markSwitch(from, to, hold ?: 0L)
+            SmoothSwitch.markSwitch(from, to, hold ?: 0L, channelKey)
             scope.launch {
                 delay(14_000 + (hold ?: 0L))
                 val result = SmoothSwitch.measure()
@@ -4839,7 +4841,8 @@ private fun PlayerHome(
                         R.string.playback_stream_http_error
                     else -> R.string.playback_error
                 }
-                AppDiagnostics.record(context, "playback_error ${error.errorCodeName}" + (httpStatus?.let { " http:$it" } ?: ""))
+                AppDiagnostics.record(context, "playback_error ${error.errorCodeName}" + (httpStatus?.let { " http:$it" } ?: "") +
+                    (Timeshift.describe()?.let { " $it" } ?: ""))
                 scope.launch { failPlayback(attempt, message) }
             }
         }

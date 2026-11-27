@@ -1,8 +1,8 @@
 name: Android
 
 on:
+  # Only version tags build: a push to master alone does not use Actions minutes.
   push:
-    branches: [master]
     tags: ['v*']
   pull_request:
   workflow_dispatch:

@@ -4605,6 +4605,7 @@ private fun PlayerHome(
                             }
                             lastBadgedAttempt = attempt.mediaId
                             playbackSourceBadge = attempt.mediaId to attempt.variants[attempt.index].label
+                            if (attempt.index > 0) AppDiagnostics.record(context, "playback_source_badge index:${attempt.index}")
                         }
                     }
                     val openFullscreen = when (vodSection) {
@@ -4675,6 +4676,7 @@ private fun PlayerHome(
                 }
                 if (playbackState == Player.STATE_ENDED && player?.currentMediaItem?.mediaId == attempt.mediaId) {
                     if (attempt.progressKey == null) {
+                        if (attempt.selection.section == PortalSection.LIVE) AppDiagnostics.record(context, "playback_live_ended")
                         scope.launch { failPlayback(attempt, R.string.playback_error) }
                     } else {
                         progressPreferences?.edit()?.remove(attempt.progressKey)
@@ -4738,6 +4740,7 @@ private fun PlayerHome(
                         R.string.playback_stream_http_error
                     else -> R.string.playback_error
                 }
+                AppDiagnostics.record(context, "playback_error ${error.errorCodeName}" + (httpStatus?.let { " http:$it" } ?: ""))
                 scope.launch { failPlayback(attempt, message) }
             }
         }
@@ -4750,6 +4753,7 @@ private fun PlayerHome(
         if (attempt != null && (starting != null || buffering)) {
             delay(if (attempt.selection.section == PortalSection.LIVE) 12_000 else 25_000)
             if (canPlay() && (starting != null || player?.playWhenReady == true)) {
+                AppDiagnostics.record(context, if (starting != null) "playback_start_timeout" else "playback_buffer_timeout")
                 failPlayback(attempt, R.string.playback_timeout)
             }
         }
@@ -4829,6 +4833,7 @@ private fun PlayerHome(
                 val reset = now - playerPositionResetAt.get() < 5_000
                 if (lastPosition >= 0 && !reset && position < lastPosition - 1_500) {
                     // The stream jumped back by itself: a source that keeps repeating the last seconds.
+                    AppDiagnostics.record(context, "playback_jump_back ms:${lastPosition - position}")
                     jumps.addLast(now)
                     prepareNextLiveVariant(attempt)
                     if (jumps.size >= 2) return@LaunchedEffect fail("playback_stream_loop")

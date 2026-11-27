@@ -943,4 +943,5 @@
     <string name="guide_veil_line_color">Боја линије</string>
     <string name="guide_veil_dark">Тамно</string>
     <string name="guide_veil_strength">Јачина вела</string>
+    <string name="whats_new">Новости</string>
 </resources>

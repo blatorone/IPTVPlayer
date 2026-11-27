@@ -13,8 +13,8 @@ android {
         applicationId = "com.iptvplayer.app"
         minSdk = 26
         targetSdk = 37
-        versionCode = 127
-        versionName = "2.0.0-beta.1"
+        versionCode = 128
+        versionName = "2.0.0-beta.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -34,6 +34,15 @@ android {
         compose = true
     }
 }
+
+// "Neuigkeiten" in the app shows CHANGELOG.md: it is copied into the assets at build time.
+val changelogAssets = layout.buildDirectory.dir("generated/changelogAssets")
+val copyChangelog by tasks.registering(Copy::class) {
+    from(rootProject.file("CHANGELOG.md"))
+    into(changelogAssets)
+}
+android.sourceSets.getByName("main").assets.directories.add(changelogAssets.get().asFile.path)
+tasks.named("preBuild") { dependsOn(copyChangelog) }
 
 dependencies {
     implementation(libs.media3.exoplayer)

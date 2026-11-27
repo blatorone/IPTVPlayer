@@ -2,40 +2,30 @@
 
 ## 2.0.0
 
-- Version 2.0.0: Die Oberfläche hat sich seit dem Anfang komplett geändert – neue Player-Leiste, einheitliche Knöpfe, neuer Programmführer und vieles mehr aus den Betas von 1.0.99.
-- Behoben: „Nach Updates suchen“ (und andere Zeilen, die während einer Aktion kurz gesperrt sind) ließ den Fokus in einen anderen Bereich springen, z. B. „Quellen und Bibliothek“. Der Fokus bleibt jetzt auf der Zeile; ist ein Update da, öffnet sich das Fenster, sonst erscheint darunter der Hinweis.
-- Wiedergabeleiste: Die Spul-Knöpfe haben jetzt denselben, genau auf dem Kreis liegenden Fokusrahmen wie die anderen Knöpfe. Play/Pause hat keinen weißen Kreis mehr und ist so groß wie die übrigen Knöpfe.
-- Wiedergabeleiste: Spulen zeigt jetzt zwei Pfeile statt des runden Pfeils mit Sekundenzahl, im selben runden Stil wie die anderen Knöpfe. Außen: bei Serien die Pfeile mit Strich für vorherige/nächste Folge, bei Filmen und Timeshift drei Pfeile für 10 Minuten zurück/vor.
-- Zurück aus dem Vollbild führt nie in die Einstellungen, sondern dorthin, wo der Titel geöffnet wurde: Programmführer, Film (danach dessen Kategorie) oder Serie.
-- Behoben: Beim Öffnen und Schließen des Update-Fensters sprang die Einstellungsseite in einen anderen Bereich (z. B. „Quellen und Bibliothek“).
-- Einstellungen und Kategorien: Der gewählte Eintrag behält weiße Schrift; markiert wird er durch das Symbol in Akzentfarbe und einen leicht getönten Hintergrund.
-- Programmführer: Der Schleier über der abgelaufenen Zeit dunkelt jetzt ab und ist leicht in der Farbe der Zeitlinie getönt; wählbar sind Linienfarbe, Dunkel oder Aus, die Stärke in Stufen von 20 bis 60 % (Standard 40 %).
-- Updates: Nimmt GitHub von deinem Anschluss gerade keine Anfragen mehr an (höchstens 60 pro Stunde), sagt die App das jetzt mit der Wartezeit statt „nicht erreichbar“. Andere Fehler bei der Suche stehen mit Grund im Diagnosebericht. Es werden die letzten 50 statt 20 Versionen verglichen, damit keine neue Beta übersehen wird.
-- Behoben: „Nach Updates suchen“ ließ den Fokus während der Suche in eine andere Kategorie springen. Zeilen, die während einer Aktion kurz gesperrt sind, behalten jetzt den Fokus.
-- Programmführer: Die Zeitlinie geht jetzt durchgehend von der Zeile mit den Uhrzeiten bis ganz nach unten; die bereits abgelaufene Zeit links davon liegt unter einem dunklen Schleier. Die Farbe der Linie ist wählbar (Programmführer-Darstellung und Handy-Seite): Cyan (neu als Standard, gut sichtbar neben Rot), Türkis, Gelb, Limette oder Eisblau.
-- Einheitliche Knöpfe in der ganzen App nach dem Vorbild der Einstellungszeilen: Angewählt wird die Fläche heller und bekommt einen Rahmen in der Akzentfarbe; Ausgewähltes (z. B. die offene Kategorie) steht in der Akzentfarbe statt mit Streifen; Dialogknöpfe sind kleine Karten; die Player-Knöpfe bekommen beim Anwählen einen Akzentring. Keine eckigen Schatten mehr um runde Knöpfe.
-- Wiedergabeleiste neu geordnet wie bei Netflix und Prime: vorherige Folge – zurückspulen – Play/Pause – Stopp – vorspulen – nächste Folge, alle im selben runden Stil mit neuen Symbolen. Bei Filmen und Live-TV mit Timeshift springen die äußeren Knöpfe 10 Minuten zurück bzw. vor; was nicht geht, wird ausgeblendet.
-- Handy-Seite: Puffer, Timeshift und Fließender Portalwechsel lassen sich jetzt auch vom Handy aus einstellen.
-- Neue App-Sprachen: Tschechisch und Dänisch.
-- Aufgeräumt: alte, nicht mehr erreichbare Listen (Merkliste/Verlauf) entfernt; interne Umstellung, damit der Player wieder Platz für neue Funktionen hat.
-- Live-TV: Springt oder hängt ein Stream, wird genau dieser Stream (z. B. die FHD-Variante eines Portals) für 6 Stunden zuletzt versucht – nicht das ganze Portal. Andere Varianten desselben Portals bleiben vorne. Gute und schlechte Erfahrungen werden jetzt je Variante gemerkt.
-- Live-TV: Als Ersatz kommt, wenn vorhanden, immer ein Stream von einem anderen Portal dran. Ähnlich gut laufende Streams werden gemischt, damit die App alle kennenlernt; ein klar besserer bleibt vorne. Sind alle Streams durch, versucht die App noch eine zweite Runde, bevor die Meldung kommt.
-- Fließender Portalwechsel (Schalter, weiterhin experimentell): Zeigt der laufende Stream Störungen, nimmt die App das Ersatzportal schon im Hintergrund auf (höchstens 90 Sekunden, wird danach oder bei Erholung gelöscht) und macht beim Wechsel an derselben Stelle weiter – auch wenn das Ersatzportal voraus ist. Den Abstand zwischen zwei Portalen lernt sie aus sicheren Messungen; liegt das neue Portal zurück, hält sie das letzte Bild so lange an. Ist der Schalter aus, wird wie bisher sofort gewechselt.
-- Live-TV: Springt ein Portal um viele Sekunden zurück (manche wiederholen jede Minute die letzten 55 Sekunden), wechselt die App sofort zum nächsten Portal, statt erst beim zweiten Rücksprung. Das gilt auch mit Timeshift; hat man selbst zurückgespult oder pausiert, wird nicht gewechselt, damit die Aufnahme erhalten bleibt.
-- Diagnose: Jeder automatische Portalwechsel nennt seinen Grund (Abspielfehler, Stream beendet, Zeitüberschreitung). Springt das Bild eines Portals von selbst zurück, wird das mit der Länge festgehalten; ebenso, wenn nach einem Wechsel der Hinweis „Quelle“ erscheint.
-- Timeshift: Der Fortschrittsbalken zeigt die Aufnahme mit einem Punkt in der Akzentfarbe; nach unten auf den Balken und mit links/rechts spulen. Ganz rechts erscheint „● Live“, sobald man zurückgespult hat – ein Klick springt zurück zu live. Spul-Knöpfe sind jetzt anwählbar. Aufnahmen gelten nur für den laufenden Sender und werden beim Senderwechsel und beim Beenden der App gelöscht.
-- Neu unter Wiedergabe: „Fließender Portalwechsel (experimentell)“, standardmäßig aus. Erste Stufe: Beim Wechsel zu einem anderen Portal misst die App, wie weit die Streams auseinanderliegen (im Diagnosebericht) – über den Ton und, wenn der Ton per Dolby direkt an Fernseher oder Receiver geht, über die Bildhelligkeit. Auf schwachen Geräten erscheint ein Hinweis, die Option bleibt aber wählbar.
-- Neu unter Wiedergabe: Timeshift (standardmäßig aus). Der laufende Sender wird im App-Speicher mitgeschnitten (15, 30 oder 60 Minuten); Live-TV lässt sich dann pausieren und mit der Wiedergabeleiste zurück- und vorspulen.
-- Filme und Serien: Kategorien wie „Beliebt“ oder „Im Kino“ laden deutlich schneller; einmal geöffnet erscheinen sie beim nächsten Mal sofort.
-- Live-TV: Die gespeicherte Senderliste bleibt nach App-Updates erhalten (kein langes Neuaufbereiten mehr nach jedem Update).
-- Wiedergabeleiste: alle Knöpfe einheitlich gestaltet und mit links/rechts erreichbar; nicht nutzbare Knöpfe (z. B. Spulen bei Live-TV, nicht vorhandene Folgen) werden ausgeblendet.
-- Untertitel: „Forced“-Untertitel werden auch dann automatisch gewählt, wenn die Spuren schon vor dem Start bekannt waren.
-- Ton: Ist kein Ton abspielbar und gibt es kein weiteres Portal, endet die Wiedergabe und das Vollbild schließt sich. Ist nur fremdsprachiger Ton da und kein anderes Portal, erscheint ein Hinweis (Filme und Serien).
-- Filme und Serien: Zurück von der Detailseite setzt den Fokus zuverlässig auf den zuletzt gewählten Titel – auch aus der Vorschau oben und „Neue Folgen“. Kategorien werden im Hintergrund zusammengeführt, damit die Bedienung nicht stockt.
-- Live-TV: Beim Umschalten im Vollbild erscheint jedes Mal oben links die Senderinfo; Hoch/Runter schalten dabei weiter.
-- Neu unter Wiedergabe: Puffer (standardmäßig aus) mit festen Stufen Klein, Mittel (empfohlen), Groß und Sehr groß. Gilt ab dem nächsten Start der App.
-- Wiedergabeleiste überarbeitet: runde Knöpfe mit Akzentfarbe beim Fokus, dunkler Verlauf unten, der Fortschrittsbalken bleibt. Knöpfe, die nicht nutzbar sind, werden ausgeblendet; Untertitel erscheint nur, wenn der Stream welche hat.
-- Handy-Seite im App-Stil: Symbolleiste unten, Seitentitel, Einstellungen als Liste mit Unterseiten; behoben: „null“ im Tab Sperren.
+Neue Oberfläche: StreamWatch wurde seit dem Anfang komplett überarbeitet.
+
+Bedienung und Aussehen:
+- Einheitliche Knöpfe in der ganzen App: Angewählt wird die Fläche heller und bekommt einen Rahmen in der Akzentfarbe; Ausgewähltes zeigt das Symbol in der Akzentfarbe. Dialogknöpfe sind kleine Karten.
+- Neue Wiedergabeleiste wie bei Netflix und Prime: vorherige Folge – zurückspulen – Play/Pause – Stopp – vorspulen – nächste Folge, alle rund im gleichen Stil. Bei Filmen und Timeshift springen die äußeren Knöpfe 10 Minuten. Was nicht geht, wird ausgeblendet; Untertitel nur, wenn der Stream welche hat.
+- Zurück aus dem Vollbild führt dorthin, wo der Titel geöffnet wurde – nie in die Einstellungen. Zurück von Film- und Seriendetails landet auf dem zuletzt gewählten Titel.
+- Programmführer: durchgehende Zeitlinie mit wählbarer Farbe; die abgelaufene Zeit liegt unter einem Schleier, dessen Art und Stärke einstellbar sind.
+- Neue Seite „Neuigkeiten“ unter „Über StreamWatch“.
+- Neue App-Sprachen: Tschechisch und Dänisch. Die Handy-Seite hat den App-Stil und alle neuen Einstellungen.
+
+Live-TV:
+- Timeshift (optional): Live-TV pausieren und zurückspulen, 15, 30 oder 60 Minuten; „● Live“ springt zurück.
+- Puffer (optional) in vier Stufen.
+- Zuverlässigerer Portalwechsel: Springt oder hängt ein Stream, wechselt die App sofort; genau diese Variante wird 6 Stunden lang zuletzt versucht. Der Ersatz kommt bevorzugt von einem anderen Portal, ähnlich gute Streams werden gemischt, und bevor aufgegeben wird, gibt es eine zweite Runde.
+- Fließender Portalwechsel (experimentell, eigener Schalter): Bei Störungen wird das Ersatzportal schon im Hintergrund aufgenommen, und es geht an derselben Stelle weiter.
+- Die Senderinfo erscheint bei jedem Umschalten im Vollbild; die Senderliste bleibt nach Updates erhalten.
+
+Filme und Serien:
+- Kategorien wie „Beliebt“ oder „Im Kino“ laden deutlich schneller.
+- „Forced“-Untertitel werden zuverlässig gewählt. Ohne Ton oder nur mit fremdsprachigem Ton wird zu einem anderen Portal gewechselt oder ein Hinweis gezeigt.
+
+Updates und Diagnose:
+- „Nach Updates suchen“ behält den Fokus; bei einem GitHub-Anfragelimit nennt die App die Wartezeit.
+- Der Diagnosebericht nennt den Grund jedes automatischen Portalwechsels.
 
 ## 1.0.98
 

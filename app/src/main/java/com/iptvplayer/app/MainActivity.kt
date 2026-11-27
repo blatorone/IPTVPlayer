@@ -757,6 +757,7 @@ private class PlayerHomeFlags {
     var traktSettingsOpen by mutableStateOf<Boolean>(false)
     var kidsProtectionOpen by mutableStateOf<Boolean>(false)
     var termsOpen by mutableStateOf<Boolean>(false)
+    var whatsNewOpen by mutableStateOf<Boolean>(false)
     var languageOpen by mutableStateOf<Boolean>(false)
     var profilePickerOpen by mutableStateOf<Boolean>(false)
     var profileStartChecked by mutableStateOf<Boolean>(false)
@@ -5129,7 +5130,7 @@ private fun PlayerHome(
     val mainMenuOpen = isMainMenuOpen()
     LaunchedEffect(mainMenuOpen) { if (!mainMenuOpen) lastBack = 0L }
     fun settingsPageOpen() = ui.epgSettingsOpen || ui.episodeSettingsOpen || ui.controlSettingsOpen ||
-        ui.metadataSettingsOpen || ui.traktSettingsOpen || ui.kidsProtectionOpen || ui.termsOpen || ui.languageOpen || ui.guideAppearancePage != null || ui.remoteAccessOpen || ui.accentPaletteOpen
+        ui.metadataSettingsOpen || ui.traktSettingsOpen || ui.kidsProtectionOpen || ui.termsOpen || ui.whatsNewOpen || ui.languageOpen || ui.guideAppearancePage != null || ui.remoteAccessOpen || ui.accentPaletteOpen
     fun openSettingsPage(open: () -> Unit) {
         ui.settingsPageOpenedAt = SystemClock.elapsedRealtime()
         open()
@@ -5152,6 +5153,7 @@ private fun PlayerHome(
         ui.traktSettingsOpen = false
         ui.kidsProtectionOpen = false
         ui.termsOpen = false
+        ui.whatsNewOpen = false
         ui.languageOpen = false
         ui.guideAppearancePage = null
         ui.remoteAccessOpen = false
@@ -8032,6 +8034,9 @@ private fun PlayerHome(
                                         ui.termsOpen -> { {
                                             SettingsDialog(stringResource(R.string.disclaimer_title), { ui.termsOpen = false }) { DisclaimerText() }
                                         } }
+                                        ui.whatsNewOpen -> { {
+                                            SettingsDialog(stringResource(R.string.whats_new), { ui.whatsNewOpen = false }) { WhatsNewText() }
+                                        } }
                                         ui.kidsColorOpen -> { {
                                             // The kids account's own accent colour, chosen by the admin.
                                             val kidsAccent = remember(ui.kidsAccentVersion) {
@@ -8296,6 +8301,7 @@ private fun PlayerHome(
                                 }
                                 SettingsSection.ABOUT -> {
                                     AboutSettings()
+                                    SettingRow(stringResource(R.string.whats_new), Modifier) { openSettingsPage { ui.whatsNewOpen = true } }
                                     SettingRow(stringResource(R.string.disclaimer_title), Modifier) { openSettingsPage { ui.termsOpen = true } }
                                 }
                                 SettingsSection.DIAGNOSTICS -> {

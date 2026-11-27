@@ -20,6 +20,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -150,6 +151,28 @@ internal fun ColumnScope.PortalSearch(
     val history = remember(historyKey) {
         SearchHistory(context.getSharedPreferences("catalog_visibility", android.content.Context.MODE_PRIVATE), historyKey)
     }
+    // After searching (keyboard "Suchen" or an entry of the history) the focus goes to the first
+    // result area, Live-TV; while typing it stays in the field.
+    val firstSection = remember { FocusRequester() }
+    var focusResults by remember { mutableIntStateOf(0) }
+    var selection by remember { mutableStateOf(PortalSection.LIVE) }
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    // The keyboard closed (e.g. with Back) while something is entered: on to the results, not up.
+    @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+    val imeVisible = androidx.compose.foundation.layout.WindowInsets.isImeVisible
+    val currentQuery by androidx.compose.runtime.rememberUpdatedState(query)
+    var imeWasVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(imeVisible) {
+        if (imeWasVisible && !imeVisible && currentQuery.isNotBlank()) focusResults++
+        imeWasVisible = imeVisible
+    }
+    LaunchedEffect(focusResults) {
+        if (focusResults == 0) return@LaunchedEffect
+        selection = PortalSection.LIVE
+        keyboard?.hide()
+        repeat(2) { androidx.compose.runtime.withFrameNanos { } }
+        runCatching { firstSection.requestFocus() }
+    }
     OutlinedTextField(
         value = query,
         onValueChange = onQueryChange,
@@ -159,7 +182,12 @@ internal fun ColumnScope.PortalSearch(
         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
             imeAction = androidx.compose.ui.text.input.ImeAction.Search
         ),
-        keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { history.add(query) })
+        // Every finishing key of the on-screen keyboard searches: Fire TV shows "Weiter" (next) instead
+        // of "Suchen".
+        keyboardActions = androidx.compose.foundation.text.KeyboardActions {
+            history.add(query)
+            if (query.isNotBlank()) focusResults++
+        }
     )
     val term = query.trim()
     if (term.isEmpty()) {
@@ -175,14 +203,16 @@ internal fun ColumnScope.PortalSearch(
                     MenuButton(
                         entry, Modifier.fillMaxWidth(), leadingIcon = R.drawable.ic_menu_search,
                         onLongPress = { history.remove(entry) }
-                    ) { onQueryChange(entry) }
+                    ) {
+                        onQueryChange(entry)
+                        focusResults++
+                    }
                 }
             }
         }
         return
     }
     if (sources.isEmpty()) return
-    var selection by remember { mutableStateOf(PortalSection.LIVE) }
     val metadataLimiter = remember { Semaphore(3) }
 
     val live = remember(channels, term) { channels.filter { matchesSearch(it.name, term) } }
@@ -231,7 +261,8 @@ internal fun ColumnScope.PortalSearch(
             }
             MenuButton(
                 stringResource(if (loading) R.string.search_section_loading else R.string.search_section_count,
-                    stringResource(section.label), count), Modifier.weight(1f),
+                    stringResource(section.label), count),
+                Modifier.weight(1f).then(if (section == PortalSection.LIVE) Modifier.focusRequester(firstSection) else Modifier),
                 selected = selection == section
             ) { selection = section }
         }

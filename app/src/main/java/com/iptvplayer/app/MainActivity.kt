@@ -10734,7 +10734,7 @@ internal fun PlayerFrame(
                                 enableRemoteFocus(cc)
                             }
                             // Smoking break (smart home): pauses and starts its own scene; the next play
-                            // brings everything back. Only shown when that scene has devices set up.
+                            // brings everything back. Only for films and series, and only when that scene has devices.
                             if (bar.findViewWithTag<android.view.View>("player_smoke_action") == null) {
                                 val smoke = ImageButton(context).apply {
                                     id = android.view.View.generateViewId()
@@ -10751,7 +10751,7 @@ internal fun PlayerFrame(
                                             android.R.attr.selectableItemBackgroundBorderless, selectable, true
                                         )
                                     ) setBackgroundResource(selectable.resourceId)
-                                    visibility = if (LightAutomation.smokeReady) android.view.View.VISIBLE else android.view.View.GONE
+                                    visibility = if (LightAutomation.smokeReady && !livePlayback) android.view.View.VISIBLE else android.view.View.GONE
                                     setOnClickListener {
                                         LightAutomation.startSmoke()
                                         playerView.player?.pause()
@@ -10764,7 +10764,7 @@ internal fun PlayerFrame(
                                 enableRemoteFocus(smoke)
                                 val check = object : Runnable {
                                     override fun run() {
-                                        val visibility = if (LightAutomation.smokeReady) android.view.View.VISIBLE else android.view.View.GONE
+                                        val visibility = if (LightAutomation.smokeReady && !livePlayback) android.view.View.VISIBLE else android.view.View.GONE
                                         if (smoke.visibility != visibility) {
                                             smoke.visibility = visibility
                                             configureBottomFocus(playerView)

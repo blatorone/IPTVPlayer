@@ -7222,6 +7222,17 @@ private fun PlayerHome(
                     }
                 }
             }
+            // While a stream starts, and when none plays, say so in fullscreen instead of a black screen.
+            if (starting != null || playbackError != null) Surface(
+                modifier = Modifier.align(Alignment.Center).padding(24.dp).widthIn(max = 460.dp),
+                shape = RoundedCornerShape(14.dp),
+                color = Color.Black.copy(alpha = 0.82f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+            ) {
+                Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    PlaybackFeedback(starting, playbackError)
+                }
+            }
             if (live && (playbackControlsVisible ||
                     startupInfoVisible && fullscreenGuidePanel == GuidePanel.GRID && episodeAction == 0)
             ) {

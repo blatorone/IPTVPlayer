@@ -4,6 +4,7 @@
 
 - Handy-Seite: Backups lassen sich auch dort mit Passwort erstellen und geschützte Backups einspielen. Das Passwort geht über die verschlüsselte Verbindung direkt ans Gerät.
 - Handy-Seite: PIN-Abfragen sind eine eigene Seite mit großem Ziffernblock statt der Handy-Tastatur; die Leiste unten ist dabei verdeckt.
+- PIN ändern per Handy: Nach der aktuellen PIN ging die neue PIN immer als „falsch“ zurück – das Handy prüfte weiter gegen die alte. Jetzt läuft die ganze Änderung über eine Verbindung, und das Handy zeigt jeden Schritt: aktuelle PIN, dann Zahlen oder Text, die Länge (4, 6, 8 oder eigene), neue PIN eingeben und wiederholen; OK speichert.
 - Neue App-Sprachen: Lettisch, Litauisch, Ungarisch, Niederländisch, Norwegisch, Schwedisch, Slowakisch und Slowenisch.
 - Fließender Portalwechsel: Der Abstand zwischen zwei Portalen wird jetzt pro Sender gelernt und erst verwendet, wenn zwei Messungen übereinstimmen. Das Standbild beim Wechsel dauert höchstens 3 Sekunden (vorher bis zu 9).
 - Diagnose: Bricht ein Stream nach dem Wechsel ab, steht dabei, wie lange seine Aufnahme lief und warum sie endete.

@@ -197,15 +197,19 @@ function show() {
 }
 
 // A large digit pad like on the TV: dots for the digits, 1–9, ⌫, 0, OK. Returns the parts to show.
-// With [length] the PIN is taken as soon as it is complete; without, OK confirms (at least 4).
-function digitPad(onSubmit, length = null) {
+// With [length] and [auto] the PIN is taken as soon as it is complete; otherwise OK confirms
+// (at least 4 digits, or exactly [length]).
+function digitPad(onSubmit, length = null, auto = true) {
   let pin = "";
   const dots = el("div", { class: "pin-dots", "aria-live": "polite" });
   const draw = () => {
-    dots.textContent = Array.from({ length: length || Math.max(4, pin.length) }, (_, i) => (i < pin.length ? "●" : "○")).join(" ");
+    dots.replaceChildren(...Array.from({ length: length || Math.max(4, pin.length) },
+      (_, i) => el("span", { class: "pin-dot" + (i < pin.length ? " on" : "") })));
+    dots.setAttribute("aria-label", String(pin.length));
   };
   const submit = () => {
     if (pin.length < 4) { toast(t("pin.min4"), true); return; }
+    if (length && pin.length !== length) { toast(t("pin.digits", length), true); return; }
     const value = pin;
     pin = "";
     draw();
@@ -218,7 +222,7 @@ function digitPad(onSubmit, length = null) {
       else if (label === "OK") return submit();
       else if (pin.length < (length || 12)) pin += label;
       draw();
-      if (length && pin.length === length) submit();
+      if (auto && length && pin.length === length) submit();
     } }, label === "OK" ? t("common.ok") : label);
   draw();
   return [dots, el("div", { class: "pin-pad" }, ["1","2","3","4","5","6","7","8","9","⌫","0","OK"].map(key))];
@@ -243,12 +247,21 @@ function askPin(title) {
     page.hidden = false;
   });
 }
-async function askNewPin(title) {
-  const first = await askPin(t("pin.withMin", title));
-  if (!first) return null;
-  const second = await askPin(t("pin.repeatNew"));
-  if (first !== second) { toast(t("pin.mismatch"), true); return null; }
-  return first;
+// A new PIN or password inside the page: the same steps as from the TV, on a page of their own.
+function askNewPin(context) {
+  return new Promise((resolve) => {
+    const page = $("pin-page");
+    const done = (value) => {
+      page.hidden = true;
+      page.replaceChildren();
+      document.body.classList.remove("pin-open");
+      resolve(value);
+    };
+    const show = (...children) => page.replaceChildren(el("div", { class: "pin-sheet" }, ...children));
+    document.body.classList.add("pin-open");
+    page.hidden = false;
+    newSecretFlow(show, context, done, () => done(null));
+  });
 }
 
 // ---------- rendering ----------
@@ -476,7 +489,7 @@ function renderParental() {
     box.replaceChildren(
       el("p", { class: "hint" }, t("parental.setPinFirst")),
       el("button", { class: "primary", onclick: async () => {
-        const pin = await askNewPin(t("pin.new"));
+        const pin = await askNewPin(null);
         if (pin) send({ t: "pin", pin });
       } }, t("parental.setPin")));
     return;
@@ -503,17 +516,17 @@ function renderParental() {
     el("h3", {}, t("pin.heading")),
     el("div", { class: "row-actions" },
       el("button", { onclick: async () => {
-        const current = await askPin(t("pin.current")); if (!current) return;
-        const pin = await askNewPin(t("pin.new")); if (pin) send({ t: "pin", pin, current });
+        const current = await askPin(t("pin.enterCurrent")); if (!current) return;
+        const pin = await askNewPin(null); if (pin) send({ t: "pin", pin, current });
       } }, t("parental.changePin")),
       el("button", { onclick: async () => {
-        const current = await askPin(t("pin.current")); if (!current) return;
+        const current = await askPin(t("pin.enterCurrent")); if (!current) return;
         if (p.separateKidsPin) send({ t: "kidsPin", pin: null, current });
         else { const pin = await askNewPin(t("pin.endKids")); if (pin) send({ t: "kidsPin", pin, current }); }
       } }, p.separateKidsPin ? t("parental.kidsPinRemove") : t("parental.kidsPinSet")),
       el("button", { class: "danger", onclick: async () => {
         if (!confirm(t("parental.removePinConfirm"))) return;
-        const current = await askPin(t("pin.current")); if (current) send({ t: "pinRemove", current });
+        const current = await askPin(t("pin.enterCurrent")); if (current) send({ t: "pinRemove", current });
       } }, t("parental.removePin"))),
     p.hasSettingsPin ? null : el("p", { class: "hint" }, t("parental.settingsPinHint")),
     el("h3", {}, t("parental.kidsAccountHeading")),
@@ -636,72 +649,57 @@ $("finish").addEventListener("click", async () => {
   setStatus(t("status.ended"));
 });
 
+// A new PIN or password, one step per page (like the digit pad): first numbers or text, for
+// numbers then how many digits, then the entry and its repetition; OK sends it. [show] puts a
+// step on the page; [context] (e.g. "PIN ändern") stands small above each step.
+function newSecretFlow(show, context, onDone, cancel = null) {
+  const head = (title) => [context ? el("p", { class: "pin-context" }, context) : null, el("h1", {}, title)];
+  const tail = () => (cancel ? [el("button", { type: "button", class: "pin-cancel", onclick: cancel }, t("common.cancel"))] : []);
+  const choice = (label, onclick) => el("button", { type: "button", class: "pin-choice", onclick }, label);
+  const kind = () => show(...head(t("pin.kindQ")),
+    el("div", { class: "pin-choices" }, choice(t("pin.kindDigits"), lengths), choice(t("pin.kindText"), text)),
+    ...tail());
+  const lengths = () => show(...head(t("pin.lengthQ")),
+    el("div", { class: "pin-choices" },
+      [4, 6, 8].map((n) => choice(t("pin.digits", n), () => digits(n))),
+      choice(t("pin.lenCustom"), () => digits(null))),
+    ...tail());
+  const digits = (length) => {
+    show(...head(t("pin.enterNew")), ...digitPad((first) => {
+      show(...head(t("pin.repeatNew")), ...digitPad((second) => {
+        if (first !== second) { toast(t("pin.mismatchBoth"), true); digits(length); return; }
+        onDone(first);
+      }, length, false), ...tail());
+    }, length, false), ...tail());
+  };
+  const text = () => {
+    show(...head(t("pw.enterNew")), passwordForm(t("pw.new"), (first) => {
+      show(...head(t("pw.repeatNew")), passwordForm(t("pw.repeat"), (second) => {
+        if (first !== second) { toast(t("pw.mismatch"), true); text(); return; }
+        onDone(first);
+      }), ...tail());
+    }), ...tail());
+  };
+  kind();
+}
+
 // ---------- PIN only (from the PIN window on the TV) ----------
-// Only a PIN field: the TV sends no settings; the PIN never appears on the TV screen.
+// Only a PIN field: the TV sends no settings; the PIN never appears on the TV screen. The TV
+// goes from step to step (current PIN, then the new one) on the same connection.
 function renderPinOnly() {
   setStatus(t("status.connected"), "ok");
   $("finish").hidden = true;
   $("tabs").hidden = true;
   $("app").hidden = true;
   $("intro").hidden = false;
-  const newPin = state.mode === "pinNew";
-  const hint = el("p", { class: "hint" }, t("pin.hintInput"));
-  // A password (letters allowed) is typed with the keyboard.
-  if (state.password && !newPin) {
-    $("intro").replaceChildren(el("h1", {}, t("pin.enterPassword")), hint,
-      passwordForm(t("pw.label"), (pin) => send({ t: "pinEntry", pin })));
-    return;
-  }
-  const newPassword = () => {
-    $("intro").replaceChildren(el("h1", {}, t("pin.newPasswordTitle")), hint,
-      passwordForm(t("pw.new"), (first) => {
-        $("intro").replaceChildren(el("h1", {}, t("pw.repeat")), hint,
-          passwordForm(t("pw.repeat"), (second) => {
-            if (first !== second) { toast(t("pw.mismatch"), true); newPassword(); return; }
-            send({ t: "pinEntry", pin: first });
-          }));
-      }));
-  };
-  // The same digit pad as on the TV: dots for the digits, 1–9, ⌫, 0, OK.
-  // Like on the device: a new PIN first asks for its length (4, 6, 8 or own length);
-  // with a fixed length the PIN is taken as soon as it is reached.
-  let pin = "", first = null, length = null, choosing = newPin;
-  const dots = el("div", { class: "pin-dots" });
-  const title = el("h1", {});
-  const draw = () => {
-    title.textContent = !newPin ? t("pin.enter") : first === null ? t("pin.newTitle") : t("pin.repeatNew");
-    dots.textContent = Array.from({ length: length || Math.max(4, pin.length) }, (_, i) => (i < pin.length ? "●" : "–")).join(" ");
-    lengths.hidden = !choosing;
-    dots.hidden = choosing;
-    pad.hidden = choosing;
-    if (choosing) title.textContent = t("pin.lengthQ");
-  };
-  const submit = () => {
-    if (pin.length < 4) { toast(t("pin.min4"), true); return; }
-    if (newPin && first === null) { first = pin; pin = ""; draw(); return; }
-    // A new PIN is typed twice here, so a typo cannot lock the device.
-    if (newPin && first !== pin) { toast(t("pin.mismatchBoth"), true); first = null; pin = ""; draw(); return; }
-    send({ t: "pinEntry", pin });
-    pin = ""; first = null; draw();
-  };
-  const key = (label) => el("button", { class: "pin-key", onclick: () => {
-    if (label === "⌫") pin = pin.slice(0, -1);
-    else if (label === "OK") return submit();
-    else if (pin.length < (length || 12)) pin += label;
-    draw();
-    if (length && pin.length === length) submit();
-  } }, label === "OK" ? t("common.ok") : label);
-  const pad = el("div", { class: "pin-pad" }, ["1","2","3","4","5","6","7","8","9","⌫","0","OK"].map(key));
-  const lengths = el("div", { class: "pin-lengths" }, [[4, t("pin.digits", 4)], [6, t("pin.digits", 6)], [8, t("pin.digits", 8)], [null, t("pin.lenCustom")], ["pw", t("pin.lenPassword")]]
-    .map(([n, label]) => el("button", { class: "pin-key", onclick: () => {
-      if (n === "pw") { newPassword(); return; }
-      length = n; choosing = false; draw();
-    } }, label)));
-  // Checking an existing PIN: no fixed length (OK confirms).
-  $("intro").replaceChildren(title,
-    el("p", { class: "hint" }, t("pin.hintPin")),
-    lengths, dots, pad);
-  draw();
+  const show = (...children) => $("intro").replaceChildren(el("div", { class: "pin-sheet" }, ...children,
+    el("p", { class: "hint" }, t("pin.hintInput"))));
+  const sendPin = (pin) => send({ t: "pinEntry", pin });
+  if (state.mode === "pinNew") { newSecretFlow(show, state.title, sendPin); return; }
+  const head = [state.title ? el("p", { class: "pin-context" }, state.title) : null,
+    el("h1", {}, state.password ? t("pw.enterCurrent") : t("pin.enterCurrent"))];
+  if (state.password) show(...head, passwordForm(t("pw.label"), sendPin));
+  else show(...head, ...digitPad(sendPin));
 }
 
 // A text field for a password (or a PIN typed with the keyboard).

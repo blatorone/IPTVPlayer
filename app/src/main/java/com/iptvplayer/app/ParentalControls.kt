@@ -293,6 +293,7 @@ internal fun PinDialog(
     confirmTwice: Boolean = false,
     length: Int? = null,
     onRemoteSetup: (() -> Unit)? = null,
+    phoneLink: PhonePinLink,
     onPin: (String) -> Boolean,
     onDismiss: () -> Unit
 ) {
@@ -306,7 +307,8 @@ internal fun PinDialog(
     var error by remember { mutableStateOf<String?>(null) }
     // "Eingaben nur per Handy": only the QR code, no pad on the TV.
     val phoneOnly = remoteInputOnly(androidx.compose.ui.platform.LocalContext.current)
-    var phoneEntry by remember { mutableStateOf(phoneOnly) }
+    // The phone already in use for an earlier step (current PIN): it goes on with this one.
+    var phoneEntry by remember { mutableStateOf(phoneOnly || phoneLink.active) }
     val wrong = stringResource(R.string.pin_wrong)
     val mismatch = stringResource(R.string.pin_mismatch)
     val firstKey = remember { FocusRequester() }
@@ -364,7 +366,7 @@ internal fun PinDialog(
             ) {
                 message?.let { Text(it, textAlign = TextAlign.Center) }
                 // A new PIN is typed twice on the phone and compared there.
-                if (phoneEntry) PhonePinEntry(confirmTwice, onPin, password = password)
+                if (phoneEntry) PhonePinEntry(phoneLink, title, confirmTwice, onPin, password = password)
                 if (phoneOnly) return@Column
                 if (choosing) {
                     Text(stringResource(R.string.pin_length_question), style = MaterialTheme.typography.labelLarge)
@@ -445,31 +447,54 @@ internal fun PinDialog(
     )
 }
 
-/** A PIN-only phone session: its QR code, and every PIN typed there is checked with [onPin]. */
-@Composable
-private fun PhonePinEntry(newPin: Boolean, onPin: (String) -> Boolean, password: Boolean = false) {
-    val scope = androidx.compose.runtime.rememberCoroutineScope()
-    val wrongMessage = stringResource(R.string.pin_wrong)
-    val ended = stringResource(R.string.remote_msg_ended)
-    val failed = stringResource(R.string.remote_msg_change_failed)
-    var attempts by remember { mutableIntStateOf(0) }
-    val session = remember {
+/**
+ * The phone connection of the PIN window. It outlives one PIN step: after "current PIN" the
+ * window asks for the new one, and the phone goes on with that step (before, it kept checking
+ * against the current PIN and called every new PIN wrong). Ended when no PIN window is open.
+ */
+internal class PhonePinLink(private val scope: kotlinx.coroutines.CoroutineScope) {
+    private var session: RemoteSession? = null
+    private var attempts = 0
+    /** The check of the step on screen; each step sets its own. */
+    var onPin: (String) -> Boolean = { false }
+    /** The phone is in use: the next step shows the phone entry again by itself. */
+    val active: Boolean get() = session?.let { it.status.value != RemoteStatus.ENDED } == true
+
+    fun open(newPin: Boolean, password: Boolean, title: String?, ended: String, failed: String, wrong: String): RemoteSession {
+        val mode = if (newPin) "pinNew" else "pin"
+        attempts = 0
+        session?.takeIf { it.status.value != RemoteStatus.ENDED }?.let { running ->
+            running.continuePin(mode, password, title)
+            return running
+        }
         var self: RemoteSession? = null
         val handler = object : RemoteHandler {
             override fun remoteState(): RemoteState = error("PIN-only session")
             override fun applyRemote(command: RemoteCommand): RemoteReply {
                 val entry = command as? RemoteCommand.PinEntry ?: return RemoteReply(false)
-                // A few tries per QR code; then the code is worthless.
-                if (++attempts > PHONE_PIN_ATTEMPTS) { self?.end(); return RemoteReply(false, wrongMessage) }
-                // On success the PIN window closes; leaving it ends the session after this answer.
-                return if (onPin(entry.pin)) RemoteReply(true) else RemoteReply(false, wrongMessage)
+                // A few tries per step; then the code is worthless.
+                if (++attempts > PHONE_PIN_ATTEMPTS) { self?.end(); return RemoteReply(false, wrong) }
+                return if (onPin(entry.pin)) RemoteReply(true) else RemoteReply(false, wrong)
             }
         }
-        RemoteSession(
-            scope, handler, ended, failed, pinMode = if (newPin) "pinNew" else "pin", pinPassword = password
-        ).also { self = it; it.start() }
+        return RemoteSession(scope, handler, ended, failed, pinMode = mode, pinPassword = password, pinTitle = title)
+            .also { self = it; session = it; it.start() }
     }
-    androidx.compose.runtime.DisposableEffect(session) { onDispose { session.end() } }
+
+    fun end() {
+        session?.end()
+        session = null
+    }
+}
+
+/** The QR code of the PIN window's phone connection; every PIN typed there is checked with [onPin]. */
+@Composable
+private fun PhonePinEntry(link: PhonePinLink, title: String, newPin: Boolean, onPin: (String) -> Boolean, password: Boolean = false) {
+    val wrongMessage = stringResource(R.string.pin_wrong)
+    val ended = stringResource(R.string.remote_msg_ended)
+    val failed = stringResource(R.string.remote_msg_change_failed)
+    link.onPin = onPin
+    val session = remember(link, newPin, password, title) { link.open(newPin, password, title, ended, failed, wrongMessage) }
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
         QrCode(session.pageUrl, Modifier.width(110.dp).height(110.dp))
         Text(stringResource(R.string.pin_phone_hint), style = MaterialTheme.typography.bodySmall, modifier = Modifier.width(200.dp))

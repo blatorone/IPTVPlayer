@@ -80,7 +80,9 @@ button.primary, nav button.active, .segments button.active { color: var(--on-acc
 .overview-row { display: flex; justify-content: space-between; gap: 10px; padding: 7px 10px; border-bottom: 1px solid var(--line); }
 .overview-row:last-child { border-bottom: none; }
 .overview-row .sub { flex: none; color: var(--muted); font-size: .8rem; }
-.pin-dots { font-size: 2rem; letter-spacing: .35rem; text-align: center; margin: 8px 0 16px; color: var(--text); }
+.pin-dots { display: flex; justify-content: center; flex-wrap: wrap; gap: 14px; min-height: 18px; margin: 10px 0 20px; }
+.pin-dot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--text); }
+.pin-dot.on { background: var(--text); }
 .pin-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: 100%; max-width: 340px; margin: 0 auto; }
 .pin-key { font-size: 1.7rem; font-weight: 600; min-height: 64px; padding: 0; border-radius: 18px;
   background: var(--card2); border: 1px solid var(--line); color: var(--text); touch-action: manipulation; user-select: none; }
@@ -149,3 +151,9 @@ header { flex-wrap: wrap; row-gap: 2px; }
 #finish { order: 2; max-width: 58%; overflow: hidden; text-overflow: ellipsis; }
 .row-actions .badge { align-self: center; padding: 4px 10px; }
 .hint.error { color: #ff6b6b; }
+/* New PIN: one question per page, big choices like the digit pad. */
+.pin-choices { display: grid; gap: 12px; width: 100%; max-width: 340px; margin: 8px auto 0; }
+.pin-choice { min-height: 64px; font-size: 1.15rem; font-weight: 600; border-radius: 18px;
+  background: var(--card2); border: 1px solid var(--line); color: var(--text); touch-action: manipulation; }
+.pin-choice:active { background: var(--line); transform: scale(.98); }
+.pin-context { margin: 0; color: var(--muted); font-size: .9rem; }

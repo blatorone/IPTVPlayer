@@ -5774,8 +5774,14 @@ private fun PlayerHome(
         )
     }
     ui.pinRequest?.let { request ->
-        PinDialog(
+        // One phone connection for all steps of a PIN change (current PIN, then the new one); each
+        // step is a dialog of its own (key), so nothing of the previous step is kept.
+        val pinScope = rememberCoroutineScope()
+        val phoneLink = remember { PhonePinLink(pinScope) }
+        DisposableEffect(phoneLink) { onDispose { phoneLink.end() } }
+        key(request) { PinDialog(
             request.title, request.message, confirmTwice = request.newPin, length = request.length,
+            phoneLink = phoneLink,
             onRemoteSetup = if (request.remoteSetup) { { ui.pinRequest = null; ui.remoteAccessStandalone = true } } else null,
             onPin = { pin ->
                 val ok = request.check(pin)
@@ -5786,7 +5792,7 @@ private fun PlayerHome(
                 ok
             },
             onDismiss = { ui.pinRequest = null }
-        )
+        ) }
     }
     LaunchedEffect(ui.watchingPrompt) {
         if (ui.watchingPrompt) {

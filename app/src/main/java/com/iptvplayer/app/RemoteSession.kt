@@ -61,9 +61,11 @@ internal class RemoteSession(
      * "pin" (check a PIN) or "pinNew" (set a new one): only a PIN field on the phone, no settings
      * are sent, only the PIN comes back. Null for the normal settings session.
      */
-    private val pinMode: String? = null,
+    private var pinMode: String? = null,
     /** In a PIN-only session: the PIN is a password (the phone shows a text field). */
-    private val pinPassword: Boolean = false,
+    private var pinPassword: Boolean = false,
+    /** In a PIN-only session: what the device asks for (e.g. "PIN ändern"), shown above the entry. */
+    private var pinTitle: String? = null,
     /**
      * A PIN or password protects the settings: the phone has to enter it before it gets any
      * setting (checked here on the device). Null when nothing is protected.
@@ -112,6 +114,18 @@ internal class RemoteSession(
         inbox.close()
     }
 
+    /**
+     * A PIN-only session goes on with the next step (e.g. after the current PIN the new one): the
+     * phone switches to it without a new QR code.
+     */
+    fun continuePin(mode: String, password: Boolean, title: String?) {
+        if (pinMode == null) return
+        pinMode = mode
+        pinPassword = password
+        pinTitle = title
+        publish()
+    }
+
     /** Sends the current state to the phone if it changed (called whenever app state changes). */
     fun publish() {
         if (_status.value != RemoteStatus.CONNECTED) return
@@ -121,6 +135,7 @@ internal class RemoteSession(
                 addProperty("epoch", epoch)
                 addProperty("mode", pinMode ?: "unlock")
                 addProperty("password", if (pinMode != null) pinPassword else unlockPassword)
+                if (pinMode != null) pinTitle?.let { addProperty("title", it) }
             }.toString()
         } else runCatching { RemoteProtocol.encodeState(handler.remoteState(), epoch) }.getOrNull() ?: return
         if (text == lastSentState) return

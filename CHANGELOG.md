@@ -2,6 +2,7 @@
 
 ## 2.0.1
 
+- Neu: Smart Home mit Home Assistant (eigener Bereich in den Einstellungen, auch per Handy). Die App sucht Home Assistant im Heimnetz und steuert die gewählten Lampen, Schalter oder Szenen: bei Wiedergabe aus oder gedimmt, bei Pause nach einigen Sekunden an, bei Stopp oder Ende an – für Filme, Serien und/oder Live-TV, immer, zu festen Zeiten oder bei Dunkelheit (Sonnenuntergang aus Home Assistant, mit Vorlauf). Eingeschaltet wird nur, was StreamWatch vorher ausgeschaltet hat. Im Backup ist Smart Home schon zu sehen, kommt aber erst später hinein.
 - Handy-Seite „Sperren“: aufgeteilt wie am Gerät in Kindersicherung und Einstellungsschutz, jeweils mit eigener PIN (oder derselben). Die Bereiche (Live-TV, Filme, Serien anzeigen) lassen sich auch ohne PIN einstellen. Die PIN des Einstellungsschutzes lässt sich jetzt auch per Handy festlegen, ändern und entfernen.
 - Programmführer: Schlug der Abruf beim Portal einmal fehl oder kam leer zurück, blieb das bis zu 6 Stunden so – man musste von Hand aktualisieren. Jetzt wird es nach 10 Minuten erneut versucht, und alle 15 Minuten wird nachgeladen, was veraltet ist.
 - Programmführer: hält jetzt einen Tag zurück und einen Tag voraus (bisher 2 Stunden zurück). Beim Nachladen bleiben die schon gelaufenen Sendungen erhalten, alles Ältere fällt heraus – der Speicher wird überschrieben und wächst nicht. „Früher“ blättert bis zu 24 Stunden zurück.

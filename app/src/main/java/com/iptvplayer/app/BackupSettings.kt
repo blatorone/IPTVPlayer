@@ -143,6 +143,8 @@ internal fun BackupSettings(storage: PortalStorage?, guard: (() -> Unit) -> Unit
     if (stage == BackupStage.EXPORT) {
         Text(stringResource(R.string.backup_pick_export))
         PartChoice(BackupPart.entries, chosen, firstStepRow) { chosen = it }
+        // Smart home settings join the backup once that part is finished.
+        SettingRow(stringResource(R.string.backup_part_smart_home_soon), enabled = false, selected = false) {}
         SettingRow(stringResource(R.string.backup_protect), selected = protect) { protect = !protect }
         if (protect) {
             Text(stringResource(R.string.backup_protect_hint), style = MaterialTheme.typography.bodySmall)

@@ -61,6 +61,7 @@ internal class PortalStorage(context: Context) {
     private val migratedLegacyFile = File(context.noBackupFilesDir, "stalker-source.v1.migrated")
     private val libraryFile = AtomicFile(File(context.noBackupFilesDir, "portal-library.v2"))
     private val metadataFile = AtomicFile(File(context.noBackupFilesDir, "metadata-token.v1"))
+    private val homeAssistantFile = AtomicFile(File(context.noBackupFilesDir, "home-assistant-token.v1"))
     private val traktSessionFile = AtomicFile(File(context.noBackupFilesDir, "trakt-session.v1"))
     private val traktAppFile = AtomicFile(File(context.noBackupFilesDir, "trakt-app.v1"))
     /** Trakt session of a kids account that keeps its own data. */
@@ -190,6 +191,15 @@ internal class PortalStorage(context: Context) {
 
     suspend fun writeMetadataToken(token: String) = mutex.withLock {
         withContext(Dispatchers.IO) { writeEncrypted(metadataFile, token) }
+    }
+
+    /** Home Assistant access token (smart home); encrypted like the other accounts. */
+    suspend fun readHomeAssistantToken(): String? = mutex.withLock {
+        withContext(Dispatchers.IO) { readEncrypted(homeAssistantFile)?.ifBlank { null } }
+    }
+
+    suspend fun writeHomeAssistantToken(token: String?) = mutex.withLock {
+        withContext(Dispatchers.IO) { if (token == null) homeAssistantFile.delete() else writeEncrypted(homeAssistantFile, token) }
     }
 
     suspend fun readTraktSession(kids: Boolean = false): TraktSession? = mutex.withLock {

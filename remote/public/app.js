@@ -903,6 +903,9 @@ function renderBackup() {
       el("h2", {}, t("backup.createTitle")),
       el("p", { class: "hint" }, t("backup.createHint")),
       ...partChoice(parts, backupChoice, (next) => { backupChoice = next; renderBackup(); }),
+      // Smart home joins the backup later: shown greyed out until then.
+      el("div", { class: "row disabled" }, el("span", { class: "label" }, t("backup.smartHomeSoon")),
+        el("button", { class: "switch", role: "switch", "aria-checked": "false", disabled: true, "aria-label": t("backup.smartHomeSoon") })),
       // Only when the device can do it: an older app would save the file without protection.
       !state.backupPassword ? null : el("div", { class: "row" }, el("span", { class: "label" }, el("b", {}, t("backup.protect"))),
         switchButton(backupProtect, t("backup.protect"), () => { backupProtect = !backupProtect; renderBackup(); })),

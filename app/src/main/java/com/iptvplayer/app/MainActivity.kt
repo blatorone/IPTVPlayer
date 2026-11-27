@@ -675,6 +675,7 @@ private enum class SettingsSection(val label: Int, val icon: Int) {
     PLAYBACK(R.string.settings_playback, R.drawable.settings_playback),
     CONTROLS(R.string.settings_controls, R.drawable.settings_controls),
     SYNC(R.string.settings_sync, R.drawable.settings_sync),
+    SMART_HOME(R.string.settings_smart_home, R.drawable.settings_smart_home),
     PARENTAL(R.string.settings_locks, R.drawable.settings_parental),
     UPDATES(R.string.settings_updates, R.drawable.settings_updates),
     DIAGNOSTICS(R.string.settings_diagnostics, R.drawable.settings_diagnostics),
@@ -1328,6 +1329,12 @@ private fun PlayerHome(
         } catch (_: Exception) {
             null
         }
+    }
+
+    // Smart home: the light rule and the Home Assistant token (kept encrypted).
+    LaunchedEffect(storage) {
+        val haToken = runCatching { storage?.readHomeAssistantToken() }.getOrNull()
+        LightAutomation.init(context, storage, haToken)
     }
 
     LaunchedEffect(storage) {
@@ -3086,6 +3093,7 @@ private fun PlayerHome(
 
     fun stopPlayback() {
         preparedLiveVariant = null
+        LightAutomation.onStopped()
         SmoothSwitch.stopStandby()
         savePlaybackPosition()
         if (ui.currentTraktPlayback != null && playbackAttempt != null && (player?.currentPosition ?: 0L) > 0L) {
@@ -4748,6 +4756,8 @@ private fun PlayerHome(
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
+                // Smart home: play dims, pause switches the light on again (buffering does not count).
+                LightAutomation.onPlayer(isPlaying, player?.playWhenReady == true, playbackAttempt?.selection?.section)
                 if (isPlaying) {
                     sendTraktScrobble("start")
                     ui.pendingSeriesEpisode?.let { (series, episode) ->
@@ -4861,6 +4871,8 @@ private fun PlayerHome(
                     }
                 }
                 if (playbackState == Player.STATE_ENDED && player?.currentMediaItem?.mediaId == attempt.mediaId) {
+                    // The end of a film or episode counts as stop (the next episode cancels it if it follows).
+                    LightAutomation.onStopped()
                     if (attempt.progressKey == null) {
                         if (attempt.selection.section == PortalSection.LIVE) AppDiagnostics.record(context, "playback_live_ended")
                         scope.launch { failPlayback(attempt, R.string.playback_error) }
@@ -6213,6 +6225,8 @@ private fun PlayerHome(
                         disconnectTrakt(); null
                     })
                 }
+                // Smart home (Home Assistant): its own section, built in SmartHomeSettings.kt.
+                addAll(smartHomeRemoteEntries(context))
                 // Parental settings are changed with their own command (some need the PIN).
                 add(RemoteEntry.Toggle("parental.protectSettings", parentalSection, text(R.string.parental_protect_settings),
                     { parental.protectSettings }) {})
@@ -8427,6 +8441,7 @@ private fun PlayerHome(
                                     SettingRow(stringResource(R.string.whats_new), Modifier) { openSettingsPage { ui.whatsNewOpen = true } }
                                     SettingRow(stringResource(R.string.disclaimer_title), Modifier) { openSettingsPage { ui.termsOpen = true } }
                                 }
+                                SettingsSection.SMART_HOME -> SmartHomeSettings { openSettingsPage { ui.remoteAccessOpen = true } }
                                 SettingsSection.DIAGNOSTICS -> {
                                     // The backup holds portals and accounts, so it follows the portal lock.
                                     BackupSettings(storage, guard = { action -> withSettingsPin(parental.lockPortals, action = action) }) {

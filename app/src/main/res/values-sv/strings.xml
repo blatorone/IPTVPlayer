@@ -955,4 +955,11 @@
     <string name="autostart_permission_device">Ge den på enheten under Inställningar → Allmänt.</string>
     <string name="autostart_notification">Startar StreamWatch när enheten vaknar.</string>
     <string name="autostart_channel">Autostart</string>
+    <string name="auto_switch_setting">Byt kanal automatiskt vid fel</string>
+    <string name="auto_switch_off_hint">Av: Har en kanal flera strömmar väljer du själv vid start. StreamWatch byter aldrig av sig själv.</string>
+    <string name="manual_error_setting">Vid fel</string>
+    <string name="manual_error_list">Visa listan över strömmar</string>
+    <string name="manual_error_none">gör ingenting (byt själv)</string>
+    <string name="stream_choice_title">Välj ström</string>
+    <string name="stream_choice_failed">Strömmen spelas inte. Välj en annan:</string>
 </resources>

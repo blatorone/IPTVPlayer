@@ -955,4 +955,11 @@
     <string name="autostart_permission_device">Cihazda Ayarlar → Genel altında ver.</string>
     <string name="autostart_notification">Cihaz uyandığında StreamWatch\'u başlatır.</string>
     <string name="autostart_channel">Otomatik başlatma</string>
+    <string name="auto_switch_setting">Hatalarda kanalı otomatik değiştir</string>
+    <string name="auto_switch_off_hint">Kapalı: bir kanalın birden fazla yayını varsa başlatırken sen seçersin. StreamWatch asla kendiliğinden değiştirmez.</string>
+    <string name="manual_error_setting">Hata olunca</string>
+    <string name="manual_error_list">Yayın listesini göster</string>
+    <string name="manual_error_none">bir şey yapma (kendin değiştir)</string>
+    <string name="stream_choice_title">Yayın seç</string>
+    <string name="stream_choice_failed">Yayın oynatılamıyor. Başka birini seç:</string>
 </resources>

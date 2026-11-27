@@ -955,4 +955,11 @@
     <string name="autostart_permission_device">Erteile sie am Gerät unter Einstellungen → Allgemein.</string>
     <string name="autostart_notification">Startet StreamWatch, wenn das Gerät aufwacht.</string>
     <string name="autostart_channel">Autostart</string>
+    <string name="auto_switch_setting">Senderwechsel automatisch bei Fehlern</string>
+    <string name="auto_switch_off_hint">Aus: Hat ein Sender mehrere Streams, wählst du beim Start selbst. StreamWatch wechselt nie von allein.</string>
+    <string name="manual_error_setting">Bei Fehler</string>
+    <string name="manual_error_list">Liste der Streams zeigen</string>
+    <string name="manual_error_none">nichts tun (selbst umschalten)</string>
+    <string name="stream_choice_title">Stream wählen</string>
+    <string name="stream_choice_failed">Der Stream läuft nicht. Wähle einen anderen:</string>
 </resources>

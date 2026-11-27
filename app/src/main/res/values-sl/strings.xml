@@ -964,4 +964,11 @@
     <string name="autostart_permission_device">Dovoli ga v napravi pod Nastavitve → Splošno.</string>
     <string name="autostart_notification">Zažene StreamWatch, ko se naprava prebudi.</string>
     <string name="autostart_channel">Samodejni zagon</string>
+    <string name="auto_switch_setting">Ob napakah samodejno zamenjaj kanal</string>
+    <string name="auto_switch_off_hint">Izklopljeno: če ima kanal več pretokov, ob zagonu izbereš sam. StreamWatch nikoli ne menja sam.</string>
+    <string name="manual_error_setting">Ob napaki</string>
+    <string name="manual_error_list">Prikaži seznam pretokov</string>
+    <string name="manual_error_none">ne naredi nič (zamenjaj sam)</string>
+    <string name="stream_choice_title">Izberi pretok</string>
+    <string name="stream_choice_failed">Pretok se ne predvaja. Izberi drugega:</string>
 </resources>

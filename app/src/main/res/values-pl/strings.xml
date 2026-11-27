@@ -963,4 +963,11 @@
     <string name="autostart_permission_device">Nadaj je na urządzeniu w Ustawienia → Ogólne.</string>
     <string name="autostart_notification">Uruchamia StreamWatch, gdy urządzenie się wybudzi.</string>
     <string name="autostart_channel">Autostart</string>
+    <string name="auto_switch_setting">Automatycznie zmieniaj kanał przy błędach</string>
+    <string name="auto_switch_off_hint">Wyłączone: jeśli kanał ma kilka strumieni, wybierasz sam przy starcie. StreamWatch nigdy nie zmienia sam.</string>
+    <string name="manual_error_setting">Przy błędzie</string>
+    <string name="manual_error_list">Pokaż listę strumieni</string>
+    <string name="manual_error_none">nic nie rób (zmień sam)</string>
+    <string name="stream_choice_title">Wybierz strumień</string>
+    <string name="stream_choice_failed">Strumień nie działa. Wybierz inny:</string>
 </resources>

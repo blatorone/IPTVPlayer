@@ -955,4 +955,11 @@
     <string name="autostart_permission_device">Gi den på enheten under Innstillinger → Generelt.</string>
     <string name="autostart_notification">Starter StreamWatch når enheten våkner.</string>
     <string name="autostart_channel">Autostart</string>
+    <string name="auto_switch_setting">Bytt kanal automatisk ved feil</string>
+    <string name="auto_switch_off_hint">Av: Har en kanal flere strømmer, velger du selv ved start. StreamWatch bytter aldri av seg selv.</string>
+    <string name="manual_error_setting">Ved feil</string>
+    <string name="manual_error_list">Vis listen over strømmer</string>
+    <string name="manual_error_none">ikke gjør noe (bytt selv)</string>
+    <string name="stream_choice_title">Velg strøm</string>
+    <string name="stream_choice_failed">Strømmen spiller ikke. Velg en annen:</string>
 </resources>

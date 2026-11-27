@@ -963,4 +963,11 @@
     <string name="autostart_permission_device">Suteik jį įrenginyje: Nustatymai → Bendrieji.</string>
     <string name="autostart_notification">Paleidžia StreamWatch, kai įrenginys pabunda.</string>
     <string name="autostart_channel">Automatinis paleidimas</string>
+    <string name="auto_switch_setting">Klaidų atveju kanalą keisti automatiškai</string>
+    <string name="auto_switch_off_hint">Išjungta: jei kanalas turi kelis srautus, renkiesi pats paleisdamas. StreamWatch niekada nekeičia pats.</string>
+    <string name="manual_error_setting">Klaidos atveju</string>
+    <string name="manual_error_list">Rodyti srautų sąrašą</string>
+    <string name="manual_error_none">nieko nedaryti (keisti pačiam)</string>
+    <string name="stream_choice_title">Pasirinkti srautą</string>
+    <string name="stream_choice_failed">Srautas neveikia. Pasirink kitą:</string>
 </resources>

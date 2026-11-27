@@ -955,4 +955,11 @@
     <string name="autostart_permission_device">Jepe në pajisje te Cilësimet → Të përgjithshme.</string>
     <string name="autostart_notification">Nis StreamWatch kur pajisja zgjohet.</string>
     <string name="autostart_channel">Nisje automatike</string>
+    <string name="auto_switch_setting">Ndërro kanalin automatikisht kur ka gabime</string>
+    <string name="auto_switch_off_hint">Joaktiv: nëse një kanal ka disa transmetime, zgjedh vetë në nisje. StreamWatch nuk ndërron kurrë vetë.</string>
+    <string name="manual_error_setting">Kur ka gabim</string>
+    <string name="manual_error_list">Shfaq listën e transmetimeve</string>
+    <string name="manual_error_none">mos bëj asgjë (ndërro vetë)</string>
+    <string name="stream_choice_title">Zgjidh transmetimin</string>
+    <string name="stream_choice_failed">Transmetimi nuk luhet. Zgjidh një tjetër:</string>
 </resources>

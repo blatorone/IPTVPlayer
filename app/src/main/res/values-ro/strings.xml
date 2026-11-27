@@ -959,4 +959,11 @@
     <string name="autostart_permission_device">Acord-o pe dispozitiv în Setări → General.</string>
     <string name="autostart_notification">Pornește StreamWatch când dispozitivul se trezește.</string>
     <string name="autostart_channel">Pornire automată</string>
+    <string name="auto_switch_setting">Schimbă automat canalul la erori</string>
+    <string name="auto_switch_off_hint">Oprit: dacă un canal are mai multe fluxuri, alegi tu la pornire. StreamWatch nu schimbă niciodată singur.</string>
+    <string name="manual_error_setting">La eroare</string>
+    <string name="manual_error_list">Arată lista fluxurilor</string>
+    <string name="manual_error_none">nu face nimic (schimbă tu)</string>
+    <string name="stream_choice_title">Alege fluxul</string>
+    <string name="stream_choice_failed">Fluxul nu merge. Alege altul:</string>
 </resources>

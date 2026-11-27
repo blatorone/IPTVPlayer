@@ -971,4 +971,11 @@
     <string name="autostart_permission_device">امنحه على الجهاز ضمن الإعدادات ← عام.</string>
     <string name="autostart_notification">يشغّل StreamWatch عند استيقاظ الجهاز.</string>
     <string name="autostart_channel">التشغيل التلقائي</string>
+    <string name="auto_switch_setting">تبديل القناة تلقائيًا عند الأخطاء</string>
+    <string name="auto_switch_off_hint">إيقاف: إذا كان للقناة عدة بثوث تختار بنفسك عند البدء. لا يبدّل StreamWatch من تلقاء نفسه أبدًا.</string>
+    <string name="manual_error_setting">عند الخطأ</string>
+    <string name="manual_error_list">عرض قائمة البثوث</string>
+    <string name="manual_error_none">لا شيء (التبديل يدويًا)</string>
+    <string name="stream_choice_title">اختر البث</string>
+    <string name="stream_choice_failed">البث لا يعمل. اختر بثًا آخر:</string>
 </resources>

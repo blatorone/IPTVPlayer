@@ -963,4 +963,11 @@
     <string name="autostart_permission_device">Дай его на устройстве в Настройки → Общие.</string>
     <string name="autostart_notification">Запускает StreamWatch, когда устройство просыпается.</string>
     <string name="autostart_channel">Автозапуск</string>
+    <string name="auto_switch_setting">Автоматически переключать канал при ошибках</string>
+    <string name="auto_switch_off_hint">Выкл.: если у канала несколько потоков, при запуске выбираешь сам. StreamWatch никогда не переключает сам.</string>
+    <string name="manual_error_setting">При ошибке</string>
+    <string name="manual_error_list">Показать список потоков</string>
+    <string name="manual_error_none">ничего не делать (переключить самому)</string>
+    <string name="stream_choice_title">Выбрать поток</string>
+    <string name="stream_choice_failed">Поток не воспроизводится. Выбери другой:</string>
 </resources>

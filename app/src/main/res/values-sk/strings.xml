@@ -963,4 +963,11 @@
     <string name="autostart_permission_device">Udeľ ho v zariadení v Nastavenia → Všeobecné.</string>
     <string name="autostart_notification">Spustí StreamWatch, keď sa zariadenie prebudí.</string>
     <string name="autostart_channel">Automatické spustenie</string>
+    <string name="auto_switch_setting">Pri chybách automaticky prepnúť kanál</string>
+    <string name="auto_switch_off_hint">Vypnuté: ak má kanál viac streamov, vyberáš pri spustení sám. StreamWatch nikdy neprepína sám.</string>
+    <string name="manual_error_setting">Pri chybe</string>
+    <string name="manual_error_list">Zobraziť zoznam streamov</string>
+    <string name="manual_error_none">nerobiť nič (prepnúť sám)</string>
+    <string name="stream_choice_title">Vybrať stream</string>
+    <string name="stream_choice_failed">Stream nehrá. Vyber iný:</string>
 </resources>

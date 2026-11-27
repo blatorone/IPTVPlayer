@@ -959,4 +959,11 @@
     <string name="autostart_permission_device">Dozvoli je na uređaju pod Postavke → Općenito.</string>
     <string name="autostart_notification">Pokreće StreamWatch kada se uređaj probudi.</string>
     <string name="autostart_channel">Automatsko pokretanje</string>
+    <string name="auto_switch_setting">Automatski promijeni kanal pri greškama</string>
+    <string name="auto_switch_off_hint">Isključeno: ako kanal ima više strimova, biraš sam pri pokretanju. StreamWatch nikad ne mijenja sam.</string>
+    <string name="manual_error_setting">Pri grešci</string>
+    <string name="manual_error_list">Prikaži listu strimova</string>
+    <string name="manual_error_none">ne radi ništa (promijeni sam)</string>
+    <string name="stream_choice_title">Izaberi strim</string>
+    <string name="stream_choice_failed">Strim ne radi. Izaberi drugi:</string>
 </resources>

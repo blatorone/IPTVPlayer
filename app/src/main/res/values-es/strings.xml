@@ -959,4 +959,11 @@
     <string name="autostart_permission_device">Concédelo en el dispositivo en Ajustes → General.</string>
     <string name="autostart_notification">Inicia StreamWatch cuando el dispositivo se activa.</string>
     <string name="autostart_channel">Inicio automático</string>
+    <string name="auto_switch_setting">Cambiar de canal automáticamente si hay errores</string>
+    <string name="auto_switch_off_hint">Desactivado: si un canal tiene varios streams, eliges tú al empezar. StreamWatch nunca cambia por sí solo.</string>
+    <string name="manual_error_setting">Si hay un error</string>
+    <string name="manual_error_list">Mostrar la lista de streams</string>
+    <string name="manual_error_none">no hacer nada (cambiar tú)</string>
+    <string name="stream_choice_title">Elegir stream</string>
+    <string name="stream_choice_failed">El stream no se reproduce. Elige otro:</string>
 </resources>

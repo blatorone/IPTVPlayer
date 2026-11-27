@@ -955,4 +955,11 @@
     <string name="autostart_permission_device">Add meg az eszközön: Beállítások → Általános.</string>
     <string name="autostart_notification">Elindítja a StreamWatchot, amikor az eszköz felébred.</string>
     <string name="autostart_channel">Automatikus indítás</string>
+    <string name="auto_switch_setting">Csatornaváltás automatikusan hiba esetén</string>
+    <string name="auto_switch_off_hint">Ki: ha egy csatornának több streamje van, indításkor te választasz. A StreamWatch soha nem vált magától.</string>
+    <string name="manual_error_setting">Hiba esetén</string>
+    <string name="manual_error_list">Streamek listájának megjelenítése</string>
+    <string name="manual_error_none">ne tegyen semmit (válts magad)</string>
+    <string name="stream_choice_title">Stream kiválasztása</string>
+    <string name="stream_choice_failed">A stream nem játszik. Válassz egy másikat:</string>
 </resources>

@@ -955,4 +955,11 @@
     <string name="autostart_permission_device">Geef ze op het apparaat onder Instellingen → Algemeen.</string>
     <string name="autostart_notification">Start StreamWatch wanneer het apparaat ontwaakt.</string>
     <string name="autostart_channel">Automatisch starten</string>
+    <string name="auto_switch_setting">Bij fouten automatisch van zender wisselen</string>
+    <string name="auto_switch_off_hint">Uit: heeft een zender meerdere streams, dan kies je bij het starten zelf. StreamWatch wisselt nooit vanzelf.</string>
+    <string name="manual_error_setting">Bij een fout</string>
+    <string name="manual_error_list">Lijst met streams tonen</string>
+    <string name="manual_error_none">niets doen (zelf wisselen)</string>
+    <string name="stream_choice_title">Stream kiezen</string>
+    <string name="stream_choice_failed">De stream speelt niet af. Kies een andere:</string>
 </resources>

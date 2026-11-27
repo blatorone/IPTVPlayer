@@ -959,4 +959,11 @@
     <string name="autostart_permission_device">Piešķir to ierīcē: Iestatījumi → Vispārīgi.</string>
     <string name="autostart_notification">Palaiž StreamWatch, kad ierīce pamostas.</string>
     <string name="autostart_channel">Automātiska palaišana</string>
+    <string name="auto_switch_setting">Kļūdu gadījumā automātiski mainīt kanālu</string>
+    <string name="auto_switch_off_hint">Izslēgts: ja kanālam ir vairākas plūsmas, sākumā izvēlies pats. StreamWatch nekad nemaina pats.</string>
+    <string name="manual_error_setting">Kļūdas gadījumā</string>
+    <string name="manual_error_list">Rādīt plūsmu sarakstu</string>
+    <string name="manual_error_none">neko nedarīt (mainīt pašam)</string>
+    <string name="stream_choice_title">Izvēlēties plūsmu</string>
+    <string name="stream_choice_failed">Plūsma nedarbojas. Izvēlies citu:</string>
 </resources>

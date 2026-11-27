@@ -2,6 +2,7 @@
 
 ## 2.0.1
 
+- Neu: „Senderwechsel automatisch bei Fehlern“ (Wiedergabe, auch per Handy, Standard: an wie bisher). Ausgeschaltet wählst du beim Start eines Senders mit mehreren Streams selbst aus einer Liste, und StreamWatch wechselt nie von allein. Bei einem Fehler zeigt die App wahlweise wieder die Liste oder tut nichts; dann kommt die Liste beim nächsten Start. Die Einstellungen zum automatischen Wechsel erscheinen nur, wenn er an ist.
 - Smart Home: Die Knöpfe sprangen beim Drücken in den Bereich „Programmführer“. Der Fokus bleibt jetzt beim Seitenwechsel oben auf der Seite.
 - Neu: Autostart (Einstellungen → Allgemein, auch per Handy). StreamWatch startet auf Wunsch beim Einschalten des Geräts und/oder beim Aufwecken aus dem Standby. Dafür braucht die App die Berechtigung „Über anderen Apps einblenden“; auf Android TV (z. B. Shield) führt ein Knopf direkt dorthin, auf Fire TV lässt sie sich einmalig über einen Computer setzen.
 - Neu: Smart Home mit Home Assistant (eigener Bereich in den Einstellungen, auch per Handy). Die App sucht Home Assistant im Heimnetz und steuert die gewählten Lampen, Schalter oder Szenen: bei Wiedergabe aus oder gedimmt, bei Pause nach einigen Sekunden an, bei Stopp oder Ende an – für Filme, Serien und/oder Live-TV, immer, zu festen Zeiten oder bei Dunkelheit (Sonnenuntergang aus Home Assistant, mit Vorlauf). Eingeschaltet wird nur, was StreamWatch vorher ausgeschaltet hat. Im Backup ist Smart Home schon zu sehen, kommt aber erst später hinein.

@@ -959,4 +959,11 @@
     <string name="autostart_permission_device">Accorde-la sur l\'appareil sous Réglages → Général.</string>
     <string name="autostart_notification">Démarre StreamWatch quand l\'appareil se réveille.</string>
     <string name="autostart_channel">Démarrage automatique</string>
+    <string name="auto_switch_setting">Changer de chaîne automatiquement en cas d\'erreur</string>
+    <string name="auto_switch_off_hint">Désactivé : si une chaîne a plusieurs flux, tu choisis au démarrage. StreamWatch ne change jamais tout seul.</string>
+    <string name="manual_error_setting">En cas d\'erreur</string>
+    <string name="manual_error_list">Afficher la liste des flux</string>
+    <string name="manual_error_none">ne rien faire (changer toi-même)</string>
+    <string name="stream_choice_title">Choisir le flux</string>
+    <string name="stream_choice_failed">Le flux ne fonctionne pas. Choisis-en un autre :</string>
 </resources>

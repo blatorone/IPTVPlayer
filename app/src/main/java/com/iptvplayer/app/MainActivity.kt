@@ -714,6 +714,9 @@ private fun EpisodeTimingAdjustment(
  * reference instead of a MutableState each (ART on Android 11 rejects lambdas with >255 captures).
  */
 private class PlayerHomeFlags {
+    /** Live-TV without the automatic switch: the channel waits for the stream to be chosen. */
+    var streamChoice by mutableStateOf<PlaybackAttempt?>(null)
+    var streamChoiceFailed by mutableStateOf(false)
     // Moved out of PlayerHome: fewer values captured by its lambdas (ART limit 255).
     var sharedPinQuestion by mutableStateOf<SharedPinQuestion?>(null)
     var pinRequest by mutableStateOf<PinRequest?>(null)
@@ -3178,7 +3181,10 @@ private fun PlayerHome(
         playbackError = null
         playbackJob = scope.launch {
             var message = R.string.playback_link_error
-            for (index in plan.index until plan.variants.size) {
+            // Chosen by hand (automatic switch off): only that one stream is tried.
+            val lastIndex = if (plan.selection.section == PortalSection.LIVE && !StreamSwitch.auto(context)) plan.index
+                else plan.variants.size - 1
+            for (index in plan.index..lastIndex) {
                 val attempt = plan.copy(index = index, mediaId = "playback-${++ui.attemptSerial}")
                 playbackAttempt = attempt
                 ui.triedHls = false
@@ -3235,6 +3241,12 @@ private fun PlayerHome(
             }
             starting = null
             playbackError = if (plan.variants.size > 1) R.string.playback_all_variants_failed else message
+            if (plan.selection.section == PortalSection.LIVE && plan.variants.size > 1 &&
+                !StreamSwitch.auto(context) && StreamSwitch.listOnError(context)
+            ) {
+                ui.streamChoiceFailed = true
+                ui.streamChoice = plan
+            }
         }
     }
 
@@ -3260,10 +3272,17 @@ private fun PlayerHome(
         playbackSelection = selection
         vodSection = selection.section.takeUnless { it == PortalSection.LIVE }
         val resume = progressKey?.let { progressPreferences?.getLong(it, 0L) } ?: 0L
-        runPlayback(PlaybackAttempt(
+        val attempt = PlaybackAttempt(
             selection, channel, variants, 0, resume, progressKey,
             openFullscreenOnStart = openFullscreenOnStart, liveRestoreKey = liveRestoreKey
-        ))
+        )
+        // Without the automatic switch a channel with several streams asks which one to play.
+        if (selection.section == PortalSection.LIVE && variants.size > 1 && !StreamSwitch.auto(context)) {
+            ui.streamChoiceFailed = false
+            ui.streamChoice = attempt
+            return
+        }
+        runPlayback(attempt)
     }
 
     /**
@@ -3278,7 +3297,9 @@ private fun PlayerHome(
             val stream = variant.streamKey ?: variant.sourceId
             if (key != null && stream != null) liveStreamHistory.recordFailure(key, stream, block)
         }
-        val nextIndex = attempt.nextIndex()
+        val nextIndex = 
+            // Chosen by hand (automatic switch off): never another stream by itself.
+            if (attempt.selection.section == PortalSection.LIVE && !StreamSwitch.auto(context)) null else attempt.nextIndex()
         if (nextIndex == null) {
             savePlaybackPosition(onFailure = true)
             SmoothSwitch.stopStandby()
@@ -3288,6 +3309,12 @@ private fun PlayerHome(
             player?.stop()
             starting = null
             playbackError = if (attempt.variants.size > 1) R.string.playback_all_variants_failed else message
+            if (attempt.selection.section == PortalSection.LIVE && attempt.variants.size > 1 &&
+                !StreamSwitch.auto(context) && StreamSwitch.listOnError(context)
+            ) {
+                ui.streamChoiceFailed = true
+                ui.streamChoice = attempt
+            }
             // Nothing playable (e.g. no sound): playback ends and fullscreen closes, so the message
             // is shown on the page below instead of a stream that cannot even be stopped.
             fullscreen = false
@@ -4983,6 +5010,8 @@ private fun PlayerHome(
     /** [trouble]: the running stream shows signs of trouble (not just the early link fetch). */
     fun prepareNextLiveVariant(attempt: PlaybackAttempt, trouble: Boolean = false) {
         if (attempt.selection.section != PortalSection.LIVE) return
+        // Chosen by hand: no stand-in is prepared (it would never be used).
+        if (!StreamSwitch.auto(context)) return
         val next = attempt.nextIndex()?.let(attempt.variants::get) ?: return
         if (trouble) SmoothSwitch.troubleAt = timeshiftNow()
         // Smooth switch: a stand-in from another portal (another account) is recorded in the
@@ -5817,6 +5846,21 @@ private fun PlayerHome(
             }
         )
     }
+    // Live-TV without the automatic switch: which stream to play (at the start, or after one failed).
+    ui.streamChoice?.let { attempt ->
+        StreamChoiceDialog(
+            attempt.variants.map { it.label }, attempt.index, ui.streamChoiceFailed,
+            onPick = { index ->
+                ui.streamChoice = null
+                playbackSelection = attempt.selection
+                runPlayback(attempt.copy(index = index, round = 0))
+            },
+            onDismiss = {
+                ui.streamChoice = null
+                if (!ui.streamChoiceFailed) stopPlayback()
+            }
+        )
+    }
     ui.pinRequest?.let { request ->
         // One phone connection for all steps of a PIN change (current PIN, then the new one); each
         // step is a dialog of its own (key), so nothing of the previous step is kept.
@@ -6118,9 +6162,8 @@ private fun PlayerHome(
                         TIMESHIFT_DURATIONS.map { RemoteOption(it.toString(), context.getString(R.string.timeshift_duration_setting, it)) },
                     { timeshiftMinutes(context)?.toString() ?: "OFF" }
                 ) { value -> setTimeshiftMinutes(context, value.toIntOrNull()?.takeIf { it in TIMESHIFT_DURATIONS }) })
-                add(RemoteEntry.Toggle("smoothSwitch", playback, text(R.string.smooth_switch_setting), { smoothSwitchEnabled(context) }) {
-                    setSmoothSwitchEnabled(context, it)
-                })
+                // Automatic switch on errors (its settings while on) or the stream chosen by hand.
+                addAll(streamSwitchRemoteEntries(context, playback))
                 add(RemoteEntry.Choice("vodLive", playback, name(R.string.live_preview_in_vod),
                     options(vodViews) { it.label }, { vodLiveView.name }
                 ) { value ->
@@ -8392,7 +8435,7 @@ private fun PlayerHome(
                                 SettingsSection.PLAYBACK -> {
                                     BufferSettings()
                                     TimeshiftSettings()
-                                    SmoothSwitchSettings()
+                                    StreamSwitchSettings()
                                     SettingRow(stringResource(R.string.episode_settings), Modifier) { openSettingsPage { ui.episodeSettingsOpen = true } }
                                     SettingRow(
                                         stringResource(

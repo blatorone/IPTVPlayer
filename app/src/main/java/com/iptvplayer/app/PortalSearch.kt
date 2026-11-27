@@ -210,10 +210,7 @@ internal fun ColumnScope.PortalSearch(
     if (term.isEmpty() || showHistory) {
         // Recent searches: OK searches again, a long press removes the entry.
         if (history.enabled && history.entries.isNotEmpty()) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                Text(stringResource(R.string.recent_searches), Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
-                MenuButton(stringResource(R.string.clear_search_history), Modifier) { history.clear() }
-            }
+            Text(stringResource(R.string.recent_searches), style = MaterialTheme.typography.titleSmall)
             Text(stringResource(R.string.search_history_hint), style = MaterialTheme.typography.bodySmall)
             LazyColumn(Modifier.weight(1f)) {
                 itemsIndexed(history.entries, key = { _, entry -> entry }) { index, entry ->
@@ -225,6 +222,14 @@ internal fun ColumnScope.PortalSearch(
                         onQueryChange(entry)
                         showHistory = false
                         focusResults++
+                    }
+                }
+                // Deleting is the last row: reachable with Down (top right it could not be reached).
+                item(key = "clear") {
+                    MenuButton(stringResource(R.string.clear_search_history), Modifier.fillMaxWidth()) {
+                        history.clear()
+                        showHistory = false
+                        runCatching { focusRequester.requestFocus() }
                     }
                 }
             }

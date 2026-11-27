@@ -2,6 +2,7 @@
 
 ## 2.0.1
 
+- Suche: „Suchverlauf löschen“ steht jetzt als letzte Zeile unter dem Verlauf und ist mit der Fernbedienung erreichbar.
 - Suche: Neben „Serien“ gibt es den Knopf „Letzte Suchen“. Die Tastatur schließt jetzt mit jeder Abschlusstaste, auch ohne Eingabe; dann geht der Fokus auf den Suchverlauf.
 - Suche: Nach dem Suchen (auf Fire TV der Tastaturknopf „Weiter“, sonst „Suchen“, oder ein Eintrag aus dem Verlauf) und nach dem Schließen der Tastatur geht der Fokus auf „Live-TV“ bei den Ergebnissen statt nach oben. Der Raucherpause-Knopf erscheint nur bei Filmen und Serien.
 - Raucherpause-Knopf im Vollbild ist jetzt mit der Fernbedienung erreichbar. Smart Home: Pro Lampe gibt es jetzt eine Zeile „Schalten“, die bei jedem Druck zwischen „unverändert lassen“, „aus“ und „an“ wechselt (vorher drei Schalter, von denen der aktive scheinbar nicht reagierte). Die Lampenseite erklärt, wann Helligkeit und Farbpalette erscheinen.

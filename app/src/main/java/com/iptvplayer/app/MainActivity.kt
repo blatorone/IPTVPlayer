@@ -10975,7 +10975,7 @@ internal fun MenuButton(
                 if (it.isFocused && !focused) onFocused?.invoke()
                 focused = it.isFocused
             }
-            .focusProperties { canFocus = enabled }
+            .focusProperties { canFocus = enabled || focused }
             // The press and focus effect stays inside the rounded shape (no square corners).
             .clip(RoundedCornerShape(12.dp))
             .combinedClickable(enabled = enabled, onClick = onClick, onLongClick = onLongPress),

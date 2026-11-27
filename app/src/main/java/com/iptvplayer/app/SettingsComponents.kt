@@ -95,7 +95,9 @@ internal fun SettingRow(
                 focused = it.isFocused
                 if (it.isFocused) memory?.focused(title)
             }
-            .focusProperties { canFocus = enabled }
+            // A row that gets disabled while focused (e.g. "Nach Updates suchen" while it searches) keeps
+            // the focus; otherwise it jumped to another category. Clicks stay off until it is enabled.
+            .focusProperties { canFocus = enabled || focused }
             .clip(RoundedCornerShape(12.dp))
             .clickable(enabled = enabled, onClick = onClick),
         color = if (focused) colors.surfaceContainerHighest else colors.surfaceContainerHigh,
@@ -135,7 +137,7 @@ internal fun SettingToggleButton(on: Boolean, label: String, enabled: Boolean = 
     Surface(
         modifier = Modifier
             .onFocusChanged { focused = it.isFocused }
-            .focusProperties { canFocus = enabled }
+            .focusProperties { canFocus = enabled || focused }
             .clip(RoundedCornerShape(12.dp))
             .clickable(enabled = enabled, onClickLabel = label, onClick = onClick)
             .semantics { contentDescription = label },

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -157,13 +158,23 @@ internal fun ColumnScope.PortalSearch(
     var focusResults by remember { mutableIntStateOf(0) }
     var selection by remember { mutableStateOf(PortalSection.LIVE) }
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    // The history: below the empty field, or with "Letzte Suchen" next to the result areas.
+    val firstHistory = remember { FocusRequester() }
+    var focusHistory by remember { mutableIntStateOf(0) }
+    var showHistory by remember { mutableStateOf(false) }
+    LaunchedEffect(focusHistory) {
+        if (focusHistory == 0) return@LaunchedEffect
+        keyboard?.hide()
+        repeat(2) { androidx.compose.runtime.withFrameNanos { } }
+        runCatching { firstHistory.requestFocus() }
+    }
     // The keyboard closed (e.g. with Back) while something is entered: on to the results, not up.
     @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
     val imeVisible = androidx.compose.foundation.layout.WindowInsets.isImeVisible
     val currentQuery by androidx.compose.runtime.rememberUpdatedState(query)
     var imeWasVisible by remember { mutableStateOf(false) }
     LaunchedEffect(imeVisible) {
-        if (imeWasVisible && !imeVisible && currentQuery.isNotBlank()) focusResults++
+        if (imeWasVisible && !imeVisible) { if (currentQuery.isNotBlank()) focusResults++ else focusHistory++ }
         imeWasVisible = imeVisible
     }
     LaunchedEffect(focusResults) {
@@ -184,13 +195,19 @@ internal fun ColumnScope.PortalSearch(
         ),
         // Every finishing key of the on-screen keyboard searches: Fire TV shows "Weiter" (next) instead
         // of "Suchen".
+        // It always closes the keyboard: empty, the focus goes to the history.
         keyboardActions = androidx.compose.foundation.text.KeyboardActions {
-            history.add(query)
-            if (query.isNotBlank()) focusResults++
+            keyboard?.hide()
+            if (query.isBlank()) focusHistory++
+            else {
+                history.add(query)
+                showHistory = false
+                focusResults++
+            }
         }
     )
     val term = query.trim()
-    if (term.isEmpty()) {
+    if (term.isEmpty() || showHistory) {
         // Recent searches: OK searches again, a long press removes the entry.
         if (history.enabled && history.entries.isNotEmpty()) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
@@ -199,12 +216,14 @@ internal fun ColumnScope.PortalSearch(
             }
             Text(stringResource(R.string.search_history_hint), style = MaterialTheme.typography.bodySmall)
             LazyColumn(Modifier.weight(1f)) {
-                items(history.entries, key = { it }) { entry ->
+                itemsIndexed(history.entries, key = { _, entry -> entry }) { index, entry ->
                     MenuButton(
-                        entry, Modifier.fillMaxWidth(), leadingIcon = R.drawable.ic_menu_search,
+                        entry, Modifier.fillMaxWidth().then(if (index == 0) Modifier.focusRequester(firstHistory) else Modifier),
+                        leadingIcon = R.drawable.ic_menu_search,
                         onLongPress = { history.remove(entry) }
                     ) {
                         onQueryChange(entry)
+                        showHistory = false
                         focusResults++
                     }
                 }
@@ -265,6 +284,11 @@ internal fun ColumnScope.PortalSearch(
                 Modifier.weight(1f).then(if (section == PortalSection.LIVE) Modifier.focusRequester(firstSection) else Modifier),
                 selected = selection == section
             ) { selection = section }
+        }
+        // The search history next to the areas (the field is not empty here).
+        if (history.enabled && history.entries.isNotEmpty()) MenuButton(stringResource(R.string.recent_searches), Modifier.weight(1f)) {
+            showHistory = true
+            focusHistory++
         }
     }
     if (remote.size < searchedSections.size) LinearProgressIndicator(Modifier.fillMaxWidth())

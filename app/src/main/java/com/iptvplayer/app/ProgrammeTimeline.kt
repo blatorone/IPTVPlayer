@@ -9,6 +9,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
@@ -200,8 +201,10 @@ internal fun ProgrammeTimeline(
     // already gone (left of it) lies under a dark veil.
     val nowFraction = ((now - start).toFloat() / GUIDE_WINDOW).takeIf { now >= start && now < start + GUIDE_WINDOW }
     val nowColor = appearance.nowColor.color
+    // "Linienfarbe": darkened and lightly tinted in the line's colour, so the time gone is clearly
+    // set apart but still readable; "Dunkel": darkened only.
     val veil = when (appearance.veil) {
-        GuideVeil.LINE_COLOR -> nowColor.copy(alpha = 0.16f)
+        GuideVeil.LINE_COLOR -> nowColor.copy(alpha = 0.14f).compositeOver(Color.Black.copy(alpha = 0.40f))
         GuideVeil.DARK -> Color.Black.copy(alpha = 0.45f)
         GuideVeil.OFF -> null
     }

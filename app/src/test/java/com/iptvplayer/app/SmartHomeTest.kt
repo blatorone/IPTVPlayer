@@ -23,6 +23,22 @@ class SmartHomeTest {
     }
 
     @Test
+    fun eachStateHasItsOwnSceneAndUnsetMeansUnchanged() {
+        val rule = LightRule()
+            .withSetting(LightState.PLAY, "light.sofa", LightSetting(true, brightness = 20, kelvin = 2_700))
+            .withSetting(LightState.PAUSE, "light.sofa", LightSetting(true, brightness = 80))
+            .withSetting(LightState.SMOKE, "cover.terrace", LightSetting(true))
+        assertTrue(rule.scene(LightState.PLAY).getValue("light.sofa").brightness == 20)
+        assertTrue(rule.scene(LightState.PAUSE).getValue("light.sofa").brightness == 80)
+        assertTrue(rule.scene(LightState.STOP).isEmpty())
+        // "nicht ändern" removes the light from that state only.
+        val unchanged = rule.withSetting(LightState.PLAY, "light.sofa", null)
+        assertTrue(unchanged.scene(LightState.PLAY).isEmpty())
+        assertTrue(unchanged.scene(LightState.PAUSE).containsKey("light.sofa"))
+        assertTrue(unchanged.scene(LightState.SMOKE).containsKey("cover.terrace"))
+    }
+
+    @Test
     fun ruleAppliesOnlyToChosenAreas() {
         val rule = LightRule(movies = true, series = false, live = false)
         assertTrue(rule.applies(PortalSection.MOVIES))

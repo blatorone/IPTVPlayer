@@ -10656,6 +10656,47 @@ internal fun PlayerFrame(
                                 bar.addView(cc, insertAt, LinearLayout.LayoutParams(size, size))
                                 enableRemoteFocus(cc)
                             }
+                            // Smoking break (smart home): pauses and starts its own scene; the next play
+                            // brings everything back. Only shown when that scene has devices set up.
+                            if (bar.findViewWithTag<android.view.View>("player_smoke_action") == null) {
+                                val smoke = ImageButton(context).apply {
+                                    id = android.view.View.generateViewId()
+                                    tag = "player_smoke_action"
+                                    setImageResource(R.drawable.ic_smoking)
+                                    imageTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.WHITE)
+                                    contentDescription = context.getString(R.string.smart_home_smoke)
+                                    tooltipText = contentDescription
+                                    isFocusable = true
+                                    isFocusableInTouchMode = true
+                                    defaultFocusHighlightEnabled = false
+                                    val selectable = TypedValue()
+                                    if (context.theme.resolveAttribute(
+                                            android.R.attr.selectableItemBackgroundBorderless, selectable, true
+                                        )
+                                    ) setBackgroundResource(selectable.resourceId)
+                                    visibility = if (LightAutomation.smokeReady) android.view.View.VISIBLE else android.view.View.GONE
+                                    setOnClickListener {
+                                        LightAutomation.startSmoke()
+                                        playerView.player?.pause()
+                                    }
+                                }
+                                val size = (48 * context.resources.displayMetrics.density).toInt()
+                                val after = bar.findViewWithTag<android.view.View>("player_subtitles_action")
+                                val insertAt = after?.let { bar.indexOfChild(it) + 1 }?.takeIf { it > 0 } ?: bar.childCount
+                                bar.addView(smoke, insertAt, LinearLayout.LayoutParams(size, size))
+                                enableRemoteFocus(smoke)
+                                val check = object : Runnable {
+                                    override fun run() {
+                                        val visibility = if (LightAutomation.smokeReady) android.view.View.VISIBLE else android.view.View.GONE
+                                        if (smoke.visibility != visibility) {
+                                            smoke.visibility = visibility
+                                            configureBottomFocus(playerView)
+                                        }
+                                        smoke.postDelayed(this, 2_000)
+                                    }
+                                }
+                                smoke.post(check)
+                            }
                         }
                         findViewById<android.view.View>(androidx.media3.ui.R.id.exo_progress)?.let { progress ->
                             progress.isFocusable = true

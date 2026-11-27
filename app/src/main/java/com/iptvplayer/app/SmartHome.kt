@@ -30,12 +30,54 @@ import java.util.concurrent.TimeUnit
  * Home Assistant's sun). Everything stays in the home network; address and token are never logged.
  */
 
-/** A light, switch or scene of Home Assistant. */
-internal data class HaEntity(val id: String, val name: String) {
+/**
+ * A light, switch or scene of Home Assistant and what it can do: dim, colour temperature (with
+ * its range in Kelvin) and colour.
+ */
+internal data class HaEntity(
+    val id: String,
+    val name: String,
+    val dimmable: Boolean = false,
+    val temperature: Boolean = false,
+    val color: Boolean = false,
+    val minKelvin: Int = 2_000,
+    val maxKelvin: Int = 6_500
+) {
     val domain: String get() = id.substringBefore('.')
 }
 
 internal class HomeAssistantException(val status: Int) : Exception("HTTP $status")
+
+/** What one light does in one state: off, or on with brightness and a colour temperature or colour. */
+internal data class LightSetting(
+    val on: Boolean,
+    /** Percent (1-100); null: as it is. */
+    val brightness: Int? = null,
+    val kelvin: Int? = null,
+    /** Colour as hue (0-359) and saturation (0-100); used instead of [kelvin] when set. */
+    val hue: Int? = null,
+    val saturation: Int? = null
+) {
+    fun toJson(): JSONObject = JSONObject().put("on", on).apply {
+        brightness?.let { put("b", it) }
+        kelvin?.let { put("k", it) }
+        hue?.let { put("h", it) }
+        saturation?.let { put("s", it) }
+    }
+
+    companion object {
+        fun fromJson(json: JSONObject) = LightSetting(
+            json.optBoolean("on"),
+            json.optInt("b", -1).takeIf { it in 1..100 },
+            json.optInt("k", -1).takeIf { it in 1_000..10_000 },
+            json.optInt("h", -1).takeIf { it in 0..359 },
+            json.optInt("s", -1).takeIf { it in 0..100 }
+        )
+    }
+}
+
+/** The moments the light follows; SMOKE is the smoking break started with its button in the player. */
+internal enum class LightState { PLAY, PAUSE, STOP, SMOKE }
 
 /** The Home Assistant REST API (long-lived access token). */
 internal class HomeAssistantClient(baseUrl: String, private val token: String) {
@@ -57,15 +99,26 @@ internal class HomeAssistantClient(baseUrl: String, private val token: String) {
     /** True when address and token work. */
     suspend fun check(): Boolean = JSONObject(call("/api/")).has("message")
 
-    /** Lights, switches and scenes, sorted by name. */
+    /** Lights, switches and scenes with what they can do, sorted by name. */
     suspend fun entities(): List<HaEntity> {
         val states = JSONArray(call("/api/states"))
         return (0 until states.length()).mapNotNull { index ->
             val row = states.optJSONObject(index) ?: return@mapNotNull null
             val id = row.optString("entity_id")
             if (id.substringBefore('.') !in CONTROLLED_DOMAINS) return@mapNotNull null
-            val name = row.optJSONObject("attributes")?.optString("friendly_name")?.takeIf { it.isNotBlank() } ?: id
-            HaEntity(id, name)
+            val attributes = row.optJSONObject("attributes")
+            val name = attributes?.optString("friendly_name")?.takeIf { it.isNotBlank() } ?: id
+            val modes = attributes?.optJSONArray("supported_color_modes")?.let { list ->
+                (0 until list.length()).map { list.optString(it) }.toSet()
+            }.orEmpty()
+            HaEntity(
+                id, name,
+                dimmable = id.startsWith("light.") && modes.any { it != "onoff" },
+                temperature = "color_temp" in modes,
+                color = modes.any { it in COLOR_MODES },
+                minKelvin = attributes?.optInt("min_color_temp_kelvin", 2_000)?.takeIf { it > 0 } ?: 2_000,
+                maxKelvin = attributes?.optInt("max_color_temp_kelvin", 6_500)?.takeIf { it > 0 } ?: 6_500
+            )
         }.sortedBy { it.name.lowercase() }
     }
 
@@ -78,57 +131,103 @@ internal class HomeAssistantClient(baseUrl: String, private val token: String) {
         return Instant.now().plusSeconds(leadMinutes * 60L) >= setting
     }
 
-    /** Switches [entities] on (with [brightness] in percent for lights) or off. */
-    suspend fun switch(entities: Collection<String>, on: Boolean, brightness: Int? = null) {
-        for ((domain, ids) in entities.groupBy { it.substringBefore('.') }) {
-            val body = JSONObject().put("entity_id", JSONArray(ids))
+    /** Sets every light of [scene] as configured (each light its own call: they differ). */
+    suspend fun apply(scene: Map<String, LightSetting>) {
+        for ((id, setting) in scene) {
+            val domain = id.substringBefore('.')
+            val body = JSONObject().put("entity_id", id)
+            // Blinds: open or closed, or a position (kept in [LightSetting.brightness]) when restoring.
+            if (domain == "cover") {
+                val position = setting.brightness
+                if (position != null) call("/api/services/cover/set_cover_position", body.put("position", position))
+                else call("/api/services/cover/" + (if (setting.on) "open_cover" else "close_cover"), body)
+                continue
+            }
             val service = when {
-                domain == "scene" -> if (on) "turn_on" else continue
-                on -> "turn_on"
+                domain == "scene" -> if (setting.on) "turn_on" else continue
+                setting.on -> "turn_on"
                 else -> "turn_off"
             }
-            if (domain == "light" && on && brightness != null) body.put("brightness_pct", brightness)
-            if (domain == "light") body.put("transition", 1)
+            if (domain == "light") {
+                body.put("transition", 1)
+                if (setting.on) {
+                    setting.brightness?.let { body.put("brightness_pct", it) }
+                    if (setting.hue != null) body.put("hs_color", JSONArray().put(setting.hue).put(setting.saturation ?: 100))
+                    else setting.kelvin?.let { body.put("color_temp_kelvin", it) }
+                }
+            }
             call("/api/services/$domain/$service", body)
         }
     }
 
-    /** Dims lights to [percent]; switches and scenes have no brightness and are switched off. */
-    suspend fun dim(entities: Collection<String>, percent: Int) {
-        val lights = entities.filter { it.startsWith("light.") }
-        if (lights.isNotEmpty()) switch(lights, on = true, brightness = percent)
-        val others = entities.filter { it.startsWith("switch.") }
-        if (others.isNotEmpty()) switch(others, on = false)
+    /**
+     * How [ids] are right now, as settings that bring them back exactly: on/off, brightness,
+     * colour temperature or colour, blind position. Scenes cannot be undone and are left out.
+     */
+    suspend fun snapshot(ids: Collection<String>): Map<String, LightSetting> = buildMap {
+        for (id in ids) {
+            val domain = id.substringBefore('.')
+            if (domain == "scene") continue
+            val row = runCatching { JSONObject(call("/api/states/$id")) }.getOrNull() ?: continue
+            val state = row.optString("state")
+            val attributes = row.optJSONObject("attributes") ?: JSONObject()
+            put(id, when (domain) {
+                "cover" -> LightSetting(
+                    on = state != "closed",
+                    brightness = attributes.optInt("current_position", -1).takeIf { it in 0..100 }
+                )
+                "light" -> if (state != "on") LightSetting(false) else {
+                    val brightness = attributes.optInt("brightness", -1).takeIf { it >= 0 }?.let { ((it * 100 + 127) / 255).coerceIn(1, 100) }
+                    val hs = attributes.optJSONArray("hs_color")
+                    val mode = attributes.optString("color_mode")
+                    if (mode != "color_temp" && hs != null && hs.length() == 2) {
+                        LightSetting(true, brightness, hue = hs.optDouble(0).toInt().coerceIn(0, 359), saturation = hs.optDouble(1).toInt().coerceIn(0, 100))
+                    } else LightSetting(true, brightness, kelvin = attributes.optInt("color_temp_kelvin", -1).takeIf { it > 0 })
+                }
+                else -> LightSetting(state == "on")
+            })
+        }
     }
 
     companion object {
-        val CONTROLLED_DOMAINS = setOf("light", "switch", "scene")
+        val CONTROLLED_DOMAINS = setOf("light", "switch", "scene", "cover")
+        private val COLOR_MODES = setOf("hs", "xy", "rgb", "rgbw", "rgbww")
     }
 }
 
 /** When the rule applies. */
 internal enum class LightWindow { ALWAYS, DARK, HOURS }
 
-/** The light rule, stored in the "smart_home" preferences (the token is stored encrypted elsewhere). */
+/**
+ * The light rule, stored in the "smart_home" preferences (the token is stored encrypted elsewhere).
+ * Each state has its own scene: per light off, or on with brightness and colour; lights not in a
+ * scene are left alone in that state.
+ */
 internal data class LightRule(
     val enabled: Boolean = false,
     val url: String = "",
-    val entities: Set<String> = emptySet(),
+    val scenes: Map<LightState, Map<String, LightSetting>> = emptyMap(),
     val movies: Boolean = true,
     val series: Boolean = true,
     val live: Boolean = false,
-    /** 0: off; otherwise dim to this percent while playing. */
-    val playLevel: Int = 0,
-    /** Seconds after pausing until the light goes on; -1: leave it as it is. */
+    /** Seconds after pausing until the pause scene is set. */
     val pauseDelay: Int = 3,
-    val onStop: Boolean = true,
-    /** Brightness when the light goes on again (percent). */
-    val onLevel: Int = 100,
+    /** Seconds after stop or end until the stop scene is set (the next episode cancels it). */
+    val stopDelay: Int = 3,
+    /** Weekdays on which the rule applies (1 = Monday ... 7 = Sunday). */
+    val days: Set<Int> = (1..7).toSet(),
     val window: LightWindow = LightWindow.DARK,
     val fromMinutes: Int = 18 * 60,
     val toMinutes: Int = 6 * 60,
     val sunLead: Int = 30
 ) {
+    fun scene(state: LightState): Map<String, LightSetting> = scenes[state].orEmpty()
+
+    fun withSetting(state: LightState, id: String, setting: LightSetting?): LightRule {
+        val scene = scene(state).let { if (setting == null) it - id else it + (id to setting) }
+        return copy(scenes = scenes + (state to scene))
+    }
+
     fun applies(section: PortalSection?): Boolean = when (section) {
         PortalSection.MOVIES -> movies
         PortalSection.SERIES -> series
@@ -139,14 +238,17 @@ internal data class LightRule(
     fun save(preferences: SharedPreferences) = preferences.edit {
         putBoolean("enabled", enabled)
         putString("url", url)
-        putStringSet("entities", entities)
+        putString("scenes", JSONObject().apply {
+            scenes.forEach { (state, scene) ->
+                put(state.name, JSONObject().apply { scene.forEach { (id, setting) -> put(id, setting.toJson()) } })
+            }
+        }.toString())
         putBoolean("movies", movies)
         putBoolean("series", series)
         putBoolean("live", live)
-        putInt("play_level", playLevel)
         putInt("pause_delay", pauseDelay)
-        putBoolean("on_stop", onStop)
-        putInt("on_level", onLevel)
+        putInt("stop_delay", stopDelay)
+        putStringSet("days", days.map { it.toString() }.toSet())
         putString("window", window.name)
         putInt("from", fromMinutes)
         putInt("to", toMinutes)
@@ -154,22 +256,49 @@ internal data class LightRule(
     }
 
     companion object {
-        fun load(preferences: SharedPreferences) = LightRule(
-            enabled = preferences.getBoolean("enabled", false),
-            url = preferences.getString("url", "").orEmpty(),
-            entities = preferences.getStringSet("entities", null)?.toSet().orEmpty(),
-            movies = preferences.getBoolean("movies", true),
-            series = preferences.getBoolean("series", true),
-            live = preferences.getBoolean("live", false),
-            playLevel = preferences.getInt("play_level", 0),
-            pauseDelay = preferences.getInt("pause_delay", 3),
-            onStop = preferences.getBoolean("on_stop", true),
-            onLevel = preferences.getInt("on_level", 100),
-            window = LightWindow.entries.firstOrNull { it.name == preferences.getString("window", null) } ?: LightWindow.DARK,
-            fromMinutes = preferences.getInt("from", 18 * 60),
-            toMinutes = preferences.getInt("to", 6 * 60),
-            sunLead = preferences.getInt("sun_lead", 30)
-        )
+        fun load(preferences: SharedPreferences): LightRule {
+            val stored = preferences.getString("scenes", null)?.let { raw ->
+                runCatching {
+                    val json = JSONObject(raw)
+                    LightState.entries.associateWith { state ->
+                        val scene = json.optJSONObject(state.name) ?: JSONObject()
+                        scene.keys().asSequence().associateWith { LightSetting.fromJson(scene.getJSONObject(it)) }
+                    }
+                }.getOrNull()
+            }
+            return LightRule(
+                enabled = preferences.getBoolean("enabled", false),
+                url = preferences.getString("url", "").orEmpty(),
+                scenes = stored ?: earlierScenes(preferences),
+                movies = preferences.getBoolean("movies", true),
+                series = preferences.getBoolean("series", true),
+                live = preferences.getBoolean("live", false),
+                pauseDelay = preferences.getInt("pause_delay", 3).coerceIn(0, 60),
+                stopDelay = preferences.getInt("stop_delay", 3).coerceIn(0, 60),
+                days = preferences.getStringSet("days", null)?.mapNotNull { it.toIntOrNull()?.takeIf { day -> day in 1..7 } }?.toSet() ?: (1..7).toSet(),
+                window = LightWindow.entries.firstOrNull { it.name == preferences.getString("window", null) } ?: LightWindow.DARK,
+                fromMinutes = preferences.getInt("from", 18 * 60),
+                toMinutes = preferences.getInt("to", 6 * 60),
+                sunLead = preferences.getInt("sun_lead", 30)
+            )
+        }
+
+        /** The first version had one list of lights for all states: it becomes the three scenes. */
+        private fun earlierScenes(preferences: SharedPreferences): Map<LightState, Map<String, LightSetting>> {
+            val entities = preferences.getStringSet("entities", null).orEmpty()
+            if (entities.isEmpty()) return emptyMap()
+            val playLevel = preferences.getInt("play_level", 0)
+            val onLevel = preferences.getInt("on_level", 100)
+            val play = entities.associateWith {
+                if (playLevel > 0 && it.startsWith("light.")) LightSetting(true, playLevel) else LightSetting(false)
+            }
+            val on = entities.associateWith { LightSetting(true, onLevel.takeIf { _ -> it.startsWith("light.") }) }
+            return mapOf(
+                LightState.PLAY to play,
+                LightState.PAUSE to if (preferences.getInt("pause_delay", 3) < 0) emptyMap() else on,
+                LightState.STOP to if (preferences.getBoolean("on_stop", true)) on else emptyMap()
+            )
+        }
     }
 }
 
@@ -191,12 +320,12 @@ internal object LightAutomation {
     /** Lights, switches and scenes of the connected Home Assistant (null: not loaded yet). */
     var known by mutableStateOf<List<HaEntity>?>(null)
         private set
-    /** Last switch: on (true), dimmed (null) or off (false), and when (epoch ms). */
-    var last by mutableStateOf<Pair<Boolean?, Long>?>(null)
+    /** Last scene set, and when (epoch ms). */
+    var last by mutableStateOf<Pair<LightState, Long>?>(null)
         private set
     private var storage: PortalStorage? = null
-    /** StreamWatch dimmed or switched the light off and has not switched it on again. */
-    @Volatile private var dimmed = false
+    /** Area of the running playback (for pause and stop). */
+    @Volatile private var section0: PortalSection? = null
     private var pending: Job? = null
     private var playing = false
 
@@ -249,8 +378,8 @@ internal object LightAutomation {
         }
     }
 
-    fun testInBackground() {
-        scope.launch { runCatching { test() } }
+    fun testInBackground(state: LightState) {
+        scope.launch { runCatching { test(state) } }
     }
 
     fun disconnectInBackground() {
@@ -261,17 +390,14 @@ internal object LightAutomation {
         storage?.writeHomeAssistantToken(null)
         token = null
         known = null
-        update { it.copy(enabled = false, entities = emptySet()) }
+        update { it.copy(enabled = false) }
     }
 
-    /** Switches the chosen devices off and on again after 3 s, to see that it works. */
-    suspend fun test() {
-        val current = rule
+    /** Sets the scene of [state] now, to see how it looks. */
+    suspend fun test(state: LightState) {
         val client = client() ?: return
-        client.switch(current.entities, on = false)
-        delay(3_000)
-        client.switch(current.entities, on = true, brightness = current.onLevel)
-        last = true to System.currentTimeMillis()
+        client.apply(rule.scene(state))
+        last = state to System.currentTimeMillis()
     }
 
     fun update(change: (LightRule) -> LightRule) {
@@ -287,13 +413,8 @@ internal object LightAutomation {
 
     val connected: Boolean get() = client() != null
 
-    private fun ready(): Pair<LightRule, HomeAssistantClient>? {
-        val current = rule
-        if (!current.enabled || current.entities.isEmpty()) return null
-        return client()?.let { current to it }
-    }
-
-    private suspend fun active(current: LightRule, client: HomeAssistantClient): Boolean = when (current.window) {
+    private suspend fun active(current: LightRule, client: HomeAssistantClient): Boolean =
+        java.time.LocalDate.now().dayOfWeek.value in current.days && when (current.window) {
         LightWindow.ALWAYS -> true
         LightWindow.HOURS -> LocalTime.now().let { inHours(it.hour * 60 + it.minute, current.fromMinutes, current.toMinutes) }
         LightWindow.DARK -> client.dark(current.sunLead) ?: true
@@ -313,47 +434,96 @@ internal object LightAutomation {
         }
     }
 
-    /** The player started or stopped playing; [wanted]: it should play (false: paused by the user). */
-    fun onPlayer(isPlaying: Boolean, wanted: Boolean, section: PortalSection?) {
-        val (current, client) = ready() ?: return
-        if (isPlaying) {
-            playing = true
-            if (!current.applies(section)) return
-            run {
-                if (!active(current, client)) return@run
-                if (current.playLevel > 0) client.dim(current.entities, current.playLevel)
-                else client.switch(current.entities, on = false)
-                dimmed = true
-                last = (if (current.playLevel > 0) null else false) to System.currentTimeMillis()
-            }
-        } else if (!wanted && playing) {
-            // Paused (buffering keeps "wanted" and is ignored).
-            playing = false
-            if (!dimmed || current.pauseDelay < 0) return
-            run {
-                delay(current.pauseDelay * 1_000L)
-                client.switch(current.entities, on = true, brightness = current.onLevel)
-                dimmed = false
-                last = true to System.currentTimeMillis()
+    /** Sets the scene of [state] (lights not in it stay as they are). */
+    private suspend fun set(client: HomeAssistantClient, current: LightRule, state: LightState) {
+        val scene = current.scene(state)
+        if (scene.isEmpty()) return
+        client.apply(scene)
+        last = state to System.currentTimeMillis()
+    }
+
+    // ---- Smoking break: its own scene from the player button, undone with the next play ----
+
+    /** How the devices of the smoking break were before it (set back exactly with the next play). */
+    @Volatile private var smokeBefore: Map<String, LightSetting>? = null
+    private var smokeJob: Job? = null
+    /** The smoking break runs: its pause does not set the pause scene. */
+    @Volatile private var smoking = false
+
+    /** The button in the player is shown only when the smoking break has devices set up. */
+    val smokeReady: Boolean get() = connected && rule.scene(LightState.SMOKE).isNotEmpty()
+
+    /** Starts the smoking break (the caller pauses the player right after). Regardless of time and day. */
+    fun startSmoke() {
+        val client = client() ?: return
+        val scene = rule.scene(LightState.SMOKE)
+        if (scene.isEmpty() || smoking) return
+        smoking = true
+        pending?.cancel()
+        smokeJob = scope.launch {
+            try {
+                smokeBefore = client.snapshot(scene.keys)
+                client.apply(scene)
+                last = LightState.SMOKE to System.currentTimeMillis()
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                diagnostics?.let { AppDiagnostics.record(it, "light_failed ${(error as? HomeAssistantException)?.status ?: error.javaClass.simpleName}") }
             }
         }
     }
 
-    /** Playback stopped or ended. Waits a moment: the next episode may start right away. */
+    /** Ends a running smoking break: everything it changed goes back to how it was. */
+    private suspend fun endSmoke(client: HomeAssistantClient) {
+        if (!smoking) return
+        smoking = false
+        smokeJob?.join()
+        smokeJob = null
+        smokeBefore?.let { client.apply(it) }
+        smokeBefore = null
+    }
+
+    /** The player started or stopped playing; [wanted]: it should play (false: paused by the user). */
+    fun onPlayer(isPlaying: Boolean, wanted: Boolean, section: PortalSection?) {
+        val client = client() ?: return
+        val current = rule
+        if (isPlaying) {
+            playing = true
+            section0 = section
+            run {
+                endSmoke(client)
+                if (current.enabled && current.applies(section) && active(current, client)) set(client, current, LightState.PLAY)
+            }
+        } else if (!wanted && playing) {
+            // Paused (buffering keeps "wanted" and is ignored). Always sent, even when the light
+            // was switched by hand in between; not during the smoking break.
+            playing = false
+            if (smoking || !current.enabled || !current.applies(section ?: section0)) return
+            run {
+                delay(current.pauseDelay * 1_000L)
+                if (active(current, client)) set(client, current, LightState.PAUSE)
+            }
+        }
+    }
+
+    /** Playback stopped or ended. Waits as set: the next episode may start right away. */
     fun onStopped() {
+        val wasPlaying = playing || section0 != null
         playing = false
-        val (current, client) = ready() ?: return
-        if (!dimmed || !current.onStop) return
+        val client = client() ?: return
+        val current = rule
+        val section = section0
+        section0 = null
+        if (smoking) run { endSmoke(client) }
+        if (!wasPlaying || !current.enabled || !current.applies(section)) return
         run {
-            delay(STOP_DELAY_MS)
-            client.switch(current.entities, on = true, brightness = current.onLevel)
-            dimmed = false
-            last = true to System.currentTimeMillis()
+            endSmoke(client)
+            delay(current.stopDelay * 1_000L)
+            if (active(current, client)) set(client, current, LightState.STOP)
         }
     }
 
     private const val PREFERENCES = "smart_home"
-    private const val STOP_DELAY_MS = 4_000L
 }
 
 /**

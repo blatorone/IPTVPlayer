@@ -21,6 +21,8 @@ internal enum class GuideSize(val label: Int, val factor: Float) {
     fun next() = entries[(ordinal + 1) % entries.size]
 }
 
+internal val GUIDE_VEIL_STRENGTHS = listOf(20, 30, 40, 50, 60)
+
 /** The veil over the time already gone in the guide. */
 internal enum class GuideVeil(val label: Int) {
     LINE_COLOR(R.string.guide_veil_line_color),
@@ -56,7 +58,9 @@ internal data class GuideAppearance(
     val opacity: Int = 90,
     val closeSeconds: Int = 15,
     val nowColor: GuideNowColor = GuideNowColor.CYAN,
-    val veil: GuideVeil = GuideVeil.LINE_COLOR
+    val veil: GuideVeil = GuideVeil.LINE_COLOR,
+    /** How strongly the veil darkens (percent). */
+    val veilStrength: Int = 40
 ) {
     fun save(preferences: SharedPreferences?) {
         preferences?.edit()
@@ -67,7 +71,7 @@ internal data class GuideAppearance(
             ?.putBoolean("guide_schedule", showSchedule)?.putBoolean("guide_description", showDescription)
             ?.putBoolean("guide_keep_list", keepChannelList)?.putInt("guide_opacity", opacity)
             ?.putInt("guide_close_seconds", closeSeconds)?.putString("guide_now_color", nowColor.name)
-            ?.putString("guide_veil", veil.name)?.apply()
+            ?.putString("guide_veil", veil.name)?.putInt("guide_veil_strength", veilStrength)?.apply()
     }
 }
 
@@ -83,7 +87,8 @@ internal fun readGuideAppearance(preferences: SharedPreferences?): GuideAppearan
         preferences?.getInt("guide_opacity", 90)?.coerceIn(60, 100) ?: 90,
         preferences?.getInt("guide_close_seconds", 15)?.coerceIn(0, 60) ?: 15,
         GuideNowColor.entries.firstOrNull { it.name == preferences?.getString("guide_now_color", null) } ?: GuideNowColor.CYAN,
-        GuideVeil.entries.firstOrNull { it.name == preferences?.getString("guide_veil", null) } ?: GuideVeil.LINE_COLOR
+        GuideVeil.entries.firstOrNull { it.name == preferences?.getString("guide_veil", null) } ?: GuideVeil.LINE_COLOR,
+        (preferences?.getInt("guide_veil_strength", 40) ?: 40).takeIf { it in GUIDE_VEIL_STRENGTHS } ?: 40
     )
 }
 
@@ -120,6 +125,11 @@ internal fun GuideAppearanceDialog(
                     SettingRow(stringResource(R.string.guide_setting_value, stringResource(R.string.guide_veil),
                         stringResource(appearance.veil.label))) {
                         onChange(appearance.copy(veil = appearance.veil.next()))
+                    }
+                    if (appearance.veil != GuideVeil.OFF) SettingRow(stringResource(R.string.guide_setting_value,
+                        stringResource(R.string.guide_veil_strength), "${appearance.veilStrength} %")) {
+                        val steps = GUIDE_VEIL_STRENGTHS
+                        onChange(appearance.copy(veilStrength = steps[(steps.indexOf(appearance.veilStrength) + 1) % steps.size]))
                     }
                 } else {
                     AppearanceSize(R.string.guide_list_width, appearance.listWidth) { onChange(appearance.copy(listWidth = it)) }

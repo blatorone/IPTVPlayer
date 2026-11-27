@@ -5932,6 +5932,9 @@ private fun PlayerHome(
                 add(RemoteEntry.Choice("guideVeil", grid, text(R.string.guide_veil),
                     options(GuideVeil.entries) { it.label }, { guideAppearance.veil.name }
                 ) { value -> appearance { it.copy(veil = GuideVeil.valueOf(value)) } })
+                add(RemoteEntry.Choice("guideVeilStrength", grid, text(R.string.guide_veil_strength),
+                    GUIDE_VEIL_STRENGTHS.map { RemoteOption(it.toString(), "$it %") }, { guideAppearance.veilStrength.toString() }
+                ) { value -> appearance { it.copy(veilStrength = value.toInt()) } })
                 add(size("listWidth", list, R.string.guide_list_width, { it.listWidth }) { a, v -> a.copy(listWidth = v) })
                 add(shown("listSchedule", list, R.string.guide_show_schedule, { it.showSchedule }) { a, v -> a.copy(showSchedule = v) })
                 add(shown("listDescription", list, R.string.guide_show_description, { it.showDescription }) { a, v ->

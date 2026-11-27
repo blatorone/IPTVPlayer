@@ -947,4 +947,5 @@
     <string name="guide_veil">Zasłona nad minionym czasem</string>
     <string name="guide_veil_line_color">Kolor linii</string>
     <string name="guide_veil_dark">Ciemna</string>
+    <string name="guide_veil_strength">Siła zasłony</string>
 </resources>

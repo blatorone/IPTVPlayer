@@ -942,4 +942,5 @@
     <string name="guide_veil">Voile sur le temps écoulé</string>
     <string name="guide_veil_line_color">Couleur de la ligne</string>
     <string name="guide_veil_dark">Sombre</string>
+    <string name="guide_veil_strength">Intensité du voile</string>
 </resources>

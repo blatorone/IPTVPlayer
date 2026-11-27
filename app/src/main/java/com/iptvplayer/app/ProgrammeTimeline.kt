@@ -204,8 +204,8 @@ internal fun ProgrammeTimeline(
     // "Linienfarbe": darkened and lightly tinted in the line's colour, so the time gone is clearly
     // set apart but still readable; "Dunkel": darkened only.
     val veil = when (appearance.veil) {
-        GuideVeil.LINE_COLOR -> nowColor.copy(alpha = 0.14f).compositeOver(Color.Black.copy(alpha = 0.40f))
-        GuideVeil.DARK -> Color.Black.copy(alpha = 0.45f)
+        GuideVeil.LINE_COLOR -> nowColor.copy(alpha = 0.14f).compositeOver(Color.Black.copy(alpha = appearance.veilStrength / 100f))
+        GuideVeil.DARK -> Color.Black.copy(alpha = appearance.veilStrength / 100f)
         GuideVeil.OFF -> null
     }
     Column(

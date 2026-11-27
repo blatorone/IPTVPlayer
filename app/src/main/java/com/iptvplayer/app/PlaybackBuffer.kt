@@ -34,6 +34,22 @@ internal fun chosenBuffer(context: Context): BufferLevel? {
     return BufferLevel.entries.firstOrNull { it.name == preferences.getString(BUFFER_LEVEL, null) } ?: BufferLevel.MEDIUM
 }
 
+/** Buffer off (null) or one of the sizes; applies after a restart of the app. */
+internal fun setChosenBuffer(context: Context, level: BufferLevel?) {
+    context.getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE).edit()
+        .putBoolean(BUFFER_ENABLED, level != null)
+        .apply { if (level != null) putString(BUFFER_LEVEL, level.name) }
+        .apply()
+}
+
+/** Timeshift off (null) or on with this many minutes. */
+internal fun setTimeshiftMinutes(context: Context, minutes: Int?) {
+    context.getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE).edit()
+        .putBoolean("timeshift_enabled", minutes != null)
+        .apply { if (minutes != null) putInt("timeshift_minutes", minutes) }
+        .apply()
+}
+
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 internal fun bufferLoadControl(level: BufferLevel?): DefaultLoadControl =
     if (level == null) DefaultLoadControl()

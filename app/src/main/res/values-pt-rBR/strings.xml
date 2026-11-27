@@ -935,4 +935,6 @@
     <string name="smooth_switch_hint">Se o stream atual tiver problemas, o app já grava o portal reserva em segundo plano e, na troca, continua do mesmo ponto em vez de repetir ou pular segundos. Ele aprende a diferença entre os portais com trocas anteriores. Durante os problemas usa o dobro de dados por pouco tempo. Desligado: troca imediata como antes.</string>
     <string name="smooth_switch_weak_device">Este aparelho pode ser fraco demais para isso – use por sua conta e risco.</string>
     <string name="timeshift_live">Ao vivo</string>
+    <string name="player_jump_back">Voltar 10 minutos</string>
+    <string name="player_jump_forward">Avançar 10 minutos</string>
 </resources>

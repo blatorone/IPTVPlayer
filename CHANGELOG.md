@@ -2,6 +2,10 @@
 
 ## 1.0.99
 
+- Wiedergabeleiste neu geordnet wie bei Netflix und Prime: vorherige Folge – zurückspulen – Play/Pause – Stopp – vorspulen – nächste Folge, alle im selben runden Stil mit neuen Symbolen. Bei Filmen und Live-TV mit Timeshift springen die äußeren Knöpfe 10 Minuten zurück bzw. vor; was nicht geht, wird ausgeblendet.
+- Handy-Seite: Puffer, Timeshift und Fließender Portalwechsel lassen sich jetzt auch vom Handy aus einstellen.
+- Neue App-Sprachen: Tschechisch und Dänisch.
+- Aufgeräumt: alte, nicht mehr erreichbare Listen (Merkliste/Verlauf) entfernt; interne Umstellung, damit der Player wieder Platz für neue Funktionen hat.
 - Live-TV: Springt oder hängt ein Stream, wird genau dieser Stream (z. B. die FHD-Variante eines Portals) für 6 Stunden zuletzt versucht – nicht das ganze Portal. Andere Varianten desselben Portals bleiben vorne. Gute und schlechte Erfahrungen werden jetzt je Variante gemerkt.
 - Live-TV: Als Ersatz kommt, wenn vorhanden, immer ein Stream von einem anderen Portal dran. Ähnlich gut laufende Streams werden gemischt, damit die App alle kennenlernt; ein klar besserer bleibt vorne. Sind alle Streams durch, versucht die App noch eine zweite Runde, bevor die Meldung kommt.
 - Fließender Portalwechsel (Schalter, weiterhin experimentell): Zeigt der laufende Stream Störungen, nimmt die App das Ersatzportal schon im Hintergrund auf (höchstens 90 Sekunden, wird danach oder bei Erholung gelöscht) und macht beim Wechsel an derselben Stelle weiter – auch wenn das Ersatzportal voraus ist. Den Abstand zwischen zwei Portalen lernt sie aus sicheren Messungen; liegt das neue Portal zurück, hält sie das letzte Bild so lange an. Ist der Schalter aus, wird wie bisher sofort gewechselt.

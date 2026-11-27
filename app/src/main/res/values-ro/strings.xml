@@ -935,4 +935,6 @@
     <string name="smooth_switch_hint">Când fluxul curent are probleme, aplicația înregistrează deja în fundal portalul de rezervă și la schimbare continuă din același loc, în loc să repete sau să sară secunde. Diferența dintre portaluri o învață din schimbările anterioare. În timpul problemelor folosește scurt date duble. Oprit: trecere imediată ca înainte.</string>
     <string name="smooth_switch_weak_device">Acest dispozitiv poate fi prea slab pentru asta – folosire pe propriul risc.</string>
     <string name="timeshift_live">Live</string>
+    <string name="player_jump_back">Înapoi 10 minute</string>
+    <string name="player_jump_forward">Înainte 10 minute</string>
 </resources>

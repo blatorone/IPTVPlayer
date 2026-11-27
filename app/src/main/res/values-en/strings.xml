@@ -930,4 +930,6 @@
     <string name="smooth_switch_hint">When the running stream shows trouble, the app already records the stand-in portal in the background and continues at the same spot when switching, instead of repeating or skipping seconds. It learns the distance between portals from earlier switches. Uses double data briefly during trouble. Off: immediate switch as before.</string>
     <string name="smooth_switch_weak_device">This device may be too weak for this – use at your own risk.</string>
     <string name="timeshift_live">Live</string>
+    <string name="player_jump_back">Back 10 minutes</string>
+    <string name="player_jump_forward">Forward 10 minutes</string>
 </resources>

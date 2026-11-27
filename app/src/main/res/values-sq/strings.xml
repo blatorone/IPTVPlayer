@@ -930,4 +930,6 @@
     <string name="smooth_switch_hint">Kur transmetimi aktual ka probleme, aplikacioni e regjistron që në sfond portalin rezervë dhe gjatë ndërrimit vazhdon nga i njëjti vend, pa përsëritur apo kapërcyer sekonda. Diferencën mes portaleve e mëson nga ndërrimet e mëparshme. Gjatë problemeve përdor shkurt të dhëna të dyfishta. Joaktiv: ndërrim i menjëhershëm si më parë.</string>
     <string name="smooth_switch_weak_device">Kjo pajisje mund të jetë shumë e dobët për këtë – përdorim me përgjegjësinë tënde.</string>
     <string name="timeshift_live">Live</string>
+    <string name="player_jump_back">10 minuta prapa</string>
+    <string name="player_jump_forward">10 minuta përpara</string>
 </resources>

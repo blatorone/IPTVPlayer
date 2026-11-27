@@ -930,4 +930,6 @@
     <string name="smooth_switch_hint">Zeigt der laufende Stream Störungen, nimmt die App das Ersatzportal schon im Hintergrund auf und macht beim Wechsel an derselben Stelle weiter, statt Sekunden zu wiederholen oder zu überspringen. Den Abstand zwischen den Portalen lernt sie aus früheren Wechseln. Braucht bei Störungen kurz doppelte Daten. Aus: sofortiger Wechsel wie bisher.</string>
     <string name="smooth_switch_weak_device">Dieses Gerät ist dafür eventuell zu schwach – Nutzung auf eigene Gefahr.</string>
     <string name="timeshift_live">Live</string>
+    <string name="player_jump_back">10 Minuten zurück</string>
+    <string name="player_jump_forward">10 Minuten vor</string>
 </resources>

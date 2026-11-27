@@ -935,4 +935,6 @@
     <string name="smooth_switch_hint">Se lo stream in corso ha problemi, l\'app registra già in background il portale di riserva e al cambio riprende dallo stesso punto, senza ripetere né saltare secondi. Impara la differenza tra i portali dai passaggi precedenti. Durante i problemi usa per poco il doppio dei dati. Disattivato: passaggio immediato come prima.</string>
     <string name="smooth_switch_weak_device">Questo dispositivo potrebbe essere troppo debole: uso a proprio rischio.</string>
     <string name="timeshift_live">Diretta</string>
+    <string name="player_jump_back">Indietro di 10 minuti</string>
+    <string name="player_jump_forward">Avanti di 10 minuti</string>
 </resources>

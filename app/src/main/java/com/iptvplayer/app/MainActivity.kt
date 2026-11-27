@@ -524,6 +524,8 @@ private const val REMOTE_PIN_ATTEMPTS = 5
 /** Live-TV watchdog: long buffering or jumps only count within this window. */
 private const val STALL_WINDOW_MS = 3 * 60_000L
 private const val LONG_JUMP_BACK_MS = 10_000L
+/** The outer play buttons jump this far in films and timeshift. */
+private const val BIG_JUMP_MS = 10 * 60_000L
 /** Picture (or picture and sound) standing still this long while "playing" counts as a hang. */
 private const val FROZEN_LIMIT_MS = 8_000L
 /** A stream that played this long without trouble is remembered as a good one for the channel. */
@@ -644,7 +646,6 @@ private fun PlaybackAttempt.nextIndex(): Int? = when {
     else -> null
 }
 
-private enum class SeriesActivityView { CONTINUE, UPCOMING, HISTORY, WATCHLIST }
 
 /** One poster in a row of "Mein Bereich". */
 private class MyAreaCard(
@@ -700,6 +701,57 @@ private fun EpisodeTimingAdjustment(
  * reference instead of a MutableState each (ART on Android 11 rejects lambdas with >255 captures).
  */
 private class PlayerHomeFlags {
+    // Moved out of PlayerHome: fewer values captured by its lambdas (ART limit 255).
+    var sharedPinQuestion by mutableStateOf<SharedPinQuestion?>(null)
+    var pinRequest by mutableStateOf<PinRequest?>(null)
+    var portalCategoriesFor by mutableStateOf<SavedPortal?>(null)
+    var traktDeviceCode by mutableStateOf<TraktDeviceCode?>(null)
+    var traktStatus by mutableStateOf<String?>(null)
+    var traktPlaybackNotice by mutableStateOf<String?>(null)
+    var portalRefreshNotice by mutableStateOf<String?>(null)
+    var castOf by mutableStateOf<Triple<PortalSection, PortalTitle, Int?>?>(null)
+    var castPerson by mutableStateOf<CastMember?>(null)
+    var castPreview by mutableStateOf<Pair<PortalTitle, List<CastMember>>?>(null)
+    var guideAppearancePage by mutableStateOf<GuideAppearancePage?>(null)
+    var playbackVideoSurface by mutableStateOf<SurfaceView?>(null)
+    var nextEpisodeName by mutableStateOf("")
+    var nextEpisodeSeconds by mutableStateOf<Int?>(null)
+    var interruptedEpisode by mutableStateOf(false)
+    var advancingEpisode by mutableStateOf(false)
+    var watchingPrompt by mutableStateOf(false)
+    var skipIntroTo by mutableStateOf<Long?>(null)
+    var introOfferClosed by mutableStateOf<Pair<String, Long>?>(null)
+    var outroOfferClosed by mutableStateOf<Pair<String, Long>?>(null)
+    var skipIsOutro by mutableStateOf(false)
+    var pendingSeriesEpisode by mutableStateOf<Pair<PortalTitle, EpisodeResume>?>(null)
+    var pendingMovie by mutableStateOf<WatchedMovie?>(null)
+    var currentTraktPlayback by mutableStateOf<TraktMedia?>(null)
+    var portalPickerFor by mutableStateOf<Pair<PortalSection, PortalTitle>?>(null)
+    var categoryMenu by mutableStateOf<Pair<PortalSection, String?>?>(null)
+    var restoreLiveFocus by mutableStateOf(false)
+    var attemptSerial by mutableStateOf(0L)
+    var playbackSourceBadge by mutableStateOf<Pair<String, String>?>(null)
+    var triedHls by mutableStateOf(false)
+    var batchProgress by mutableStateOf<Pair<Int, Int>?>(null)
+    var batchSummary by mutableStateOf<Pair<Int, Int>?>(null)
+    var selectedRefreshSources by mutableStateOf<Set<String>>(emptySet())
+    var sourceError by mutableStateOf<Int?>(null)
+    var importStatuses by mutableStateOf(emptyMap<PortalSection, ImportStatus>())
+    var metadataNextPages by mutableStateOf(emptyMap<String, Int>())
+    var catalogLoading by mutableStateOf(emptySet<PortalSection>())
+    var catalogErrors by mutableStateOf(emptySet<PortalSection>())
+    var catalogueReturnTitle by mutableStateOf<PortalTitle?>(null)
+    var episodeError by mutableStateOf(false)
+    var sourceContentCounts by mutableStateOf<Map<String, PortalContentCounts>>(emptyMap())
+    var combinedContentCounts by mutableStateOf(PortalContentCounts(0, 0, 0))
+    var diagnosticsStatus by mutableStateOf<String?>(null)
+    var startupPortalRefresh by mutableStateOf<Pair<Int, Int>?>(null)
+    var startupPortalCheck by mutableStateOf<Pair<Int, Int>?>(null)
+    var storageError by mutableStateOf<Int?>(null)
+    var epgFetchedAt by mutableStateOf(emptyMap<String, Long>())
+    var watchStatusAction by mutableStateOf<((Boolean) -> Unit)?>(null)
+    var fullscreenOverlayContent by mutableStateOf(GuidePanel.CHANNELS)
+    var guideProgramme by mutableStateOf<Pair<StalkerChannel, PortalProgramme>?>(null)
     var metadataSettingsOpen by mutableStateOf<Boolean>(false)
     var traktSettingsOpen by mutableStateOf<Boolean>(false)
     var kidsProtectionOpen by mutableStateOf<Boolean>(false)
@@ -827,11 +879,6 @@ private fun PlayerHome(
     var seriesActivity by remember(progressPreferences) {
         mutableStateOf(decodeSeriesActivity(progressPreferences?.getString("series_activity", null)))
     }
-    var seriesActivityView by rememberSaveable { mutableStateOf<SeriesActivityView?>(null) }
-    var movieHistoryOpen by rememberSaveable { mutableStateOf(false) }
-    /** The film history shows only started, unfinished films ("Weiter schauen"). */
-    var movieContinueOpen by rememberSaveable { mutableStateOf(false) }
-    var movieWatchlistOpen by rememberSaveable { mutableStateOf(false) }
     /** "Mein Bereich" of films or series: continue watching, watchlist and recently watched. */
     var myAreaSection by rememberSaveable { mutableStateOf<PortalSection?>(null) }
     var movieHistory by remember(progressPreferences) {
@@ -844,39 +891,29 @@ private fun PlayerHome(
     var traktSession by remember { mutableStateOf<TraktSession?>(null) }
     /** The user's own Trakt API app; needed before a (new) account can be connected. */
     var traktApp by remember { mutableStateOf<TraktApp?>(null) }
-    var sharedPinQuestion by remember { mutableStateOf<SharedPinQuestion?>(null) }
-    var pinRequest by remember { mutableStateOf<PinRequest?>(null) }
     var exitConfirmation by remember(preferences) {
         val saved = preferences?.getString("exit_confirmation", null)
         mutableStateOf(ExitConfirmation.entries.firstOrNull { it.name == saved } ?: ExitConfirmation.DIALOG)
     }
-    var portalCategoriesFor by remember { mutableStateOf<SavedPortal?>(null) }
     // Settings: whether focus is in the rows on the right, and a request to move it there.
     var settingsContentFocusRequest by remember { mutableIntStateOf(0) }
     val settingsContentFocus = remember { FocusRequester() }
     val settingsFocusMemory = remember { SettingsFocusMemory() }
     val ageRatings = remember { HashMap<String, Int?>() }
-    var traktDeviceCode by remember { mutableStateOf<TraktDeviceCode?>(null) }
-    var traktStatus by remember { mutableStateOf<String?>(null) }
-    var traktPlaybackNotice by remember { mutableStateOf<String?>(null) }
-    var portalRefreshNotice by remember { mutableStateOf<String?>(null) }
     val playbackNoticeHost = remember { androidx.compose.material3.SnackbarHostState() }
-    LaunchedEffect(traktPlaybackNotice) {
-        val notice = traktPlaybackNotice ?: return@LaunchedEffect
+    LaunchedEffect(ui.traktPlaybackNotice) {
+        val notice = ui.traktPlaybackNotice ?: return@LaunchedEffect
         playbackNoticeHost.showSnackbar(notice)
-        traktPlaybackNotice = null
+        ui.traktPlaybackNotice = null
     }
-    LaunchedEffect(portalRefreshNotice) {
-        val notice = portalRefreshNotice ?: return@LaunchedEffect
+    LaunchedEffect(ui.portalRefreshNotice) {
+        val notice = ui.portalRefreshNotice ?: return@LaunchedEffect
         playbackNoticeHost.showSnackbar(notice)
-        portalRefreshNotice = null
+        ui.portalRefreshNotice = null
     }
     var newEpisodesNotice by remember { mutableStateOf<String?>(null) }
-    var castOf by remember { mutableStateOf<Triple<PortalSection, PortalTitle, Int?>?>(null) }
     val castReturns = remember { mutableStateListOf<CastReturn>() }
-    var castPerson by remember { mutableStateOf<CastMember?>(null) }
     /** Cast found for the open details title; the "Besetzung" button only appears when it is not empty. */
-    var castPreview by remember { mutableStateOf<Pair<PortalTitle, List<CastMember>>?>(null) }
     /** Keys of all films watched according to Trakt (null until the first full import). */
     var traktWatchedMovieKeys by remember(progressPreferences) {
         mutableStateOf(progressPreferences?.getStringSet("trakt_watched_movie_keys", null)?.toSet())
@@ -901,7 +938,6 @@ private fun PlayerHome(
             it.name == preferences?.getString("provider_category_style", null)
         } ?: ProviderCategoryStyle.BOTH)
     }
-    var guideAppearancePage by remember { mutableStateOf<GuideAppearancePage?>(null) }
     var guideAppearance by remember(preferences) { mutableStateOf(readGuideAppearance(preferences)) }
     var useXmlTv by remember(preferences) { mutableStateOf(preferences?.getBoolean("xmltv_enabled", false) ?: false) }
     var epgAtStartup by remember(preferences) { mutableStateOf(preferences?.getBoolean("epg_at_startup", true) ?: true) }
@@ -983,12 +1019,9 @@ private fun PlayerHome(
         }
     }
     var fullscreenVideoSurface by remember { mutableStateOf<SurfaceView?>(null) }
-    var playbackVideoSurface by remember { mutableStateOf<SurfaceView?>(null) }
     var detectedTiming by remember { mutableStateOf<Pair<String, EpisodeTiming>?>(null) }
     var nextEpisodeAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     var previousEpisodeAction by remember { mutableStateOf<(() -> Unit)?>(null) }
-    var nextEpisodeName by remember { mutableStateOf("") }
-    var nextEpisodeSeconds by remember { mutableStateOf<Int?>(null) }
     var checkSeriesInactivity by remember(preferences) {
         mutableStateOf(preferences?.getBoolean("check_series_inactivity", true) ?: true)
     }
@@ -996,22 +1029,12 @@ private fun PlayerHome(
         mutableIntStateOf((preferences?.getInt("inactive_episode_limit", 3) ?: 3).coerceIn(1, 10))
     }
     var silentEpisodes by remember { mutableIntStateOf(0) }
-    var interruptedEpisode by remember { mutableStateOf(false) }
-    var advancingEpisode by remember { mutableStateOf(false) }
-    var watchingPrompt by remember { mutableStateOf(false) }
-    var skipIntroTo by remember { mutableStateOf<Long?>(null) }
     /** Media item whose skip-intro offer was used or dismissed; it is not offered again for it. */
     /**
      * Media item and skip target up to which the skip-intro offer was used (or Long.MAX_VALUE
      * after Back). It returns only if the opening turns out to end clearly later.
      */
-    var introOfferClosed by remember { mutableStateOf<Pair<String, Long>?>(null) }
-    var outroOfferClosed by remember { mutableStateOf<Pair<String, Long>?>(null) }
     /** Whether the current skip offer is for end credits rather than the opening. */
-    var skipIsOutro by remember { mutableStateOf(false) }
-    var pendingSeriesEpisode by remember { mutableStateOf<Pair<PortalTitle, EpisodeResume>?>(null) }
-    var pendingMovie by remember { mutableStateOf<WatchedMovie?>(null) }
-    var currentTraktPlayback by remember { mutableStateOf<TraktMedia?>(null) }
     var countries by remember(preferences) {
         mutableStateOf(
             preferences?.getString("countryOrder", null)?.split(',')?.filter { it.isNotBlank() }?.toSet()
@@ -1038,10 +1061,8 @@ private fun PlayerHome(
     }
     // Portal chosen on a film's or series' page (title key -> portal), kept while the app runs.
     val titlePortalChoices = remember { mutableStateMapOf<String, String>() }
-    var portalPickerFor by remember { mutableStateOf<Pair<PortalSection, PortalTitle>?>(null) }
     // Media item whose sound was already checked at start (a stream without sound switches portal).
     var audioCheckedFor by remember { mutableStateOf<String?>(null) }
-    var categoryMenu by remember { mutableStateOf<Pair<PortalSection, String?>?>(null) }
     val categoryOrders = remember { mutableStateMapOf<String, List<String>>() }
     var details by remember { mutableStateOf<Pair<PortalSection, PortalTitle>?>(null) }
     var favorites by remember(preferences, separateKidsData) {
@@ -1060,7 +1081,6 @@ private fun PlayerHome(
     var lastLiveCategory by remember(preferences) {
         mutableStateOf(preferences?.getString("last_live_category", null))
     }
-    var restoreLiveFocus by remember { mutableStateOf(false) }
     val categoryScroll = rememberLazyListState()
     val guideScroll = rememberLazyListState()
     val guideState = rememberSaveableStateHolder()
@@ -1074,8 +1094,6 @@ private fun PlayerHome(
     var playing by remember { mutableStateOf<StalkerChannel?>(null) }
     var playbackSelection by remember { mutableStateOf<PlaybackSelection?>(null) }
     var playbackAttempt by remember { mutableStateOf<PlaybackAttempt?>(null) }
-    var attemptSerial by remember { mutableStateOf(0L) }
-    var playbackSourceBadge by remember { mutableStateOf<Pair<String, String>?>(null) }
     var lastBadgedAttempt by remember { mutableStateOf<String?>(null) }
     var buffering by remember { mutableStateOf(false) }
     var programmeChannel by remember { mutableStateOf<StalkerChannel?>(null) }
@@ -1092,23 +1110,16 @@ private fun PlayerHome(
     var startupInfoVisible by remember { mutableStateOf(fullscreenAtStart) }
     val appUpdates = rememberAppUpdates()
     var lastBack by remember { mutableStateOf(0L) }
-    var triedHls by remember { mutableStateOf(false) }
     /** When the position was last moved on purpose (seek, reload), so the loop check ignores it. */
     val playerPositionResetAt = remember { java.util.concurrent.atomic.AtomicLong(0L) }
     /** When a running Live-TV stream was last reloaded after a short network error. */
     var liveRetryAt by remember { mutableStateOf(0L) }
     var connecting by remember { mutableStateOf(false) }
-    var batchProgress by remember { mutableStateOf<Pair<Int, Int>?>(null) }
-    var batchSummary by remember { mutableStateOf<Pair<Int, Int>?>(null) }
-    var selectedRefreshSources by remember { mutableStateOf<Set<String>>(emptySet()) }
     var playbackJob by remember { mutableStateOf<Job?>(null) }
-    var sourceError by remember { mutableStateOf<Int?>(null) }
-    var importStatuses by remember { mutableStateOf(emptyMap<PortalSection, ImportStatus>()) }
     var catalogSession by remember { mutableStateOf<Pair<StalkerPortal, String?>?>(null) }
     var catalogs by remember { mutableStateOf(emptyMap<PortalSection, PortalCatalog>()) }
     var selectedGroup by remember { mutableStateOf<Pair<PortalSection, PortalGroup>?>(null) }
     var groupCatalog by remember { mutableStateOf<PortalCatalog?>(null) }
-    var metadataNextPages by remember { mutableStateOf(emptyMap<String, Int>()) }
     var metadataTitles by remember {
         mutableStateOf(emptyMap<Int, Pair<PortalTitle, List<SourceItem<PortalTitle>>>>())
     }
@@ -1116,8 +1127,6 @@ private fun PlayerHome(
     var groupVariants by remember { mutableStateOf(emptyMap<PortalTitle, List<SourceItem<PortalTitle>>>()) }
     var searchedVariants by remember { mutableStateOf(emptyMap<PortalTitle, List<SourceItem<PortalTitle>>>()) }
     var groupJob by remember { mutableStateOf<Job?>(null) }
-    var catalogLoading by remember { mutableStateOf(emptySet<PortalSection>()) }
-    var catalogErrors by remember { mutableStateOf(emptySet<PortalSection>()) }
     var playbackError by remember { mutableStateOf<Int?>(null) }
     var vodSection by remember { mutableStateOf<PortalSection?>(null) }
     val vodPlaybackViews = remember(preferences) {
@@ -1149,16 +1158,12 @@ private fun PlayerHome(
     }
     var openedSeason by remember { mutableStateOf<PortalSeason?>(null) }
     val seriesDetailScroll = rememberLazyListState()
-    var catalogueReturnTitle by remember { mutableStateOf<PortalTitle?>(null) }
     var episodeVariants by remember { mutableStateOf(emptyMap<PortalTitle, List<SourceItem<PortalTitle>>>()) }
-    var episodeError by remember { mutableStateOf(false) }
     var episodeJob by remember { mutableStateOf<Job?>(null) }
     var address by remember { mutableStateOf("") }
     var mac by remember { mutableStateOf("") }
     var storedSource by remember { mutableStateOf<SavedPortal?>(null) }
     var savedSources by remember { mutableStateOf(emptyList<SavedPortal>()) }
-    var sourceContentCounts by remember { mutableStateOf<Map<String, PortalContentCounts>>(emptyMap()) }
-    var combinedContentCounts by remember { mutableStateOf(PortalContentCounts(0, 0, 0)) }
     val sourceContentKeys = savedSources.map { source ->
         listOf(
             source.identity, source.enabled, System.identityHashCode(source.channels),
@@ -1192,14 +1197,13 @@ private fun PlayerHome(
                 mergedCount(PortalSection.MOVIES), mergedCount(PortalSection.SERIES)
             )
         }
-        sourceContentCounts = counts.first
-        combinedContentCounts = counts.second
+        ui.sourceContentCounts = counts.first
+        ui.combinedContentCounts = counts.second
     }
     var diagnosticsTree by remember(context) {
         mutableStateOf(context.getSharedPreferences("diagnostics_settings", Context.MODE_PRIVATE)
             .getString("tree_uri", null)?.let(Uri::parse))
     }
-    var diagnosticsStatus by remember { mutableStateOf<String?>(null) }
     val chooseDiagnosticsFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
             val permission = android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
@@ -1210,16 +1214,16 @@ private fun PlayerHome(
                     .edit().putString("tree_uri", uri.toString()).apply()
                 diagnosticsTree = uri
                 AppDiagnostics.record(context, "diagnostics_folder_selected")
-                diagnosticsStatus = context.getString(R.string.diagnostics_folder_selected)
+                ui.diagnosticsStatus = context.getString(R.string.diagnostics_folder_selected)
             } else {
-                diagnosticsStatus = context.getString(R.string.diagnostics_export_failed)
+                ui.diagnosticsStatus = context.getString(R.string.diagnostics_export_failed)
             }
         }
     }
     val saveDiagnosticsFile = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
         if (uri != null) runCatching { AppDiagnostics.exportToDocument(context, uri) }
-            .onSuccess { diagnosticsStatus = context.getString(R.string.diagnostics_export_complete) }
-            .onFailure { diagnosticsStatus = context.getString(R.string.diagnostics_export_failed) }
+            .onSuccess { ui.diagnosticsStatus = context.getString(R.string.diagnostics_export_complete) }
+            .onFailure { ui.diagnosticsStatus = context.getString(R.string.diagnostics_export_failed) }
     }
     val secondarySessions = remember { mutableMapOf<String, StalkerPortal>() }
     val sourcesForBrowsing = remember(sourceContentKeys, storedSource?.identity, mergeSources) {
@@ -1279,8 +1283,6 @@ private fun PlayerHome(
     var editing by remember { mutableStateOf(false) }
     var initialPortalPromptDismissed by rememberSaveable { mutableStateOf(false) }
     var restoring by remember { mutableStateOf(storage != null) }
-    var startupPortalRefresh by remember { mutableStateOf<Pair<Int, Int>?>(null) }
-    var startupPortalCheck by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var autoDisableUnavailablePortals by remember(preferences) {
         mutableStateOf(preferences?.getBoolean("auto_disable_unavailable_portals", true) ?: true)
     }
@@ -1290,7 +1292,6 @@ private fun PlayerHome(
         expiryLead = lead
         preferences?.edit()?.putString("expiry_lead", lead.key)?.apply()
     }
-    var storageError by remember { mutableStateOf<Int?>(null) }
     val detailMetadata by produceState<TmdbTitle?>(null, metadataClient, details, mergeSources, traktSession?.username) {
         value = null
         if (!mergeSources || traktSession != null) return@produceState
@@ -1351,12 +1352,12 @@ private fun PlayerHome(
         try {
             val session = storage?.readTraktSession(separateKidsData)
             traktSession = session
-            traktDeviceCode = null
+            ui.traktDeviceCode = null
             if (session != null) ui.traktSyncRequested = true
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
-            traktStatus = context.getString(R.string.trakt_session_read_failed)
+            ui.traktStatus = context.getString(R.string.trakt_session_read_failed)
         }
     }
 
@@ -1392,16 +1393,16 @@ private fun PlayerHome(
         // account was connected with (earlier versions had it built in).
         val app = traktApp ?: traktSession?.takeIf { ui.traktForKids }?.let { TraktApp(it.clientId, it.clientSecret) }
         if (app == null) {
-            traktStatus = context.getString(R.string.trakt_app_missing)
+            ui.traktStatus = context.getString(R.string.trakt_app_missing)
             return
         }
         ui.traktBusy = true
-        traktStatus = null
+        ui.traktStatus = null
         scope.launch {
             try {
                 val api = TraktApi(app.clientId, app.clientSecret) { id, args -> context.getString(id, *args) }
                 val code = api.beginDeviceAuthorization()
-                traktDeviceCode = code
+                ui.traktDeviceCode = code
                 var interval = code.intervalSeconds
                 val deadline = SystemClock.elapsedRealtime() + code.expiresInSeconds * 1_000L
                 while (SystemClock.elapsedRealtime() < deadline) {
@@ -1419,19 +1420,19 @@ private fun PlayerHome(
                             if (forKids == separateKidsData) traktSession = session
                             if (forKids) ui.kidsTraktName = username
                             ui.traktSyncRequested = true
-                            traktDeviceCode = null
-                            traktStatus = context.getString(R.string.trakt_connected_status, username)
+                            ui.traktDeviceCode = null
+                            ui.traktStatus = context.getString(R.string.trakt_connected_status, username)
                             return@launch
                         }
                     }
                 }
-                traktDeviceCode = null
-                traktStatus = context.getString(R.string.trakt_code_expired)
+                ui.traktDeviceCode = null
+                ui.traktStatus = context.getString(R.string.trakt_code_expired)
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                traktDeviceCode = null
-                traktStatus = error.message ?: context.getString(R.string.trakt_connect_failed)
+                ui.traktDeviceCode = null
+                ui.traktStatus = error.message ?: context.getString(R.string.trakt_connect_failed)
             } finally {
                 ui.traktBusy = false
             }
@@ -1446,12 +1447,12 @@ private fun PlayerHome(
                 storage?.clearTraktSession(forKids)
                 if (forKids == separateKidsData) traktSession = null
                 if (forKids) ui.kidsTraktName = null
-                traktDeviceCode = null
-                traktStatus = context.getString(R.string.trakt_disconnected_status)
+                ui.traktDeviceCode = null
+                ui.traktStatus = context.getString(R.string.trakt_disconnected_status)
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
-                traktStatus = context.getString(R.string.trakt_disconnect_failed)
+                ui.traktStatus = context.getString(R.string.trakt_disconnect_failed)
             }
         }
     }
@@ -1459,7 +1460,7 @@ private fun PlayerHome(
     fun syncTrakt(forceSeriesHistory: Boolean = false) {
         if (ui.traktBusy || ui.sendingWatchStatus) return
         ui.traktBusy = true
-        traktStatus = context.getString(R.string.trakt_checking_changes)
+        ui.traktStatus = context.getString(R.string.trakt_checking_changes)
         fun importedTitleKey(section: PortalSection, title: PortalTitle): String =
             "${catalogSession?.first?.sourceLabel.orEmpty()}:${section.name}:${title.id ?: title.name}"
         fun importedSeriesKey(title: PortalTitle): String =
@@ -1490,16 +1491,16 @@ private fun PlayerHome(
                         preferences?.getBoolean(historyReconcileKey, false) != true
                     if (cachedActivities == activities && !watchlistDirty && !reconcileSeriesHistory && traktWatchedMovieKeys != null) {
                         withContext(Dispatchers.Main) {
-                            traktStatus = context.getString(R.string.trakt_cache_current)
+                            ui.traktStatus = context.getString(R.string.trakt_cache_current)
                         }
                         return@withTraktSession null
                     }
                     withContext(Dispatchers.Main) {
-                        traktStatus = context.getString(R.string.trakt_checking_changes)
+                        ui.traktStatus = context.getString(R.string.trakt_checking_changes)
                     }
                     val remote = api.loadLibrary(
                         session.accessToken,
-                        onProgress = { progress -> withContext(Dispatchers.Main) { traktStatus = progress } },
+                        onProgress = { progress -> withContext(Dispatchers.Main) { ui.traktStatus = progress } },
                         previousActivities = cachedActivities,
                         currentActivities = activities,
                         reconcileSeriesHistory = reconcileSeriesHistory,
@@ -1510,7 +1511,7 @@ private fun PlayerHome(
                         localSaved.forEachIndexed { index, item ->
                             if (item.imdbId != null || item.tmdbId != null) {
                                 withContext(Dispatchers.Main) {
-                                    traktStatus = context.getString(
+                                    ui.traktStatus = context.getString(
                                         R.string.trakt_uploading_watchlist, index + 1, localSaved.size
                                     )
                                 }
@@ -1640,7 +1641,7 @@ private fun PlayerHome(
                 val importedProgress = linkedMapOf<String, Float>()
                 suspend fun reportImportProgress(label: String, index: Int, total: Int) {
                     if ((index + 1) % 100 == 0 || index + 1 == total) {
-                        traktStatus = "$label: ${index + 1} / $total"
+                        ui.traktStatus = "$label: ${index + 1} / $total"
                         yield()
                     }
                 }
@@ -1704,7 +1705,7 @@ private fun PlayerHome(
                 }
                 val sortedWatchedEpisodes = library.watchedEpisodes.sortedBy { it.watchedAtMillis ?: 0L }
                 if (sortedWatchedEpisodes.isNotEmpty()) {
-                    traktStatus = context.getString(R.string.trakt_matching_saved_episodes)
+                    ui.traktStatus = context.getString(R.string.trakt_matching_saved_episodes)
                 }
                 val watchedEpisodeGroups = sortedWatchedEpisodes.groupBy { media ->
                     "${media.traktId ?: media.imdbId ?: media.tmdbId ?: normalizedLabel(media.name)}:${media.year ?: 0}"
@@ -1880,7 +1881,7 @@ private fun PlayerHome(
                     progressPreferences?.edit()?.putStringSet("trakt_watched_movie_keys", keys)?.apply()
                 }
                 val remoteSeriesKeys = library.seriesHistorySnapshot?.let { snapshot ->
-                    traktStatus = context.getString(R.string.trakt_reconcile_series_history)
+                    ui.traktStatus = context.getString(R.string.trakt_reconcile_series_history)
                     withContext(Dispatchers.Default) {
                         snapshot.flatMapTo(hashSetOf()) { media ->
                             trackedRecordsFor(media, media.asTitle()).map { it.key }
@@ -1920,13 +1921,13 @@ private fun PlayerHome(
                             ?.apply()
                     }
                 }
-                traktStatus = context.getString(R.string.trakt_sync_complete, matched)
-                traktPlaybackNotice = context.getString(R.string.trakt_sync_complete, matched)
+                ui.traktStatus = context.getString(R.string.trakt_sync_complete, matched)
+                ui.traktPlaybackNotice = context.getString(R.string.trakt_sync_complete, matched)
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
                 AppDiagnostics.record(context, "trakt_library_sync_failed")
-                traktStatus = error.message ?: context.getString(R.string.trakt_sync_failed)
+                ui.traktStatus = error.message ?: context.getString(R.string.trakt_sync_failed)
             } finally {
                 ui.traktBusy = false
             }
@@ -2452,7 +2453,7 @@ private fun PlayerHome(
         groupJob?.cancel()
         selectedGroup = null
         groupCatalog = null
-        metadataNextPages = emptyMap()
+        ui.metadataNextPages = emptyMap()
         metadataTitles = emptyMap()
         ui.groupUsesTmdb = false
         groupPages = emptyMap()
@@ -2466,7 +2467,7 @@ private fun PlayerHome(
         val client = metadataClient
         if (category?.usesTmdb(section) == true && client != null) {
             groupJob?.cancel()
-            val pages = if (next) metadataNextPages else tmdbShelfRegions(
+            val pages = if (next) ui.metadataNextPages else tmdbShelfRegions(
                 category, countries, java.util.Locale.getDefault().country
             ).associateWith { 1 }
             if (pages.isEmpty()) return
@@ -2479,7 +2480,7 @@ private fun PlayerHome(
                 groupJob?.cancel()
                 selectedGroup = section to group
                 metadataTitles = cached.titles
-                metadataNextPages = cached.nextPages
+                ui.metadataNextPages = cached.nextPages
                 groupVariants = cached.titles.values.toMap()
                 groupCatalog = PortalCatalog(groupVariants.keys.toList(), null, 1.takeIf { cached.nextPages.isNotEmpty() })
                 ui.groupUsesTmdb = true
@@ -2489,7 +2490,7 @@ private fun PlayerHome(
                 return
             }
             val previous = if (next) metadataTitles else emptyMap()
-            metadataNextPages = pages
+            ui.metadataNextPages = pages
             metadataTitles = previous
             selectedGroup = section to group
             groupCatalog = null
@@ -2511,15 +2512,15 @@ private fun PlayerHome(
                         )
                         metadataTitles = metadataTitles + result.titles
                         groupVariants = metadataTitles.values.toMap()
-                        metadataNextPages = result.nextPages
+                        ui.metadataNextPages = result.nextPages
                         incomplete = incomplete || result.incomplete
-                        groupCatalog = PortalCatalog(groupVariants.keys.toList(), null, 1.takeIf { metadataNextPages.isNotEmpty() })
+                        groupCatalog = PortalCatalog(groupVariants.keys.toList(), null, 1.takeIf { ui.metadataNextPages.isNotEmpty() })
                         requested = result.nextPages
                         rounds++
                     } while (requested.isNotEmpty() && metadataTitles.size - previous.size < 24 && rounds < 8)
                     AppDiagnostics.record(context,
                         "vod_group_tmdb ${section.name} ms:${SystemClock.elapsedRealtime() - started} rounds:$rounds titles:${metadataTitles.size}")
-                    if (!next) TmdbShelfCache.put(shelfKey, TmdbShelfResult(metadataTitles, metadataNextPages, incomplete))
+                    if (!next) TmdbShelfCache.put(shelfKey, TmdbShelfResult(metadataTitles, ui.metadataNextPages, incomplete))
                     ui.groupError = incomplete
                 } catch (error: CancellationException) {
                     throw error
@@ -2616,7 +2617,6 @@ private fun PlayerHome(
     var epgCache by remember {
         mutableStateOf(emptyMap<String, List<PortalProgramme>>())
     }
-    var epgFetchedAt by remember { mutableStateOf(emptyMap<String, Long>()) }
     var visibleEpgChannels by remember { mutableStateOf(emptyList<StalkerChannel>()) }
     val epgInFlight = remember { mutableSetOf<String>() }
     val epgRequestLimit = remember { Semaphore(6) }
@@ -2635,12 +2635,12 @@ private fun PlayerHome(
         val now = System.currentTimeMillis()
         val recent = saved.filterValues { now - it.fetchedAt in 0..(7 * 86_400_000L) }
         epgCache = recent.mapValues { it.value.programmes } + epgCache
-        epgFetchedAt = recent.mapValues { it.value.fetchedAt } + epgFetchedAt
+        ui.epgFetchedAt = recent.mapValues { it.value.fetchedAt } + ui.epgFetchedAt
         guideCacheLoaded = true
     }
     LaunchedEffect(storage, guideCacheLoaded) {
         if (storage == null || !guideCacheLoaded) return@LaunchedEffect
-        snapshotFlow { epgFetchedAt to epgCache }.collectLatest { (times, entries) ->
+        snapshotFlow { ui.epgFetchedAt to epgCache }.collectLatest { (times, entries) ->
             if (times.isEmpty()) return@collectLatest
             delay(900)
             try {
@@ -2679,7 +2679,7 @@ private fun PlayerHome(
         val key = programmeKey(channel) ?: return true
         val variants = liveVariants[channel].orEmpty().filter { it.value.id != null }.distinctBy { it.source.identity to it.value.id }
         if (variants.isEmpty()) return true
-        val last = epgFetchedAt[key] ?: -1
+        val last = ui.epgFetchedAt[key] ?: -1
         val maxAge = if (epgRefreshHours > 0) epgRefreshHours * 3_600_000L else Long.MAX_VALUE
         if (!guideCacheLoaded) return true
         if (!force && last >= 0 && System.currentTimeMillis() - last in 0 until maxAge) return true
@@ -2707,7 +2707,7 @@ private fun PlayerHome(
             }
             check(answered)
             epgCache = epgCache + (key to entries)
-            epgFetchedAt = epgFetchedAt + (key to System.currentTimeMillis())
+            ui.epgFetchedAt = ui.epgFetchedAt + (key to System.currentTimeMillis())
             true
         } catch (error: CancellationException) {
             throw error
@@ -2825,7 +2825,7 @@ private fun PlayerHome(
             throw error
         } catch (error: Exception) {
             AppDiagnostics.record(context, "portal_library_restore_failed:${error.javaClass.simpleName}")
-            storageError = R.string.portal_restore_failed
+            ui.storageError = R.string.portal_restore_failed
         } finally {
             restoring = false
             AppDiagnostics.record(context, "portal_library_restore_completed")
@@ -2843,11 +2843,11 @@ private fun PlayerHome(
             storage?.write(SavedPortals(
                 savedSources, storedSource?.identity ?: savedSources.firstOrNull()?.identity ?: source.identity
             ))
-            storageError = null
+            ui.storageError = null
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
-            storageError = R.string.portal_save_failed
+            ui.storageError = R.string.portal_save_failed
         }
     }
 
@@ -2861,11 +2861,11 @@ private fun PlayerHome(
             ?: source.identity
         try {
             storage?.write(SavedPortals(persistedSources, activeId))
-            storageError = null
+            ui.storageError = null
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
-            storageError = R.string.portal_save_failed
+            ui.storageError = R.string.portal_save_failed
         }
     }
 
@@ -2935,12 +2935,12 @@ private fun PlayerHome(
         savedSources = remaining
         return try {
             storage?.write(SavedPortals(remaining, storedSource?.identity ?: remaining.first().identity))
-            storageError = null
+            ui.storageError = null
             true
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
-            storageError = R.string.portal_save_failed
+            ui.storageError = R.string.portal_save_failed
             false
         }
     }
@@ -2973,7 +2973,7 @@ private fun PlayerHome(
 
     fun sendTraktScrobble(action: String, notifyUser: Boolean = false) {
         if (traktSession == null) return
-        val media = currentTraktPlayback ?: return
+        val media = ui.currentTraktPlayback ?: return
         val attempt = playbackAttempt ?: return
         val activePlayer = player ?: return
         if (attempt.selection.section == PortalSection.LIVE || activePlayer.currentMediaItem?.mediaId != attempt.mediaId) return
@@ -2984,13 +2984,13 @@ private fun PlayerHome(
                 withTraktSession { api, session ->
                     api.scrobble(action, media, session.accessToken, percent)
                 }
-                if (notifyUser) traktPlaybackNotice = context.getString(
+                if (notifyUser) ui.traktPlaybackNotice = context.getString(
                     if (percent >= 80f) R.string.trakt_title_watched else R.string.trakt_playback_saved
                 )
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
-                if (notifyUser) traktPlaybackNotice = context.getString(R.string.trakt_playback_sync_failed)
+                if (notifyUser) ui.traktPlaybackNotice = context.getString(R.string.trakt_playback_sync_failed)
             }
         }
     }
@@ -3004,23 +3004,23 @@ private fun PlayerHome(
         preparedLiveVariant = null
         SmoothSwitch.stopStandby()
         savePlaybackPosition()
-        if (currentTraktPlayback != null && playbackAttempt != null && (player?.currentPosition ?: 0L) > 0L) {
+        if (ui.currentTraktPlayback != null && playbackAttempt != null && (player?.currentPosition ?: 0L) > 0L) {
             sendTraktScrobble("stop", notifyUser = true)
         }
-        currentTraktPlayback = null
+        ui.currentTraktPlayback = null
         playbackJob?.cancel()
         playbackAttempt = null
-        playbackSourceBadge = null
-        pendingSeriesEpisode = null
-        pendingMovie = null
+        ui.playbackSourceBadge = null
+        ui.pendingSeriesEpisode = null
+        ui.pendingMovie = null
         playbackMovieTitle = null
         nextEpisodeAction = null
         previousEpisodeAction = null
-        nextEpisodeSeconds = null
-        skipIntroTo = null
-        watchingPrompt = false
-        interruptedEpisode = false
-        if (!advancingEpisode) silentEpisodes = 0
+        ui.nextEpisodeSeconds = null
+        ui.skipIntroTo = null
+        ui.watchingPrompt = false
+        ui.interruptedEpisode = false
+        if (!ui.advancingEpisode) silentEpisodes = 0
         player?.stop()
         player?.clearMediaItems()
         Timeshift.stop()
@@ -3036,12 +3036,12 @@ private fun PlayerHome(
     fun advanceEpisode(confirmed: Boolean = false) {
         val next = nextEpisodeAction ?: return
         if (confirmed) silentEpisodes = 0
-        watchingPrompt = false
-        advancingEpisode = true
+        ui.watchingPrompt = false
+        ui.advancingEpisode = true
         try {
             next()
         } finally {
-            advancingEpisode = false
+            ui.advancingEpisode = false
         }
     }
 
@@ -3085,9 +3085,9 @@ private fun PlayerHome(
         playbackJob = scope.launch {
             var message = R.string.playback_link_error
             for (index in plan.index until plan.variants.size) {
-                val attempt = plan.copy(index = index, mediaId = "playback-${++attemptSerial}")
+                val attempt = plan.copy(index = index, mediaId = "playback-${++ui.attemptSerial}")
                 playbackAttempt = attempt
-                triedHls = false
+                ui.triedHls = false
                 starting = attempt.channel
                 try {
                     val variant = attempt.variants[index]
@@ -3097,7 +3097,7 @@ private fun PlayerHome(
                         else null.also { SmoothSwitch.stopStandby() }
                     if (standby != null) {
                         playing = attempt.channel
-                        triedHls = true
+                        ui.triedHls = true
                         val media = MediaItem.Builder().setUri("standby:${attempt.mediaId}").setMediaId(attempt.mediaId).build()
                         val started = Timeshift.adopt(
                             activePlayer, standby, media, SmoothSwitch.standbyTarget ?: timeshiftNow(), timeshiftMinutes(context)
@@ -3158,7 +3158,7 @@ private fun PlayerHome(
         // The player listener opens fullscreen only once playback actually starts.
         // Live TV still opens immediately; automatic episode transitions stay fullscreen.
         val remainFullscreen = selection.section == PortalSection.LIVE && !stayInGuide ||
-            fullscreen && selection.section == PortalSection.SERIES && advancingEpisode
+            fullscreen && selection.section == PortalSection.SERIES && ui.advancingEpisode
         stopPlayback()
         fullscreen = remainFullscreen
         playbackSelection = selection
@@ -3186,7 +3186,7 @@ private fun PlayerHome(
         if (nextIndex == null) {
             savePlaybackPosition(onFailure = true)
             SmoothSwitch.stopStandby()
-            currentTraktPlayback = null
+            ui.currentTraktPlayback = null
             playbackJob?.cancel()
             playbackAttempt = null
             player?.stop()
@@ -3425,7 +3425,7 @@ private fun PlayerHome(
             if (index >= 0) {
                 guideScroll.requestScrollToItem(index)
                 programmeChannel = visibleChannels[index]
-                restoreLiveFocus = true
+                ui.restoreLiveFocus = true
                 if (playLastChannelAtStartup && selected == Destination.LIVE) playChannel(
                     visibleChannels[index], openFullscreenOnStart = startInFullscreen, stayInGuide = !startInFullscreen
                 )
@@ -3468,7 +3468,7 @@ private fun PlayerHome(
         seasons = null
         openedSeason = null
         episodeVariants = emptyMap()
-        episodeError = false
+        ui.episodeError = false
         ui.resumeEpisodeMissing = false
     }
 
@@ -3484,10 +3484,10 @@ private fun PlayerHome(
         categoryScroll.requestScrollToItem(0)
         guideScroll.requestScrollToItem(0)
         programmeChannel = null
-        importStatuses = emptyMap()
-        sourceError = null
-        catalogErrors = emptySet()
-        catalogLoading = emptySet()
+        ui.importStatuses = emptyMap()
+        ui.sourceError = null
+        ui.catalogErrors = emptySet()
+        ui.catalogLoading = emptySet()
         val session = StalkerPortal(source.address, source.mac) to null
         liveSession = session
         catalogSession = session
@@ -3646,7 +3646,6 @@ private fun PlayerHome(
         )
     }
 
-    var watchStatusAction by remember { mutableStateOf<((Boolean) -> Unit)?>(null) }
     fun isPlaybackCompleted(key: String, fallback: Boolean = false): Boolean {
         val prefs = progressPreferences ?: return fallback
         return prefs.isPlaybackCompleted(key, fallback)
@@ -3720,7 +3719,7 @@ private fun PlayerHome(
                         session.accessToken, section, remoteTitle, numberedEpisodes.toSet(), watched
                     )
                 }
-                traktPlaybackNotice = context.getString(when {
+                ui.traktPlaybackNotice = context.getString(when {
                     !accepted -> R.string.trakt_manual_history_failed
                     watched -> R.string.trakt_manual_history_added
                     else -> R.string.trakt_manual_history_removed
@@ -3728,27 +3727,27 @@ private fun PlayerHome(
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
-                traktPlaybackNotice = context.getString(R.string.trakt_manual_history_failed)
+                ui.traktPlaybackNotice = context.getString(R.string.trakt_manual_history_failed)
             } finally {
                 ui.sendingWatchStatus = false
             }
         }
     }
 
-    watchStatusAction?.let { update ->
+    ui.watchStatusAction?.let { update ->
         AlertDialog(
-            onDismissRequest = { watchStatusAction = null },
+            onDismissRequest = { ui.watchStatusAction = null },
             title = { Text(stringResource(R.string.watched_status)) },
             text = if (traktSession != null) {
                 { Text(stringResource(R.string.trakt_manual_history_description)) }
             } else null,
             confirmButton = {
-                MaterialTextButton(enabled = !ui.sendingWatchStatus && !ui.traktBusy, onClick = { update(true); watchStatusAction = null }) {
+                MaterialTextButton(enabled = !ui.sendingWatchStatus && !ui.traktBusy, onClick = { update(true); ui.watchStatusAction = null }) {
                     Text(stringResource(R.string.mark_watched))
                 }
             },
             dismissButton = {
-                MaterialTextButton(enabled = !ui.sendingWatchStatus && !ui.traktBusy, onClick = { update(false); watchStatusAction = null }) {
+                MaterialTextButton(enabled = !ui.sendingWatchStatus && !ui.traktBusy, onClick = { update(false); ui.watchStatusAction = null }) {
                     Text(stringResource(R.string.mark_unwatched))
                 }
             }
@@ -3791,7 +3790,7 @@ private fun PlayerHome(
                     if (parental.allowsAge(age)) {
                         parental.allowedTitles += key
                         showTitle(section, title)
-                    } else pinRequest = PinRequest(
+                    } else ui.pinRequest = PinRequest(
                         context.getString(R.string.kids_title_blocked),
                         context.getString(
                             R.string.kids_title_blocked_message, displayVodTitle(title),
@@ -3842,7 +3841,7 @@ private fun PlayerHome(
         val primary = variants.firstOrNull {
             equivalentCatalogueTitle(reference, listOf(it.value), requireVerifiedIdentity = true) != null
         } ?: variants.firstOrNull() ?: run {
-            traktPlaybackNotice = context.getString(R.string.trakt_source_missing)
+            ui.traktPlaybackNotice = context.getString(R.string.trakt_source_missing)
             return
         }
         val title = primary.value
@@ -3877,7 +3876,7 @@ private fun PlayerHome(
         }
         if (section == PortalSection.SERIES && openedSeries == null) {
             openedSeries = title
-            episodeError = false
+            ui.episodeError = false
             ui.resumeEpisodeMissing = false
             seasons = null
             openedSeason = null
@@ -3932,7 +3931,7 @@ private fun PlayerHome(
                     throw error
                 } catch (_: Exception) {
                     AppDiagnostics.record(context, "series_catalog_load_failed")
-                    episodeError = true
+                    ui.episodeError = true
                 }
             }
         } else {
@@ -3966,7 +3965,7 @@ private fun PlayerHome(
                     StalkerChannel(title.name, title.command.orEmpty(), null, null),
                     selection, variants, progressKey = key
                 )
-                currentTraktPlayback = when (section) {
+                ui.currentTraktPlayback = when (section) {
                     PortalSection.MOVIES -> TraktMedia(
                         PortalSection.MOVIES, displayVodTitle(title), title.year, title.imdbId, title.tmdbId, null
                     )
@@ -3983,11 +3982,11 @@ private fun PlayerHome(
                     playbackMovieTitle = null
                     previousEpisodeAction = null
                     nextEpisodeAction = null
-                    nextEpisodeSeconds = null
+                    ui.nextEpisodeSeconds = null
                     val series = openedSeries
                     val season = openedSeason
                     if (series != null && season != null) {
-                        pendingSeriesEpisode = series to EpisodeResume(
+                        ui.pendingSeriesEpisode = series to EpisodeResume(
                             seriesEpisodeKey(season, title), season.number, title.episode, title.name, key
                         )
                         val seasonList = seasons.orEmpty()
@@ -4008,7 +4007,7 @@ private fun PlayerHome(
                             }
                         } ?: run { previousEpisodeAction = null }
                         followingEpisode(seasonList, season, title)?.let { (followingSeason, following) ->
-                            nextEpisodeName = following.episode?.let {
+                            ui.nextEpisodeName = following.episode?.let {
                                 resources.getString(R.string.episode_number, it)
                             } ?: following.name
                             nextEpisodeAction = {
@@ -4023,7 +4022,7 @@ private fun PlayerHome(
                     }
                 } else if (section == PortalSection.MOVIES) {
                     playbackMovieTitle = title
-                    pendingMovie = WatchedMovie(
+                    ui.pendingMovie = WatchedMovie(
                         displayVodTitle(title), vodReleaseYear(title), title.imdbId, title.tmdbId,
                         known.map { SeriesPortalRef(it.source.identity, it.value.id.orEmpty()) }.distinct(),
                         key, System.currentTimeMillis()
@@ -4038,16 +4037,16 @@ private fun PlayerHome(
 
     // Choice of the portal on a film's or series' page. Films start right away; for a series
     // the choice applies to the episodes started from its page.
-    portalPickerFor?.let { (section, title) ->
+    ui.portalPickerFor?.let { (section, title) ->
         val key = titleKey(section, title)
         val portals = titlePortals(section, title)
         fun choose(identity: String?) {
             if (identity == null) titlePortalChoices.remove(key) else titlePortalChoices[key] = identity
-            portalPickerFor = null
+            ui.portalPickerFor = null
             if (section == PortalSection.MOVIES && identity != null) selectTitle(section, title)
         }
         AlertDialog(
-            onDismissRequest = { portalPickerFor = null },
+            onDismissRequest = { ui.portalPickerFor = null },
             title = { Text(stringResource(R.string.title_portal_choose)) },
             text = {
                 Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -4071,7 +4070,7 @@ private fun PlayerHome(
                     }
                 }
             },
-            confirmButton = { MaterialTextButton(onClick = { portalPickerFor = null }) { Text(stringResource(R.string.close)) } }
+            confirmButton = { MaterialTextButton(onClick = { ui.portalPickerFor = null }) { Text(stringResource(R.string.close)) } }
         )
     }
 
@@ -4175,7 +4174,7 @@ private fun PlayerHome(
         val allVariants = (linkedVariants + discoveredVariants).distinctBy { "${it.source.identity}:${it.value.id}" }
         val variants = countryVariants(PortalSection.MOVIES, allVariants).ifEmpty { allVariants }
         val title = variants.firstOrNull()?.value ?: run {
-            traktPlaybackNotice = context.getString(R.string.trakt_source_missing)
+            ui.traktPlaybackNotice = context.getString(R.string.trakt_source_missing)
             return
         }
         searchedVariants = mapOf(title to variants)
@@ -4205,8 +4204,8 @@ private fun PlayerHome(
 
     suspend fun refreshPortal(enteredAddress: String, enteredMac: String, activate: Boolean): Boolean {
         AppDiagnostics.record(context, "portal_refresh_started")
-        sourceError = null
-        importStatuses = emptyMap()
+        ui.sourceError = null
+        ui.importStatuses = emptyMap()
         try {
             val source = StalkerPortal(enteredAddress, enteredMac)
             val token = source.openSession()
@@ -4243,7 +4242,7 @@ private fun PlayerHome(
                     ))
                 }
             }
-            importStatuses = PortalSection.entries.associateWith { ImportStatus.Loading }
+            ui.importStatuses = PortalSection.entries.associateWith { ImportStatus.Loading }
             coroutineScope {
                 for (section in PortalSection.entries) launch {
                     val status = try {
@@ -4261,7 +4260,7 @@ private fun PlayerHome(
                                 val imported = source.loadChannels(token) { loaded, total ->
                                     withContext(Dispatchers.Main) {
                                         snapshotMutex.withLock {
-                                            importStatuses = importStatuses +
+                                            ui.importStatuses = ui.importStatuses +
                                                 (section to ImportStatus.Progress(loaded, total))
                                         }
                                     }
@@ -4316,14 +4315,14 @@ private fun PlayerHome(
                         }
                     }
                     snapshotMutex.withLock {
-                        importStatuses = importStatuses + (section to status)
+                        ui.importStatuses = ui.importStatuses + (section to status)
                     }
                     if (status is ImportStatus.Count || status is ImportStatus.Loaded || status is ImportStatus.Partial) {
                         persistProgress()
                     }
                 }
             }
-            val changed = importStatuses.values.any {
+            val changed = ui.importStatuses.values.any {
                 it is ImportStatus.Count || it is ImportStatus.Loaded || it is ImportStatus.Partial
             }
             if (!changed) {
@@ -4377,8 +4376,8 @@ private fun PlayerHome(
                     }
                     liveSession = source to token
                     catalogSession = source to token
-                    catalogLoading = emptySet()
-                    catalogErrors = emptySet()
+                    ui.catalogLoading = emptySet()
+                    ui.catalogErrors = emptySet()
                     channels = unchangedSnapshot.channels
                     genres = unchangedSnapshot.genres
                     catalogs = unchangedSnapshot.catalogs
@@ -4388,7 +4387,7 @@ private fun PlayerHome(
                     updatePortalStatus(sourceIdentity, reachable = true)
                 }
                 AppDiagnostics.record(context, "portal_refresh_unchanged")
-                val complete = importStatuses.values.all { it is ImportStatus.Count || it is ImportStatus.Loaded }
+                val complete = ui.importStatuses.values.all { it is ImportStatus.Count || it is ImportStatus.Loaded }
                 if (complete) markPortalFullRefresh(sourceIdentity)
                 return complete
             }
@@ -4408,8 +4407,8 @@ private fun PlayerHome(
                 val session = source to token
                 liveSession = session
                 catalogSession = session
-                catalogLoading = emptySet()
-                catalogErrors = emptySet()
+                ui.catalogLoading = emptySet()
+                ui.catalogErrors = emptySet()
                 channels = refreshedChannels
                 genres = refreshedGenres
                 catalogs = refreshedCatalogs
@@ -4419,8 +4418,8 @@ private fun PlayerHome(
             }
             save(snapshot, activate)
             AppDiagnostics.record(context, "portal_refresh_completed")
-            val complete = importStatuses.values.all { it is ImportStatus.Count || it is ImportStatus.Loaded } &&
-                storageError == null
+            val complete = ui.importStatuses.values.all { it is ImportStatus.Count || it is ImportStatus.Loaded } &&
+                ui.storageError == null
             if (complete) markPortalFullRefresh(sourceIdentity)
             return complete
         } catch (error: CancellationException) {
@@ -4439,7 +4438,7 @@ private fun PlayerHome(
                     AppDiagnostics.record(context, "portal_status_update_failed")
                 }
             }
-            sourceError = when (error) {
+            ui.sourceError = when (error) {
                 is InvalidPortalAddressException -> R.string.portal_invalid_address
                 is PortalAuthenticationException -> R.string.portal_auth_failed
                 is PortalHandshakeException -> R.string.portal_handshake_failed
@@ -4460,7 +4459,7 @@ private fun PlayerHome(
                 throw error
             } catch (_: Exception) {
                 AppDiagnostics.record(context, "portal_toggle_failed")
-                sourceError = R.string.portal_error
+                ui.sourceError = R.string.portal_error
             }
         }
     }
@@ -4473,8 +4472,8 @@ private fun PlayerHome(
         if (connecting) return
         val wasActive = storedSource?.identity == old.identity
         connecting = true
-        batchSummary = null
-        sourceError = null
+        ui.batchSummary = null
+        ui.sourceError = null
         scope.launch {
             try {
                 refreshPortal(newAddress, newMac, activate = wasActive)
@@ -4496,11 +4495,11 @@ private fun PlayerHome(
         val enteredAddress = address.trim()
         val enteredMac = mac.trim()
         connecting = true
-        batchSummary = null
+        ui.batchSummary = null
         scope.launch {
             try {
                 val imported = refreshPortal(enteredAddress, enteredMac, activate = true)
-                if (automaticCountries && importStatuses.values.any {
+                if (automaticCountries && ui.importStatuses.values.any {
                     it is ImportStatus.Count || it is ImportStatus.Loaded || it is ImportStatus.Partial
                 }) ui.askForCountries = true
                 if (firstPortal && imported && selected == Destination.SOURCES) selected = Destination.LIVE
@@ -4511,34 +4510,34 @@ private fun PlayerHome(
     }
 
     fun openSourceRefreshDialog() {
-        selectedRefreshSources = emptySet()
+        ui.selectedRefreshSources = emptySet()
         ui.sourceRefreshDialogOpen = true
     }
 
     fun refreshSources(sources: List<SavedPortal>) {
         if (connecting || sources.isEmpty()) return
         connecting = true
-        batchSummary = null
+        ui.batchSummary = null
         scope.launch {
             var completed = 0
             val unavailable = mutableListOf<String>()
             try {
                 // Let the initial background check finish first. The UI stays usable and
                 // the manual request is queued instead of silently discarded.
-                while (startupPortalRefresh != null || startupPortalCheck != null) delay(200)
+                while (ui.startupPortalRefresh != null || ui.startupPortalCheck != null) delay(200)
                 for ((index, source) in sources.withIndex()) {
-                    batchProgress = (index + 1) to sources.size
+                    ui.batchProgress = (index + 1) to sources.size
                     if (refreshPortal(source.address, source.mac, activate = false)) completed++
                     if (savedSources.firstOrNull { it.identity == source.identity }?.reachable == false) {
                         unavailable += runCatching { java.net.URI(source.address).host }.getOrNull().orEmpty()
                             .ifBlank { "Portal" }
                     }
                 }
-                batchSummary = completed to (sources.size - completed)
+                ui.batchSummary = completed to (sources.size - completed)
                 val reachableCount = sources.count { source ->
                     savedSources.firstOrNull { it.identity == source.identity }?.reachable == true
                 }
-                portalRefreshNotice = if (unavailable.isEmpty()) {
+                ui.portalRefreshNotice = if (unavailable.isEmpty()) {
                     context.getString(R.string.portals_refresh_success, reachableCount)
                 } else context.getString(R.string.portals_refresh_with_unavailable, reachableCount, unavailable.joinToString(", "))
                 if (completed > 0 && automaticCountries) ui.askForCountries = true
@@ -4546,9 +4545,9 @@ private fun PlayerHome(
                 throw error
             } catch (error: Exception) {
             AppDiagnostics.record(context, "portal_batch_refresh_failed:${error.javaClass.simpleName}")
-                portalRefreshNotice = context.getString(R.string.portals_refresh_failed)
+                ui.portalRefreshNotice = context.getString(R.string.portals_refresh_failed)
             } finally {
-                batchProgress = null
+                ui.batchProgress = null
                 connecting = false
             }
         }
@@ -4565,10 +4564,10 @@ private fun PlayerHome(
                 if (refreshPortalsAtStartup) {
                     if (portalFullRefreshDue(source)) {
                         fullRefreshPerformed = true
-                        startupPortalRefresh = (index + 1) to sources.size
+                        ui.startupPortalRefresh = (index + 1) to sources.size
                         refreshPortal(source.address, source.mac, activate = false)
                     } else {
-                        startupPortalCheck = (index + 1) to sources.size
+                        ui.startupPortalCheck = (index + 1) to sources.size
                         try {
                             sessionFor(source).openSession()
                             updatePortalStatus(source.identity, reachable = true)
@@ -4579,7 +4578,7 @@ private fun PlayerHome(
                         }
                     }
                 } else {
-                    startupPortalCheck = (index + 1) to sources.size
+                    ui.startupPortalCheck = (index + 1) to sources.size
                     try {
                         sessionFor(source).openSession()
                         updatePortalStatus(source.identity, reachable = true)
@@ -4593,19 +4592,19 @@ private fun PlayerHome(
                     unavailable += runCatching { java.net.URI(source.address).host }.getOrNull().orEmpty()
                         .ifBlank { "Portal" }
                 }
-                startupPortalRefresh = null
-                startupPortalCheck = null
+                ui.startupPortalRefresh = null
+                ui.startupPortalCheck = null
             }
             if (sources.isNotEmpty()) {
                 val reachableCount = sources.count { source ->
                     savedSources.firstOrNull { it.identity == source.identity }?.reachable == true
                 }
                 if (fullRefreshPerformed) {
-                    portalRefreshNotice = if (unavailable.isEmpty()) {
+                    ui.portalRefreshNotice = if (unavailable.isEmpty()) {
                         context.getString(R.string.portals_refresh_success, reachableCount)
                     } else context.getString(R.string.portals_refresh_with_unavailable, reachableCount, unavailable.joinToString(", "))
                 } else if (unavailable.isNotEmpty()) {
-                    portalRefreshNotice = context.getString(
+                    ui.portalRefreshNotice = context.getString(
                         R.string.portals_refresh_with_unavailable, reachableCount, unavailable.joinToString(", ")
                     )
                 }
@@ -4614,10 +4613,10 @@ private fun PlayerHome(
             throw error
         } catch (error: Exception) {
             AppDiagnostics.record(context, "startup_portal_refresh_failed:${error.javaClass.simpleName}")
-            portalRefreshNotice = context.getString(R.string.portals_refresh_failed)
+            ui.portalRefreshNotice = context.getString(R.string.portals_refresh_failed)
         } finally {
-            startupPortalCheck = null
-            startupPortalRefresh = null
+            ui.startupPortalCheck = null
+            ui.startupPortalRefresh = null
         }
     }
 
@@ -4625,9 +4624,9 @@ private fun PlayerHome(
         val session = catalogSession ?: return
         val previous = catalogs[section] ?: return
         val page = previous.nextPage ?: return
-        if (connecting || section in catalogLoading) return
-        catalogLoading = catalogLoading + section
-        catalogErrors = catalogErrors - section
+        if (connecting || section in ui.catalogLoading) return
+        ui.catalogLoading = ui.catalogLoading + section
+        ui.catalogErrors = ui.catalogErrors - section
         scope.launch {
             try {
                 val token = session.second ?: session.first.openSession()
@@ -4644,9 +4643,9 @@ private fun PlayerHome(
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
-                if (catalogSession === session) catalogErrors = catalogErrors + section
+                if (catalogSession === session) ui.catalogErrors = ui.catalogErrors + section
             } finally {
-                if (catalogSession === session) catalogLoading = catalogLoading - section
+                if (catalogSession === session) ui.catalogLoading = ui.catalogLoading - section
             }
         }
     }
@@ -4664,12 +4663,12 @@ private fun PlayerHome(
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 if (isPlaying) {
                     sendTraktScrobble("start")
-                    pendingSeriesEpisode?.let { (series, episode) ->
-                        pendingSeriesEpisode = null
+                    ui.pendingSeriesEpisode?.let { (series, episode) ->
+                        ui.pendingSeriesEpisode = null
                         updateTrackedSeries(series, watchedEpisode = episode)
                     }
-                    pendingMovie?.let { movie ->
-                        pendingMovie = null
+                    ui.pendingMovie?.let { movie ->
+                        ui.pendingMovie = null
                         movieHistory = (listOf(movie) + movieHistory.filterNot { it.progressKey == movie.progressKey }).take(200)
                         progressPreferences?.edit()?.putString("movie_history", encodeMovieHistory(movieHistory))?.apply()
                     }
@@ -4699,7 +4698,7 @@ private fun PlayerHome(
                                 }
                             }
                             lastBadgedAttempt = attempt.mediaId
-                            playbackSourceBadge = attempt.mediaId to attempt.variants[attempt.index].label
+                            ui.playbackSourceBadge = attempt.mediaId to attempt.variants[attempt.index].label
                             if (attempt.index > 0) {
                                 SmoothSwitch.markPlaying()
                                 AppDiagnostics.record(context, "playback_source_badge index:${attempt.index}")
@@ -4797,9 +4796,9 @@ private fun PlayerHome(
                     PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED
                 )
                 if (uri != null && startingChannel != null && formatError &&
-                    !triedHls && !uri.path.orEmpty().endsWith(".m3u8", ignoreCase = true)
+                    !ui.triedHls && !uri.path.orEmpty().endsWith(".m3u8", ignoreCase = true)
                 ) {
-                    triedHls = true
+                    ui.triedHls = true
                     scope.launch {
                         if (starting === startingChannel && player.currentMediaItem == item) {
                             Timeshift.stop()
@@ -5022,21 +5021,19 @@ private fun PlayerHome(
             if (player?.isPlaying == true) savePlaybackPosition()
         }
     }
-    LaunchedEffect(playbackSourceBadge) {
-        if (playbackSourceBadge != null) {
+    LaunchedEffect(ui.playbackSourceBadge) {
+        if (ui.playbackSourceBadge != null) {
             delay(4_000)
-            playbackSourceBadge = null
+            ui.playbackSourceBadge = null
         }
     }
 
     val inGuide = selected == Destination.LIVE
     var guidePanel by remember { mutableStateOf(GuidePanel.GRID) }
     var fullscreenGuidePanel by remember { mutableStateOf(GuidePanel.GRID) }
-    var fullscreenOverlayContent by remember { mutableStateOf(GuidePanel.CHANNELS) }
     var playbackControlsVisible by remember { mutableStateOf(false) }
     var dismissPlaybackControls by remember { mutableIntStateOf(0) }
     var overlayInteraction by remember { mutableIntStateOf(0) }
-    var guideProgramme by remember { mutableStateOf<Pair<StalkerChannel, PortalProgramme>?>(null) }
     val guideNow by produceState(System.currentTimeMillis() / 1_000) {
         while (true) {
             delay(30_000)
@@ -5045,7 +5042,7 @@ private fun PlayerHome(
     }
     fun guideSelection(channel: StalkerChannel): PortalProgramme? = resolveGuideProgramme(
         effectiveProgrammes(channel).orEmpty(),
-        guideProgramme?.takeIf { it.first === channel }?.second,
+        ui.guideProgramme?.takeIf { it.first === channel }?.second,
         guideNow
     )
     val guidePanelFocus = remember { FocusRequester() }
@@ -5056,13 +5053,10 @@ private fun PlayerHome(
     }
     fun openMainMenu() {
         if (selected == Destination.MOVIES || selected == Destination.SERIES) {
-            catalogueReturnTitle = null
+            ui.catalogueReturnTitle = null
             closeGroup()
             closeSeries()
             details = null
-            movieHistoryOpen = false
-            movieWatchlistOpen = false
-            seriesActivityView = null
             myAreaSection = null
         }
         pendingVodCategory = null
@@ -5092,14 +5086,14 @@ private fun PlayerHome(
             val index = liveCategories.getValue(entry.first).indexOf(entry.second)
             if (index >= 0) guideScroll.requestScrollToItem(index)
         }
-        restoreLiveFocus = true
+        ui.restoreLiveFocus = true
     }
     fun restoreGuideEntryFocus() {
         val savedKey = preferences?.getString("last_live_channel", null)
         val channel = playing.takeIf { vodSection == null } ?: savedKey?.let { key ->
             liveGroups.keys.firstOrNull { (programmeKey(it) ?: liveGroups[it]?.identity) == key }
         }
-        if (channel != null) restoreGuideChannel(channel) else restoreLiveFocus = true
+        if (channel != null) restoreGuideChannel(channel) else ui.restoreLiveFocus = true
     }
     fun navigateGuide(input: GuideInput) {
         if (input in setOf(GuideInput.REMOTE_LEFT, GuideInput.SWIPE_LEFT) &&
@@ -5112,21 +5106,21 @@ private fun PlayerHome(
     }
     fun showFullscreenPanel(panel: GuidePanel) {
         if (panel != fullscreenGuidePanel) ui.overlayScheduleFocused = false
-        if (panel != GuidePanel.GRID) fullscreenOverlayContent = panel
+        if (panel != GuidePanel.GRID) ui.fullscreenOverlayContent = panel
         fullscreenGuidePanel = panel
     }
     LaunchedEffect(
         fullscreen, fullscreenGuidePanel, guideAppearance.closeSeconds, overlayInteraction,
-        categoryMenu, vodSection, watchingPrompt, nextEpisodeSeconds, skipIntroTo
+        ui.categoryMenu, vodSection, ui.watchingPrompt, ui.nextEpisodeSeconds, ui.skipIntroTo
     ) {
         if (!fullscreen) showFullscreenPanel(GuidePanel.GRID)
         else if ((vodSection == null || vodSection == PortalSection.SERIES && playbackSeries != null) &&
             fullscreenGuidePanel != GuidePanel.GRID && guideAppearance.closeSeconds > 0 &&
-            categoryMenu == null && !watchingPrompt && nextEpisodeSeconds == null && skipIntroTo == null
+            ui.categoryMenu == null && !ui.watchingPrompt && ui.nextEpisodeSeconds == null && ui.skipIntroTo == null
         ) {
             delay(guideAppearance.closeSeconds * 1_000L)
-            if (fullscreenGuidePanel != GuidePanel.GRID && !watchingPrompt &&
-                nextEpisodeSeconds == null && skipIntroTo == null
+            if (fullscreenGuidePanel != GuidePanel.GRID && !ui.watchingPrompt &&
+                ui.nextEpisodeSeconds == null && ui.skipIntroTo == null
             ) showFullscreenPanel(GuidePanel.GRID)
         }
     }
@@ -5134,7 +5128,7 @@ private fun PlayerHome(
     val mainMenuOpen = isMainMenuOpen()
     LaunchedEffect(mainMenuOpen) { if (!mainMenuOpen) lastBack = 0L }
     fun settingsPageOpen() = ui.epgSettingsOpen || ui.episodeSettingsOpen || ui.controlSettingsOpen ||
-        ui.metadataSettingsOpen || ui.traktSettingsOpen || ui.kidsProtectionOpen || ui.termsOpen || ui.languageOpen || guideAppearancePage != null || ui.remoteAccessOpen || ui.accentPaletteOpen
+        ui.metadataSettingsOpen || ui.traktSettingsOpen || ui.kidsProtectionOpen || ui.termsOpen || ui.languageOpen || ui.guideAppearancePage != null || ui.remoteAccessOpen || ui.accentPaletteOpen
     fun openSettingsPage(open: () -> Unit) {
         ui.settingsPageOpenedAt = SystemClock.elapsedRealtime()
         open()
@@ -5158,7 +5152,7 @@ private fun PlayerHome(
         ui.kidsProtectionOpen = false
         ui.termsOpen = false
         ui.languageOpen = false
-        guideAppearancePage = null
+        ui.guideAppearancePage = null
         ui.remoteAccessOpen = false
         ui.accentPaletteOpen = false
         return open
@@ -5189,7 +5183,7 @@ private fun PlayerHome(
     /** Runs [action] right away, or after the settings PIN when [flag] protects it (Einstellungsschutz). */
     fun withSettingsPin(flag: Boolean, unlock: Boolean = true, action: () -> Unit) {
         if (!parental.needsSettingsPin(flag)) return action()
-        if (pinRequest == null) pinRequest = PinRequest(
+        if (ui.pinRequest == null) ui.pinRequest = PinRequest(
             context.getString(R.string.pin_enter), null, check = parental::checkSettingsPin, length = parental.settingsPinLength
         ) {
             if (unlock) parental.settingsUnlocked = true
@@ -5199,7 +5193,7 @@ private fun PlayerHome(
     fun openSettings(after: () -> Unit = {}) {
         if (parental.kidsMode || parental.needsSettingsPin(parental.protectSettings)) {
             val kids = parental.kidsMode
-            if (pinRequest == null) pinRequest = PinRequest(
+            if (ui.pinRequest == null) ui.pinRequest = PinRequest(
                 context.getString(if (kids) R.string.kids_mode_exit else R.string.pin_enter), null,
                 check = if (kids) parental::checkKidsPin else parental::checkSettingsPin,
                 length = if (kids) parental.kidsExitPinLength else parental.settingsPinLength,
@@ -5224,7 +5218,7 @@ private fun PlayerHome(
     fun returnToCategories() {
         lastLiveCategory = category
         category = null
-        restoreLiveFocus = true
+        ui.restoreLiveFocus = true
     }
     DisposableEffect(fullscreen) {
         onFullscreen(fullscreen)
@@ -5244,8 +5238,8 @@ private fun PlayerHome(
             seasons = playbackSeasons
             episodeVariants = playbackEpisodeVariants
         }
-        restoreLiveFocus = vodSection == null && (selected == null || selected == Destination.LIVE)
-        if (restoreLiveFocus && selected == Destination.LIVE) {
+        ui.restoreLiveFocus = vodSection == null && (selected == null || selected == Destination.LIVE)
+        if (ui.restoreLiveFocus && selected == Destination.LIVE) {
             playing?.let(::restoreGuideChannel)
         }
         if (vodSection != null && cataloguePlaybackView == VodLiveView.HIDDEN) player?.pause()
@@ -5293,7 +5287,7 @@ private fun PlayerHome(
     }
     fun navigateBack() {
         if (fullscreen) {
-            if (watchingPrompt) {
+            if (ui.watchingPrompt) {
                 stopPlayback()
                 return
             }
@@ -5301,12 +5295,12 @@ private fun PlayerHome(
                 dismissPlaybackControls++
                 return
             }
-            if (skipIntroTo != null) {
+            if (ui.skipIntroTo != null) {
                 // Back only closes the skip-intro offer, for the rest of this episode; the
                 // remote's left/right then seek again instead of moving between offer buttons.
-                skipIntroTo = null
+                ui.skipIntroTo = null
                 val closed = playbackAttempt?.mediaId?.let { it to Long.MAX_VALUE }
-                if (skipIsOutro) outroOfferClosed = closed else introOfferClosed = closed
+                if (ui.skipIsOutro) ui.outroOfferClosed = closed else ui.introOfferClosed = closed
                 return
             }
             if (fullscreenGuidePanel != GuidePanel.GRID) {
@@ -5346,8 +5340,8 @@ private fun PlayerHome(
             selected = back.destination
             back.destination?.let { lastFocused = it }
             details = back.details
-            castOf = back.castOf
-            castPerson = back.person
+            ui.castOf = back.castOf
+            ui.castPerson = back.person
         }
         else if (selected == Destination.SERIES && openedSeries != null) {
             closeSeries()
@@ -5355,23 +5349,17 @@ private fun PlayerHome(
         }
         else if (details != null && selected in listOf(Destination.SERIES, Destination.MOVIES)) {
             details = null
-            movieHistoryOpen = false
-            movieWatchlistOpen = false
-            if (selected != Destination.SERIES) seriesActivityView = null
         }
-        else if (selected == Destination.SERIES && seriesActivityView != null) seriesActivityView = null
-        else if (selected == Destination.MOVIES && movieHistoryOpen) movieHistoryOpen = false
-        else if (selected == Destination.MOVIES && movieWatchlistOpen) movieWatchlistOpen = false
         else if (selected == Destination.SOURCES || selected == Destination.CATEGORIES) selected = Destination.SETTINGS
         // Films and series always keep a category (or "Mein Bereich") open: closing it only
         // left an empty, black area. Back goes to the start page or leaves the app instead.
         else if (selected == Destination.MOVIES || selected == Destination.SERIES) leaveToStartPage()
         else openMainMenu()
     }
-    portalCategoriesFor?.let { source ->
+    ui.portalCategoriesFor?.let { source ->
         PortalCategoriesDialog(
             stringResource(R.string.portal_categories_title, portalName(source)), source
-        ) { portalCategoriesFor = null }
+        ) { ui.portalCategoriesFor = null }
     }
     if (ui.expiryLeadPickerOpen) AlertDialog(
         onDismissRequest = { ui.expiryLeadPickerOpen = false },
@@ -5423,7 +5411,7 @@ private fun PlayerHome(
             expiryConfirmations::state
         )
     }
-    if (expiryNotices.isNotEmpty() && !ui.exitDialogOpen && !ui.profilePickerOpen && pinRequest == null && !kidsAccountActive) {
+    if (expiryNotices.isNotEmpty() && !ui.exitDialogOpen && !ui.profilePickerOpen && ui.pinRequest == null && !kidsAccountActive) {
         fun confirmExpiry() {
             expiryConfirmations.confirm(expiryNotices)
             expiryConfirmedVersion++
@@ -5498,7 +5486,7 @@ private fun PlayerHome(
             if (fullscreen && (vodSection == null || vodSection == PortalSection.SERIES && panel != GuidePanel.DETAILS)) {
                 if (panel == GuidePanel.DETAILS) {
                     programmeChannel = playing
-                    guideProgramme = null
+                    ui.guideProgramme = null
                 }
                 showFullscreenPanel(panel)
                 return true
@@ -5524,7 +5512,7 @@ private fun PlayerHome(
         }
     }
     val longBack by rememberUpdatedState<() -> Boolean>({
-        !watchingPrompt && !playbackControlsVisible && !ui.controlSettingsOpen && guideAppearancePage == null &&
+        !ui.watchingPrompt && !playbackControlsVisible && !ui.controlSettingsOpen && ui.guideAppearancePage == null &&
             (runMappedControl(GuideInput.LONG_BACK) ||
                 if (fullscreen && fullscreenGuidePanel != GuidePanel.GRID) {
                     showFullscreenPanel(GuidePanel.GRID)
@@ -5535,13 +5523,13 @@ private fun PlayerHome(
         // Navigation sounds while browsing; plain fullscreen video stays silent so seeking
         // with left and right does not click.
         registerKeySounds(
-            keySounds && (!fullscreen || playbackControlsVisible || watchingPrompt || skipIntroTo != null ||
+            keySounds && (!fullscreen || playbackControlsVisible || ui.watchingPrompt || ui.skipIntroTo != null ||
                 fullscreenGuidePanel != GuidePanel.GRID)
         )
     }
     val screenBack by rememberUpdatedState<(Boolean) -> Boolean>({ released ->
         val handled = fullscreen && (
-            playbackControlsVisible || watchingPrompt || skipIntroTo != null || fullscreenGuidePanel != GuidePanel.GRID
+            playbackControlsVisible || ui.watchingPrompt || ui.skipIntroTo != null || fullscreenGuidePanel != GuidePanel.GRID
         ) || !fullscreen && (
             isMainMenuOpen() || selected == Destination.MOVIES || selected == Destination.SERIES
         )
@@ -5549,8 +5537,8 @@ private fun PlayerHome(
         handled
     })
     val playbackInput by rememberUpdatedState<() -> Unit>({
-        if (vodSection == PortalSection.SERIES && playing != null && !watchingPrompt) {
-            interruptedEpisode = true
+        if (vodSection == PortalSection.SERIES && playing != null && !ui.watchingPrompt) {
+            ui.interruptedEpisode = true
             silentEpisodes = 0
         }
     })
@@ -5567,13 +5555,13 @@ private fun PlayerHome(
     }
     BackHandler(onBack = ::navigateBack)
     // Hiding, ordering and locking categories needs the settings PIN when they are protected.
-    val lockedCategoryMenu = categoryMenu?.takeIf { parental.needsSettingsPin(parental.lockCategories) }
+    val lockedCategoryMenu = ui.categoryMenu?.takeIf { parental.needsSettingsPin(parental.lockCategories) }
     LaunchedEffect(lockedCategoryMenu) {
         val pending = lockedCategoryMenu ?: return@LaunchedEffect
-        categoryMenu = null
-        withSettingsPin(true, unlock = false) { categoryMenu = pending }
+        ui.categoryMenu = null
+        withSettingsPin(true, unlock = false) { ui.categoryMenu = pending }
     }
-    if (lockedCategoryMenu == null) categoryMenu?.let { (section, first) ->
+    if (lockedCategoryMenu == null) ui.categoryMenu?.let { (section, first) ->
         val defaultGroups = if (section == PortalSection.LIVE) {
             allLiveCategories.keys.sortedBy { categoryNames.values.indexOf(it) }.map { PortalGroup(it, it) }
         } else defaultVodCategoryOrder(section)
@@ -5583,7 +5571,7 @@ private fun PlayerHome(
             isHidden = { categoryKey(section, it.id) in hiddenCategories },
             onApply = { ids, hidden ->
                 setCategoryVisibility(section, ids, hidden)
-                categoryMenu = null
+                ui.categoryMenu = null
             },
             onMove = { id, direction ->
                 val order = groups.map { it.id }.moveCategory(id, direction)
@@ -5591,12 +5579,12 @@ private fun PlayerHome(
                 categoryOrders[key] = order
                 preferences?.edit()?.putString(key, org.json.JSONArray(order).toString())?.apply()
             },
-            onDismiss = { categoryMenu = null },
+            onDismiss = { ui.categoryMenu = null },
             isLocked = { categoryKey(section, it.id) in parental.lockedCategories },
             onToggleLock = if (parental.hasPin) { group ->
                 val key = categoryKey(section, group.id)
                 if (key in parental.lockedCategories) {
-                    pinRequest = PinRequest(context.getString(R.string.pin_enter), null, check = parental::checkPin, length = parental.pinLength) {
+                    ui.pinRequest = PinRequest(context.getString(R.string.pin_enter), null, check = parental::checkPin, length = parental.pinLength) {
                         parental.toggleLocked(key)
                     }
                 } else parental.toggleLocked(key)
@@ -5623,7 +5611,7 @@ private fun PlayerHome(
             StartProfile.ADMIN, StartProfile.ASK -> {
                 parental.updateKidsMode(true)
                 ui.profilePickerOpen = true
-                if (profiles.startProfile == StartProfile.ADMIN) pinRequest = PinRequest(
+                if (profiles.startProfile == StartProfile.ADMIN) ui.pinRequest = PinRequest(
                     context.getString(R.string.profile_admin_pin), null,
                     check = parental::checkKidsPin, length = parental.kidsExitPinLength
                 ) {
@@ -5646,7 +5634,7 @@ private fun PlayerHome(
     if (ui.profilePickerOpen && profiles.hasKids) ProfilePicker(
         profiles.kidsName.orEmpty(),
         onAdmin = {
-            if (pinRequest == null) pinRequest = PinRequest(
+            if (ui.pinRequest == null) ui.pinRequest = PinRequest(
                 context.getString(R.string.profile_admin_pin), null,
                 check = parental::checkKidsPin, length = parental.kidsExitPinLength
             ) { switchAccount(false) }
@@ -5669,49 +5657,49 @@ private fun PlayerHome(
         },
         onDismiss = ::closeKidsNameDialog
     )
-    sharedPinQuestion?.let { question ->
+    ui.sharedPinQuestion?.let { question ->
         AlertDialog(
-            onDismissRequest = { sharedPinQuestion = null },
+            onDismissRequest = { ui.sharedPinQuestion = null },
             title = { Text(stringResource(R.string.pin_same_title)) },
             text = { Text(question.text) },
             confirmButton = {
                 val same = remember { FocusRequester() }
                 MenuButton(stringResource(R.string.pin_same), Modifier.focusRequester(same)) {
-                    sharedPinQuestion = null
+                    ui.sharedPinQuestion = null
                     question.onShared()
                 }
                 LaunchedEffect(Unit) { runCatching { same.requestFocus() } }
             },
             dismissButton = {
                 MenuButton(stringResource(R.string.pin_own), Modifier) {
-                    sharedPinQuestion = null
+                    ui.sharedPinQuestion = null
                     question.onOwn()
                 }
             }
         )
     }
-    pinRequest?.let { request ->
+    ui.pinRequest?.let { request ->
         PinDialog(
             request.title, request.message, confirmTwice = request.newPin, length = request.length,
-            onRemoteSetup = if (request.remoteSetup) { { pinRequest = null; ui.remoteAccessStandalone = true } } else null,
+            onRemoteSetup = if (request.remoteSetup) { { ui.pinRequest = null; ui.remoteAccessStandalone = true } } else null,
             onPin = { pin ->
                 val ok = request.check(pin)
                 if (ok) {
-                    pinRequest = null
+                    ui.pinRequest = null
                     request.onSuccess(pin)
                 }
                 ok
             },
-            onDismiss = { pinRequest = null }
+            onDismiss = { ui.pinRequest = null }
         )
     }
-    LaunchedEffect(watchingPrompt) {
-        if (watchingPrompt) {
+    LaunchedEffect(ui.watchingPrompt) {
+        if (ui.watchingPrompt) {
             delay(30_000)
-            if (watchingPrompt) stopPlayback()
+            if (ui.watchingPrompt) stopPlayback()
         }
     }
-    if (watchingPrompt && !fullscreen) AlertDialog(
+    if (ui.watchingPrompt && !fullscreen) AlertDialog(
         onDismissRequest = ::stopPlayback,
         title = { Text(stringResource(R.string.series_still_watching)) },
         text = { Text(stringResource(R.string.series_still_watching_timeout)) },
@@ -5722,7 +5710,7 @@ private fun PlayerHome(
         GuideAppearanceDialog(page, guideAppearance, onChange = {
             guideAppearance = it
             it.save(preferences)
-        }, onDismiss = { guideAppearancePage = null })
+        }, onDismiss = { ui.guideAppearancePage = null })
     }
     val controlSettingsPage: @Composable () -> Unit = { ControlMappingDialog(
         bindings = controlBindings,
@@ -5965,6 +5953,20 @@ private fun PlayerHome(
                     "subtitle_default_enabled") { subtitleDefaultEnabled = it })
                 add(toggle("forcedSubtitles", playback, text(R.string.subtitles_forced_auto), { forcedSubtitlesEnabled },
                     "forced_subtitles_enabled") { forcedSubtitlesEnabled = it })
+                // Buffer, timeshift and smooth switch, as under Wiedergabe on the TV.
+                add(RemoteEntry.Choice("buffer", playback, text(R.string.buffer_setting),
+                    listOf(RemoteOption("OFF", text(R.string.subtitle_off))) + BufferLevel.entries.map { RemoteOption(it.name, text(it.label)) },
+                    { chosenBuffer(context)?.name ?: "OFF" }
+                ) { value -> setChosenBuffer(context, BufferLevel.entries.firstOrNull { it.name == value }) })
+                add(RemoteEntry.Info("bufferHint", playback, text(R.string.buffer_setting), text(R.string.buffer_restart_hint)))
+                add(RemoteEntry.Choice("timeshift", playback, text(R.string.timeshift_setting),
+                    listOf(RemoteOption("OFF", text(R.string.subtitle_off))) +
+                        TIMESHIFT_DURATIONS.map { RemoteOption(it.toString(), context.getString(R.string.timeshift_duration_setting, it)) },
+                    { timeshiftMinutes(context)?.toString() ?: "OFF" }
+                ) { value -> setTimeshiftMinutes(context, value.toIntOrNull()?.takeIf { it in TIMESHIFT_DURATIONS }) })
+                add(RemoteEntry.Toggle("smoothSwitch", playback, text(R.string.smooth_switch_setting), { smoothSwitchEnabled(context) }) {
+                    setSmoothSwitchEnabled(context, it)
+                })
                 add(RemoteEntry.Choice("vodLive", playback, name(R.string.live_preview_in_vod),
                     options(vodViews) { it.label }, { vodLiveView.name }
                 ) { value ->
@@ -6050,12 +6052,12 @@ private fun PlayerHome(
                     text(R.string.tmdb_disconnect)) { updateMetadataConnection(null); text(R.string.remote_msg_tmdb_disconnected) })
                 val sync = text(R.string.settings_sync)
                 val trakt = traktSession
-                val code = traktDeviceCode
+                val code = ui.traktDeviceCode
                 add(RemoteEntry.Info("traktStatus", sync, "Trakt", when {
                     trakt != null -> context.getString(R.string.trakt_connected_as, trakt.username)
                     code != null -> context.getString(R.string.trakt_enter_code, code.verificationUrl) + " " + code.userCode
                     ui.traktBusy -> text(R.string.trakt_connecting)
-                    else -> traktStatus ?: text(R.string.remote_trakt_not_connected)
+                    else -> ui.traktStatus ?: text(R.string.remote_trakt_not_connected)
                 }, code?.verificationUrl))
                 if (trakt == null) {
                     add(RemoteEntry.Info("traktAppInfo", sync, text(R.string.trakt_app_title),
@@ -6071,7 +6073,7 @@ private fun PlayerHome(
                 if (trakt == null && code == null && traktApp != null) add(RemoteEntry.Action("traktConnect", sync, text(R.string.remote_trakt_account),
                     text(R.string.trakt_connect)) { connectTrakt(); text(R.string.remote_msg_code_requested) })
                 if (trakt != null) {
-                    add(RemoteEntry.Action("traktSync", sync, traktStatus ?: text(R.string.remote_trakt_history_watchlist), text(R.string.remote_action_sync)) {
+                    add(RemoteEntry.Action("traktSync", sync, ui.traktStatus ?: text(R.string.remote_trakt_history_watchlist), text(R.string.remote_action_sync)) {
                         if (ui.traktBusy) text(R.string.remote_msg_already_running) else { syncTrakt(forceSeriesHistory = true); text(R.string.trakt_syncing) }
                     })
                     add(RemoteEntry.Action("traktDisconnect", sync, text(R.string.remote_trakt_account), text(R.string.trakt_disconnect)) {
@@ -6155,7 +6157,7 @@ private fun PlayerHome(
                 ),
                 busy = if (connecting) text(R.string.remote_busy_portals) else null,
                 askCountries = ui.askForCountries || ui.choosingCountries,
-                error = sourceError?.let(::text)
+                error = ui.sourceError?.let(::text)
             )
         }
 
@@ -6218,7 +6220,7 @@ private fun PlayerHome(
                 else {
                     address = command.address
                     mac = command.mac
-                    sourceError = null
+                    ui.sourceError = null
                     importPortal()
                     RemoteReply(true, text(R.string.remote_msg_portal_loading))
                 }
@@ -6455,7 +6457,7 @@ private fun PlayerHome(
                     // Scan the closing eight minutes so longer credit rolls and
                     // post-credit scenes are not automatically reduced to a 15s fallback.
                     val inCredits = !creditsComplete && active.duration - position <= 480_000L
-                    val surface = fullscreenVideoSurface ?: playbackVideoSurface
+                    val surface = fullscreenVideoSurface ?: ui.playbackVideoSurface
                     if (surface != null && active.isPlaying) {
                         if (inOpening) {
                             val bucket = position / HLS_INTRO_FRAME_INTERVAL_MS * HLS_INTRO_FRAME_INTERVAL_MS
@@ -6709,7 +6711,7 @@ private fun PlayerHome(
                 // frame matching completes near the end of an intro.
                 val introGrace = intro?.let { position > it.last && position - it.last <= 15_000L } == true
                 val introTarget = futureIntroSkipTarget(intro, position)
-                val closedUntil = introOfferClosed?.takeIf { it.first == attempt.mediaId }?.second
+                val closedUntil = ui.introOfferClosed?.takeIf { it.first == attempt.mediaId }?.second
                 val introClosed = closedUntil != null && (
                     closedUntil == Long.MAX_VALUE || introTarget == null || introTarget <= closedUntil + 2_000L
                 )
@@ -6719,36 +6721,36 @@ private fun PlayerHome(
                 // End credits followed by more footage: offer to skip to the post-credits scene.
                 val outro = if (manualCredits) null else detected?.outro(duration)
                 val outroTarget = futureIntroSkipTarget(outro, position)
-                val outroClosedUntil = outroOfferClosed?.takeIf { it.first == attempt.mediaId }?.second
+                val outroClosedUntil = ui.outroOfferClosed?.takeIf { it.first == attempt.mediaId }?.second
                 val outroClosed = outroClosedUntil != null && (
                     outroClosedUntil == Long.MAX_VALUE || outroTarget == null || outroTarget <= outroClosedUntil + 2_000L
                 )
                 val outroOffer = if (!outroClosed && outroTarget != null && outro?.contains(position) == true &&
                     active.isCurrentMediaItemSeekable
                 ) outroTarget else null
-                skipIntroTo = introOffer ?: outroOffer
-                skipIsOutro = introOffer == null && outroOffer != null
-                if (autoSkipIntro && active.isPlaying && !skipIsOutro) skipIntroTo?.let {
+                ui.skipIntroTo = introOffer ?: outroOffer
+                ui.skipIsOutro = introOffer == null && outroOffer != null
+                if (autoSkipIntro && active.isPlaying && !ui.skipIsOutro) ui.skipIntroTo?.let {
                     active.seekTo(it)
-                    skipIntroTo = null
-                    introOfferClosed = attempt.mediaId to it
+                    ui.skipIntroTo = null
+                    ui.introOfferClosed = attempt.mediaId to it
                 }
                 val nextAt = if (manualCredits) {
                     (duration - creditsBeforeEndSeconds * 1_000L).takeIf { it > 0 } ?: duration
                 } else minOf(portal.nextAt(duration), detected?.nextAt(duration) ?: duration)
                 val remaining = (nextAt - position).coerceAtLeast(0)
-                nextEpisodeSeconds = if (nextEpisodeAction != null && remaining <= episodeNoticeSeconds * 1_000L) {
+                ui.nextEpisodeSeconds = if (nextEpisodeAction != null && remaining <= episodeNoticeSeconds * 1_000L) {
                     ((remaining + 999) / 1_000).toInt()
                 } else null
-                if (!watchingPrompt && autoNextEpisode && (active.isPlaying || active.playbackState == Player.STATE_ENDED) &&
+                if (!ui.watchingPrompt && autoNextEpisode && (active.isPlaying || active.playbackState == Player.STATE_ENDED) &&
                     remaining == 0L && canPlay()
                 ) {
                     if (nextEpisodeAction != null) {
-                        silentEpisodes = if (interruptedEpisode) 0 else silentEpisodes + 1
+                        silentEpisodes = if (ui.interruptedEpisode) 0 else silentEpisodes + 1
                         if (checkSeriesInactivity && silentEpisodes >= inactiveEpisodeLimit) {
                             active.pause()
-                            watchingPrompt = true
-                            nextEpisodeSeconds = null
+                            ui.watchingPrompt = true
+                            ui.nextEpisodeSeconds = null
                         } else advanceEpisode()
                         return@LaunchedEffect
                     }
@@ -6768,14 +6770,14 @@ private fun PlayerHome(
         val episodeActionTertiaryFocus = remember { FocusRequester() }
         var episodeActionSelection by remember { mutableIntStateOf(0) }
         val episodeAction = when {
-            watchingPrompt -> 3
-            nextEpisodeSeconds != null -> 2
-            skipIntroTo != null -> 1
+            ui.watchingPrompt -> 3
+            ui.nextEpisodeSeconds != null -> 2
+            ui.skipIntroTo != null -> 1
             else -> 0
         }
         val episodeActionCount = when {
-            watchingPrompt -> 2
-            else -> (if (skipIntroTo != null) 1 else 0) + (if (nextEpisodeSeconds != null) 2 else 0)
+            ui.watchingPrompt -> 2
+            else -> (if (ui.skipIntroTo != null) 1 else 0) + (if (ui.nextEpisodeSeconds != null) 2 else 0)
         }
         fun requestEpisodeActionFocus(index: Int) {
             episodeActionSelection = index.coerceIn(0, (episodeActionCount - 1).coerceAtLeast(0))
@@ -6786,22 +6788,22 @@ private fun PlayerHome(
             }.requestFocus()
         }
         fun activateEpisodeAction() {
-            if (watchingPrompt) {
+            if (ui.watchingPrompt) {
                 if (episodeActionSelection == 0) advanceEpisode(confirmed = true) else stopPlayback()
                 return
             }
-            val introOffset = if (skipIntroTo != null) 1 else 0
+            val introOffset = if (ui.skipIntroTo != null) 1 else 0
             when {
-                skipIntroTo != null && episodeActionSelection == 0 -> {
-                    val target = requireNotNull(skipIntroTo)
+                ui.skipIntroTo != null && episodeActionSelection == 0 -> {
+                    val target = requireNotNull(ui.skipIntroTo)
                     player?.seekTo(target)
-                    skipIntroTo = null
+                    ui.skipIntroTo = null
                     val closed = playbackAttempt?.mediaId?.let { it to target }
-                    if (skipIsOutro) outroOfferClosed = closed else introOfferClosed = closed
+                    if (ui.skipIsOutro) ui.outroOfferClosed = closed else ui.introOfferClosed = closed
                 }
-                nextEpisodeSeconds != null && episodeActionSelection == introOffset ->
+                ui.nextEpisodeSeconds != null && episodeActionSelection == introOffset ->
                     advanceEpisode(confirmed = true)
-                nextEpisodeSeconds != null && episodeActionSelection == introOffset + 1 -> stopPlayback()
+                ui.nextEpisodeSeconds != null && episodeActionSelection == introOffset + 1 -> stopPlayback()
             }
         }
         val episodeActionKeyModifier = Modifier.onPreviewKeyEvent { event ->
@@ -6815,9 +6817,9 @@ private fun PlayerHome(
                 } else false
             }
         }
-        LaunchedEffect(episodeAction, playbackControlsVisible, fullscreenGuidePanel, skipIntroTo != null, nextEpisodeSeconds != null) {
+        LaunchedEffect(episodeAction, playbackControlsVisible, fullscreenGuidePanel, ui.skipIntroTo != null, ui.nextEpisodeSeconds != null) {
             if (episodeAction != 0 && !playbackControlsVisible &&
-                (fullscreenGuidePanel == GuidePanel.GRID || watchingPrompt || skipIntroTo != null)
+                (fullscreenGuidePanel == GuidePanel.GRID || ui.watchingPrompt || ui.skipIntroTo != null)
             ) {
                 withFrameNanos { }
                 requestEpisodeActionFocus(0)
@@ -6855,7 +6857,7 @@ private fun PlayerHome(
             if (!live) return
             if (fullscreenGuidePanel == GuidePanel.GRID && (input == GuideInput.SWIPE_RIGHT || input == GuideInput.REMOTE_RIGHT)) {
                 programmeChannel = playing
-                guideProgramme = null
+                ui.guideProgramme = null
             }
             showFullscreenPanel(fullscreenGuidePanel.after(input))
         }
@@ -6940,11 +6942,11 @@ private fun PlayerHome(
                 onMediaKey = { runMappedControl(GuideInput.PLAY_PAUSE) },
                 controlsRequest = playerControlsRequest,
                 controlsDismissRequest = dismissPlaybackControls,
-                controlsAllowed = fullscreenGuidePanel == GuidePanel.GRID && !watchingPrompt,
+                controlsAllowed = fullscreenGuidePanel == GuidePanel.GRID && !ui.watchingPrompt,
                 actionPromptActive = episodeAction != 0 &&
-                    (fullscreenGuidePanel == GuidePanel.GRID || watchingPrompt || skipIntroTo != null),
+                    (fullscreenGuidePanel == GuidePanel.GRID || ui.watchingPrompt || ui.skipIntroTo != null),
                 onEpisodeActionConfirm = ::activateEpisodeAction,
-                episodeActionVisible = episodeAction != 0 || fullscreenGuidePanel != GuidePanel.GRID || skipIntroTo != null,
+                episodeActionVisible = episodeAction != 0 || fullscreenGuidePanel != GuidePanel.GRID || ui.skipIntroTo != null,
                 subtitleDefaultEnabled = subtitleDefaultEnabled,
                 forcedSubtitlesEnabled = forcedSubtitlesEnabled,
                 subtitleSeriesKey = if (vodSection == PortalSection.SERIES) playbackSeries?.let {
@@ -7053,11 +7055,11 @@ private fun PlayerHome(
                 AnimatedVisibility(
                     visible = fullscreenGuidePanel != GuidePanel.GRID,
                     modifier = Modifier.align(
-                        if (fullscreenOverlayContent == GuidePanel.DETAILS) Alignment.TopEnd else Alignment.CenterStart
+                        if (ui.fullscreenOverlayContent == GuidePanel.DETAILS) Alignment.TopEnd else Alignment.CenterStart
                     ).padding(12.dp),
                     enter = fadeIn(), exit = fadeOut()
                 ) {
-                    val panel = fullscreenOverlayContent
+                    val panel = ui.fullscreenOverlayContent
                     val groups = withCategoryOrder(PortalSection.LIVE, liveCategories.keys
                         .filter { visibleCategory(PortalSection.LIVE, it, it) }
                         .sortedBy { categoryNames.values.indexOf(it) }) { it }
@@ -7165,7 +7167,7 @@ private fun PlayerHome(
                                     } else {
                                     items(groups) { group ->
                                         MenuButton(group, Modifier.fillMaxWidth(), selected = channelCategory == group,
-                                            onLongPress = { categoryMenu = PortalSection.LIVE to group }) {
+                                            onLongPress = { ui.categoryMenu = PortalSection.LIVE to group }) {
                                             category = group
                                             showFullscreenPanel(GuidePanel.CHANNELS)
                                         }
@@ -7206,13 +7208,13 @@ private fun PlayerHome(
                     }
                 }
             }
-            if (episodeAction != 0 && (fullscreenGuidePanel == GuidePanel.GRID || watchingPrompt || skipIntroTo != null)) {
+            if (episodeAction != 0 && (fullscreenGuidePanel == GuidePanel.GRID || ui.watchingPrompt || ui.skipIntroTo != null)) {
                 Surface(
                 modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp),
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Column(Modifier.padding(12.dp)) {
-                        if (watchingPrompt) {
+                        if (ui.watchingPrompt) {
                             Text(stringResource(R.string.series_still_watching), style = MaterialTheme.typography.titleMedium)
                             Text(stringResource(R.string.series_still_watching_timeout))
                             Row(Modifier.focusGroup()) {
@@ -7231,26 +7233,26 @@ private fun PlayerHome(
                                 )
                             }
                         } else {
-                        skipIntroTo?.let { position ->
+                        ui.skipIntroTo?.let { position ->
                             MenuButton(
-                                stringResource(if (skipIsOutro) R.string.skip_credits else R.string.skip_intro),
+                                stringResource(if (ui.skipIsOutro) R.string.skip_credits else R.string.skip_intro),
                                 Modifier.focusRequester(episodeActionFocus),
                                 selected = episodeActionSelection == 0,
                                 onFocused = { episodeActionSelection = 0 }
                             ) {
                                 player?.seekTo(position)
-                                skipIntroTo = null
+                                ui.skipIntroTo = null
                                 val closed = playbackAttempt?.mediaId?.let { it to position }
-                                if (skipIsOutro) outroOfferClosed = closed else introOfferClosed = closed
+                                if (ui.skipIsOutro) ui.outroOfferClosed = closed else ui.introOfferClosed = closed
                             }
                         }
-                        nextEpisodeSeconds?.let { seconds ->
+                        ui.nextEpisodeSeconds?.let { seconds ->
                             Text(
-                                if (autoNextEpisode) stringResource(R.string.episode_countdown, nextEpisodeName, seconds)
-                                else stringResource(R.string.next_episode_ready, nextEpisodeName)
+                                if (autoNextEpisode) stringResource(R.string.episode_countdown, ui.nextEpisodeName, seconds)
+                                else stringResource(R.string.next_episode_ready, ui.nextEpisodeName)
                             )
                             Row(Modifier.focusGroup()) {
-                                val introOffset = if (skipIntroTo != null) 1 else 0
+                                val introOffset = if (ui.skipIntroTo != null) 1 else 0
                                 MenuButton(
                                     stringResource(R.string.play_next_episode),
                                     Modifier.focusRequester(
@@ -7276,7 +7278,7 @@ private fun PlayerHome(
                     }
                 }
             }
-            playbackSourceBadge?.takeUnless { fullscreenGuidePanel == GuidePanel.DETAILS }?.let { (_, label) ->
+            ui.playbackSourceBadge?.takeUnless { fullscreenGuidePanel == GuidePanel.DETAILS }?.let { (_, label) ->
                 Text(
                     stringResource(R.string.playback_source_badge, label),
                     modifier = Modifier.align(Alignment.TopEnd).padding(12.dp)
@@ -7338,7 +7340,7 @@ private fun PlayerHome(
         // offered when TMDB or Trakt know actors for it.
         val openTitle = details?.takeIf { it.first != PortalSection.LIVE }
         LaunchedEffect(openTitle, metadataClient, traktSession?.username) {
-            castPreview = null
+            ui.castPreview = null
             val (section, title) = openTitle ?: return@LaunchedEffect
             if (metadataClient == null && traktSession == null) return@LaunchedEffect
             // Without Trakt the TMDB match of the details arrives shortly after opening; wait for
@@ -7364,19 +7366,19 @@ private fun PlayerHome(
             } catch (_: Exception) {
                 emptyList()
             }
-            castPreview = title to members
+            ui.castPreview = title to members
         }
-        val (castSection, castTitle, tmdbId) = castOf ?: return
+        val (castSection, castTitle, tmdbId) = ui.castOf ?: return
         CastDialog(
             displayVodTitle(castTitle),
             load = {
-                castPreview?.takeIf { it.first == castTitle && it.second.isNotEmpty() }?.second
+                ui.castPreview?.takeIf { it.first == castTitle && it.second.isNotEmpty() }?.second
                     ?: loadCast(castSection, castTitle, tmdbId)
             },
-            onPerson = { castPerson = it },
-            onDismiss = { castOf = null }
+            onPerson = { ui.castPerson = it },
+            onDismiss = { ui.castOf = null }
         )
-        castPerson?.let { person ->
+        ui.castPerson?.let { person ->
             PersonDialog(
                 person,
                 load = {
@@ -7399,9 +7401,9 @@ private fun PlayerHome(
                 },
                 isSaved = ::isTitleSaved,
                 onOpen = { kind, title ->
-                    castReturns += CastReturn(selected, details, castOf, person, kind to title)
-                    castPerson = null
-                    castOf = null
+                    castReturns += CastReturn(selected, details, ui.castOf, person, kind to title)
+                    ui.castPerson = null
+                    ui.castOf = null
                     // A film is shown under "Filme", a series under "Serien".
                     val target = if (kind == PortalSection.MOVIES) Destination.MOVIES else Destination.SERIES
                     if (selected != target) {
@@ -7410,13 +7412,13 @@ private fun PlayerHome(
                     }
                     showTitle(kind, title)
                 },
-                onDismiss = { castPerson = null }
+                onDismiss = { ui.castPerson = null }
             )
         }
     }
     CastLayer()
     // While the phone is used, the question appears only there; the device shows nothing of it.
-    if (ui.askForCountries && !ui.remoteAccessOpen && !ui.profilePickerOpen && pinRequest == null && !kidsAccountActive) {
+    if (ui.askForCountries && !ui.remoteAccessOpen && !ui.profilePickerOpen && ui.pinRequest == null && !kidsAccountActive) {
         AlertDialog(
             onDismissRequest = { ui.askForCountries = false },
             title = { Text(stringResource(R.string.select_countries)) },
@@ -7443,15 +7445,15 @@ private fun PlayerHome(
                     Text(stringResource(R.string.select_sources_to_refresh))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         MenuButton(stringResource(R.string.select_all_sources), Modifier.weight(1f)) {
-                            selectedRefreshSources = savedSources.map { it.identity }.toSet()
+                            ui.selectedRefreshSources = savedSources.map { it.identity }.toSet()
                         }
                         MenuButton(stringResource(R.string.clear_source_selection), Modifier.weight(1f)) {
-                            selectedRefreshSources = emptySet()
+                            ui.selectedRefreshSources = emptySet()
                         }
                     }
                     LazyColumn(Modifier.heightIn(max = 320.dp)) {
                         items(savedSources, key = { it.identity }) { source ->
-                            val selectedForRefresh = source.identity in selectedRefreshSources
+                            val selectedForRefresh = source.identity in ui.selectedRefreshSources
                             val host = runCatching { java.net.URI(source.address).host }.getOrNull()
                                 .orEmpty().ifBlank { source.address }
                             MenuButton(
@@ -7459,9 +7461,9 @@ private fun PlayerHome(
                                 Modifier.fillMaxWidth(),
                                 selected = selectedForRefresh
                             ) {
-                                selectedRefreshSources = if (selectedForRefresh) {
-                                    selectedRefreshSources - source.identity
-                                } else selectedRefreshSources + source.identity
+                                ui.selectedRefreshSources = if (selectedForRefresh) {
+                                    ui.selectedRefreshSources - source.identity
+                                } else ui.selectedRefreshSources + source.identity
                             }
                         }
                     }
@@ -7471,9 +7473,9 @@ private fun PlayerHome(
                 MenuButton(
                     stringResource(R.string.refresh_selected_sources),
                     Modifier,
-                    enabled = selectedRefreshSources.isNotEmpty() && !connecting
+                    enabled = ui.selectedRefreshSources.isNotEmpty() && !connecting
                 ) {
-                    val sources = savedSources.filter { it.identity in selectedRefreshSources }
+                    val sources = savedSources.filter { it.identity in ui.selectedRefreshSources }
                     ui.sourceRefreshDialogOpen = false
                     refreshSources(sources)
                 }
@@ -7502,10 +7504,10 @@ private fun PlayerHome(
             onDismiss = { ui.metadataSettingsOpen = false }
         )
     }
-    if (storage != null && !restoring && storageError == null && savedSources.isEmpty() &&
+    if (storage != null && !restoring && ui.storageError == null && savedSources.isEmpty() &&
         !hasPortal && !initialPortalPromptDismissed && !editing && !connecting &&
         // Not before the account is chosen, and never in the kids account.
-        !ui.profilePickerOpen && pinRequest == null && !kidsAccountActive
+        !ui.profilePickerOpen && ui.pinRequest == null && !kidsAccountActive
     ) AlertDialog(
         onDismissRequest = { initialPortalPromptDismissed = true },
         title = { Text(stringResource(R.string.first_portal_title)) },
@@ -7726,14 +7728,11 @@ private fun PlayerHome(
             }
             fun openVodCategory(group: PortalGroup) {
                 val section = vodSectionForScreen ?: return
-                catalogueReturnTitle = null
+                ui.catalogueReturnTitle = null
                 ui.focusFirstTitle = true
                 preferences?.edit()?.putString(recentCategoryKey, group.id)?.apply()
                 closeSeries()
                 details = null
-                movieHistoryOpen = false
-                movieWatchlistOpen = false
-                seriesActivityView = null
                 myAreaSection = null
                 if (!combine && group.id == ALL_CATALOG_ITEMS) {
                     closeGroup()
@@ -7837,17 +7836,17 @@ private fun PlayerHome(
                 }
             }
             val header: @Composable () -> Unit = {
-                val portalRefreshText = startupPortalRefresh?.let { (number, total) ->
+                val portalRefreshText = ui.startupPortalRefresh?.let { (number, total) ->
                     val source = savedSources.filter { it.enabled || it.autoDisabled }.getOrNull(number - 1)
                     val host = source?.address?.let { runCatching { java.net.URI(it).host }.getOrNull() }
                         ?.takeIf(String::isNotBlank) ?: "Portal"
                     stringResource(R.string.portal_refresh_progress, number, total, host)
                 }
-                val portalCheckText = startupPortalCheck?.let { (number, total) ->
+                val portalCheckText = ui.startupPortalCheck?.let { (number, total) ->
                     stringResource(R.string.portal_check_progress, number, total)
                 }
                 val busy = restoring || connecting || ui.liveGroupsLoading || ui.traktBusy || portalRefreshText != null ||
-                    portalCheckText != null || importStatuses.values.any { it == ImportStatus.Loading || it is ImportStatus.Progress }
+                    portalCheckText != null || ui.importStatuses.values.any { it == ImportStatus.Loading || it is ImportStatus.Progress }
                 // All background activity in one line next to the category; together with the fixed
                 // progress strip above, the screen below never moves while something loads.
                 val statusLine = if (!busy) "" else buildList {
@@ -7855,9 +7854,9 @@ private fun PlayerHome(
                     if (ui.liveGroupsLoading) add(stringResource(R.string.live_groups_loading))
                     portalRefreshText?.let(::add)
                     portalCheckText?.let(::add)
-                    batchProgress?.let { (number, total) -> add(stringResource(R.string.portal_import_progress, number, total)) }
-                    if (ui.traktBusy) traktStatus?.let(::add)
-                    importStatuses.forEach { (section, status) ->
+                    ui.batchProgress?.let { (number, total) -> add(stringResource(R.string.portal_import_progress, number, total)) }
+                    if (ui.traktBusy) ui.traktStatus?.let(::add)
+                    ui.importStatuses.forEach { (section, status) ->
                         when (status) {
                             ImportStatus.Loading -> add(stringResource(R.string.section_loading, stringResource(section.label)))
                             is ImportStatus.Progress -> add(
@@ -7903,7 +7902,7 @@ private fun PlayerHome(
                             Box(Modifier.width(cornerPreviewWidth)) {
                                 PlayerFrame(
                                     player, active = true, onStop = ::stopPlayback,
-                                    onSurface = { playbackVideoSurface = it },
+                                    onSurface = { ui.playbackVideoSurface = it },
                                     onOpenFullscreen = { if (vodSection == null) playChannel(channel) else fullscreen = true }
                                 )
                             }
@@ -7922,7 +7921,7 @@ private fun PlayerHome(
                             visibleCategory(PortalSection.LIVE, it, it)
                         }.sortedBy { categoryNames.values.indexOf(it) },
                         hiddenGroups = hiddenCategories,
-                        onManageGroups = { categoryMenu = PortalSection.LIVE to it },
+                        onManageGroups = { ui.categoryMenu = PortalSection.LIVE to it },
                         category = category,
                         onCategory = {
                             if (it == null) returnToCategories()
@@ -7934,8 +7933,8 @@ private fun PlayerHome(
                         categoryScroll = categoryScroll,
                         channelScroll = channelScroll,
                         lastCategory = lastLiveCategory,
-                        restoreFocus = restoreLiveFocus,
-                        onFocusRestored = { restoreLiveFocus = false },
+                        restoreFocus = ui.restoreLiveFocus,
+                        onFocusRestored = { ui.restoreLiveFocus = false },
                         playing = playing.takeIf { vodSection == null },
                         starting = starting.takeIf { vodSection == null },
                         programmeChannel = programmeChannel,
@@ -8043,13 +8042,13 @@ private fun PlayerHome(
                                                     accountName = if (ui.traktForKids) ui.kidsTraktName else traktSession?.username,
                                                     app = traktApp ?: traktSession?.takeIf { ui.traktForKids }?.let { TraktApp(it.clientId, it.clientSecret) },
                                                     onSaveApp = ::saveTraktApp,
-                                                    deviceCode = traktDeviceCode,
+                                                    deviceCode = ui.traktDeviceCode,
                                                     busy = ui.traktBusy,
-                                                    status = traktStatus,
+                                                    status = ui.traktStatus,
                                                     onConnect = ::connectTrakt,
                                                     onSync = {
                                                         // The kids account syncs when it signs in with its own data.
-                                                        if (ui.traktForKids) traktStatus = context.getString(R.string.kids_profile_trakt_sync, profiles.kidsName.orEmpty())
+                                                        if (ui.traktForKids) ui.traktStatus = context.getString(R.string.kids_profile_trakt_sync, profiles.kidsName.orEmpty())
                                                         else syncTrakt(forceSeriesHistory = true)
                                                     },
                                                     onDisconnect = ::disconnectTrakt,
@@ -8064,8 +8063,8 @@ private fun PlayerHome(
                                         } }
                                         ui.kidsProtectionOpen -> { {
                                             SettingsDialog(stringResource(R.string.kids_protection), { ui.kidsProtectionOpen = false }) {
-                                                ParentalSettings(parental, { pinRequest = it }, profiles.hasKids) { onShared, onOwn ->
-                                                    sharedPinQuestion = SharedPinQuestion(context.getString(R.string.parental_pin_same_question), onShared, onOwn)
+                                                ParentalSettings(parental, { ui.pinRequest = it }, profiles.hasKids) { onShared, onOwn ->
+                                                    ui.sharedPinQuestion = SharedPinQuestion(context.getString(R.string.parental_pin_same_question), onShared, onOwn)
                                                 }
                                                 KidsProfileSettings(
                                                     profiles, parental,
@@ -8076,7 +8075,7 @@ private fun PlayerHome(
                                                     kidsTraktName = ui.kidsTraktName,
                                                     adminTraktConnected = traktSession != null,
                                                     onRemove = {
-                                                        pinRequest = PinRequest(context.getString(R.string.pin_enter), null,
+                                                        ui.pinRequest = PinRequest(context.getString(R.string.pin_enter), null,
                                                             check = parental::checkPin, length = parental.pinLength) { profiles.removeKids() }
                                                     }
                                                 )
@@ -8085,7 +8084,7 @@ private fun PlayerHome(
                                         ui.accentPaletteOpen -> { {
                                             AccentPalette(accentChoice, accentGradient, onAccentChoiceChange, onAccentGradientChange)
                                         } }
-                                        else -> guideAppearancePage?.let { page -> { guideAppearanceSettingsPage(page) } }
+                                        else -> ui.guideAppearancePage?.let { page -> { guideAppearanceSettingsPage(page) } }
                                     }
                                     if (subpage != null) {
                                         androidx.compose.runtime.CompositionLocalProvider(LocalSettingsInline provides true) { subpage() }
@@ -8207,10 +8206,10 @@ private fun PlayerHome(
                                         preferences?.edit()?.putString("provider_category_style", providerCategoryStyle.name)?.apply()
                                     }
                                     SettingRow(stringResource(R.string.guide_grid_appearance), Modifier) {
-                                        openSettingsPage { guideAppearancePage = GuideAppearancePage.GRID }
+                                        openSettingsPage { ui.guideAppearancePage = GuideAppearancePage.GRID }
                                     }
                                     SettingRow(stringResource(R.string.guide_channel_list_appearance), Modifier) {
-                                        openSettingsPage { guideAppearancePage = GuideAppearancePage.CHANNELS }
+                                        openSettingsPage { ui.guideAppearancePage = GuideAppearancePage.CHANNELS }
                                     }
                                 }
                                 SettingsSection.PLAYBACK -> {
@@ -8266,8 +8265,8 @@ private fun PlayerHome(
                                     ) { openSettingsPage { ui.kidsProtectionOpen = true } }
                                     Text(stringResource(R.string.settings_protection), style = MaterialTheme.typography.titleSmall,
                                         color = MaterialTheme.colorScheme.primary)
-                                    SettingsProtection(parental, { pinRequest = it }) { onShared, onOwn ->
-                                        sharedPinQuestion = SharedPinQuestion(context.getString(R.string.settings_pin_same_question), onShared, onOwn)
+                                    SettingsProtection(parental, { ui.pinRequest = it }) { onShared, onOwn ->
+                                        ui.sharedPinQuestion = SharedPinQuestion(context.getString(R.string.settings_pin_same_question), onShared, onOwn)
                                     }
                                 }
                                 SettingsSection.ABOUT -> {
@@ -8292,7 +8291,7 @@ private fun PlayerHome(
                                         enabled = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q
                                     ) {
                                         scope.launch {
-                                            diagnosticsStatus = try {
+                                            ui.diagnosticsStatus = try {
                                                 val name = withContext(Dispatchers.IO) { AppDiagnostics.saveToDownloads(context) }
                                                 context.getString(R.string.diagnostics_saved_downloads, name)
                                             } catch (error: CancellationException) {
@@ -8304,20 +8303,20 @@ private fun PlayerHome(
                                     }
                                     SettingRow(stringResource(R.string.diagnostics_choose_folder), Modifier) {
                                         runCatching { chooseDiagnosticsFolder.launch(null) }
-                                            .onFailure { diagnosticsStatus = context.getString(R.string.diagnostics_folder_open_failed) }
+                                            .onFailure { ui.diagnosticsStatus = context.getString(R.string.diagnostics_folder_open_failed) }
                                     }
                                     SettingRow(stringResource(R.string.diagnostics_save_file), Modifier) {
                                         runCatching { saveDiagnosticsFile.launch("StreamWatch-Diagnose.txt") }
-                                            .onFailure { diagnosticsStatus = context.getString(R.string.diagnostics_folder_open_failed) }
+                                            .onFailure { ui.diagnosticsStatus = context.getString(R.string.diagnostics_folder_open_failed) }
                                     }
                                     SettingRow(stringResource(R.string.diagnostics_export), Modifier, enabled = diagnosticsTree != null) {
                                         diagnosticsTree?.let { tree ->
                                             runCatching { AppDiagnostics.export(context, tree) }
-                                                .onSuccess { diagnosticsStatus = context.getString(R.string.diagnostics_export_complete) }
-                                                .onFailure { diagnosticsStatus = context.getString(R.string.diagnostics_export_failed) }
+                                                .onSuccess { ui.diagnosticsStatus = context.getString(R.string.diagnostics_export_complete) }
+                                                .onFailure { ui.diagnosticsStatus = context.getString(R.string.diagnostics_export_failed) }
                                         }
                                     }
-                                    diagnosticsStatus?.let { Text(it) }
+                                    ui.diagnosticsStatus?.let { Text(it) }
                                 }
                                 // Accounts and metadata in one place: each row opens its page on the right.
                                 SettingsSection.SYNC -> {
@@ -8479,7 +8478,7 @@ private fun PlayerHome(
                                     } else switchSource(source)
                                 }
                                 )
-                                val counts = sourceContentCounts[source.identity] ?: PortalContentCounts(0, 0, 0)
+                                val counts = ui.sourceContentCounts[source.identity] ?: PortalContentCounts(0, 0, 0)
                                 Text(
                                     stringResource(R.string.portal_content_counts, counts.tv, counts.movies, counts.series),
                                     Modifier.padding(start = 10.dp, end = 10.dp),
@@ -8494,7 +8493,7 @@ private fun PlayerHome(
                             }
                             }
                             // The provider's own categories (before grouping): which countries are in the portal.
-                            MenuButton(stringResource(R.string.portal_categories), Modifier) { portalCategoriesFor = source }
+                            MenuButton(stringResource(R.string.portal_categories), Modifier) { ui.portalCategoriesFor = source }
                             // "Bevorzugen" has its own frame next to the portal, so it is not taken for the switch.
                             val preferred = preferredPortal == source.identity
                             MenuButton(
@@ -8506,7 +8505,7 @@ private fun PlayerHome(
                         Text(
                             stringResource(
                                 R.string.portal_content_counts_merged,
-                                combinedContentCounts.tv, combinedContentCounts.movies, combinedContentCounts.series
+                                ui.combinedContentCounts.tv, ui.combinedContentCounts.movies, ui.combinedContentCounts.series
                             ),
                             Modifier.fillMaxWidth().padding(vertical = 12.dp),
                             style = MaterialTheme.typography.titleSmall
@@ -8534,13 +8533,13 @@ private fun PlayerHome(
                             onRemote = ::openRemoteAccess
                         )
                         if (connecting) {
-                            batchProgress?.let { (number, total) ->
+                            ui.batchProgress?.let { (number, total) ->
                                 Text(stringResource(R.string.refresh_all_progress, number, total))
                             }
-                            if (importStatuses.isEmpty()) {
+                            if (ui.importStatuses.isEmpty()) {
                                 LinearProgressIndicator(Modifier.fillMaxWidth())
                             } else {
-                                val completed = importStatuses.values.count {
+                                val completed = ui.importStatuses.values.count {
                                     it != ImportStatus.Loading && it !is ImportStatus.Progress
                                 }
                                 LinearProgressIndicator(
@@ -8549,16 +8548,16 @@ private fun PlayerHome(
                                 )
                                 Text(stringResource(R.string.import_steps, completed + 1, PortalSection.entries.size + 1))
                             }
-                            if (importStatuses.isEmpty()) Text(stringResource(R.string.connecting))
+                            if (ui.importStatuses.isEmpty()) Text(stringResource(R.string.connecting))
                         }
-                        sourceError?.let { message ->
+                        ui.sourceError?.let { message ->
                             Text(stringResource(message), color = MaterialTheme.colorScheme.error)
                         }
-                        storageError?.let { message ->
+                        ui.storageError?.let { message ->
                             Text(stringResource(message), color = MaterialTheme.colorScheme.error)
                         }
-                        PortalImportStatus(importStatuses)
-                        batchSummary?.let { (updated, failed) ->
+                        PortalImportStatus(ui.importStatuses)
+                        ui.batchSummary?.let { (updated, failed) ->
                             Text(stringResource(R.string.refresh_all_summary, updated, failed))
                         }
                         if (liveVariants.isNotEmpty()) {
@@ -8586,7 +8585,7 @@ private fun PlayerHome(
                             else groups.flatMap { liveCategories[it].orEmpty() }
                         }
                         val livePlayback = playing.takeIf { vodSection == null }
-                        val focusTarget = if (restoreLiveFocus) {
+                        val focusTarget = if (ui.restoreLiveFocus) {
                             livePlayback ?: preferences?.getString("last_live_channel", null)?.let { key ->
                                 guideChannels.firstOrNull { (programmeKey(it) ?: liveGroups[it]?.identity) == key }
                             }
@@ -8605,7 +8604,7 @@ private fun PlayerHome(
                                     if (guideAppearance.showPreview) Box(Modifier.width(guidePreviewWidth)) {
                                         PlayerFrame(
                                             player, active = livePreview != null, onStop = ::stopPlayback,
-                                            onSurface = { playbackVideoSurface = it },
+                                            onSurface = { ui.playbackVideoSurface = it },
                                             onOpenFullscreen = (livePreview ?: infoChannel)?.let { channel ->
                                                 { playChannel(channel) }
                                             }
@@ -8677,8 +8676,8 @@ private fun PlayerHome(
                                 window = guideWindow,
                                 active = guidePanel == GuidePanel.GRID,
                                 channelColumnFocus = guideChannelFocus,
-                                restorePlayingFocus = restoreLiveFocus,
-                                onPlayingFocusRestored = { restoreLiveFocus = false },
+                                restorePlayingFocus = ui.restoreLiveFocus,
+                                onPlayingFocusRestored = { ui.restoreLiveFocus = false },
                                 onChannelLeft = { guidePanel = GuidePanel.CATEGORIES },
                                 onVisibleChannels = { visible ->
                                     visibleEpgChannels = visible
@@ -8686,11 +8685,11 @@ private fun PlayerHome(
                                 },
                                 onHighlight = {
                                     programmeChannel = it
-                                    guideProgramme = null
+                                    ui.guideProgramme = null
                                 },
                                 onProgrammeFocus = { channel, programme ->
                                     programmeChannel = channel
-                                    guideProgramme = channel to programme
+                                    ui.guideProgramme = channel to programme
                                 },
                                 onPlay = { channel -> playChannel(channel, openFullscreenOnStart = false) },
                                 onTogglePin = ::toggleProgrammeChannel
@@ -8736,15 +8735,15 @@ private fun PlayerHome(
                                             Modifier.fillMaxWidth().focusRequester(guidePanelFocus), selected = category == null
                                         ) {
                                             category = null
-                                            restoreLiveFocus = false
+                                            ui.restoreLiveFocus = false
                                             guideScroll.requestScrollToItem(0)
                                             guidePanel = GuidePanel.GRID
                                         }
                                         groups.forEach { group ->
                                             MenuButton(group, Modifier.fillMaxWidth(), selected = category == group,
-                                                onLongPress = { categoryMenu = PortalSection.LIVE to group }) {
+                                                onLongPress = { ui.categoryMenu = PortalSection.LIVE to group }) {
                                                 category = group
-                                                restoreLiveFocus = false
+                                                ui.restoreLiveFocus = false
                                                 guideScroll.requestScrollToItem(0)
                                                 guidePanel = GuidePanel.GRID
                                             }
@@ -8937,18 +8936,18 @@ private fun PlayerHome(
                                         val items = if (section == PortalSection.SERIES) {
                                             seasons.orEmpty().flatMap { season -> season.episodes.map { season to it } }
                                         } else emptyList()
-                                        watchStatusAction = { watched -> setWatched(section, title, items, watched) }
+                                        ui.watchStatusAction = { watched -> setWatched(section, title, items, watched) }
                                     }
                                 } else null,
                                 onFavorite = { toggleSavedTitle(section, title, true) },
                                 onWatch = { toggleSavedTitle(section, title, false) },
-                                onCast = castPreview?.takeIf { it.first == title && it.second.isNotEmpty() }?.let {
-                                    { castOf = Triple(section, title, detailMetadata?.id) }
+                                onCast = ui.castPreview?.takeIf { it.first == title && it.second.isNotEmpty() }?.let {
+                                    { ui.castOf = Triple(section, title, detailMetadata?.id) }
                                 },
                                 portalLabel = titlePortalChoices[titleKey(section, title)]
                                     ?.let { id -> savedSources.firstOrNull { it.identity == id } }
                                     ?.let { context.getString(R.string.title_portal_chosen, portalName(it)) },
-                                onPortal = { portalPickerFor = section to title }.takeIf { titlePortals(section, title).size > 1 }
+                                onPortal = { ui.portalPickerFor = section to title }.takeIf { titlePortals(section, title).size > 1 }
                             )
                             }
                             if (section == PortalSection.SERIES) {
@@ -8956,16 +8955,16 @@ private fun PlayerHome(
                                     modifier = Modifier.weight(1f),
                                     scroll = seriesDetailScroll,
                                     series = displayTitle, seasons = seasons, selected = openedSeason,
-                                    failed = episodeError, unseen = trackedSeries(title)?.unseen.orEmpty(),
+                                    failed = ui.episodeError, unseen = trackedSeries(title)?.unseen.orEmpty(),
                                     metadata = episodeMetadata,
                                     onSeason = { openedSeason = it.takeUnless { season -> season == openedSeason } },
                                     onSeasonWatchStatus = { season ->
-                                        watchStatusAction = { watched ->
+                                        ui.watchStatusAction = { watched ->
                                             setWatched(section, title, season.episodes.map { season to it }, watched)
                                         }
                                     },
                                     onEpisodeWatchStatus = { season, episode ->
-                                        watchStatusAction = { watched -> setWatched(section, title, listOf(season to episode), watched) }
+                                        ui.watchStatusAction = { watched -> setWatched(section, title, listOf(season to episode), watched) }
                                     },
                                     episodeProgress = { season, episode ->
                                         val key = titleSelection(section, episode, season).progressKey
@@ -9001,179 +9000,6 @@ private fun PlayerHome(
                                     }
                                 )
                             } else titleOverview()
-                        } else if (section == PortalSection.SERIES && seriesActivityView != null) {
-                            val showHistory = seriesActivityView == SeriesActivityView.HISTORY
-                            val showContinue = seriesActivityView == SeriesActivityView.CONTINUE
-                            val showUpcoming = seriesActivityView == SeriesActivityView.UPCOMING
-                            fun playable(entry: TrackedSeries) = hasPortalReference(
-                                PortalSection.SERIES,
-                                PortalTitle(entry.name, year = entry.year, imdbId = entry.imdb, tmdbId = entry.tmdb),
-                                entry.refs
-                            )
-                            val airDates = if (showUpcoming) {
-                                upcomingSeries(seriesActivity, java.time.LocalDate.now()).filter { playable(it.first) }
-                            } else emptyList()
-                            val entries = if (showUpcoming) airDates.map { it.first } else seriesActivity.filter { entry ->
-                                (when {
-                                    showHistory -> entry.viewed && !entry.hiddenFromHistory
-                                    showContinue -> entry.continuable()
-                                    else -> entry.saved
-                                }) && playable(entry)
-                            }.let { matched ->
-                                if (showHistory || showContinue) matched.sortedByDescending { it.watchedAt }.let {
-                                    if (showHistory) it.take(10) else it
-                                } else matched.sortedBy { it.name }
-                            }
-                            val airDateLabels = airDates.associate { (entry, date) ->
-                                entry.key to date.format(java.time.format.DateTimeFormatter.ofPattern("EE, dd.MM.yyyy", java.util.Locale.GERMAN))
-                            }
-                            if (showSettingsBackButton) MenuButton(stringResource(R.string.back_to_categories), Modifier) { seriesActivityView = null }
-                            Text(stringResource(when {
-                                showHistory -> R.string.series_history
-                                showContinue -> R.string.continue_watching
-                                showUpcoming -> R.string.upcoming_series
-                                else -> R.string.watchlist
-                            }))
-                            if (entries.isEmpty()) Text(stringResource(if (showUpcoming) R.string.no_upcoming_series else R.string.no_tracked_series))
-                            LazyColumn(Modifier.weight(1f)) {
-                                items(entries, key = { it.key }) { entry ->
-                                    val baseLabel = airDateLabels[entry.key]?.let { date ->
-                                        stringResource(R.string.upcoming_series_entry, entry.name, date)
-                                    } ?: entry.name
-                                    val label = if (entry.unseen.isEmpty()) baseLabel else
-                                        "$baseLabel · ${stringResource(R.string.new_episode_count, entry.unseen.size)}"
-                                    // A Trakt-Watched-Eintrag kann ohne Prozentwert gespeichert sein.
-                                    // Die Detailseite berechnet dann aus der letzten gesehenen Folge
-                                    // die nächste nicht abgeschlossene Folge.
-                                    val resume = resumeFor(entry)
-                                    // New episodes reopen a finished series.
-                                    val reopened = entry.isComplete == true && entry.unseen.isNotEmpty()
-                                    val canContinue = !showUpcoming && (entry.isComplete != true || reopened) && resume != null &&
-                                        (entry.isComplete == false || reopened ||
-                                            progressPreferences?.getBoolean("completed:${resume.progressKey}", false) != true)
-                                    Row(
-                                        Modifier.fillMaxWidth().background(
-                                            MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp)
-                                        ).padding(8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        HistoryArtwork(
-                                            section,
-                                            PortalTitle(entry.name, year = entry.year, imdbId = entry.imdb, tmdbId = entry.tmdb),
-                                            entry.refs
-                                        )
-                                        Column(Modifier.weight(1f)) {
-                                            MenuButton(label, Modifier.fillMaxWidth()) { openTrackedSeries(entry) }
-                                            if (showUpcoming) entry.nextEpisodeName?.takeIf(String::isNotBlank)?.let { episodeName ->
-                                                Text(
-                                                    episodeName,
-                                                    Modifier.padding(start = 10.dp, bottom = 6.dp),
-                                                    style = MaterialTheme.typography.bodySmall
-                                                )
-                                            }
-                                            resume?.takeIf { canContinue }?.let { episode ->
-                                                val position = progressPreferences?.getLong(episode.progressKey, 0L) ?: 0L
-                                                Text(
-                                                    episodeResumeLabel(episode, position),
-                                                    Modifier.padding(start = 10.dp, bottom = 6.dp),
-                                                    style = MaterialTheme.typography.bodySmall
-                                                )
-                                            }
-                                        }
-                                        resume?.takeIf { canContinue }?.let {
-                                            MenuButton(stringResource(R.string.resume_playback), Modifier) {
-                                                openTrackedSeries(entry)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        } else if (section == PortalSection.MOVIES && movieWatchlistOpen) {
-                            Text(stringResource(R.string.watchlist), style = MaterialTheme.typography.titleMedium)
-                            val entries = movieBookmarks.filter { entry ->
-                                entry.progressKey in watchlist && hasPortalReference(
-                                    PortalSection.MOVIES,
-                                    PortalTitle(entry.name, year = entry.year, imdbId = entry.imdb, tmdbId = entry.tmdb),
-                                    entry.refs
-                                )
-                            }
-                            val legacy = (catalogs[section]?.titles.orEmpty() + groupCatalog?.titles.orEmpty())
-                                .distinctBy { titleKey(section, it) }
-                                .filter { title ->
-                                    titleKey(section, title) in watchlist &&
-                                        entries.none { it.progressKey == titleKey(section, title) }
-                                }
-                            if (entries.isEmpty() && legacy.isEmpty()) Text(stringResource(R.string.no_movie_bookmarks))
-                            LazyColumn(Modifier.weight(1f)) {
-                                items(entries, key = { it.progressKey }) { entry ->
-                                    Row(
-                                        Modifier.fillMaxWidth().background(
-                                            MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp)
-                                        ).padding(8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        HistoryArtwork(
-                                            section, PortalTitle(entry.name, year = entry.year, imdbId = entry.imdb, tmdbId = entry.tmdb),
-                                            entry.refs
-                                        )
-                                        MenuButton(entry.name, Modifier.weight(1f)) { openWatchedMovie(entry, resume = false) }
-                                    }
-                                }
-                                items(legacy) { title ->
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Poster(title, Modifier.width(104.dp).padding(end = 10.dp))
-                                        MenuButton(displayVodTitle(title), Modifier.weight(1f)) { showTitle(section, title) }
-                                    }
-                                }
-                            }
-                        } else if (section == PortalSection.MOVIES && movieHistoryOpen) {
-                            if (showSettingsBackButton) MenuButton(stringResource(R.string.back_to_categories), Modifier) { movieHistoryOpen = false }
-                            Text(stringResource(if (movieContinueOpen) R.string.continue_watching else R.string.movie_history))
-                            fun unfinished(key: String): Boolean {
-                                val position = progressPreferences?.getLong(key, 0L) ?: 0L
-                                return progressPreferences?.getBoolean("completed:$key", false) != true && position > 0L &&
-                                    (progressPreferences?.getFloat("trakt_percent:$key", 0f) ?: 0f) < 90f
-                            }
-                            val entries = movieHistory.filter { entry ->
-                                (!movieContinueOpen || unfinished(entry.progressKey)) && hasPortalReference(
-                                    PortalSection.MOVIES,
-                                    PortalTitle(entry.name, year = entry.year, imdbId = entry.imdb, tmdbId = entry.tmdb),
-                                    entry.refs
-                                )
-                            }.sortedByDescending { it.watchedAt }.take(if (movieContinueOpen) 30 else 10)
-                            if (entries.isEmpty()) Text(stringResource(R.string.no_watched_movies))
-                            LazyColumn(Modifier.weight(1f)) {
-                                items(entries, key = { it.progressKey }) { entry ->
-                                    Row(
-                                        Modifier.fillMaxWidth().background(
-                                            MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp)
-                                        ).padding(8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        HistoryArtwork(
-                                            section,
-                                            PortalTitle(entry.name, year = entry.year, imdbId = entry.imdb, tmdbId = entry.tmdb),
-                                            entry.refs
-                                        )
-                                        val position = progressPreferences?.getLong(entry.progressKey, 0L) ?: 0L
-                                        val incomplete = progressPreferences?.getBoolean("completed:${entry.progressKey}", false) != true &&
-                                            position > 0L && (progressPreferences?.getFloat("trakt_percent:${entry.progressKey}", 0f) ?: 0f) < 90f
-                                        Column(Modifier.weight(1f)) {
-                                            MenuButton(entry.name, Modifier.fillMaxWidth()) {
-                                                openWatchedMovie(entry, resume = false)
-                                            }
-                                            if (incomplete) Text(
-                                                stringResource(R.string.saved_playback_position, playbackTime(position)),
-                                                Modifier.padding(start = 10.dp, bottom = 6.dp),
-                                                style = MaterialTheme.typography.bodySmall
-                                            )
-                                        }
-                                        if (incomplete) MenuButton(stringResource(R.string.resume_playback), Modifier) {
-                                            openWatchedMovie(entry, resume = true)
-                                        }
-                                    }
-                                }
-                            }
                         } else if (myAreaSection == section) {
                             // Like the "My Netflix" page: one row each for continue watching,
                             // the watchlist, (for series) announced episodes and recently watched.
@@ -9287,8 +9113,8 @@ private fun PlayerHome(
                                     modifier = Modifier.weight(1f),
                                         categoryTitle = group.name,
                                     catalog = if (uncategorizedSelected) baseCatalog else groupCatalog,
-                                    loading = if (uncategorizedSelected) section in catalogLoading else ui.groupLoading,
-                                    failed = if (uncategorizedSelected) section in catalogErrors else ui.groupError,
+                                    loading = if (uncategorizedSelected) section in ui.catalogLoading else ui.groupLoading,
+                                    failed = if (uncategorizedSelected) section in ui.catalogErrors else ui.groupError,
                                     canLoadMore = !connecting,
                                     emptyMessage = if (ui.groupUsesTmdb) R.string.tmdb_no_portal_matches
                                     else if (section == PortalSection.MOVIES) {
@@ -9301,17 +9127,17 @@ private fun PlayerHome(
                                     isFavorite = { titleKey(section, it) in favorites },
                                     isSaved = { isTitleSaved(section, it) },
                                     preferPopularity = group.id == VodCategory.POPULAR.id,
-                                    returnTitle = catalogueReturnTitle,
+                                    returnTitle = ui.catalogueReturnTitle,
                                     focusFirstTitle = ui.focusFirstTitle,
                                     onTitleFocusRestored = {
-                                        catalogueReturnTitle = null
+                                        ui.catalogueReturnTitle = null
                                         ui.focusFirstTitle = false
                                     },
                                     newEpisodes = { title ->
                                         if (section == PortalSection.SERIES) trackedSeries(title)?.unseen?.size ?: 0 else 0
                                     },
                                     onSelect = {
-                                        catalogueReturnTitle = it
+                                        ui.catalogueReturnTitle = it
                                         searchedVariants = emptyMap()
                                         showTitle(section, it)
                                     }
@@ -9320,13 +9146,13 @@ private fun PlayerHome(
                             } else {
                                 if (visibleVodGroups.isEmpty()) CatalogCategories(
                                 groups = visibleVodGroups,
-                                loading = section in catalogLoading ||
-                                    importStatuses[section] == ImportStatus.Loading,
-                                failed = section in catalogErrors ||
-                                    importStatuses[section] == ImportStatus.Failed,
+                                loading = section in ui.catalogLoading ||
+                                    ui.importStatuses[section] == ImportStatus.Loading,
+                                failed = section in ui.catalogErrors ||
+                                    ui.importStatuses[section] == ImportStatus.Failed,
                                 isHidden = { categoryKey(section, it.id) in hiddenCategories },
                                 onSelect = ::openVodCategory,
-                                onManage = { categoryMenu = section to it }
+                                onManage = { ui.categoryMenu = section to it }
                                 )
                             }
                         }
@@ -9367,8 +9193,7 @@ private fun PlayerHome(
                         MenuButton(
                             stringResource(R.string.my_area), Modifier,
                             leadingIcon = R.drawable.ic_menu_my_area,
-                            selected = myAreaSection == section && !movieHistoryOpen && !movieWatchlistOpen &&
-                                seriesActivityView == null,
+                            selected = myAreaSection == section,
                             // New episodes of followed series: a number in a circle, like at "Einstellungen".
                             badge = if (section == PortalSection.SERIES) {
                                 seriesActivity.filter { it.saved || it.viewed }.sumOf { it.unseen.size }.takeIf { it > 0 }
@@ -9376,9 +9201,6 @@ private fun PlayerHome(
                         ) {
                             closeSeries()
                             details = null
-                            movieHistoryOpen = false
-                            movieWatchlistOpen = false
-                            seriesActivityView = null
                             myAreaSection = section
                         }
                             visibleVodGroups.forEach { group ->
@@ -9395,20 +9217,19 @@ private fun PlayerHome(
                                     providerMarkOnly = providerCategoryStyle == ProviderCategoryStyle.SYMBOLS &&
                                         serviceCategory(group.name) != null,
                                     selected = selectedGroup?.first == section && selectedGroup?.second?.id == group.id &&
-                                        !movieHistoryOpen && !movieWatchlistOpen && seriesActivityView == null &&
                                         myAreaSection != section,
                                     hiddenIndicator = categoryKey(section, group.id) in hiddenCategories,
-                                    onLongPress = { categoryMenu = section to group.id }
+                                    onLongPress = { ui.categoryMenu = section to group.id }
                                 ) { openVodCategory(group) }
                             }
                         MenuButton(
                             stringResource(R.string.manage_categories),
                             Modifier
                         ) {
-                            categoryMenu = section to null
+                            ui.categoryMenu = section to null
                         }
                     }
-                    if (restoring || connecting || ui.liveGroupsLoading || ui.traktBusy || startupPortalRefresh != null || startupPortalCheck != null ||
+                    if (restoring || connecting || ui.liveGroupsLoading || ui.traktBusy || ui.startupPortalRefresh != null || ui.startupPortalCheck != null ||
                         cataloguePlaybackView == VodLiveView.CORNER && playing != null
                     ) header()
                     content()
@@ -9514,7 +9335,7 @@ private fun PlayerHome(
                 }
             }
             LaunchedEffect(destination, settingsSection) {
-                if (!inGuide && !restoreLiveFocus) {
+                if (!inGuide && !ui.restoreLiveFocus) {
                     if (destination == Destination.SETTINGS) {
                         contentScroll.scrollTo(0)
                         withFrameNanos { }
@@ -10288,6 +10109,27 @@ internal fun PlayerFrame(
         view.setShowNextButton(false)
         view.setShowRewindButton(seekable)
         view.setShowFastForwardButton(seekable)
+        // Outer buttons: the previous/next episode when there is one, otherwise a 10-minute jump
+        // (films, Live-TV with timeshift); hidden when neither works.
+        fun outer(name: String, episode: Boolean, episodeIcon: Int, episodeLabel: Int, jumpIcon: Int, jumpLabel: Int) {
+            val button = view.findViewWithTag<android.widget.ImageButton>(name) ?: return
+            val mode = when {
+                !livePlayback && episode -> 1
+                seekable -> 2
+                else -> 0
+            }
+            button.visibility = if (mode == 0) android.view.View.GONE else android.view.View.VISIBLE
+            if (mode != 0 && button.getTag(R.string.player_jump_back) != mode) {
+                button.setTag(R.string.player_jump_back, mode)
+                button.setImageResource(if (mode == 1) episodeIcon else jumpIcon)
+                button.contentDescription = view.context.getString(if (mode == 1) episodeLabel else jumpLabel)
+                button.tooltipText = button.contentDescription
+            }
+        }
+        outer("previous_episode_action", canPreviousEpisode, R.drawable.ic_player_skip_previous, R.string.previous_episode,
+            R.drawable.ic_player_jump_back, R.string.player_jump_back)
+        outer("next_episode_action", canNextEpisode, R.drawable.ic_player_skip_next, R.string.next_episode,
+            R.drawable.ic_player_jump_forward, R.string.player_jump_forward)
         val row = view.findViewById<LinearLayout>(androidx.media3.ui.R.id.exo_center_controls) ?: return
         val progress = view.findViewById<android.view.View>(androidx.media3.ui.R.id.exo_progress)
         val pause = view.findViewById<android.view.View>(androidx.media3.ui.R.id.exo_play_pause)
@@ -10518,72 +10360,43 @@ internal fun PlayerFrame(
                     }.apply {
                         useController = true
                         controllerAutoShow = false
+                        // Play row, like Netflix or Prime: previous episode (or 10 min back), seek back,
+                        // play/pause, stop, seek forward, next episode (or 10 min forward). Buttons that
+                        // do nothing for the running title are hidden in arrangePlayerButtons.
+                        val playerView = this
                         findViewById<LinearLayout>(androidx.media3.ui.R.id.exo_center_controls)?.let { row ->
-                            val size = (48 * context.resources.displayMetrics.density).toInt()
-                            fun actionButton(icon: Int, label: Int, action: () -> Unit) = ImageButton(context).apply {
+                            val density = context.resources.displayMetrics.density
+                            val size = (52 * density).toInt()
+                            val padding = (13 * density).toInt()
+                            fun actionButton(icon: Int, label: Int, name: String, action: () -> Unit) = ImageButton(context).apply {
+                                id = android.view.View.generateViewId()
+                                tag = name
                                 setImageResource(icon)
                                 contentDescription = context.getString(label)
                                 tooltipText = contentDescription
-                                isFocusable = true
-                                val background = TypedValue()
-                                if (context.theme.resolveAttribute(
-                                        android.R.attr.selectableItemBackgroundBorderless, background, true
-                                    )
-                                ) setBackgroundResource(background.resourceId)
+                                scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+                                setPadding(padding, padding, padding, padding)
                                 setOnClickListener { action() }
+                                enableRemoteFocus(this)
                             }
-                            val previous = actionButton(android.R.drawable.ic_media_previous, R.string.previous_episode) {
-                                previousEpisode?.invoke()
+                            fun jump(byMs: Long) {
+                                val active = playerView.player ?: return
+                                val target = (active.currentPosition + byMs).coerceAtLeast(0L)
+                                val duration = active.duration.takeIf { it > 0 && it != C.TIME_UNSET }
+                                active.seekTo(duration?.let { target.coerceAtMost((it - 1_000).coerceAtLeast(0L)) } ?: target)
                             }
-                            val button = ImageButton(context).apply {
-                                setImageResource(R.drawable.ic_player_stop)
-                                contentDescription = context.getString(R.string.stop_playback)
-                                tooltipText = contentDescription
-                                isFocusable = true
-                                val background = TypedValue()
-                                if (context.theme.resolveAttribute(
-                                        android.R.attr.selectableItemBackgroundBorderless, background, true
-                                    )
-                                ) setBackgroundResource(background.resourceId)
-                                setOnClickListener { stop() }
+                            val previous = actionButton(R.drawable.ic_player_skip_previous, R.string.previous_episode, "previous_episode_action") {
+                                if (!livePlayback && canPreviousEpisode) previousEpisode?.invoke() else jump(-BIG_JUMP_MS)
                             }
-                            button.tag = "stop_playback_action"
-                            val next = actionButton(android.R.drawable.ic_media_next, R.string.next_episode) {
-                                nextEpisode?.invoke()
+                            val stopButton = actionButton(R.drawable.ic_player_stop, R.string.stop_playback, "stop_playback_action") { stop() }
+                            val next = actionButton(R.drawable.ic_player_skip_next, R.string.next_episode, "next_episode_action") {
+                                if (!livePlayback && canNextEpisode) nextEpisode?.invoke() else jump(BIG_JUMP_MS)
                             }
                             val pause = row.findViewById<android.view.View>(androidx.media3.ui.R.id.exo_play_pause)
-                            if (pause != null) {
-                                previous.id = android.view.View.generateViewId()
-                                button.id = android.view.View.generateViewId()
-                                next.id = android.view.View.generateViewId()
-                                previous.visibility = if (!livePlayback && canPreviousEpisode) android.view.View.VISIBLE else android.view.View.GONE
-                                next.visibility = if (!livePlayback && canNextEpisode) android.view.View.VISIBLE else android.view.View.GONE
-                                button.visibility = android.view.View.VISIBLE
-                                val controls = buildList {
-                                    if (previous.visibility == android.view.View.VISIBLE) add(previous)
-                                    add(pause)
-                                    if (next.visibility == android.view.View.VISIBLE) add(next)
-                                    if (button.visibility == android.view.View.VISIBLE) add(button)
-                                }
-                                controls.forEachIndexed { index, control ->
-                                    enableRemoteFocus(control)
-                                    control.nextFocusLeftId = controls.getOrNull(index - 1)?.id ?: control.id
-                                    control.nextFocusRightId = controls.getOrNull(index + 1)?.id ?: control.id
-                                }
-                                findViewById<android.view.View>(androidx.media3.ui.R.id.exo_progress)?.let { progress ->
-                                    controls.forEach { it.nextFocusDownId = progress.id }
-                                    progress.nextFocusUpId = pause.id
-                                    progress.nextFocusDownId = progress.id
-                                }
-                            }
-                            val index = row.indexOfChild(pause).takeIf { it >= 0 } ?: 0
-                            row.addView(previous, index, LinearLayout.LayoutParams(size, size))
-                            row.addView(next, row.indexOfChild(pause).coerceAtLeast(0) + 1, LinearLayout.LayoutParams(size, size))
-                            row.addView(button, row.indexOfChild(next) + 1, LinearLayout.LayoutParams(size, size))
-                            previous.tag = "previous_episode_action"
-                            next.tag = "next_episode_action"
-                            previous.isEnabled = canPreviousEpisode
-                            next.isEnabled = canNextEpisode
+                            row.addView(previous, 0, LinearLayout.LayoutParams(size, size))
+                            val afterPause = row.indexOfChild(pause).takeIf { it >= 0 }?.plus(1) ?: row.childCount
+                            row.addView(stopButton, afterPause, LinearLayout.LayoutParams(size, size))
+                            row.addView(next, LinearLayout.LayoutParams(size, size))
                         }
                         findViewById<android.view.View>(androidx.media3.ui.R.id.exo_subtitle)?.visibility =
                             android.view.View.GONE
@@ -10655,7 +10468,6 @@ internal fun PlayerFrame(
                                     android.graphics.Color.argb(210, 0, 0, 0))
                             )
                         // "● Live" at the far right: only with timeshift and when behind live.
-                        val playerView = this
                         (findViewById<android.view.View>(androidx.media3.ui.R.id.exo_basic_controls) as? LinearLayout)?.let { bar ->
                             if (bar.findViewWithTag<android.view.View>("player_live_action") == null) {
                                 val live = android.widget.TextView(context).apply {
@@ -10742,26 +10554,8 @@ internal fun PlayerFrame(
                     // Live TV keeps the last picture while another stream or channel starts (no black cut).
                     view.setKeepContentOnPlayerReset(livePlayback)
                     arrangePlayerButtons(view)
-                    view.findViewWithTag<android.view.View>("previous_episode_action")?.let { button ->
-                        button.visibility = if (!livePlayback && canPreviousEpisode) android.view.View.VISIBLE else android.view.View.GONE
-                        button.isEnabled = canPreviousEpisode
-                    }
-                    view.findViewWithTag<android.view.View>("next_episode_action")?.let { button ->
-                        button.visibility = if (!livePlayback && canNextEpisode) android.view.View.VISIBLE else android.view.View.GONE
-                        button.isEnabled = canNextEpisode
-                    }
                     val pause = view.findViewById<android.view.View>(androidx.media3.ui.R.id.exo_play_pause)
-                    val stopButton = view.findViewWithTag<android.view.View>("stop_playback_action")
-                    val previousButton = view.findViewWithTag<android.view.View>("previous_episode_action")
-                    val nextButton = view.findViewWithTag<android.view.View>("next_episode_action")
                     val subtitlesButton = view.findViewWithTag<android.view.View>("player_subtitles_action")
-                    val visibleControls = listOfNotNull(previousButton, pause, nextButton, stopButton)
-                        .filter { it.visibility == android.view.View.VISIBLE }
-                    visibleControls.forEachIndexed { index, control ->
-                        control.nextFocusLeftId = visibleControls.getOrNull(index - 1)?.id ?: control.id
-                        control.nextFocusRightId = visibleControls.getOrNull(index + 1)?.id ?: control.id
-                        control.nextFocusDownId = androidx.media3.ui.R.id.exo_progress
-                    }
                     view.findViewById<android.view.View>(androidx.media3.ui.R.id.exo_progress)?.let { progress ->
                         progress.nextFocusUpId = pause?.id ?: progress.id
                         (progress as? DefaultTimeBar)?.let { timeBar ->

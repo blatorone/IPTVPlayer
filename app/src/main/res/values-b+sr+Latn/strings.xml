@@ -935,4 +935,6 @@
     <string name="smooth_switch_hint">Kada trenutni strim ima smetnje, aplikacija već u pozadini snima zamenski portal i pri prelasku nastavlja na istom mestu umesto da ponavlja ili preskače sekunde. Razliku među portalima uči iz ranijih prelazaka. Tokom smetnji kratko troši dvostruke podatke. Isključeno: trenutni prelazak kao do sada.</string>
     <string name="smooth_switch_weak_device">Ovaj uređaj je možda preslab za to – korišćenje na sopstvenu odgovornost.</string>
     <string name="timeshift_live">Uživo</string>
+    <string name="player_jump_back">10 minuta nazad</string>
+    <string name="player_jump_forward">10 minuta napred</string>
 </resources>

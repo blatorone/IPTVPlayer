@@ -935,4 +935,6 @@
     <string name="smooth_switch_hint">Si le flux en cours a des problèmes, l\'app enregistre déjà le portail de secours en arrière-plan et reprend au même endroit lors du changement, sans répéter ni sauter de secondes. Elle apprend l\'écart entre les portails grâce aux changements précédents. Utilise brièvement le double de données pendant les problèmes. Désactivé : changement immédiat comme avant.</string>
     <string name="smooth_switch_weak_device">Cet appareil est peut-être trop faible pour cela – à tes risques et périls.</string>
     <string name="timeshift_live">Direct</string>
+    <string name="player_jump_back">Reculer de 10 minutes</string>
+    <string name="player_jump_forward">Avancer de 10 minutes</string>
 </resources>

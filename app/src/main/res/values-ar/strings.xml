@@ -950,4 +950,6 @@
     <string name="smooth_switch_hint">عندما تظهر مشكلات في البث الجاري يسجّل التطبيق البوابة البديلة في الخلفية، ويتابع عند التبديل من الموضع نفسه بدل تكرار ثوانٍ أو تخطيها. يتعلم الفرق بين البوابات من الانتقالات السابقة. يستهلك بيانات مضاعفة لفترة قصيرة أثناء المشكلات. إيقاف: انتقال فوري كما في السابق.</string>
     <string name="smooth_switch_weak_device">قد يكون هذا الجهاز ضعيفًا لذلك – الاستخدام على مسؤوليتك.</string>
     <string name="timeshift_live">مباشر</string>
+    <string name="player_jump_back">رجوع 10 دقائق</string>
+    <string name="player_jump_forward">تقديم 10 دقائق</string>
 </resources>

@@ -935,4 +935,6 @@
     <string name="smooth_switch_hint">Si el stream actual da problemas, la app ya graba en segundo plano el portal de reserva y al cambiar continúa en el mismo punto, sin repetir ni saltar segundos. Aprende la diferencia entre portales de cambios anteriores. Durante los problemas usa brevemente el doble de datos. Desactivado: cambio inmediato como antes.</string>
     <string name="smooth_switch_weak_device">Este dispositivo puede ser demasiado débil para esto: úsalo bajo tu propia responsabilidad.</string>
     <string name="timeshift_live">En directo</string>
+    <string name="player_jump_back">Retroceder 10 minutos</string>
+    <string name="player_jump_forward">Avanzar 10 minutos</string>
 </resources>

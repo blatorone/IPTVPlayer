@@ -5243,13 +5243,15 @@ private fun PlayerHome(
     fun isMainMenuOpen() = selected == Destination.LIVE && guidePanel == GuidePanel.MENU && !fullscreen
     val mainMenuOpen = isMainMenuOpen()
     LaunchedEffect(mainMenuOpen) { if (!mainMenuOpen) lastBack = 0L }
-    fun settingsPageOpen() = ui.epgSettingsOpen || ui.episodeSettingsOpen || ui.controlSettingsOpen ||
+    fun settingsPageOpen() = SmartHomePages.open || ui.epgSettingsOpen || ui.episodeSettingsOpen || ui.controlSettingsOpen ||
         ui.metadataSettingsOpen || ui.traktSettingsOpen || ui.kidsProtectionOpen || ui.termsOpen || ui.whatsNewOpen || ui.languageOpen || ui.guideAppearancePage != null || ui.remoteAccessOpen || ui.accentPaletteOpen
     fun openSettingsPage(open: () -> Unit) {
         ui.settingsPageOpenedAt = SystemClock.elapsedRealtime()
         open()
     }
     fun closeSettingsPages(): Boolean {
+        // Smart home: from a light back to its state, from a state back to the section.
+        if (SmartHomePages.back()) return true
         if (ui.kidsColorOpen) {
             ui.kidsColorOpen = false
             return true

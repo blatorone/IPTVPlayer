@@ -19,3 +19,6 @@ local.properties
 /app/release/
 *.jks
 *.keystore
+
+# Claude Code: personal settings of this machine
+.claude/settings.local.json

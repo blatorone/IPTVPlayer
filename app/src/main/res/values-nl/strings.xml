@@ -932,7 +932,7 @@
     <string name="smart_home_on">aan</string>
     <string name="backup_part_smart_home_soon">Slim huis (binnenkort)</string>
     <string name="smart_home_stop">Bij stop of einde</string>
-    <string name="smart_home_unchanged">niet wijzigen</string>
+    <string name="smart_home_unchanged">laten zoals het is</string>
     <string name="smart_home_colors">Kleur</string>
     <string name="smart_home_scene_empty">niets ingesteld</string>
     <string name="smart_home_scene_lights">%1$d apparaten</string>
@@ -962,4 +962,5 @@
     <string name="manual_error_none">niets doen (zelf wisselen)</string>
     <string name="stream_choice_title">Stream kiezen</string>
     <string name="stream_choice_failed">De stream speelt niet af. Kies een andere:</string>
+    <string name="smart_home_light_hint">„Laten zoals het is“: StreamWatch schakelt deze lamp hier helemaal niet. Bij „aan“ verschijnen de helderheid en – als de lamp het kan – het palet voor kleurtemperatuur en kleur.</string>
 </resources>

@@ -936,7 +936,7 @@
     <string name="smart_home_on">ligada</string>
     <string name="backup_part_smart_home_soon">Casa inteligente (em breve)</string>
     <string name="smart_home_stop">Ao parar ou terminar</string>
-    <string name="smart_home_unchanged">não mudar</string>
+    <string name="smart_home_unchanged">deixar como está</string>
     <string name="smart_home_colors">Cor</string>
     <string name="smart_home_scene_empty">nada definido</string>
     <string name="smart_home_scene_lights">%1$d dispositivos</string>
@@ -966,4 +966,5 @@
     <string name="manual_error_none">não fazer nada (trocar você mesmo)</string>
     <string name="stream_choice_title">Escolher stream</string>
     <string name="stream_choice_failed">O stream não reproduz. Escolha outro:</string>
+    <string name="smart_home_light_hint">„Deixar como está“: o StreamWatch não muda esta luz aqui. Com „ligada“ aparecem o brilho e – se a luz suportar – a paleta de temperatura de cor e cor.</string>
 </resources>

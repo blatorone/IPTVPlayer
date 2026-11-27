@@ -932,7 +932,7 @@
     <string name="smart_home_on">ndezur</string>
     <string name="backup_part_smart_home_soon">Shtëpi e mençur (së shpejti)</string>
     <string name="smart_home_stop">Në ndalim ose fund</string>
-    <string name="smart_home_unchanged">mos ndrysho</string>
+    <string name="smart_home_unchanged">lëre siç është</string>
     <string name="smart_home_colors">Ngjyra</string>
     <string name="smart_home_scene_empty">asgjë e caktuar</string>
     <string name="smart_home_scene_lights">%1$d pajisje</string>
@@ -962,4 +962,5 @@
     <string name="manual_error_none">mos bëj asgjë (ndërro vetë)</string>
     <string name="stream_choice_title">Zgjidh transmetimin</string>
     <string name="stream_choice_failed">Transmetimi nuk luhet. Zgjidh një tjetër:</string>
+    <string name="smart_home_light_hint">„Lëre siç është“: StreamWatch këtu nuk e ndërron fare këtë llambë. Me „ndezur“ shfaqen ndriçimi dhe – nëse llamba e mbështet – paleta për temperaturën e ngjyrës dhe ngjyrën.</string>
 </resources>

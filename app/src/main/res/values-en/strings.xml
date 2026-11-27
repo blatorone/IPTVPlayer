@@ -932,7 +932,7 @@
     <string name="smart_home_on">on</string>
     <string name="backup_part_smart_home_soon">Smart home (coming soon)</string>
     <string name="smart_home_stop">On stop or end</string>
-    <string name="smart_home_unchanged">don\'t change</string>
+    <string name="smart_home_unchanged">leave as is</string>
     <string name="smart_home_colors">Colour</string>
     <string name="smart_home_scene_empty">nothing set</string>
     <string name="smart_home_scene_lights">%1$d devices</string>
@@ -962,4 +962,5 @@
     <string name="manual_error_none">do nothing (switch yourself)</string>
     <string name="stream_choice_title">Choose stream</string>
     <string name="stream_choice_failed">The stream does not play. Choose another one:</string>
+    <string name="smart_home_light_hint">„Leave as is“: StreamWatch does not switch this light here at all. With „on“ the brightness and – if the light supports it – the palette for colour temperature and colour appear.</string>
 </resources>

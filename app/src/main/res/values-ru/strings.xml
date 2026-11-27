@@ -940,7 +940,7 @@
     <string name="smart_home_on">вкл.</string>
     <string name="backup_part_smart_home_soon">Умный дом (скоро)</string>
     <string name="smart_home_stop">При остановке или конце</string>
-    <string name="smart_home_unchanged">не менять</string>
+    <string name="smart_home_unchanged">оставить как есть</string>
     <string name="smart_home_colors">Цвет</string>
     <string name="smart_home_scene_empty">ничего не задано</string>
     <string name="smart_home_scene_lights">%1$d устройств</string>
@@ -970,4 +970,5 @@
     <string name="manual_error_none">ничего не делать (переключить самому)</string>
     <string name="stream_choice_title">Выбрать поток</string>
     <string name="stream_choice_failed">Поток не воспроизводится. Выбери другой:</string>
+    <string name="smart_home_light_hint">«Оставить как есть»: здесь StreamWatch эту лампу вообще не переключает. При «вкл.» появляются яркость и – если лампа умеет – палитра цветовой температуры и цвета.</string>
 </resources>

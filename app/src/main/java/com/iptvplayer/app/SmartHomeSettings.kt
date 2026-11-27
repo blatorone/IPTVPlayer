@@ -308,6 +308,8 @@ private fun SceneEditor(state: LightState, go: (() -> Unit) -> Unit, onTry: () -
 private fun LightEditor(state: LightState, entity: HaEntity) {
     val setting = LightAutomation.rule.scene(state)[entity.id]
     fun set(value: LightSetting?) = LightAutomation.update { it.withSetting(state, entity.id, value) }
+    Text(stringResource(R.string.smart_home_light_hint), style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant)
     SettingRow(stringResource(R.string.smart_home_unchanged), selected = setting == null) { set(null) }
     if (entity.domain != "scene") SettingRow(stringResource(onLabel(entity, false)), selected = setting?.on == false) { set(LightSetting(false)) }
     SettingRow(stringResource(onLabel(entity, true)), selected = setting?.on == true) {

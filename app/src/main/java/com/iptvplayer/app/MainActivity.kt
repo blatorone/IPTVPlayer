@@ -3234,6 +3234,7 @@ private fun PlayerHome(
                 } catch (error: CancellationException) {
                     throw error
                 } catch (error: Exception) {
+                    PlaybackReason.text = (error as? PortalRequestException)?.let { "HTTP ${it.status}" } ?: error.javaClass.simpleName
                     message = if (error is PortalRequestException && error.status in listOf(401, 403)) {
                         R.string.playback_portal_denied
                     } else R.string.playback_link_error
@@ -3267,6 +3268,7 @@ private fun PlayerHome(
             fullscreen && selection.section == PortalSection.SERIES && ui.advancingEpisode
         // A new channel or title while one runs (also the next episode): not a stop for the light.
         LightAutomation.beginSwitch()
+        PlaybackReason.text = null
         stopPlayback()
         fullscreen = remainFullscreen
         playbackSelection = selection
@@ -4984,6 +4986,7 @@ private fun PlayerHome(
                         R.string.playback_stream_http_error
                     else -> R.string.playback_error
                 }
+                PlaybackReason.text = httpStatus?.let { "HTTP $it" } ?: error.errorCodeName.removePrefix("ERROR_CODE_")
                 AppDiagnostics.record(context, "playback_error ${error.errorCodeName}" + (httpStatus?.let { " http:$it" } ?: "") +
                     (Timeshift.describe()?.let { " $it" } ?: ""))
                 scope.launch { failPlayback(attempt, message) }
@@ -4998,6 +5001,7 @@ private fun PlayerHome(
         if (attempt != null && (starting != null || buffering)) {
             delay(if (attempt.selection.section == PortalSection.LIVE) 12_000 else 25_000)
             if (canPlay() && (starting != null || player?.playWhenReady == true)) {
+                PlaybackReason.text = "Timeout"
                 AppDiagnostics.record(context, if (starting != null) "playback_start_timeout" else "playback_buffer_timeout")
                 failPlayback(attempt, R.string.playback_timeout)
             }
@@ -7222,15 +7226,15 @@ private fun PlayerHome(
                     }
                 }
             }
-            // While a stream starts, and when none plays, say so in fullscreen instead of a black screen.
-            if (starting != null || playbackError != null) Surface(
+            // When no stream plays at all (not while one is switched): the message and its reason.
+            if (playbackError != null) Surface(
                 modifier = Modifier.align(Alignment.Center).padding(24.dp).widthIn(max = 460.dp),
                 shape = RoundedCornerShape(14.dp),
                 color = Color.Black.copy(alpha = 0.82f),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
             ) {
                 Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    PlaybackFeedback(starting, playbackError)
+                    PlaybackFeedback(null, playbackError)
                 }
             }
             if (live && (playbackControlsVisible ||
@@ -10171,6 +10175,8 @@ private fun PlaybackFeedback(starting: StalkerChannel?, error: Int?) {
         LinearProgressIndicator(Modifier.fillMaxWidth())
     }
     if (error != null) Text(stringResource(error), color = MaterialTheme.colorScheme.error)
+    // Why: the HTTP code of the portal or the player's error type.
+    if (error != null) PlaybackReason.text?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
 }
 
 @Composable
@@ -10459,6 +10465,8 @@ internal fun PlayerFrame(
         val bottomButtons = listOf(
             view.findViewById(androidx.media3.ui.R.id.exo_settings),
             view.findViewWithTag<android.view.View>("player_subtitles_action"),
+            // Smoking break (smart home), only shown when it is set up.
+            view.findViewWithTag<android.view.View>("player_smoke_action"),
             view.findViewWithTag<android.view.View>("player_live_action"),
             view.findViewById(androidx.media3.ui.R.id.exo_fullscreen),
             view.findViewById(androidx.media3.ui.R.id.exo_overflow_show)
@@ -10604,6 +10612,7 @@ internal fun PlayerFrame(
                                         val progress = findViewById<android.view.View>(androidx.media3.ui.R.id.exo_progress)
                                         val bottomTargets = listOfNotNull(
                                             findViewWithTag<android.view.View>("player_subtitles_action"),
+                                            findViewWithTag<android.view.View>("player_smoke_action"),
                                             findViewById(androidx.media3.ui.R.id.exo_settings),
                                             findViewById(androidx.media3.ui.R.id.exo_fullscreen),
                                             findViewById(androidx.media3.ui.R.id.exo_overflow_show)
@@ -11449,3 +11458,8 @@ internal fun expiryLeadLabel(context: Context, lead: ExpiryLead): String = when 
     'm' -> context.getString(R.string.expiry_lead_month)
     else -> context.resources.getQuantityString(R.plurals.expiry_lead_days, lead.amount, lead.amount)
 } + " " + context.getString(R.string.expiry_lead_before)
+
+/** Why the last stream failed (HTTP code or error type), shown with the message when none plays. */
+internal object PlaybackReason {
+    var text by mutableStateOf<String?>(null)
+}

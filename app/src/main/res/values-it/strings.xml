@@ -936,7 +936,7 @@
     <string name="smart_home_on">accesa</string>
     <string name="backup_part_smart_home_soon">Casa intelligente (in arrivo)</string>
     <string name="smart_home_stop">Allo stop o alla fine</string>
-    <string name="smart_home_unchanged">non cambiare</string>
+    <string name="smart_home_unchanged">lascia com\'è</string>
     <string name="smart_home_colors">Colore</string>
     <string name="smart_home_scene_empty">niente impostato</string>
     <string name="smart_home_scene_lights">%1$d dispositivi</string>
@@ -966,4 +966,5 @@
     <string name="manual_error_none">non fare nulla (cambia tu)</string>
     <string name="stream_choice_title">Scegli lo stream</string>
     <string name="stream_choice_failed">Lo stream non funziona. Scegline un altro:</string>
+    <string name="smart_home_light_hint">„Lascia com\'è“: StreamWatch qui non cambia affatto questa luce. Con „accesa“ compaiono la luminosità e – se la luce lo supporta – la tavolozza per temperatura colore e colore.</string>
 </resources>

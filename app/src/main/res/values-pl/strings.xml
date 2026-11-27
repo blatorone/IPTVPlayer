@@ -940,7 +940,7 @@
     <string name="smart_home_on">włączone</string>
     <string name="backup_part_smart_home_soon">Inteligentny dom (wkrótce)</string>
     <string name="smart_home_stop">Po zatrzymaniu lub końcu</string>
-    <string name="smart_home_unchanged">nie zmieniaj</string>
+    <string name="smart_home_unchanged">pozostaw bez zmian</string>
     <string name="smart_home_colors">Kolor</string>
     <string name="smart_home_scene_empty">nic nie ustawiono</string>
     <string name="smart_home_scene_lights">%1$d urządzeń</string>
@@ -970,4 +970,5 @@
     <string name="manual_error_none">nic nie rób (zmień sam)</string>
     <string name="stream_choice_title">Wybierz strumień</string>
     <string name="stream_choice_failed">Strumień nie działa. Wybierz inny:</string>
+    <string name="smart_home_light_hint">„Pozostaw bez zmian“: StreamWatch w ogóle nie przełącza tu tej lampy. Przy „włączone“ pojawia się jasność i – jeśli lampa to obsługuje – paleta temperatury barwowej i koloru.</string>
 </resources>

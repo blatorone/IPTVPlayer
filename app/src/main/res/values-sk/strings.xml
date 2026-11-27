@@ -940,7 +940,7 @@
     <string name="smart_home_on">zapnuté</string>
     <string name="backup_part_smart_home_soon">Inteligentná domácnosť (čoskoro)</string>
     <string name="smart_home_stop">Pri zastavení alebo konci</string>
-    <string name="smart_home_unchanged">nemeniť</string>
+    <string name="smart_home_unchanged">ponechať bez zmeny</string>
     <string name="smart_home_colors">Farba</string>
     <string name="smart_home_scene_empty">nič nenastavené</string>
     <string name="smart_home_scene_lights">%1$d zariadení</string>
@@ -970,4 +970,5 @@
     <string name="manual_error_none">nerobiť nič (prepnúť sám)</string>
     <string name="stream_choice_title">Vybrať stream</string>
     <string name="stream_choice_failed">Stream nehrá. Vyber iný:</string>
+    <string name="smart_home_light_hint">„Ponechať bez zmeny“: StreamWatch toto svetlo tu vôbec neprepína. Pri „zapnuté“ sa zobrazí jas a – ak to svetlo podporuje – paleta pre teplotu farby a farbu.</string>
 </resources>

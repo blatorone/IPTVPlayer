@@ -932,7 +932,7 @@
     <string name="smart_home_on">på</string>
     <string name="backup_part_smart_home_soon">Smarthjem (kommer snart)</string>
     <string name="smart_home_stop">Ved stopp eller slutt</string>
-    <string name="smart_home_unchanged">ikke endre</string>
+    <string name="smart_home_unchanged">la være som det er</string>
     <string name="smart_home_colors">Farge</string>
     <string name="smart_home_scene_empty">ingenting innstilt</string>
     <string name="smart_home_scene_lights">%1$d enheter</string>
@@ -962,4 +962,5 @@
     <string name="manual_error_none">ikke gjør noe (bytt selv)</string>
     <string name="stream_choice_title">Velg strøm</string>
     <string name="stream_choice_failed">Strømmen spiller ikke. Velg en annen:</string>
+    <string name="smart_home_light_hint">«La være som det er»: StreamWatch slår ikke denne lampen her i det hele tatt. Ved «på» vises lysstyrken og – hvis lampen kan – paletten for fargetemperatur og farge.</string>
 </resources>

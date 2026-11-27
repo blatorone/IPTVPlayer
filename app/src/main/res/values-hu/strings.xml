@@ -932,7 +932,7 @@
     <string name="smart_home_on">be</string>
     <string name="backup_part_smart_home_soon">Okosotthon (hamarosan)</string>
     <string name="smart_home_stop">Leállításkor vagy a végén</string>
-    <string name="smart_home_unchanged">ne változzon</string>
+    <string name="smart_home_unchanged">hagyd változatlanul</string>
     <string name="smart_home_colors">Szín</string>
     <string name="smart_home_scene_empty">nincs beállítva</string>
     <string name="smart_home_scene_lights">%1$d eszköz</string>
@@ -962,4 +962,5 @@
     <string name="manual_error_none">ne tegyen semmit (válts magad)</string>
     <string name="stream_choice_title">Stream kiválasztása</string>
     <string name="stream_choice_failed">A stream nem játszik. Válassz egy másikat:</string>
+    <string name="smart_home_light_hint">„Hagyd változatlanul“: a StreamWatch itt egyáltalán nem kapcsolja ezt a lámpát. „Be” esetén megjelenik a fényerő és – ha a lámpa tudja – a színhőmérséklet- és színpaletta.</string>
 </resources>

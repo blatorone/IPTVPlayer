@@ -941,7 +941,7 @@
     <string name="smart_home_on">vklopljeno</string>
     <string name="backup_part_smart_home_soon">Pametni dom (kmalu)</string>
     <string name="smart_home_stop">Ob ustavitvi ali koncu</string>
-    <string name="smart_home_unchanged">ne spreminjaj</string>
+    <string name="smart_home_unchanged">pusti, kot je</string>
     <string name="smart_home_colors">Barva</string>
     <string name="smart_home_scene_empty">nič nastavljeno</string>
     <string name="smart_home_scene_lights">%1$d naprav</string>
@@ -971,4 +971,5 @@
     <string name="manual_error_none">ne naredi nič (zamenjaj sam)</string>
     <string name="stream_choice_title">Izberi pretok</string>
     <string name="stream_choice_failed">Pretok se ne predvaja. Izberi drugega:</string>
+    <string name="smart_home_light_hint">„Pusti, kot je“: StreamWatch te luči tukaj sploh ne preklaplja. Pri „vklopljeno“ se prikažeta svetlost in – če luč to zmore – paleta za barvno temperaturo in barvo.</string>
 </resources>

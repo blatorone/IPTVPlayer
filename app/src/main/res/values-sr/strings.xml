@@ -936,7 +936,7 @@
     <string name="smart_home_on">укључено</string>
     <string name="backup_part_smart_home_soon">Паметна кућа (ускоро)</string>
     <string name="smart_home_stop">При заустављању или крају</string>
-    <string name="smart_home_unchanged">не мењај</string>
+    <string name="smart_home_unchanged">остави како јесте</string>
     <string name="smart_home_colors">Боја</string>
     <string name="smart_home_scene_empty">ништа подешено</string>
     <string name="smart_home_scene_lights">%1$d уређаја</string>
@@ -966,4 +966,5 @@
     <string name="manual_error_none">не ради ништа (промени сам)</string>
     <string name="stream_choice_title">Изабери стрим</string>
     <string name="stream_choice_failed">Стрим не ради. Изабери други:</string>
+    <string name="smart_home_light_hint">„Остави како јесте“: StreamWatch овде уопште не пребацује ову лампу. Код „укључено“ појављују се осветљење и – ако лампа то подржава – палета за температуру боје и боју.</string>
 </resources>

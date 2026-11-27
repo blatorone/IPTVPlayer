@@ -936,7 +936,7 @@
     <string name="smart_home_on">allumée</string>
     <string name="backup_part_smart_home_soon">Maison connectée (bientôt)</string>
     <string name="smart_home_stop">À l\'arrêt ou à la fin</string>
-    <string name="smart_home_unchanged">ne pas changer</string>
+    <string name="smart_home_unchanged">laisser tel quel</string>
     <string name="smart_home_colors">Couleur</string>
     <string name="smart_home_scene_empty">rien de réglé</string>
     <string name="smart_home_scene_lights">%1$d appareils</string>
@@ -966,4 +966,5 @@
     <string name="manual_error_none">ne rien faire (changer toi-même)</string>
     <string name="stream_choice_title">Choisir le flux</string>
     <string name="stream_choice_failed">Le flux ne fonctionne pas. Choisis-en un autre :</string>
+    <string name="smart_home_light_hint">« Laisser tel quel » : StreamWatch ne change pas du tout cette lampe ici. Avec « allumée » apparaissent la luminosité et – si la lampe le permet – la palette de température de couleur et de couleur.</string>
 </resources>

@@ -940,7 +940,7 @@
     <string name="smart_home_on">увімк.</string>
     <string name="backup_part_smart_home_soon">Розумний дім (незабаром)</string>
     <string name="smart_home_stop">При зупинці або кінці</string>
-    <string name="smart_home_unchanged">не змінювати</string>
+    <string name="smart_home_unchanged">залишити як є</string>
     <string name="smart_home_colors">Колір</string>
     <string name="smart_home_scene_empty">нічого не задано</string>
     <string name="smart_home_scene_lights">%1$d пристроїв</string>
@@ -970,4 +970,5 @@
     <string name="manual_error_none">нічого не робити (перемкнути самому)</string>
     <string name="stream_choice_title">Обрати потік</string>
     <string name="stream_choice_failed">Потік не відтворюється. Обери інший:</string>
+    <string name="smart_home_light_hint">«Залишити як є»: тут StreamWatch цю лампу взагалі не перемикає. При «увімк.» з\'являються яскравість і – якщо лампа вміє – палітра колірної температури та кольору.</string>
 </resources>

@@ -932,7 +932,7 @@
     <string name="smart_home_on">açık</string>
     <string name="backup_part_smart_home_soon">Akıllı ev (yakında)</string>
     <string name="smart_home_stop">Durdurunca veya bitince</string>
-    <string name="smart_home_unchanged">değiştirme</string>
+    <string name="smart_home_unchanged">olduğu gibi bırak</string>
     <string name="smart_home_colors">Renk</string>
     <string name="smart_home_scene_empty">hiçbir şey ayarlanmadı</string>
     <string name="smart_home_scene_lights">%1$d cihaz</string>
@@ -962,4 +962,5 @@
     <string name="manual_error_none">bir şey yapma (kendin değiştir)</string>
     <string name="stream_choice_title">Yayın seç</string>
     <string name="stream_choice_failed">Yayın oynatılamıyor. Başka birini seç:</string>
+    <string name="smart_home_light_hint">„Olduğu gibi bırak“: StreamWatch bu lambayı burada hiç değiştirmez. „Açık“ seçilince parlaklık ve – lamba destekliyorsa – renk sıcaklığı ve renk paleti görünür.</string>
 </resources>

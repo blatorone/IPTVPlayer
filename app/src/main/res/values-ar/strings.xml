@@ -948,7 +948,7 @@
     <string name="smart_home_on">تشغيل</string>
     <string name="backup_part_smart_home_soon">المنزل الذكي (قريبًا)</string>
     <string name="smart_home_stop">عند الإيقاف أو النهاية</string>
-    <string name="smart_home_unchanged">بدون تغيير</string>
+    <string name="smart_home_unchanged">اتركه كما هو</string>
     <string name="smart_home_colors">اللون</string>
     <string name="smart_home_scene_empty">لم يُضبط شيء</string>
     <string name="smart_home_scene_lights">%1$d أجهزة</string>
@@ -978,4 +978,5 @@
     <string name="manual_error_none">لا شيء (التبديل يدويًا)</string>
     <string name="stream_choice_title">اختر البث</string>
     <string name="stream_choice_failed">البث لا يعمل. اختر بثًا آخر:</string>
+    <string name="smart_home_light_hint">„اتركه كما هو“: لا يبدّل StreamWatch هذا المصباح هنا إطلاقًا. عند „تشغيل“ يظهر السطوع و – إن كان المصباح يدعم ذلك – لوحة درجة حرارة اللون واللون.</string>
 </resources>

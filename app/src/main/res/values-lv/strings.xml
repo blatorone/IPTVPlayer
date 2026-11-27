@@ -936,7 +936,7 @@
     <string name="smart_home_on">ieslēgta</string>
     <string name="backup_part_smart_home_soon">Viedā māja (drīzumā)</string>
     <string name="smart_home_stop">Apturot vai beigās</string>
-    <string name="smart_home_unchanged">nemainīt</string>
+    <string name="smart_home_unchanged">atstāt kā ir</string>
     <string name="smart_home_colors">Krāsa</string>
     <string name="smart_home_scene_empty">nekas nav iestatīts</string>
     <string name="smart_home_scene_lights">%1$d ierīces</string>
@@ -966,4 +966,5 @@
     <string name="manual_error_none">neko nedarīt (mainīt pašam)</string>
     <string name="stream_choice_title">Izvēlēties plūsmu</string>
     <string name="stream_choice_failed">Plūsma nedarbojas. Izvēlies citu:</string>
+    <string name="smart_home_light_hint">„Atstāt kā ir“: StreamWatch šeit šo lampu nepārslēdz. Izvēloties „ieslēgta“, parādās spilgtums un – ja lampa to atbalsta – krāsas temperatūras un krāsu palete.</string>
 </resources>

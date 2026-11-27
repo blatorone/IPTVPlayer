@@ -932,7 +932,7 @@
     <string name="smart_home_on">an</string>
     <string name="backup_part_smart_home_soon">Smart Home (bald verfügbar)</string>
     <string name="smart_home_stop">Bei Stopp oder Ende</string>
-    <string name="smart_home_unchanged">nicht ändern</string>
+    <string name="smart_home_unchanged">unverändert lassen</string>
     <string name="smart_home_colors">Farbe</string>
     <string name="smart_home_scene_empty">nichts eingestellt</string>
     <string name="smart_home_scene_lights">%1$d Geräte</string>
@@ -962,4 +962,5 @@
     <string name="manual_error_none">nichts tun (selbst umschalten)</string>
     <string name="stream_choice_title">Stream wählen</string>
     <string name="stream_choice_failed">Der Stream läuft nicht. Wähle einen anderen:</string>
+    <string name="smart_home_light_hint">„Unverändert lassen“: StreamWatch schaltet diese Lampe hier gar nicht. Bei „an“ erscheinen die Helligkeit und – wenn die Lampe es kann – die Farbpalette für Farbtemperatur und Farbe.</string>
 </resources>

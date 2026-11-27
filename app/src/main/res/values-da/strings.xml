@@ -932,7 +932,7 @@
     <string name="smart_home_on">tændt</string>
     <string name="backup_part_smart_home_soon">Smart home (kommer snart)</string>
     <string name="smart_home_stop">Ved stop eller slut</string>
-    <string name="smart_home_unchanged">uændret</string>
+    <string name="smart_home_unchanged">lad være som det er</string>
     <string name="smart_home_colors">Farve</string>
     <string name="smart_home_scene_empty">intet indstillet</string>
     <string name="smart_home_scene_lights">%1$d enheder</string>
@@ -962,4 +962,5 @@
     <string name="manual_error_none">gør ingenting (skift selv)</string>
     <string name="stream_choice_title">Vælg stream</string>
     <string name="stream_choice_failed">Streamen spiller ikke. Vælg en anden:</string>
+    <string name="smart_home_light_hint">„Lad være som det er“: StreamWatch skifter slet ikke denne lampe her. Ved „tændt“ vises lysstyrken og – hvis lampen kan – paletten til farvetemperatur og farve.</string>
 </resources>

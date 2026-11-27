@@ -2,6 +2,11 @@
 
 ## 1.0.99
 
+- Wiedergabeleiste: Spulen zeigt jetzt zwei Pfeile statt des runden Pfeils mit Sekundenzahl, im selben runden Stil wie die anderen Knöpfe. Außen: bei Serien die Pfeile mit Strich für vorherige/nächste Folge, bei Filmen und Timeshift drei Pfeile für 10 Minuten zurück/vor.
+- Zurück aus dem Vollbild führt nie in die Einstellungen, sondern dorthin, wo der Titel geöffnet wurde: Programmführer, Film (danach dessen Kategorie) oder Serie.
+- Behoben: Beim Öffnen und Schließen des Update-Fensters sprang die Einstellungsseite in einen anderen Bereich (z. B. „Quellen und Bibliothek“).
+- Einstellungen und Kategorien: Der gewählte Eintrag behält weiße Schrift; markiert wird er durch das Symbol in Akzentfarbe und einen leicht getönten Hintergrund.
+- Programmführer: Der Schleier über der abgelaufenen Zeit ist jetzt durchscheinend in der Farbe der Zeitlinie; wählbar sind Linienfarbe, Dunkel oder Aus.
 - Updates: Nimmt GitHub von deinem Anschluss gerade keine Anfragen mehr an (höchstens 60 pro Stunde), sagt die App das jetzt mit der Wartezeit statt „nicht erreichbar“. Andere Fehler bei der Suche stehen mit Grund im Diagnosebericht. Es werden die letzten 50 statt 20 Versionen verglichen, damit keine neue Beta übersehen wird.
 - Behoben: „Nach Updates suchen“ ließ den Fokus während der Suche in eine andere Kategorie springen. Zeilen, die während einer Aktion kurz gesperrt sind, behalten jetzt den Fokus.
 - Programmführer: Die Zeitlinie geht jetzt durchgehend von der Zeile mit den Uhrzeiten bis ganz nach unten; die bereits abgelaufene Zeit links davon liegt unter einem dunklen Schleier. Die Farbe der Linie ist wählbar (Programmführer-Darstellung und Handy-Seite): Cyan (neu als Standard, gut sichtbar neben Rot), Türkis, Gelb, Limette oder Eisblau.

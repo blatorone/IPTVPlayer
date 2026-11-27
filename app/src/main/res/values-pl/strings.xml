@@ -944,4 +944,7 @@
     <string name="player_jump_forward">10 minut do przodu</string>
     <string name="guide_now_line_color">Kolor linii czasu</string>
     <string name="update_rate_limited">GitHub chwilowo nie przyjmuje kolejnych zapytań z tego łącza. Spróbuj ponownie za około %1$d min.</string>
+    <string name="guide_veil">Zasłona nad minionym czasem</string>
+    <string name="guide_veil_line_color">Kolor linii</string>
+    <string name="guide_veil_dark">Ciemna</string>
 </resources>

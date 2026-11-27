@@ -21,6 +21,15 @@ internal enum class GuideSize(val label: Int, val factor: Float) {
     fun next() = entries[(ordinal + 1) % entries.size]
 }
 
+/** The veil over the time already gone in the guide. */
+internal enum class GuideVeil(val label: Int) {
+    LINE_COLOR(R.string.guide_veil_line_color),
+    DARK(R.string.guide_veil_dark),
+    OFF(R.string.subtitle_off);
+
+    fun next() = entries[(ordinal + 1) % entries.size]
+}
+
 /** Colour of the "now" line in the guide; cyan stands out best next to a red accent. */
 internal enum class GuideNowColor(val label: Int, val color: Color) {
     CYAN(R.string.accent_cyan, Color(0xFF00E5FF)),
@@ -46,7 +55,8 @@ internal data class GuideAppearance(
     val keepChannelList: Boolean = false,
     val opacity: Int = 90,
     val closeSeconds: Int = 15,
-    val nowColor: GuideNowColor = GuideNowColor.CYAN
+    val nowColor: GuideNowColor = GuideNowColor.CYAN,
+    val veil: GuideVeil = GuideVeil.LINE_COLOR
 ) {
     fun save(preferences: SharedPreferences?) {
         preferences?.edit()
@@ -56,7 +66,8 @@ internal data class GuideAppearance(
             ?.putBoolean("guide_logos", showLogos)?.putBoolean("guide_progress", showProgress)
             ?.putBoolean("guide_schedule", showSchedule)?.putBoolean("guide_description", showDescription)
             ?.putBoolean("guide_keep_list", keepChannelList)?.putInt("guide_opacity", opacity)
-            ?.putInt("guide_close_seconds", closeSeconds)?.putString("guide_now_color", nowColor.name)?.apply()
+            ?.putInt("guide_close_seconds", closeSeconds)?.putString("guide_now_color", nowColor.name)
+            ?.putString("guide_veil", veil.name)?.apply()
     }
 }
 
@@ -71,7 +82,8 @@ internal fun readGuideAppearance(preferences: SharedPreferences?): GuideAppearan
         enabled("guide_keep_list", false),
         preferences?.getInt("guide_opacity", 90)?.coerceIn(60, 100) ?: 90,
         preferences?.getInt("guide_close_seconds", 15)?.coerceIn(0, 60) ?: 15,
-        GuideNowColor.entries.firstOrNull { it.name == preferences?.getString("guide_now_color", null) } ?: GuideNowColor.CYAN
+        GuideNowColor.entries.firstOrNull { it.name == preferences?.getString("guide_now_color", null) } ?: GuideNowColor.CYAN,
+        GuideVeil.entries.firstOrNull { it.name == preferences?.getString("guide_veil", null) } ?: GuideVeil.LINE_COLOR
     )
 }
 
@@ -104,6 +116,10 @@ internal fun GuideAppearanceDialog(
                     SettingRow(stringResource(R.string.guide_setting_value, stringResource(R.string.guide_now_line_color),
                         stringResource(appearance.nowColor.label))) {
                         onChange(appearance.copy(nowColor = appearance.nowColor.next()))
+                    }
+                    SettingRow(stringResource(R.string.guide_setting_value, stringResource(R.string.guide_veil),
+                        stringResource(appearance.veil.label))) {
+                        onChange(appearance.copy(veil = appearance.veil.next()))
                     }
                 } else {
                     AppearanceSize(R.string.guide_list_width, appearance.listWidth) { onChange(appearance.copy(listWidth = it)) }

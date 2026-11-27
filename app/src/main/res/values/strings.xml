@@ -934,4 +934,7 @@
     <string name="player_jump_forward">10 Minuten vor</string>
     <string name="guide_now_line_color">Farbe der Zeitlinie</string>
     <string name="update_rate_limited">GitHub nimmt von diesem Internetanschluss gerade keine weiteren Anfragen an. Versuche es in etwa %1$d Minuten erneut.</string>
+    <string name="guide_veil">Schleier über abgelaufener Zeit</string>
+    <string name="guide_veil_line_color">Linienfarbe</string>
+    <string name="guide_veil_dark">Dunkel</string>
 </resources>

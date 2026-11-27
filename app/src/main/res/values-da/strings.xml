@@ -934,4 +934,7 @@
     <string name="player_jump_forward">10 minutter frem</string>
     <string name="guide_now_line_color">Farve på tidslinjen</string>
     <string name="update_rate_limited">GitHub tager lige nu ikke imod flere forespørgsler fra denne forbindelse. Prøv igen om cirka %1$d minutter.</string>
+    <string name="guide_veil">Slør over forløbet tid</string>
+    <string name="guide_veil_line_color">Linjens farve</string>
+    <string name="guide_veil_dark">Mørk</string>
 </resources>

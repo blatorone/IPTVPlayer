@@ -944,4 +944,7 @@
     <string name="player_jump_forward">Вперёд на 10 минут</string>
     <string name="guide_now_line_color">Цвет линии времени</string>
     <string name="update_rate_limited">GitHub сейчас не принимает новые запросы с этого подключения. Повтори примерно через %1$d мин.</string>
+    <string name="guide_veil">Затемнение прошедшего времени</string>
+    <string name="guide_veil_line_color">Цвет линии</string>
+    <string name="guide_veil_dark">Тёмное</string>
 </resources>

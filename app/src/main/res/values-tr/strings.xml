@@ -934,4 +934,7 @@
     <string name="player_jump_forward">10 dakika ileri</string>
     <string name="guide_now_line_color">Zaman çizgisi rengi</string>
     <string name="update_rate_limited">GitHub şu anda bu internet bağlantısından başka istek kabul etmiyor. Yaklaşık %1$d dakika sonra tekrar dene.</string>
+    <string name="guide_veil">Geçmiş zamanın üzerindeki perde</string>
+    <string name="guide_veil_line_color">Çizgi rengi</string>
+    <string name="guide_veil_dark">Koyu</string>
 </resources>

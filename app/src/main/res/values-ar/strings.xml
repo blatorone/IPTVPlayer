@@ -954,4 +954,7 @@
     <string name="player_jump_forward">تقديم 10 دقائق</string>
     <string name="guide_now_line_color">لون خط الوقت</string>
     <string name="update_rate_limited">لا يقبل GitHub حاليًا طلبات أخرى من اتصال الإنترنت هذا. حاول مرة أخرى بعد نحو %1$d دقيقة.</string>
+    <string name="guide_veil">تظليل الوقت المنقضي</string>
+    <string name="guide_veil_line_color">لون الخط</string>
+    <string name="guide_veil_dark">داكن</string>
 </resources>

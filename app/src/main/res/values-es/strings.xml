@@ -939,4 +939,7 @@
     <string name="player_jump_forward">Avanzar 10 minutos</string>
     <string name="guide_now_line_color">Color de la línea de tiempo</string>
     <string name="update_rate_limited">GitHub no acepta más solicitudes desde esta conexión por ahora. Vuelve a intentarlo en unos %1$d minutos.</string>
+    <string name="guide_veil">Velo sobre el tiempo pasado</string>
+    <string name="guide_veil_line_color">Color de la línea</string>
+    <string name="guide_veil_dark">Oscuro</string>
 </resources>

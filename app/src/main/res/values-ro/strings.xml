@@ -939,4 +939,7 @@
     <string name="player_jump_forward">Înainte 10 minute</string>
     <string name="guide_now_line_color">Culoarea liniei de timp</string>
     <string name="update_rate_limited">GitHub nu mai acceptă momentan cereri de la această conexiune. Încearcă din nou în aproximativ %1$d minute.</string>
+    <string name="guide_veil">Voal peste timpul trecut</string>
+    <string name="guide_veil_line_color">Culoarea liniei</string>
+    <string name="guide_veil_dark">Întunecat</string>
 </resources>

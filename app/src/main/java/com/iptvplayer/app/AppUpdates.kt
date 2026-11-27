@@ -200,6 +200,9 @@ private suspend fun downloadRelease(context: Context, release: AppRelease): File
 }
 
 /** Update state for the menu badge and the content of the "App-Updates" settings section. */
+/** When the update window last opened or closed (elapsedRealtime). */
+@Volatile internal var updateDialogChangedAt = 0L
+
 internal class AppUpdateUi(
     val available: Boolean,
     val settings: @Composable () -> Unit,
@@ -231,6 +234,9 @@ internal fun rememberAppUpdates(): AppUpdateUi {
     var rateLimitMinutes by remember { mutableStateOf(0) }
     // Automatic checks only mark the update; the dialog opens on request.
     var dialogOpen by remember { mutableStateOf(false) }
+    // Opening or closing the window hands the focus around for a moment; the settings use the
+    // time to keep their section instead of following that focus (see updateDialogChangedAt).
+    LaunchedEffect(dialogOpen) { updateDialogChangedAt = android.os.SystemClock.elapsedRealtime() }
     fun check(manual: Boolean) {
         if (busy) return
         busy = true
@@ -238,7 +244,10 @@ internal fun rememberAppUpdates(): AppUpdateUi {
         scope.launch {
             try {
                 release = checkRelease(context, beta)
-                if (manual && release != null) dialogOpen = true
+                if (manual && release != null) {
+                    updateDialogChangedAt = android.os.SystemClock.elapsedRealtime()
+                    dialogOpen = true
+                }
                 lastCheck = System.currentTimeMillis()
                 preferences.edit().putLong("last_check", lastCheck).apply()
                 if (release == null) result = R.string.update_current

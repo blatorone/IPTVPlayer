@@ -939,4 +939,7 @@
     <string name="player_jump_forward">10 минута напред</string>
     <string name="guide_now_line_color">Боја временске линије</string>
     <string name="update_rate_limited">GitHub тренутно не прима нове захтеве са ове интернет везе. Покушај поново за око %1$d мин.</string>
+    <string name="guide_veil">Вео преко протеклог времена</string>
+    <string name="guide_veil_line_color">Боја линије</string>
+    <string name="guide_veil_dark">Тамно</string>
 </resources>

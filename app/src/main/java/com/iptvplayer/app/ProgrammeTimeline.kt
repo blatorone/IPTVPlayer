@@ -200,13 +200,18 @@ internal fun ProgrammeTimeline(
     // already gone (left of it) lies under a dark veil.
     val nowFraction = ((now - start).toFloat() / GUIDE_WINDOW).takeIf { now >= start && now < start + GUIDE_WINDOW }
     val nowColor = appearance.nowColor.color
+    val veil = when (appearance.veil) {
+        GuideVeil.LINE_COLOR -> nowColor.copy(alpha = 0.16f)
+        GuideVeil.DARK -> Color.Black.copy(alpha = 0.45f)
+        GuideVeil.OFF -> null
+    }
     Column(
         Modifier.fillMaxHeight().drawWithContent {
             drawContent()
             if (nowFraction != null && displayed.isNotEmpty()) {
                 val timelineStart = size.width * (1.25f / 4.25f)
                 val x = timelineStart + (size.width - timelineStart) * nowFraction
-                drawRect(Color.Black.copy(alpha = 0.45f), Offset(timelineStart, 0f), Size(x - timelineStart, size.height))
+                if (veil != null) drawRect(veil, Offset(timelineStart, 0f), Size(x - timelineStart, size.height))
                 val line = 2.dp.toPx()
                 drawRect(nowColor, Offset(x - line / 2, 0f), Size(line, size.height))
             }

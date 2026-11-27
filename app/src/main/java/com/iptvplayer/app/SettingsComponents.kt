@@ -179,13 +179,14 @@ internal fun SettingsNavItem(
     Surface(
         modifier = modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused }
             .clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick),
-        // Like the settings rows: brighter when focused; the open section in the accent colour.
-        color = if (focused) colors.surfaceContainerHighest else Color.Transparent,
-        contentColor = when {
-            selected -> colors.primary
-            focused -> colors.onSurface
-            else -> colors.onSurfaceVariant
+        // Like the settings rows: brighter when focused. The open section keeps white text; a
+        // light accent tint and the accent symbol mark it.
+        color = when {
+            focused -> colors.surfaceContainerHighest
+            selected -> colors.primary.copy(alpha = 0.18f)
+            else -> Color.Transparent
         },
+        contentColor = if (selected || focused) colors.onSurface else colors.onSurfaceVariant,
         shape = RoundedCornerShape(12.dp),
         border = if (focused) BorderStroke(2.dp, accentBrush()) else null
     ) {

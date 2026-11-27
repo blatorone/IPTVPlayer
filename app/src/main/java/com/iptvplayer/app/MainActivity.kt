@@ -5233,6 +5233,21 @@ private fun PlayerHome(
     }
     fun leaveFullscreen() {
         savePlaybackPosition()
+        // Back from fullscreen returns to where the title was opened (guide, film, series),
+        // never to the settings: those were only visited while it played.
+        if (selected == null || selected == Destination.SETTINGS || selected == Destination.SOURCES ||
+            selected == Destination.CATEGORIES
+        ) {
+            closeSettingsPages()
+            when (vodSection) {
+                PortalSection.MOVIES -> {
+                    selected = Destination.MOVIES
+                    if (details == null) playbackMovieTitle?.let { details = PortalSection.MOVIES to it }
+                }
+                PortalSection.SERIES -> selected = Destination.SERIES
+                else -> selected = Destination.LIVE
+            }
+        }
         if (vodSection == PortalSection.SERIES && playbackSeries != null && selected == Destination.SERIES) {
             openedSeries = playbackSeries
             openedSeason = playbackSeason
@@ -5914,6 +5929,9 @@ private fun PlayerHome(
                 add(RemoteEntry.Choice("guideNowColor", grid, text(R.string.guide_now_line_color),
                     options(GuideNowColor.entries) { it.label }, { guideAppearance.nowColor.name }
                 ) { value -> appearance { it.copy(nowColor = GuideNowColor.valueOf(value)) } })
+                add(RemoteEntry.Choice("guideVeil", grid, text(R.string.guide_veil),
+                    options(GuideVeil.entries) { it.label }, { guideAppearance.veil.name }
+                ) { value -> appearance { it.copy(veil = GuideVeil.valueOf(value)) } })
                 add(size("listWidth", list, R.string.guide_list_width, { it.listWidth }) { a, v -> a.copy(listWidth = v) })
                 add(shown("listSchedule", list, R.string.guide_show_schedule, { it.showSchedule }) { a, v -> a.copy(showSchedule = v) })
                 add(shown("listDescription", list, R.string.guide_show_description, { it.showDescription }) { a, v ->
@@ -9273,7 +9291,15 @@ private fun PlayerHome(
                                             val justOpened = settingsPageOpen() &&
                                                 SystemClock.elapsedRealtime() - ui.settingsPageOpenedAt <
                                                 SETTINGS_PAGE_FOCUS_GRACE_MS
-                                            if (it.isFocused && settingsSection != item && !justOpened) {
+                                            // The update window opening or closing also hands focus over
+                                            // here: the section stays, focus goes back to its row.
+                                            val dialogMoved = SystemClock.elapsedRealtime() - updateDialogChangedAt < 1_500
+                                            if (it.isFocused && settingsSection != item && dialogMoved) {
+                                                scope.launch {
+                                                    withFrameNanos { }
+                                                    runCatching { settingsContentFocus.requestFocus() }
+                                                }
+                                            } else if (it.isFocused && settingsSection != item && !justOpened) {
                                                 closeSettingsPages()
                                                 // Sources and categories are pages of the settings too.
                                                 if (selected != Destination.SETTINGS) selected = Destination.SETTINGS
@@ -10109,7 +10135,8 @@ internal fun PlayerFrame(
         view.setShowNextButton(false)
         view.setShowRewindButton(seekable)
         view.setShowFastForwardButton(seekable)
-        // Outer buttons: the previous/next episode when there is one, otherwise a 10-minute jump
+        // Outer buttons: the previous/next episode (arrows with a bar) when there is one, otherwise a
+        // 10-minute jump (three arrows; the seek buttons have two)
         // (films, Live-TV with timeshift); hidden when neither works.
         fun outer(name: String, episode: Boolean, episodeIcon: Int, episodeLabel: Int, jumpIcon: Int, jumpLabel: Int) {
             val button = view.findViewWithTag<android.widget.ImageButton>(name) ?: return
@@ -10127,9 +10154,36 @@ internal fun PlayerFrame(
             }
         }
         outer("previous_episode_action", canPreviousEpisode, R.drawable.ic_player_skip_previous, R.string.previous_episode,
-            R.drawable.ic_player_jump_back, R.string.player_jump_back)
+            R.drawable.ic_player_big_jump_back, R.string.player_jump_back)
         outer("next_episode_action", canNextEpisode, R.drawable.ic_player_skip_next, R.string.next_episode,
-            R.drawable.ic_player_jump_forward, R.string.player_jump_forward)
+            R.drawable.ic_player_big_jump_forward, R.string.player_jump_forward)
+        // Media3 draws its seek icon (circle arrow with the seconds) as the button's foreground:
+        // replaced by the double arrows in the same round look as the other buttons.
+        fun styleSeek(id: Int, icon: Int) {
+            val button = view.findViewById<android.widget.TextView>(id) ?: return
+            if (button.getTag(R.string.player_jump_forward) == true) return
+            button.setTag(R.string.player_jump_forward, true)
+            val density = button.resources.displayMetrics.density
+            val drawable = androidx.core.content.ContextCompat.getDrawable(button.context, icon) ?: return
+            if (button.id == android.view.View.NO_ID) button.id = android.view.View.generateViewId()
+            enableRemoteFocus(button)
+            button.foreground = android.graphics.drawable.LayerDrawable(arrayOf(
+                android.graphics.drawable.InsetDrawable(drawable, (13 * density).toInt()), button.foreground
+            ))
+            button.background = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.OVAL
+                setColor(android.graphics.Color.argb(120, 0, 0, 0))
+            }
+            button.setTextColor(android.graphics.Color.TRANSPARENT)
+            button.minWidth = 0
+            button.minHeight = 0
+            button.layoutParams = button.layoutParams?.apply {
+                width = (52 * density).toInt()
+                height = (52 * density).toInt()
+            }
+        }
+        styleSeek(androidx.media3.ui.R.id.exo_rew_with_amount, R.drawable.ic_player_jump_back)
+        styleSeek(androidx.media3.ui.R.id.exo_ffwd_with_amount, R.drawable.ic_player_jump_forward)
         val row = view.findViewById<LinearLayout>(androidx.media3.ui.R.id.exo_center_controls) ?: return
         val progress = view.findViewById<android.view.View>(androidx.media3.ui.R.id.exo_progress)
         val pause = view.findViewById<android.view.View>(androidx.media3.ui.R.id.exo_play_pause)
@@ -10967,7 +11021,12 @@ internal fun MenuButton(
     val colors = MaterialTheme.colorScheme
     // Same look as the settings rows: the focused entry gets a brighter surface and an accent
     // border; the selected one is written in the accent colour (symbol and text).
-    val container = if (enabled && highlighted) colors.surfaceContainerHighest else Color.Transparent
+    val container = when {
+        enabled && highlighted -> colors.surfaceContainerHighest
+        // The selected entry (e.g. the open category): a light accent tint, the text stays white.
+        selected && !tintSelection -> colors.primary.copy(alpha = 0.18f)
+        else -> Color.Transparent
+    }
     Surface(
         modifier = modifier
             .then(if (enabled) Modifier.hoverable(interactions) else Modifier)
@@ -11041,8 +11100,8 @@ internal fun MenuButton(
             if ((!iconOnly || leadingIcon == null) && !providerMarkOnly) Text(
                 label,
                 modifier = if (count == null) Modifier else Modifier.weight(1f),
-                // The top bar marks only the symbol when it has one; elsewhere the text too.
-                color = if (selected && (!tintSelection || leadingIcon == null)) colors.primary else Color.Unspecified,
+                // The top bar without symbols marks the text; elsewhere the tint and symbol do it.
+                color = if (selected && tintSelection && leadingIcon == null) colors.primary else Color.Unspecified,
                 style = MaterialTheme.typography.labelLarge,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis

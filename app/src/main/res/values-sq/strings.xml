@@ -934,4 +934,7 @@
     <string name="player_jump_forward">10 minuta përpara</string>
     <string name="guide_now_line_color">Ngjyra e vijës së kohës</string>
     <string name="update_rate_limited">GitHub nuk pranon për momentin kërkesa të tjera nga kjo lidhje interneti. Provo sërish pas rreth %1$d minutash.</string>
+    <string name="guide_veil">Velo mbi kohën e kaluar</string>
+    <string name="guide_veil_line_color">Ngjyra e vijës</string>
+    <string name="guide_veil_dark">E errët</string>
 </resources>

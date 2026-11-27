@@ -944,4 +944,7 @@
     <string name="player_jump_forward">10 minut vpřed</string>
     <string name="guide_now_line_color">Barva časové čáry</string>
     <string name="update_rate_limited">GitHub teď nepřijímá další požadavky z tohoto připojení. Zkus to znovu asi za %1$d min.</string>
+    <string name="guide_veil">Závoj přes uplynulý čas</string>
+    <string name="guide_veil_line_color">Barva čáry</string>
+    <string name="guide_veil_dark">Tmavý</string>
 </resources>

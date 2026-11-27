@@ -934,4 +934,7 @@
     <string name="player_jump_forward">Forward 10 minutes</string>
     <string name="guide_now_line_color">Time line colour</string>
     <string name="update_rate_limited">GitHub is not accepting more requests from this internet connection right now. Try again in about %1$d minutes.</string>
+    <string name="guide_veil">Veil over past time</string>
+    <string name="guide_veil_line_color">Line colour</string>
+    <string name="guide_veil_dark">Dark</string>
 </resources>

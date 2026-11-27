@@ -927,7 +927,7 @@
     <string name="timeshift_duration_setting">Kohëzgjatja e timeshift: %1$d min</string>
     <string name="timeshift_hint">Kanali aktual regjistrohet në memorien e aplikacionit (deri në rreth 3 GB, pjesët e vjetra fshihen vazhdimisht). Kështu TV live mund të ndalet dhe të lëvizet me shiritin e luajtjes. Vlen nga nisja e ardhshme e kanalit.</string>
     <string name="smooth_switch_setting">Ndërrim i butë i portalit (eksperimental)</string>
-    <string name="smooth_switch_hint">Faza e parë: kur kalon në një portal tjetër, aplikacioni mat sa larg janë transmetimet (shfaqet në raportin diagnostikues). Më vonë do ta vazhdojë transmetimin e ri nga i njëjti vend.</string>
+    <string name="smooth_switch_hint">Kur transmetimi aktual ka probleme, aplikacioni e regjistron që në sfond portalin rezervë dhe gjatë ndërrimit vazhdon nga i njëjti vend, pa përsëritur apo kapërcyer sekonda. Diferencën mes portaleve e mëson nga ndërrimet e mëparshme. Gjatë problemeve përdor shkurt të dhëna të dyfishta. Joaktiv: ndërrim i menjëhershëm si më parë.</string>
     <string name="smooth_switch_weak_device">Kjo pajisje mund të jetë shumë e dobët për këtë – përdorim me përgjegjësinë tënde.</string>
     <string name="timeshift_live">Live</string>
 </resources>

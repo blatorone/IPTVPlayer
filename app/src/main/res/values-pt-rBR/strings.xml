@@ -932,7 +932,7 @@
     <string name="timeshift_duration_setting">Duração do timeshift: %1$d min</string>
     <string name="timeshift_hint">O canal atual é gravado na memória do app (até cerca de 3 GB; partes antigas são apagadas continuamente). Assim a TV ao vivo pode ser pausada e percorrida com a barra de reprodução. Vale a partir do próximo início de canal.</string>
     <string name="smooth_switch_setting">Troca de portal suave (experimental)</string>
-    <string name="smooth_switch_hint">Primeira etapa: ao trocar de portal, o app mede o quanto os streams estão defasados (aparece no relatório de diagnóstico). Depois ele vai continuar o novo stream no mesmo ponto.</string>
+    <string name="smooth_switch_hint">Se o stream atual tiver problemas, o app já grava o portal reserva em segundo plano e, na troca, continua do mesmo ponto em vez de repetir ou pular segundos. Ele aprende a diferença entre os portais com trocas anteriores. Durante os problemas usa o dobro de dados por pouco tempo. Desligado: troca imediata como antes.</string>
     <string name="smooth_switch_weak_device">Este aparelho pode ser fraco demais para isso – use por sua conta e risco.</string>
     <string name="timeshift_live">Ao vivo</string>
 </resources>

@@ -927,7 +927,7 @@
     <string name="timeshift_duration_setting">Timeshift length: %1$d min</string>
     <string name="timeshift_hint">The running channel is recorded in the app\'s storage (up to about 3 GB, older parts are deleted continuously). Live TV can then be paused and seeked with the playback bar. Applies from the next channel start.</string>
     <string name="smooth_switch_setting">Smooth portal switch (experimental)</string>
-    <string name="smooth_switch_hint">First stage: when switching to another portal, the app measures how far apart the streams are (shown in the diagnostic report). Later it will continue the new stream at the same spot.</string>
+    <string name="smooth_switch_hint">When the running stream shows trouble, the app already records the stand-in portal in the background and continues at the same spot when switching, instead of repeating or skipping seconds. It learns the distance between portals from earlier switches. Uses double data briefly during trouble. Off: immediate switch as before.</string>
     <string name="smooth_switch_weak_device">This device may be too weak for this – use at your own risk.</string>
     <string name="timeshift_live">Live</string>
 </resources>

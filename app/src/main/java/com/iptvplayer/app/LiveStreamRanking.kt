@@ -7,18 +7,25 @@ import org.json.JSONObject
  * How well a channel's stream from one portal ran so far: [good] counts runs that played steadily,
  * [bad] counts failed starts, freezes and stalls. Both are capped so that recent behaviour wins.
  */
-internal data class StreamRecord(val good: Int = 0, val bad: Int = 0) {
+internal data class StreamRecord(val good: Int = 0, val bad: Int = 0, val blockedUntil: Long = 0L) {
     val score: Int get() = good - 2 * bad
 
     fun succeeded() = capped(good + 1, bad)
     fun failed() = capped(good, bad + 1)
 
+    /** A stream that looped or froze while running is tried last for a while (only this stream). */
+    fun blocked(now: Long) = failed().copy(blockedUntil = now + BLOCK_MS)
+
+    fun isBlocked(now: Long) = blockedUntil > now
+
     private fun capped(good: Int, bad: Int): StreamRecord =
         // Halving keeps the ratio but lets a portal that improved (or got worse) move again soon.
-        if (good + bad > MAX_EVENTS) StreamRecord((good + 1) / 2, (bad + 1) / 2) else StreamRecord(good, bad)
+        if (good + bad > MAX_EVENTS) StreamRecord((good + 1) / 2, (bad + 1) / 2, blockedUntil)
+        else StreamRecord(good, bad, blockedUntil)
 
     companion object {
         const val MAX_EVENTS = 12
+        const val BLOCK_MS = 6 * 60 * 60_000L
     }
 }
 
@@ -27,8 +34,43 @@ internal data class StreamRecord(val good: Int = 0, val bad: Int = 0) {
  * ordered by the user's choice and preferred portal; streams without a history keep that order,
  * and among equal scores it is kept as well (stable sort).
  */
-internal fun <T> List<T>.rankedByHistory(records: Map<String, StreamRecord>, sourceOf: (T) -> String?): List<T> =
-    sortedByDescending { item -> sourceOf(item)?.let { records[it]?.score } ?: 0 }
+internal fun <T> List<T>.rankedByHistory(
+    records: Map<String, StreamRecord>,
+    now: Long = System.currentTimeMillis(),
+    random: kotlin.random.Random? = null,
+    portalOf: ((T) -> String?)? = null,
+    sourceOf: (T) -> String?
+): List<T> {
+    fun record(item: T) = sourceOf(item)?.let { records[it] }
+    fun blocked(item: T) = record(item)?.isBlocked(now) == true
+    // With [random], streams that ran about equally well are mixed, so the app gets to know all of
+    // them instead of always starting the same one; a clearly better stream stays in front.
+    val ordered = if (random == null) {
+        sortedWith(compareBy<T>(::blocked).thenByDescending { record(it)?.score ?: 0 })
+    } else {
+        shuffled(random).sortedWith(compareBy<T>(::blocked).thenByDescending { Math.floorDiv(record(it)?.score ?: 0, SIMILAR_SCORE) })
+    }
+    if (portalOf == null) return ordered
+    // The stand-in for a stream comes from another portal where there is one (another account,
+    // so it can already run in the background); streams tried last stay at the end.
+    return ordered.filterNot(::blocked).alternatingPortals(portalOf) + ordered.filter(::blocked).alternatingPortals(portalOf)
+}
+
+private const val SIMILAR_SCORE = 3
+
+/** Keeps the order, but takes the next item from another portal than the one before, if there is one. */
+internal fun <T> List<T>.alternatingPortals(portalOf: (T) -> String?): List<T> {
+    val left = toMutableList()
+    val result = ArrayList<T>(size)
+    var last: String? = null
+    while (left.isNotEmpty()) {
+        val index = left.indexOfFirst { portalOf(it) == null || portalOf(it) != last }.takeIf { it >= 0 } ?: 0
+        val item = left.removeAt(index)
+        result += item
+        last = portalOf(item)
+    }
+    return result
+}
 
 /**
  * Remembers per Live-TV channel how each portal's stream ran (only on this device; the file is
@@ -41,21 +83,27 @@ internal class LiveStreamHistory(private val preferences: SharedPreferences?) {
             val json = JSONObject(raw)
             json.keys().asSequence().associateWith { source ->
                 val entry = json.getJSONObject(source)
-                StreamRecord(entry.optInt("g"), entry.optInt("b"))
+                StreamRecord(entry.optInt("g"), entry.optInt("b"), entry.optLong("u"))
             }
         }.getOrDefault(emptyMap())
     }
 
     fun recordSuccess(channelKey: String, sourceId: String) = update(channelKey, sourceId) { it.succeeded() }
 
-    fun recordFailure(channelKey: String, sourceId: String) = update(channelKey, sourceId) { it.failed() }
+    fun recordFailure(channelKey: String, sourceId: String, block: Boolean = false) = update(channelKey, sourceId) {
+        if (block) it.blocked(System.currentTimeMillis()) else it.failed()
+    }
 
     private fun update(channelKey: String, sourceId: String, change: (StreamRecord) -> StreamRecord) {
         val prefs = preferences ?: return
         val records = records(channelKey).toMutableMap()
         records[sourceId] = change(records[sourceId] ?: StreamRecord())
         val json = JSONObject()
-        records.forEach { (source, record) -> json.put(source, JSONObject().put("g", record.good).put("b", record.bad)) }
+        records.forEach { (source, record) ->
+            val entry = JSONObject().put("g", record.good).put("b", record.bad)
+            if (record.blockedUntil > 0) entry.put("u", record.blockedUntil)
+            json.put(source, entry)
+        }
         val editor = prefs.edit().putString(channelKey, json.toString())
         // Bounded: once too many channels are stored, some others are forgotten to make room.
         val stored = prefs.all.keys

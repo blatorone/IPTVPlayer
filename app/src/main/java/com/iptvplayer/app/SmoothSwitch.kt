@@ -97,8 +97,101 @@ internal object SmoothSwitch {
             .filter { videoTimes[it] in from until to }.map { videoValues[it] }
     }
 
-    fun markSwitch() {
-        if (enabled) switchedAt = timeshiftNow()
+    private var lagStore: android.content.SharedPreferences? = null
+    private var switchFrom: String? = null
+    private var switchTo: String? = null
+    private var holdMs = 0L
+    @Volatile private var playingAt = Long.MIN_VALUE
+    /** Media id of the stream whose switch is waiting (holding the last picture). */
+    @Volatile var holding: String? = null
+
+    fun init(context: Context) {
+        lagStore = context.getSharedPreferences(LAG_FILE, Context.MODE_PRIVATE)
+    }
+
+    /**
+     * How far [to] runs behind [from] (ms, negative: ahead), from earlier switches between
+     * these two portals; null when not known yet.
+     */
+    fun knownLag(from: String, to: String): Long? {
+        val store = lagStore ?: return null
+        return when {
+            store.contains("$from>$to") -> store.getLong("$from>$to", 0L)
+            store.contains("$to>$from") -> -store.getLong("$to>$from", 0L)
+            else -> null
+        }
+    }
+
+    private fun rememberLag(from: String, to: String, lagMs: Long) {
+        val store = lagStore ?: return
+        val previous = knownLag(from, to)
+        // Averaged with what was known, so one odd measurement does not throw it off.
+        val value = if (previous == null) lagMs else (previous + lagMs) / 2
+        store.edit().remove("$to>$from").putLong("$from>$to", value).apply()
+    }
+
+    /** A switch from portal [from] to [to]; the new stream starts after [waitMs]. */
+    fun markSwitch(from: String?, to: String?, waitMs: Long) {
+        if (!enabled) return
+        switchFrom = from
+        switchTo = to
+        holdMs = waitMs
+        playingAt = Long.MIN_VALUE
+        sourceAt = Long.MIN_VALUE
+        switchedAt = timeshiftNow()
+    }
+
+    /** The new stream plays: used to know how long its start took. */
+    fun markPlaying() {
+        if (switchedAt != Long.MIN_VALUE && playingAt == Long.MIN_VALUE) playingAt = timeshiftNow()
+    }
+
+    /** Moment (timeshiftNow) at which the new portal sent what is played first; default: when it was opened. */
+    @Volatile private var sourceAt = Long.MIN_VALUE
+
+    fun markSource(time: Long) {
+        sourceAt = time
+    }
+
+    // ---- Stand-in recorded in the background while the running stream shows trouble ----
+
+    internal class Standby(val variant: Any, val sourceId: String, val recorder: TimeshiftRecorder)
+
+    @Volatile var standby: Standby? = null
+        private set
+    /** Where the stand-in starts in its recording at the coming switch (timeshiftNow). */
+    @Volatile var standbyTarget: Long? = null
+    /** The stand-in whose link is being fetched (the check runs every 250 ms). */
+    @Volatile var standbyPending: Any? = null
+    /** Last sign of trouble of the running stream (timeshiftNow). */
+    @Volatile var troubleAt = Long.MIN_VALUE
+    private var standbyCount = 0
+
+    /**
+     * Starts recording the stand-in [variant] (another portal, so another account) while the
+     * running stream has trouble. Kept for at most 90 s; dropped when the stream recovers.
+     */
+    fun startStandby(context: Context, variant: Any, sourceId: String, url: String) {
+        if (!enabled || standby?.variant === variant) return
+        stopStandby()
+        val directory = java.io.File(context.cacheDir, "standby-${System.currentTimeMillis()}-${standbyCount++}")
+        standby = Standby(variant, sourceId, TimeshiftRecorder(directory, url, STANDBY_WINDOW_MS).also { it.start() })
+    }
+
+    fun stopStandby() {
+        standby?.recorder?.stop()
+        standby = null
+    }
+
+    /** The recording of [variant] when it ran in the background (it then belongs to the caller). */
+    fun takeStandby(variant: Any): TimeshiftRecorder? {
+        val current = standby ?: return null
+        if (current.variant !== variant || !current.recorder.healthy) {
+            stopStandby()
+            return null
+        }
+        standby = null
+        return current.recorder
     }
 
     private fun range(from: Long, to: Long): List<Pair<Long, Double>> = synchronized(this) {
@@ -114,17 +207,53 @@ internal object SmoothSwitch {
     fun measure(): Measurement? {
         val at = switchedAt.takeIf { it != Long.MIN_VALUE } ?: return null
         switchedAt = Long.MIN_VALUE
+        val wait = holdMs
+        val probeStart = at + wait + 1_000
         val before = range(at - 45_000, at).map { it.second }
-        val after = range(at + 1_000, at + 13_000).map { it.second }
-        bestLag(before, after)?.let { (steps, score) -> return Measurement("audio", steps * STEP_MS, score) }
-        // No sound to compare (e.g. Dolby passthrough): the picture brightness instead.
-        val videoBefore = videoRange(at - 45_000, at)
-        val videoAfter = videoRange(at + 1_000, at + 13_000)
-        return bestLag(videoBefore, videoAfter, minOverlap = 20)?.let { (steps, score) -> Measurement("video", steps * 200L, score) }
+        val after = range(probeStart, probeStart + 12_000).map { it.second }
+        val measured = bestLag(before, after)?.let { (steps, score) -> Measurement("audio", steps * STEP_MS, score) }
+            ?: run {
+                // No sound to compare (e.g. Dolby passthrough): the picture brightness instead.
+                val videoBefore = videoRange(at - 45_000, at)
+                val videoAfter = videoRange(probeStart, probeStart + 12_000)
+                bestLag(videoBefore, videoAfter, minOverlap = 20)?.let { (steps, score) -> Measurement("video", steps * 200L, score) }
+            } ?: return null
+        // The measured shift is between what was heard before and after the switch. How far the
+        // portals themselves are apart: the first sound compared (at p0) was sent by the new portal
+        // at sourceAt + (p0 - playing start); the same sound was heard measured.lagMs before the switch.
+        val playing = playingAt.takeIf { it != Long.MIN_VALUE } ?: (at + wait)
+        val p0 = maxOf(probeStart, playing)
+        val source = sourceAt.takeIf { it != Long.MIN_VALUE } ?: (at + wait)
+        val portalLag = measured.lagMs + source + (p0 - playing) - at
+        val from = switchFrom
+        val to = switchTo
+        val reliable = measured.score >= if (measured.source == "audio") 0.6 else 0.7
+        if (reliable && from != null && to != null && from != to) rememberLag(from, to, portalLag)
+        return measured.copy(portalLagMs = portalLag, saved = reliable && from != null && to != null && from != to)
     }
 }
 
-internal data class Measurement(val source: String, val lagMs: Long, val score: Double)
+/** Time the new stream is held back so it continues where the old one stopped (null: switch at once). */
+internal fun smoothHoldMs(knownLagMs: Long?, staleMs: Long): Long? =
+    knownLagMs?.minus(staleMs)?.takeIf { it in 300L..20_000L }
+
+private const val LAG_FILE = "smooth_switch_lags"
+private const val STANDBY_WINDOW_MS = 90_000L
+
+/**
+ * Where to start the stand-in's recording so it goes on with what was seen last: the old stream
+ * was last seen [staleMs] before [switchAt]; the new portal sends the same [lagMs] later (ms,
+ * timeshiftNow). Unknown distance: taken as none.
+ */
+internal fun standbyStart(switchAt: Long, staleMs: Long, lagMs: Long?): Long = switchAt - staleMs + (lagMs ?: 0L)
+
+internal data class Measurement(
+    val source: String,
+    val lagMs: Long,
+    val score: Double,
+    val portalLagMs: Long = lagMs,
+    val saved: Boolean = false
+)
 
 
 /**

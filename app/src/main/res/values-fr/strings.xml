@@ -932,7 +932,7 @@
     <string name="timeshift_duration_setting">Durée du timeshift : %1$d min</string>
     <string name="timeshift_hint">La chaîne en cours est enregistrée dans la mémoire de l\'app (jusqu\'à environ 3 Go, les parties anciennes sont supprimées en continu). Le direct peut alors être mis en pause et parcouru avec la barre de lecture. S\'applique au prochain lancement de chaîne.</string>
     <string name="smooth_switch_setting">Changement de portail fluide (expérimental)</string>
-    <string name="smooth_switch_hint">Première étape : lors du passage à un autre portail, l\'app mesure le décalage entre les flux (indiqué dans le rapport de diagnostic). Plus tard, elle reprendra le nouveau flux au même endroit.</string>
+    <string name="smooth_switch_hint">Si le flux en cours a des problèmes, l\'app enregistre déjà le portail de secours en arrière-plan et reprend au même endroit lors du changement, sans répéter ni sauter de secondes. Elle apprend l\'écart entre les portails grâce aux changements précédents. Utilise brièvement le double de données pendant les problèmes. Désactivé : changement immédiat comme avant.</string>
     <string name="smooth_switch_weak_device">Cet appareil est peut-être trop faible pour cela – à tes risques et périls.</string>
     <string name="timeshift_live">Direct</string>
 </resources>

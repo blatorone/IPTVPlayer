@@ -937,7 +937,7 @@
     <string name="timeshift_duration_setting">Długość timeshift: %1$d min</string>
     <string name="timeshift_hint">Bieżący kanał jest nagrywany w pamięci aplikacji (do ok. 3 GB, starsze części są na bieżąco usuwane). Telewizję na żywo można wtedy wstrzymać i przewijać paskiem odtwarzania. Obowiązuje od następnego włączenia kanału.</string>
     <string name="smooth_switch_setting">Płynna zmiana portalu (eksperymentalna)</string>
-    <string name="smooth_switch_hint">Pierwszy etap: przy przejściu na inny portal aplikacja mierzy, jak bardzo strumienie są przesunięte (widać w raporcie diagnostycznym). Później będzie kontynuować nowy strumień w tym samym miejscu.</string>
+    <string name="smooth_switch_hint">Gdy bieżący strumień ma problemy, aplikacja już w tle nagrywa portal zastępczy i przy przełączeniu kontynuuje w tym samym miejscu, zamiast powtarzać lub pomijać sekundy. Różnicę między portalami poznaje z wcześniejszych przełączeń. Podczas problemów krótko zużywa podwójne dane. Wyłączone: natychmiastowe przejście jak dotąd.</string>
     <string name="smooth_switch_weak_device">To urządzenie może być na to za słabe – używasz na własne ryzyko.</string>
     <string name="timeshift_live">Na żywo</string>
 </resources>

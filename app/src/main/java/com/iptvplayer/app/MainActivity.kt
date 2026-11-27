@@ -246,8 +246,13 @@ class MainActivity : ComponentActivity() {
                     ?.let { EpisodeAudioTapSink(it, decodeEncoded = decodeAudioForIntro) }
         }
         SmoothSwitch.enabled = smoothSwitchEnabled(this)
+        SmoothSwitch.init(this)
         // Timeshift recordings are only temporary: whatever an earlier run left behind is deleted.
-        Thread { java.io.File(cacheDir, "timeshift").listFiles()?.forEach { it.delete() } }.start()
+        Thread {
+            java.io.File(cacheDir, "timeshift").listFiles()?.forEach { it.delete() }
+            // Stand-in recordings of the smooth switch left from the last run.
+            cacheDir.listFiles { file -> file.isDirectory && file.name.startsWith("standby-") }?.forEach { it.deleteRecursively() }
+        }.start()
         // Optional buffer (Wiedergabe → Puffer); off keeps the player's usual values.
         player = ExoPlayer.Builder(this, renderers).setLoadControl(bufferLoadControl(chosenBuffer(this))).build().also { activePlayer ->
             activePlayer.trackSelectionParameters = activePlayer.trackSelectionParameters
@@ -337,7 +342,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         // Closing the app ends the timeshift recording and deletes it.
-        if (isFinishing) Timeshift.stop()
+        if (isFinishing) {
+            Timeshift.stop()
+            SmoothSwitch.stopStandby()
+        }
         player.release()
         super.onDestroy()
     }
@@ -573,8 +581,14 @@ private data class PlaybackVariant(
     val timing: EpisodeTiming = EpisodeTiming(),
     /** Identity of the portal this variant plays from (null when unknown). */
     val sourceId: String? = null,
+    /** This one stream of the portal (FHD and HD of the same portal are separate), for its history. */
+    val streamKey: String? = null,
     val resolve: suspend () -> String
 )
+
+/** Key of one Live-TV stream in the stream history: portal plus the stream's id in that portal. */
+internal fun liveStreamKey(sourceId: String, streamId: String?) =
+    streamId?.takeIf(String::isNotBlank)?.let { "$sourceId#$it" } ?: sourceId
 
 /**
  * Languages spoken in the chosen countries (plus the device language), as ISO 639-1 codes
@@ -618,8 +632,17 @@ private data class PlaybackAttempt(
     val progressKey: String?,
     val mediaId: String = "",
     val openFullscreenOnStart: Boolean = true,
-    val liveRestoreKey: String? = null
+    val liveRestoreKey: String? = null,
+    /** Live-TV goes through its streams a second time before giving up (round 1). */
+    val round: Int = 0
 )
+
+/** The stream tried after this one: the next in the list, for Live-TV once more from the start. */
+private fun PlaybackAttempt.nextIndex(): Int? = when {
+    index + 1 < variants.size -> index + 1
+    selection.section == PortalSection.LIVE && round == 0 -> 0
+    else -> null
+}
 
 private enum class SeriesActivityView { CONTINUE, UPCOMING, HISTORY, WATCHLIST }
 
@@ -2979,6 +3002,7 @@ private fun PlayerHome(
 
     fun stopPlayback() {
         preparedLiveVariant = null
+        SmoothSwitch.stopStandby()
         savePlaybackPosition()
         if (currentTraktPlayback != null && playbackAttempt != null && (player?.currentPosition ?: 0L) > 0L) {
             sendTraktScrobble("stop", notifyUser = true)
@@ -3067,6 +3091,25 @@ private fun PlayerHome(
                 starting = attempt.channel
                 try {
                     val variant = attempt.variants[index]
+                    // Smooth switch: the stand-in already recorded in the background plays from its
+                    // recording, at the place where the old stream was last seen.
+                    val standby = if (attempt.selection.section == PortalSection.LIVE) SmoothSwitch.takeStandby(variant)
+                        else null.also { SmoothSwitch.stopStandby() }
+                    if (standby != null) {
+                        playing = attempt.channel
+                        triedHls = true
+                        val media = MediaItem.Builder().setUri("standby:${attempt.mediaId}").setMediaId(attempt.mediaId).build()
+                        val started = Timeshift.adopt(
+                            activePlayer, standby, media, SmoothSwitch.standbyTarget ?: timeshiftNow(), timeshiftMinutes(context)
+                        )
+                        SmoothSwitch.standbyTarget = null
+                        SmoothSwitch.markSource(started)
+                        AppDiagnostics.record(context, "smooth_standby_used behind_live_ms:${timeshiftNow() - started}")
+                        activePlayer.prepare()
+                        activePlayer.playWhenReady = canPlay()
+                        if (!canPlay()) starting = null
+                        return@launch
+                    }
                     val prepared = preparedLiveVariant?.takeIf {
                         it.variant === variant && SystemClock.elapsedRealtime() - it.preparedAt < 15_000
                     }
@@ -3127,15 +3170,22 @@ private fun PlayerHome(
         ))
     }
 
-    fun failPlayback(attempt: PlaybackAttempt, message: Int) {
-        if (playbackAttempt !== attempt) return
+    /**
+     * [block]: the stream looped or froze while running; this one stream is then tried last for a
+     * while. [staleMs]: how long the viewer has not seen the stream move on (smooth switch).
+     */
+    fun failPlayback(attempt: PlaybackAttempt, message: Int, block: Boolean = false, staleMs: Long = 0L) {
+        if (playbackAttempt !== attempt || SmoothSwitch.holding == attempt.mediaId) return
         if (attempt.selection.section == PortalSection.LIVE) {
             val key = attempt.liveRestoreKey
-            val source = attempt.variants[attempt.index].sourceId
-            if (key != null && source != null) liveStreamHistory.recordFailure(key, source)
+            val variant = attempt.variants[attempt.index]
+            val stream = variant.streamKey ?: variant.sourceId
+            if (key != null && stream != null) liveStreamHistory.recordFailure(key, stream, block)
         }
-        if (attempt.index + 1 >= attempt.variants.size) {
+        val nextIndex = attempt.nextIndex()
+        if (nextIndex == null) {
             savePlaybackPosition(onFailure = true)
+            SmoothSwitch.stopStandby()
             currentTraktPlayback = null
             playbackJob?.cancel()
             playbackAttempt = null
@@ -3148,26 +3198,60 @@ private fun PlayerHome(
             return
         }
         savePlaybackPosition(onFailure = true)
-        // Experimental smooth switch, stage 1: measure how far apart the two portals are.
-        if (attempt.selection.section == PortalSection.LIVE && SmoothSwitch.enabled) {
-            SmoothSwitch.markSwitch()
-            scope.launch {
-                delay(14_000)
-                val result = SmoothSwitch.measure()
-                AppDiagnostics.record(context, result?.let {
-                    "smooth_measure source:${it.source} lag_ms:${it.lagMs} score:${"%.2f".format(java.util.Locale.ROOT, it.score)}"
-                } ?: "smooth_measure none")
-            }
-        }
         val position = attempt.progressKey?.let { progressPreferences?.getLong(it, attempt.positionMs) }
             ?: attempt.positionMs
         // `starting` is cleared once the stream played. A failover after that keeps the
         // current view: switching to another variant must not pull the guide into fullscreen.
         val stillStarting = starting != null
-        runPlayback(attempt.copy(
-            index = attempt.index + 1, positionMs = position,
+        // Live-TV: after the last stream it goes through all of them once more before giving up.
+        val newRound = nextIndex <= attempt.index
+        if (newRound) AppDiagnostics.record(context, "playback_second_round")
+        val next = attempt.copy(
+            index = nextIndex, positionMs = position, round = if (newRound) attempt.round + 1 else attempt.round,
             openFullscreenOnStart = attempt.openFullscreenOnStart && stillStarting
-        ))
+        )
+        // Smooth switch (experimental, off: a hard switch as always). When the stand-in already
+        // ran in the background, it starts in its recording where the old stream was last seen
+        // (also when its portal is ahead). Otherwise, when the new portal is known to run behind,
+        // the last picture is held that long. Every switch is measured to learn the distance.
+        if (attempt.selection.section == PortalSection.LIVE && SmoothSwitch.enabled) {
+            val from = attempt.variants[attempt.index].sourceId
+            val to = next.variants[next.index].sourceId
+            val lag = if (from == null || to == null || from == to) null else SmoothSwitch.knownLag(from, to)
+            val standby = SmoothSwitch.standby?.takeIf { it.variant === next.variants[next.index] && it.recorder.healthy }
+            val now = timeshiftNow()
+            val hold = if (standby != null && !stillStarting) {
+                val target = standbyStart(now, staleMs, lag)
+                SmoothSwitch.standbyTarget = target
+                AppDiagnostics.record(context, "smooth_standby recorded_ms:${now - standby.recorder.startedAt} start_ms:${target - now}" +
+                    if (lag == null) " lag:unknown" else " lag_ms:$lag")
+                (target - now).takeIf { it in 300L..20_000L }
+            } else {
+                SmoothSwitch.standbyTarget = null
+                if (stillStarting) null else smoothHoldMs(lag, staleMs)
+            }
+            SmoothSwitch.markSwitch(from, to, hold ?: 0L)
+            scope.launch {
+                delay(14_000 + (hold ?: 0L))
+                val result = SmoothSwitch.measure()
+                AppDiagnostics.record(context, result?.let {
+                    "smooth_measure source:${it.source} lag_ms:${it.lagMs} score:${"%.2f".format(java.util.Locale.ROOT, it.score)}" +
+                        " portal_lag_ms:${it.portalLagMs}" + if (it.saved) " saved" else ""
+                } ?: "smooth_measure none")
+            }
+            if (hold != null) {
+                AppDiagnostics.record(context, "smooth_hold ms:$hold")
+                SmoothSwitch.holding = attempt.mediaId
+                player?.pause() // the last picture stays, the sound stops
+                scope.launch {
+                    delay(hold)
+                    if (SmoothSwitch.holding == attempt.mediaId) SmoothSwitch.holding = null
+                    if (playbackAttempt === attempt) runPlayback(next)
+                }
+                return
+            }
+        }
+        runPlayback(next)
     }
 
     /** Plays the current title or channel from another of its portals (chosen in the player settings). */
@@ -3190,14 +3274,20 @@ private fun PlayerHome(
             channel,
             selection,
             group.variants.preferringSource(null, preferredPortal) { it.item.source.identity }
-                .rankedByHistory(channelKey?.let(liveStreamHistory::records).orEmpty()) { it.item.source.identity }
+                .rankedByHistory(
+                    channelKey?.let(liveStreamHistory::records).orEmpty(),
+                    random = if (preferredPortal == null) kotlin.random.Random.Default else null,
+                    portalOf = { it.item.source.identity }
+                ) { liveStreamKey(it.item.source.identity, it.item.value.id) }
                 .map { variant ->
                 val item = variant.item
                 val portal = sessionFor(item.source)
                 val quality = variant.description.qualities.joinToString(" / ")
                 val sourceLabel = playbackSourceLabel(item.source, portal)
                 val label = if (quality.isBlank()) sourceLabel else "$quality · $sourceLabel"
-                PlaybackVariant(label, sourceId = item.source.identity) { portal.resolve(item.value, portal.openSession()) }
+                PlaybackVariant(label, sourceId = item.source.identity, streamKey = liveStreamKey(item.source.identity, item.value.id)) {
+                    portal.resolve(item.value, portal.openSession())
+                }
             },
             openFullscreenOnStart = openFullscreenOnStart,
             liveRestoreKey = channelKey,
@@ -3244,11 +3334,15 @@ private fun PlayerHome(
                     validStreams.map { saved ->
                         saved to SavedPortal(saved.address, saved.mac, emptyList(), emptyMap(), emptyMap()).identity
                     }.preferringSource(null, preferredPortal) { it.second }
-                        .rankedByHistory(liveStreamHistory.records(cached.key)) { it.second }
+                        .rankedByHistory(
+                            liveStreamHistory.records(cached.key),
+                            random = if (preferredPortal == null) kotlin.random.Random.Default else null,
+                            portalOf = { it.second }
+                        ) { liveStreamKey(it.second, it.first.id) }
                         .map { (saved, identity) ->
                         val portal = StalkerPortal(saved.address, saved.mac)
                         val stream = StalkerChannel(cached.name, saved.command, null, null, id = saved.id, direct = saved.direct)
-                        PlaybackVariant(portal.sourceLabel, sourceId = identity) {
+                        PlaybackVariant(portal.sourceLabel, sourceId = identity, streamKey = liveStreamKey(identity, saved.id)) {
                             portal.resolve(stream, if (saved.direct) "" else portal.openSession())
                         }
                     },
@@ -4606,7 +4700,10 @@ private fun PlayerHome(
                             }
                             lastBadgedAttempt = attempt.mediaId
                             playbackSourceBadge = attempt.mediaId to attempt.variants[attempt.index].label
-                            if (attempt.index > 0) AppDiagnostics.record(context, "playback_source_badge index:${attempt.index}")
+                            if (attempt.index > 0) {
+                                SmoothSwitch.markPlaying()
+                                AppDiagnostics.record(context, "playback_source_badge index:${attempt.index}")
+                            }
                         }
                     }
                     val openFullscreen = when (vodSection) {
@@ -4763,21 +4860,40 @@ private fun PlayerHome(
      * Resolves the next Live-TV stream ahead of time, so a failover starts right away. Portal links
      * expire, so this is repeated as soon as the running stream shows trouble.
      */
-    fun prepareNextLiveVariant(attempt: PlaybackAttempt) {
+    /** [trouble]: the running stream shows signs of trouble (not just the early link fetch). */
+    fun prepareNextLiveVariant(attempt: PlaybackAttempt, trouble: Boolean = false) {
         if (attempt.selection.section != PortalSection.LIVE) return
-        val next = attempt.variants.getOrNull(attempt.index + 1) ?: return
-        val ready = preparedLiveVariant
-        if (ready != null && ready.variant === next && SystemClock.elapsedRealtime() - ready.preparedAt < 8_000) return
+        val next = attempt.nextIndex()?.let(attempt.variants::get) ?: return
+        if (trouble) SmoothSwitch.troubleAt = timeshiftNow()
+        // Smooth switch: a stand-in from another portal (another account) is recorded in the
+        // background while the running stream has trouble, so the switch can be seamless.
+        val standbySource = next.sourceId?.takeIf {
+            trouble && SmoothSwitch.enabled && it != attempt.variants[attempt.index].sourceId
+        }
+        if (standbySource != null) {
+            if (SmoothSwitch.standby?.variant === next || SmoothSwitch.standbyPending === next) return
+            SmoothSwitch.standbyPending = next
+        } else {
+            val ready = preparedLiveVariant
+            if (ready != null && ready.variant === next && SystemClock.elapsedRealtime() - ready.preparedAt < 8_000) return
+        }
         scope.launch {
             try {
                 val stream = next.resolve()
                 if (playbackAttempt === attempt) {
-                    preparedLiveVariant = PreparedLiveVariant(next, stream, SystemClock.elapsedRealtime())
+                    if (standbySource != null && !stream.substringBefore('?').endsWith(".m3u8", true)) {
+                        SmoothSwitch.startStandby(context, next, standbySource, stream)
+                        AppDiagnostics.record(context, "smooth_standby_started")
+                    } else {
+                        preparedLiveVariant = PreparedLiveVariant(next, stream, SystemClock.elapsedRealtime())
+                    }
                 }
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
                 // Resolved again on demand if the running stream fails.
+            } finally {
+                if (SmoothSwitch.standbyPending === next) SmoothSwitch.standbyPending = null
             }
         }
     }
@@ -4802,13 +4918,18 @@ private fun PlayerHome(
         var playedMs = 0L
         var successRecorded = false
         var rewound = false
-        fun fail(event: String) {
+        fun fail(event: String, staleMs: Long = 0L) {
             AppDiagnostics.record(context, event)
-            scope.launch { failPlayback(attempt, R.string.playback_timeout) }
+            scope.launch { failPlayback(attempt, R.string.playback_timeout, block = true, staleMs = staleMs) }
         }
         while (playbackAttempt === attempt) {
             val now = SystemClock.elapsedRealtime()
             if (activePlayer.currentMediaItem?.mediaId != attempt.mediaId) { delay(250); continue }
+            // The running stream recovered: the stand-in recorded in the background is dropped.
+            if (SmoothSwitch.standby != null && timeshiftNow() - SmoothSwitch.troubleAt > 30_000) {
+                SmoothSwitch.stopStandby()
+                AppDiagnostics.record(context, "smooth_standby_dropped")
+            }
             if (activePlayer.playbackState == Player.STATE_READY) hasPlayed = true
             while (bufferEpisodes.isNotEmpty() && now - bufferEpisodes.first() > STALL_WINDOW_MS) bufferEpisodes.removeFirst()
             while (jumps.isNotEmpty() && now - jumps.first() > STALL_WINDOW_MS) jumps.removeFirst()
@@ -4819,11 +4940,11 @@ private fun PlayerHome(
                     bufferingSince = now
                     countedThisBuffer = false
                 }
-                if (now - bufferingSince!! >= 1_500) prepareNextLiveVariant(attempt)
+                if (now - bufferingSince!! >= 1_500) prepareNextLiveVariant(attempt, trouble = true)
                 if (!countedThisBuffer && now - bufferingSince!! >= 4_000) {
                     countedThisBuffer = true
                     bufferEpisodes.addLast(now)
-                    if (bufferEpisodes.size >= 3) return@LaunchedEffect fail("playback_repeated_buffering")
+                    if (bufferEpisodes.size >= 3) return@LaunchedEffect fail("playback_repeated_buffering", now - (bufferingSince ?: now))
                 }
             } else if (activePlayer.playbackState != Player.STATE_BUFFERING) {
                 bufferingSince = null
@@ -4843,7 +4964,7 @@ private fun PlayerHome(
                     // The stream jumped back by itself: a source that keeps repeating the last seconds.
                     AppDiagnostics.record(context, "playback_jump_back ms:${lastPosition - position}")
                     jumps.addLast(now)
-                    prepareNextLiveVariant(attempt)
+                    prepareNextLiveVariant(attempt, trouble = true)
                     // A jump of many seconds is a source replaying a whole stretch (seen: 55 s every
                     // minute): it switches at once instead of showing the same minute again.
                     if (jumps.size >= 2 || lastPosition - position >= LONG_JUMP_BACK_MS) {
@@ -4853,8 +4974,8 @@ private fun PlayerHome(
                 if (position != lastPosition) positionMovedAt = now
                 lastPosition = position
                 // Picture and sound stand still although the player reports playback.
-                if (now - positionMovedAt >= 3_000) prepareNextLiveVariant(attempt)
-                if (now - positionMovedAt >= FROZEN_LIMIT_MS) return@LaunchedEffect fail("playback_frozen")
+                if (now - positionMovedAt >= 3_000) prepareNextLiveVariant(attempt, trouble = true)
+                if (now - positionMovedAt >= FROZEN_LIMIT_MS) return@LaunchedEffect fail("playback_frozen", now - positionMovedAt)
                 // Only the picture stands still (sound goes on).
                 val videoSelected = activePlayer.currentTracks.isTypeSelected(C.TRACK_TYPE_VIDEO)
                 val frames = activePlayer.videoDecoderCounters?.let { it.ensureUpdated(); it.renderedOutputBufferCount }
@@ -4869,14 +4990,14 @@ private fun PlayerHome(
                 if (videoSelected && frames != null && fluentVideo) {
                     if (frames != lastFrames) framesMovedAt = now
                     lastFrames = frames
-                    if (now - framesMovedAt >= 3_000) prepareNextLiveVariant(attempt)
+                    if (now - framesMovedAt >= 3_000) prepareNextLiveVariant(attempt, trouble = true)
                     if (now - framesMovedAt >= FROZEN_LIMIT_MS) return@LaunchedEffect fail("playback_picture_frozen")
                 } else framesMovedAt = now
                 // A steady run is remembered: this portal is tried first for the channel next time.
                 if (!successRecorded && playedMs >= STEADY_PLAY_MS && bufferEpisodes.isEmpty() && jumps.isEmpty()) {
                     successRecorded = true
                     val key = attempt.liveRestoreKey
-                    val source = attempt.variants[attempt.index].sourceId
+                    val source = attempt.variants[attempt.index].let { it.streamKey ?: it.sourceId }
                     if (key != null && source != null) liveStreamHistory.recordSuccess(key, source)
                 }
             } else {

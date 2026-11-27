@@ -927,7 +927,7 @@
     <string name="timeshift_duration_setting">Timeshift-Dauer: %1$d Min.</string>
     <string name="timeshift_hint">Der laufende Sender wird im App-Speicher mitgeschnitten (bis zu etwa 3 GB, ältere Teile werden laufend gelöscht). Dann lässt sich Live-TV pausieren und mit der Wiedergabeleiste spulen. Gilt ab dem nächsten Senderstart.</string>
     <string name="smooth_switch_setting">Fließender Portalwechsel (experimentell)</string>
-    <string name="smooth_switch_hint">Erste Stufe: Beim Wechsel zu einem anderen Portal misst die App, wie weit die Streams auseinanderliegen (steht im Diagnosebericht). Später setzt sie den neuen Stream an derselben Stelle fort.</string>
+    <string name="smooth_switch_hint">Zeigt der laufende Stream Störungen, nimmt die App das Ersatzportal schon im Hintergrund auf und macht beim Wechsel an derselben Stelle weiter, statt Sekunden zu wiederholen oder zu überspringen. Den Abstand zwischen den Portalen lernt sie aus früheren Wechseln. Braucht bei Störungen kurz doppelte Daten. Aus: sofortiger Wechsel wie bisher.</string>
     <string name="smooth_switch_weak_device">Dieses Gerät ist dafür eventuell zu schwach – Nutzung auf eigene Gefahr.</string>
     <string name="timeshift_live">Live</string>
 </resources>

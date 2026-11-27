@@ -927,7 +927,7 @@
     <string name="timeshift_duration_setting">Timeshift süresi: %1$d dk</string>
     <string name="timeshift_hint">Açık kanal uygulama belleğine kaydedilir (yaklaşık 3 GB\'a kadar, eski kısımlar sürekli silinir). Böylece canlı TV duraklatılabilir ve oynatma çubuğuyla sarılabilir. Bir sonraki kanal açılışından itibaren geçerli.</string>
     <string name="smooth_switch_setting">Akıcı portal geçişi (deneysel)</string>
-    <string name="smooth_switch_hint">İlk aşama: Başka bir portala geçerken uygulama yayınlar arasındaki farkı ölçer (tanılama raporunda görünür). Daha sonra yeni yayını aynı yerden sürdürecek.</string>
+    <string name="smooth_switch_hint">Çalışan yayında sorun görülürse uygulama yedek portalı arka planda kaydetmeye başlar ve geçişte saniyeleri tekrarlamak ya da atlamak yerine aynı yerden devam eder. Portallar arasındaki farkı önceki geçişlerden öğrenir. Sorun sırasında kısa süre çift veri kullanır. Kapalı: eskisi gibi anında geçiş.</string>
     <string name="smooth_switch_weak_device">Bu cihaz bunun için yetersiz olabilir – kullanım kendi sorumluluğunuzdadır.</string>
     <string name="timeshift_live">Canlı</string>
 </resources>

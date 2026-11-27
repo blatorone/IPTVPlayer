@@ -932,7 +932,7 @@
     <string name="timeshift_duration_setting">Durata timeshift: %1$d min</string>
     <string name="timeshift_hint">Il canale in corso viene registrato nella memoria dell\'app (fino a circa 3 GB, le parti vecchie vengono eliminate di continuo). Così la diretta si può mettere in pausa e scorrere con la barra di riproduzione. Vale dal prossimo avvio di un canale.</string>
     <string name="smooth_switch_setting">Cambio portale fluido (sperimentale)</string>
-    <string name="smooth_switch_hint">Prima fase: passando a un altro portale, l\'app misura quanto sono sfasati gli stream (compare nel rapporto diagnostico). In seguito riprenderà il nuovo stream dallo stesso punto.</string>
+    <string name="smooth_switch_hint">Se lo stream in corso ha problemi, l\'app registra già in background il portale di riserva e al cambio riprende dallo stesso punto, senza ripetere né saltare secondi. Impara la differenza tra i portali dai passaggi precedenti. Durante i problemi usa per poco il doppio dei dati. Disattivato: passaggio immediato come prima.</string>
     <string name="smooth_switch_weak_device">Questo dispositivo potrebbe essere troppo debole: uso a proprio rischio.</string>
     <string name="timeshift_live">Diretta</string>
 </resources>

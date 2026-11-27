@@ -49,7 +49,8 @@ internal fun timeshiftMinutes(context: Context): Int? {
 internal class TimeshiftRecorder(
     private val directory: File,
     private val url: String,
-    private val windowMs: Long
+    /** How much is kept; can grow when a stand-in recording becomes the timeshift. */
+    @Volatile var windowMs: Long
 ) {
     private val lock = Object()
     /** First byte still kept, and the number of bytes written so far. */
@@ -71,11 +72,17 @@ internal class TimeshiftRecorder(
         thread.start()
     }
 
+    /** Still recording and something arrived. */
+    val healthy: Boolean get() = !stopped && failure == null && written > 0
+
     fun stop() {
         stopped = true
         thread.interrupt()
         synchronized(lock) { lock.notifyAll() }
-        Thread { directory.listFiles()?.forEach { it.delete() } }.start()
+        Thread {
+            directory.listFiles()?.forEach { it.delete() }
+            if (directory.name.startsWith("standby-")) directory.delete()
+        }.start()
     }
 
     private fun segment(index: Long) = File(directory, "seg-$index")
@@ -248,6 +255,22 @@ internal object Timeshift {
         mediaItem = media
         sourceStart = timeshiftNow()
         player.setMediaSource(ProgressiveMediaSource.Factory { TimeshiftDataSource(next, 0L) }.createMediaSource(media))
+    }
+
+    /**
+     * Plays a recording that already ran in the background (the stand-in of the smooth switch)
+     * from [time]; it then is the running timeshift. Returns the moment actually started at.
+     */
+    fun adopt(player: ExoPlayer, active: TimeshiftRecorder, media: MediaItem, time: Long, minutes: Int?): Long {
+        stop()
+        if (minutes != null) active.windowMs = maxOf(active.windowMs, minutes * 60_000L)
+        recorder = active
+        mediaItem = media
+        val (oldest, live) = active.window()
+        val target = time.coerceIn(oldest, live)
+        sourceStart = target
+        player.setMediaSource(ProgressiveMediaSource.Factory { TimeshiftDataSource(active, active.offsetAt(target)) }.createMediaSource(media))
+        return target
     }
 
     /** Continues playback at [time] (elapsed realtime) of the recording. */

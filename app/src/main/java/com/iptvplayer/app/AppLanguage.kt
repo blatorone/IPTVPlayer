@@ -71,7 +71,7 @@ internal val APP_LANGUAGES = listOf(
  * Languages whose translation is complete; only these are offered and used. German is the
  * built-in text (values/), the others live in values-<tag>. Grows with every translation.
  */
-internal val TRANSLATED_LANGUAGES = setOf("de", "en", "tr", "pl", "ru", "ar", "ro", "hr", "bs", "sr", "sr-Latn", "es", "fr", "it", "pt-BR", "sq", "uk", "cs", "da", "lv", "lt", "hu", "nl")
+internal val TRANSLATED_LANGUAGES = setOf("de", "en", "tr", "pl", "ru", "ar", "ro", "hr", "bs", "sr", "sr-Latn", "es", "fr", "it", "pt-BR", "sq", "uk", "cs", "da", "lv", "lt", "hu", "nl", "nb", "sv", "sk", "sl")
 
 private const val LANGUAGE_KEY = "app_language"
 private const val MIRROR_KEY = "mirror_rtl"

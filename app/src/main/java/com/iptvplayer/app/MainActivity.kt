@@ -1,5 +1,6 @@
 package com.iptvplayer.app
 
+import androidx.core.content.edit
 import androidx.compose.ui.draw.clip
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -82,6 +83,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.produceState
@@ -112,7 +114,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.res.stringResource
@@ -125,6 +127,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.Lifecycle
 import androidx.core.view.WindowCompat
+import androidx.core.view.isVisible
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import java.time.Instant
@@ -199,6 +202,10 @@ class MainActivity : ComponentActivity() {
         window?.decorView?.playSoundEffect(effect)
     }
 
+    // RestrictedApi: lint confuses this public Activity method with androidx.core's restricted
+    // helper of the same name. GestureBackNavigation: the long press of Back (a remote key on TV)
+    // only exists as key events; the back callbacks report no long press.
+    @android.annotation.SuppressLint("RestrictedApi", "GestureBackNavigation")
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
         playKeySound(event)
         // Modal playback prompts own the remote while visible, before PlayerView or
@@ -299,14 +306,16 @@ class MainActivity : ComponentActivity() {
                     accentGradient = accentGradient,
                     onAccentChoiceChange = { choice ->
                         // A plain colour replaces a gradient of this account.
-                        getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE).edit()
-                            .putString(UserProfiles.accentKey(kidsAccount), choice.name)
-                            .remove(AccentGradient.key(kidsAccount)).apply()
+                        getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE).edit {
+                            putString(UserProfiles.accentKey(kidsAccount), choice.name)
+                            remove(AccentGradient.key(kidsAccount))
+                        }
                         accentVersion++
                     },
                     onAccentGradientChange = { gradient ->
-                        getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE).edit()
-                            .putString(AccentGradient.key(kidsAccount), gradient.name).apply()
+                        getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE).edit {
+                            putString(AccentGradient.key(kidsAccount), gradient.name)
+                        }
                         accentVersion++
                     },
                     onAccountChange = { kids -> kidsAccount = kids; accentVersion++ },
@@ -730,7 +739,7 @@ private class PlayerHomeFlags {
     var portalPickerFor by mutableStateOf<Pair<PortalSection, PortalTitle>?>(null)
     var categoryMenu by mutableStateOf<Pair<PortalSection, String?>?>(null)
     var restoreLiveFocus by mutableStateOf(false)
-    var attemptSerial by mutableStateOf(0L)
+    var attemptSerial by mutableLongStateOf(0L)
     var playbackSourceBadge by mutableStateOf<Pair<String, String>?>(null)
     var triedHls by mutableStateOf(false)
     var batchProgress by mutableStateOf<Pair<Int, Int>?>(null)
@@ -763,11 +772,11 @@ private class PlayerHomeFlags {
     var profileStartChecked by mutableStateOf<Boolean>(false)
     var kidsNameDialog by mutableStateOf<Boolean>(false)
     var kidsColorOpen by mutableStateOf<Boolean>(false)
-    var kidsAccentVersion by mutableStateOf<Int>(0)
+    var kidsAccentVersion by mutableIntStateOf(0)
     /** The Trakt page was opened for the kids account (by the admin, in the Kinderschutz). */
     var traktForKids by mutableStateOf<Boolean>(false)
     var kidsTraktName by mutableStateOf<String?>(null)
-    var exitBlockedUntil by mutableStateOf<Long>(0L)
+    var exitBlockedUntil by mutableLongStateOf(0L)
     var exitDialogOpen by mutableStateOf<Boolean>(false)
     var accentPaletteOpen by mutableStateOf<Boolean>(false)
     var settingsContentFocused by mutableStateOf<Boolean>(false)
@@ -782,7 +791,7 @@ private class PlayerHomeFlags {
     var showHiddenCategories by mutableStateOf<Boolean>(false)
     var sourceRefreshDialogOpen by mutableStateOf<Boolean>(false)
     var controlSettingsOpen by mutableStateOf<Boolean>(false)
-    var settingsPageOpenedAt by mutableStateOf<Long>(0L)
+    var settingsPageOpenedAt by mutableLongStateOf(0L)
     var remoteAccessOpen by mutableStateOf<Boolean>(false)
     /** "Per Handy einstellen" opened from the PIN prompt: a window over the current screen. */
     var remoteAccessStandalone by mutableStateOf<Boolean>(false)
@@ -946,10 +955,10 @@ private fun PlayerHome(
     val portalRefreshAtStartupDefault = remember(preferences) {
         val settings = preferences
         if (settings != null && settings.getInt("portal_refresh_startup_migration", 0) < 51) {
-            settings.edit()
-                .putBoolean("refresh_portals_at_startup", true)
-                .putInt("portal_refresh_startup_migration", 51)
-                .apply()
+            settings.edit {
+                putBoolean("refresh_portals_at_startup", true)
+                putInt("portal_refresh_startup_migration", 51)
+            }
             true
         } else settings?.getBoolean("refresh_portals_at_startup", true) ?: true
     }
@@ -963,8 +972,8 @@ private fun PlayerHome(
     var startInFullscreen by remember(preferences) {
         mutableStateOf(preferences?.getBoolean("start_in_fullscreen", true) ?: true)
     }
-    var epgRefreshHours by remember(preferences) { mutableStateOf(preferences?.getInt("epg_refresh_hours", 6) ?: 6) }
-    var epgHorizonHours by remember(preferences) { mutableStateOf(preferences?.getInt("epg_horizon_hours", 24) ?: 24) }
+    var epgRefreshHours by remember(preferences) { mutableIntStateOf(preferences?.getInt("epg_refresh_hours", 6) ?: 6) }
+    var epgHorizonHours by remember(preferences) { mutableIntStateOf(preferences?.getInt("epg_horizon_hours", 24) ?: 24) }
     var subtitleDefaultEnabled by remember(preferences) {
         mutableStateOf(preferences?.getBoolean("subtitle_default_enabled", false) ?: false)
     }
@@ -990,7 +999,7 @@ private fun PlayerHome(
         mutableStateOf(preferences?.getBoolean("auto_skip_intro", false) ?: false)
     }
     var episodeNoticeSeconds by remember(preferences) {
-        mutableStateOf((preferences?.getInt("episode_notice_seconds", 15) ?: 15).coerceIn(5, 60))
+        mutableIntStateOf((preferences?.getInt("episode_notice_seconds", 15) ?: 15).coerceIn(5, 60))
     }
     var manualIntro by remember(preferences) {
         mutableStateOf(preferences?.getBoolean("manual_intro", false) ?: false)
@@ -999,13 +1008,13 @@ private fun PlayerHome(
         mutableStateOf(preferences?.getBoolean("manual_credits", false) ?: false)
     }
     var introStartSeconds by remember(preferences) {
-        mutableStateOf(preferences?.getInt("intro_start_seconds", 0) ?: 0)
+        mutableIntStateOf(preferences?.getInt("intro_start_seconds", 0) ?: 0)
     }
     var introEndSeconds by remember(preferences) {
-        mutableStateOf(preferences?.getInt("intro_end_seconds", 60) ?: 60)
+        mutableIntStateOf(preferences?.getInt("intro_end_seconds", 60) ?: 60)
     }
     var creditsBeforeEndSeconds by remember(preferences) {
-        mutableStateOf(preferences?.getInt("credits_before_end_seconds", 60) ?: 60)
+        mutableIntStateOf(preferences?.getInt("credits_before_end_seconds", 60) ?: 60)
     }
     val seriesOpenings = remember { mutableMapOf<Pair<String, String>, Pair<String, List<EpisodeFrame>>>() }
     val seriesOpeningAudio = remember { mutableMapOf<Pair<String, String>, Pair<String, List<AudioPrint>>>() }
@@ -1017,7 +1026,7 @@ private fun PlayerHome(
         val preferences = progressPreferences ?: return@LaunchedEffect
         withContext(Dispatchers.IO) {
             val obsolete = preferences.all.keys.filter { it.startsWith("opening:") || it.startsWith("opening-samples:") }
-            if (obsolete.isNotEmpty()) preferences.edit().apply { obsolete.forEach(::remove) }.apply()
+            if (obsolete.isNotEmpty()) preferences.edit { obsolete.forEach { remove(it) } }
         }
     }
     var fullscreenVideoSurface by remember { mutableStateOf<SurfaceView?>(null) }
@@ -1059,7 +1068,7 @@ private fun PlayerHome(
     var preferredPortal by remember(preferences) { mutableStateOf(preferences?.getString("preferred_portal", null)) }
     fun setPreferredPortal(identity: String?) {
         preferredPortal = identity
-        preferences?.edit()?.apply { if (identity == null) remove("preferred_portal") else putString("preferred_portal", identity) }?.apply()
+        preferences?.edit { if (identity == null) remove("preferred_portal") else putString("preferred_portal", identity) }
     }
     // Portal chosen on a film's or series' page (title key -> portal), kept while the app runs.
     val titlePortalChoices = remember { mutableStateMapOf<String, String>() }
@@ -1111,11 +1120,11 @@ private fun PlayerHome(
     /** The channel info at the top left, shown once when the app starts in fullscreen. */
     var startupInfoVisible by remember { mutableStateOf(fullscreenAtStart) }
     val appUpdates = rememberAppUpdates()
-    var lastBack by remember { mutableStateOf(0L) }
+    var lastBack by remember { mutableLongStateOf(0L) }
     /** When the position was last moved on purpose (seek, reload), so the loop check ignores it. */
     val playerPositionResetAt = remember { java.util.concurrent.atomic.AtomicLong(0L) }
     /** When a running Live-TV stream was last reloaded after a short network error. */
-    var liveRetryAt by remember { mutableStateOf(0L) }
+    var liveRetryAt by remember { mutableLongStateOf(0L) }
     var connecting by remember { mutableStateOf(false) }
     var playbackJob by remember { mutableStateOf<Job?>(null) }
     var catalogSession by remember { mutableStateOf<Pair<StalkerPortal, String?>?>(null) }
@@ -1213,7 +1222,7 @@ private fun PlayerHome(
             val persisted = runCatching { context.contentResolver.takePersistableUriPermission(uri, permission) }
             if (persisted.isSuccess) {
                 context.getSharedPreferences("diagnostics_settings", Context.MODE_PRIVATE)
-                    .edit().putString("tree_uri", uri.toString()).apply()
+                    .edit { putString("tree_uri", uri.toString()) }
                 diagnosticsTree = uri
                 AppDiagnostics.record(context, "diagnostics_folder_selected")
                 ui.diagnosticsStatus = context.getString(R.string.diagnostics_folder_selected)
@@ -1292,7 +1301,7 @@ private fun PlayerHome(
     var expiryLead by remember(preferences) { mutableStateOf(ExpiryLead.parse(preferences?.getString("expiry_lead", null))) }
     fun changeExpiryLead(lead: ExpiryLead) {
         expiryLead = lead
-        preferences?.edit()?.putString("expiry_lead", lead.key)?.apply()
+        preferences?.edit { putString("expiry_lead", lead.key) }
     }
     val detailMetadata by produceState<TmdbTitle?>(null, metadataClient, details, mergeSources, traktSession?.username) {
         value = null
@@ -1880,7 +1889,7 @@ private fun PlayerHome(
                 movieHistory = updatedMovieHistory.values.sortedByDescending { it.watchedAt }.take(200)
                 library.watchedMovieKeys?.let { keys ->
                     traktWatchedMovieKeys = keys
-                    progressPreferences?.edit()?.putStringSet("trakt_watched_movie_keys", keys)?.apply()
+                    progressPreferences?.edit { putStringSet("trakt_watched_movie_keys", keys) }
                 }
                 val remoteSeriesKeys = library.seriesHistorySnapshot?.let { snapshot ->
                     ui.traktStatus = context.getString(R.string.trakt_reconcile_series_history)
@@ -1894,33 +1903,31 @@ private fun PlayerHome(
                     if (remoteSeriesKeys == null || !record.viewed) record
                     else record.copy(hiddenFromHistory = !record.localViewed && record.key !in remoteSeriesKeys)
                 }
-                progressPreferences?.edit()?.also { editor ->
+                progressPreferences?.edit {
                     completedEpisodes.forEach { key ->
-                        editor.putBoolean("completed:$key", true).remove(key)
+                        putBoolean("completed:$key", true).remove(key)
                             .remove("manual_watched:$key").remove("trakt_percent:$key")
                     }
                     importedProgress.forEach { (key, percent) ->
                         if (key !in completedEpisodes && progressPreferences?.contains("manual_watched:$key") != true) {
-                            editor.putFloat("trakt_percent:$key", percent).putLong(key, 1L)
+                            putFloat("trakt_percent:$key", percent).putLong(key, 1L)
                                 .remove("completed:$key")
                         }
                     }
-                }?.apply()
-                preferences?.edit()?.putStringSet(userDataKey("watchlist"), watchlist)?.apply()
-                progressPreferences?.edit()
-                    ?.putString("movie_bookmarks", encodeMovieHistory(movieBookmarks))
-                    ?.putString("movie_history", encodeMovieHistory(movieHistory))
-                    ?.putString("series_activity", encodeSeriesActivity(seriesActivity))
-                    ?.apply()
+                }
+                preferences?.edit { putStringSet(userDataKey("watchlist"), watchlist) }
+                progressPreferences?.edit {
+                    putString("movie_bookmarks", encodeMovieHistory(movieBookmarks))
+                    putString("movie_history", encodeMovieHistory(movieHistory))
+                    putString("series_activity", encodeSeriesActivity(seriesActivity))
+                }
                 pendingActivities?.let { activities ->
                     traktSession?.username?.lowercase()?.let { username ->
-                        preferences?.edit()
-                            ?.putString("trakt_last_activities:$username", activities)
-                            ?.putBoolean("trakt_watchlist_dirty:$username", false)
-                            ?.also { editor ->
-                                if (remoteSeriesKeys != null) editor.putBoolean("trakt_series_history_reconciled:$username", true)
-                            }
-                            ?.apply()
+                        preferences?.edit {
+                            putString("trakt_last_activities:$username", activities)
+                            putBoolean("trakt_watchlist_dirty:$username", false)
+                            if (remoteSeriesKeys != null) putBoolean("trakt_series_history_reconciled:$username", true)
+                        }
                     }
                 }
                 ui.traktStatus = context.getString(R.string.trakt_sync_complete, matched)
@@ -2207,13 +2214,13 @@ private fun PlayerHome(
 
     fun saveCountries(selection: Set<String>) {
         countries = selection
-        preferences?.edit()?.putString("countryOrder", countries.joinToString(","))?.apply()
+        preferences?.edit { putString("countryOrder", countries.joinToString(",")) }
     }
 
     fun setCategoryVisibility(section: PortalSection, ids: Set<String>, hidden: Boolean) {
         val keys = ids.map { categoryKey(section, it) }.toSet()
         hiddenCategories = if (hidden) hiddenCategories + keys else hiddenCategories - keys
-        preferences?.edit()?.putStringSet("hidden", hiddenCategories)?.apply()
+        preferences?.edit { putStringSet("hidden", hiddenCategories) }
     }
 
     fun countryPriority(name: String, country: String? = null): Int =
@@ -2283,7 +2290,7 @@ private fun PlayerHome(
 
     fun saveSeriesActivity(entries: List<TrackedSeries>) {
         seriesActivity = entries
-        progressPreferences?.edit()?.putString("series_activity", encodeSeriesActivity(entries))?.apply()
+        progressPreferences?.edit { putString("series_activity", encodeSeriesActivity(entries)) }
     }
 
     fun updateTrackedSeries(title: PortalTitle, saved: Boolean? = null, watchedEpisode: EpisodeResume? = null) {
@@ -2331,9 +2338,9 @@ private fun PlayerHome(
             .distinctBy { it.id ?: it.name }
             .forEach { updateTrackedSeries(it, saved = true) }
         favorites = emptySet()
-        preferences?.edit()?.putStringSet(userDataKey("watchlist"), watchlist)?.remove(userDataKey("favorites"))?.apply()
+        preferences?.edit { putStringSet(userDataKey("watchlist"), watchlist); remove(userDataKey("favorites")) }
         preferences?.all?.keys?.filter { it.startsWith("trakt_watchlist_dirty:") }?.forEach { key ->
-            preferences.edit().putBoolean(key, true).apply()
+            preferences.edit { putBoolean(key, true) }
         }
     }
 
@@ -2400,12 +2407,17 @@ private fun PlayerHome(
                             else -> TvmazeClient.airedEpisodes(title)
                         }
                         if (keys != null && seriesActivity.any { it.key == tracked.key }) {
+                            val before = seriesActivity.firstOrNull { it.key == tracked.key }?.unseen?.size ?: 0
                             observeEpisodeProvider(tracked.key, keys, provider, feed?.upcoming)
-                        }
+                            val after = seriesActivity.firstOrNull { it.key == tracked.key }?.unseen?.size ?: 0
+                            // Counts only (no series names): shows whether checks run and find something.
+                            if (after > before) AppDiagnostics.record(context, "episode_check p:$provider aired:${keys.size} new:${after - before}")
+                        } else if (keys == null) AppDiagnostics.record(context, "episode_check p:$provider no_list")
                     } catch (error: CancellationException) {
                         throw error
-                    } catch (_: Exception) {
+                    } catch (error: Exception) {
                         // Keep the last verified episode list when TMDB is unavailable.
+                        AppDiagnostics.record(context, "episode_check p:$provider failed:${error.javaClass.simpleName}")
                     }
                 }
             }
@@ -2417,13 +2429,13 @@ private fun PlayerHome(
         val key = titleKey(section, title)
         if (favorite) {
             favorites = if (key in favorites) favorites - key else favorites + key
-            preferences?.edit()?.putStringSet(userDataKey("favorites"), favorites)?.apply()
+            preferences?.edit { putStringSet(userDataKey("favorites"), favorites) }
         } else {
             val saved = !isTitleSaved(section, title)
             watchlist = if (saved) watchlist + key else watchlist - key
-            preferences?.edit()?.putStringSet(userDataKey("watchlist"), watchlist)?.apply()
+            preferences?.edit { putStringSet(userDataKey("watchlist"), watchlist) }
             traktSession?.username?.lowercase()?.let { username ->
-                preferences?.edit()?.putBoolean("trakt_watchlist_dirty:$username", true)?.apply()
+                preferences?.edit { putBoolean("trakt_watchlist_dirty:$username", true) }
             }
             if (section == PortalSection.SERIES) updateTrackedSeries(title, saved = saved)
             else if (section == PortalSection.MOVIES) {
@@ -2438,7 +2450,7 @@ private fun PlayerHome(
                         key, System.currentTimeMillis()
                     )) + others
                 } else others
-                progressPreferences?.edit()?.putString("movie_bookmarks", encodeMovieHistory(movieBookmarks))?.apply()
+                progressPreferences?.edit { putString("movie_bookmarks", encodeMovieHistory(movieBookmarks)) }
             }
         }
     }
@@ -2803,7 +2815,7 @@ private fun PlayerHome(
                 val saved = library.sources.firstOrNull { it.identity == library.activeId }
                     ?.takeIf { it.enabled } ?: library.sources.firstOrNull { it.enabled }
                 if (saved != null) {
-                    preferences?.edit()?.putString("active_portal_cache", saved.identity)?.apply()
+                    preferences?.edit { putString("active_portal_cache", saved.identity) }
                     val session = StalkerPortal(saved.address, saved.mac) to null
                     storedSource = saved
                     liveSession = session
@@ -2836,7 +2848,7 @@ private fun PlayerHome(
 
     suspend fun save(source: SavedPortal, activate: Boolean = true) {
         if (activate || storedSource?.identity == source.identity) storedSource = source
-        preferences?.edit()?.putString("active_portal_cache", storedSource?.identity)?.apply()
+        preferences?.edit { putString("active_portal_cache", storedSource?.identity) }
         val index = savedSources.indexOfFirst { it.identity == source.identity }
         savedSources = if (index < 0) savedSources + source else {
             savedSources.toMutableList().apply { this[index] = source }
@@ -2901,7 +2913,7 @@ private fun PlayerHome(
                 source.enabled && runCatching { source.identity != identity }.getOrDefault(false)
             }
             storedSource = fallback
-            preferences?.edit()?.putString("active_portal_cache", fallback?.identity)?.apply()
+            preferences?.edit { putString("active_portal_cache", fallback?.identity) }
             liveSession = fallback?.let { StalkerPortal(it.address, it.mac) to null }
             catalogSession = liveSession
             channels = fallback?.channels.orEmpty()
@@ -2923,7 +2935,7 @@ private fun PlayerHome(
         if (storedSource?.identity == identity) {
             val fallback = remaining.firstOrNull { it.enabled }
             storedSource = fallback
-            preferences?.edit()?.putString("active_portal_cache", fallback?.identity)?.apply()
+            preferences?.edit { putString("active_portal_cache", fallback?.identity) }
             liveSession = fallback?.let { StalkerPortal(it.address, it.mac) to null }
             catalogSession = liveSession
             channels = fallback?.channels.orEmpty()
@@ -3382,7 +3394,7 @@ private fun PlayerHome(
     LaunchedEffect(category) {
         if (category != null) {
             lastLiveCategory = category
-            preferences?.edit()?.putString("last_live_category", category)?.apply()
+            preferences?.edit { putString("last_live_category", category) }
         }
     }
     LaunchedEffect(restoring, liveCategories) {
@@ -3663,14 +3675,15 @@ private fun PlayerHome(
             }.map { it.progressKey }
         } else episodes.mapTo(linkedSetOf()) { (season, episode) -> titleSelection(section, episode, season).progressKey }
         val previous = if (section == PortalSection.SERIES) trackedSeries(title) else null
-        val editor = prefs.edit()
-        (keys + listOfNotNull(previous?.lastEpisode?.progressKey?.takeIf {
+        val marked = keys + listOfNotNull(previous?.lastEpisode?.progressKey?.takeIf {
             episodes.any { (season, episode) -> seriesEpisodeKey(season, episode) == previous.lastEpisode?.episodeKey }
-        })).forEach { key ->
-            editor.putBoolean("manual_watched:$key", watched).putBoolean("completed:$key", watched)
-                .remove(key).remove("trakt_percent:$key").putLong("progress_updated:$key", System.currentTimeMillis())
+        })
+        prefs.edit {
+            marked.forEach { key ->
+                putBoolean("manual_watched:$key", watched).putBoolean("completed:$key", watched)
+                    .remove(key).remove("trakt_percent:$key").putLong("progress_updated:$key", System.currentTimeMillis())
+            }
         }
-        editor.apply()
         if (section == PortalSection.MOVIES) {
             val remaining = movieHistory.filterNot { it.progressKey in keys }
             val added = if (watched) listOf(WatchedMovie(
@@ -3679,7 +3692,7 @@ private fun PlayerHome(
                 titleSelection(section, title).progressKey, System.currentTimeMillis()
             )) else emptyList()
             movieHistory = (added + remaining).take(200)
-            prefs.edit().putString("movie_history", encodeMovieHistory(movieHistory)).apply()
+            prefs.edit { putString("movie_history", encodeMovieHistory(movieHistory)) }
         } else if (episodes.isNotEmpty()) {
             val episodeKeys = episodes.mapTo(linkedSetOf()) { (season, episode) -> seriesEpisodeKey(season, episode) }
             val last = episodes.last()
@@ -4020,7 +4033,7 @@ private fun PlayerHome(
                                 seasons = seasonList
                                 episodeVariants = availableVariants
                                 selectTitle(PortalSection.SERIES, following)
-                                progressPreferences?.edit()?.remove(key)?.putBoolean("completed:$key", true)?.apply()
+                                progressPreferences?.edit { remove(key); putBoolean("completed:$key", true) }
                             }
                         }
                     }
@@ -4191,7 +4204,7 @@ private fun PlayerHome(
     fun portalRefreshKey(identity: String) = "portal_full_refresh_at_$identity"
 
     fun markPortalFullRefresh(identity: String) {
-        preferences?.edit()?.putLong(portalRefreshKey(identity), System.currentTimeMillis())?.apply()
+        preferences?.edit { putLong(portalRefreshKey(identity), System.currentTimeMillis()) }
     }
 
     fun portalFullRefreshDue(source: SavedPortal): Boolean {
@@ -4674,12 +4687,12 @@ private fun PlayerHome(
                     ui.pendingMovie?.let { movie ->
                         ui.pendingMovie = null
                         movieHistory = (listOf(movie) + movieHistory.filterNot { it.progressKey == movie.progressKey }).take(200)
-                        progressPreferences?.edit()?.putString("movie_history", encodeMovieHistory(movieHistory))?.apply()
+                        progressPreferences?.edit { putString("movie_history", encodeMovieHistory(movieHistory)) }
                     }
                     playbackAttempt?.let { attempt ->
                         if (lastBadgedAttempt != attempt.mediaId) {
                             if (attempt.selection.section == PortalSection.LIVE) {
-                                preferences?.edit()?.putString("last_live_channel", attempt.liveRestoreKey)?.apply()
+                                preferences?.edit { putString("last_live_channel", attempt.liveRestoreKey) }
                                 val key = attempt.liveRestoreKey
                                 val variants = liveGroups[attempt.channel]?.variants
                                 if (key != null && !variants.isNullOrEmpty() && storage != null) {
@@ -4768,10 +4781,12 @@ private fun PlayerHome(
                     if (key != null && active.duration > 0 && percent in 0.1f..100f) {
                         val target = (active.duration * percent / 100f).toLong()
                             .coerceIn(0L, (active.duration - 1_000L).coerceAtLeast(0L))
-                        progressPreferences?.edit()?.putLong(key, target)
-                            ?.putLong("duration:$key", active.duration)
-                            ?.putLong("progress_updated:$key", System.currentTimeMillis())
-                            ?.remove("trakt_percent:$key")?.apply()
+                        progressPreferences?.edit {
+                            putLong(key, target)
+                            putLong("duration:$key", active.duration)
+                            putLong("progress_updated:$key", System.currentTimeMillis())
+                            remove("trakt_percent:$key")
+                        }
                         active.seekTo(target)
                     }
                 }
@@ -4780,8 +4795,10 @@ private fun PlayerHome(
                         if (attempt.selection.section == PortalSection.LIVE) AppDiagnostics.record(context, "playback_live_ended")
                         scope.launch { failPlayback(attempt, R.string.playback_error) }
                     } else {
-                        progressPreferences?.edit()?.remove(attempt.progressKey)
-                            ?.putBoolean("completed:${attempt.progressKey}", true)?.apply()
+                        progressPreferences?.edit {
+                            remove(attempt.progressKey)
+                            putBoolean("completed:${attempt.progressKey}", true)
+                        }
                         if (attempt.selection.section == PortalSection.SERIES && nextEpisodeAction == null) {
                             stopPlayback()
                         }
@@ -4818,18 +4835,30 @@ private fun PlayerHome(
                 // A running Live-TV stream that fell behind its live window or lost the connection
                 // for a moment is reloaded once instead of switching away from a good source.
                 val now = SystemClock.elapsedRealtime()
-                val transient = error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW ||
-                    error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ||
-                    error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ||
-                    error.errorCode == PlaybackException.ERROR_CODE_IO_UNSPECIFIED
+                // With timeshift the player reads the local recording: when that recording stopped
+                // (portal ended or refused the stream) a reload cannot help; while it still runs, a
+                // decoder that choked (seen 30–60 s after a switch) restarts at its live edge.
+                val recording = Timeshift.recorder
+                val recordingFailed = recording != null && recording.problem != null
+                val transient = !recordingFailed && (
+                    error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW ||
+                        error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ||
+                        error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ||
+                        error.errorCode == PlaybackException.ERROR_CODE_IO_UNSPECIFIED ||
+                        recording != null && error.errorCode == PlaybackException.ERROR_CODE_DECODING_FAILED
+                    )
                 if (attempt.selection.section == PortalSection.LIVE && startingChannel == null && transient &&
                     now - liveRetryAt > 60_000
                 ) {
                     liveRetryAt = now
                     playerPositionResetAt.set(now)
-                    AppDiagnostics.record(context, "playback_live_reload")
-                    player.seekToDefaultPosition()
-                    player.prepare()
+                    AppDiagnostics.record(context, "playback_live_reload ${error.errorCodeName}" +
+                        (Timeshift.describe()?.let { " $it" } ?: ""))
+                    if (recording != null) Timeshift.goLive(player)
+                    else {
+                        player.seekToDefaultPosition()
+                        player.prepare()
+                    }
                     return
                 }
                 val httpStatus = (error.cause as? HttpDataSource.InvalidResponseCodeException)
@@ -5180,7 +5209,7 @@ private fun PlayerHome(
         // A new update opens its window once (per version); later the settings open as usual.
         val updateTag = appUpdates.tag
         if (appUpdates.available && updateTag != null && preferences?.getString("update_window_shown", null) != updateTag) {
-            preferences?.edit()?.putString("update_window_shown", updateTag)?.apply()
+            preferences?.edit { putString("update_window_shown", updateTag) }
             settingsSection = SettingsSection.UPDATES
             lastSettingsSection = SettingsSection.UPDATES
             appUpdates.showUpdate()
@@ -5598,7 +5627,7 @@ private fun PlayerHome(
                 val order = groups.map { it.id }.moveCategory(id, direction)
                 val key = categoryOrderKey(section)
                 categoryOrders[key] = order
-                preferences?.edit()?.putString(key, org.json.JSONArray(order).toString())?.apply()
+                preferences?.edit { putString(key, org.json.JSONArray(order).toString()) }
             },
             onDismiss = { ui.categoryMenu = null },
             isLocked = { categoryKey(section, it.id) in parental.lockedCategories },
@@ -5737,13 +5766,11 @@ private fun PlayerHome(
         bindings = controlBindings,
         onChange = { input, action ->
             controlBindings[input] = action
-            preferences?.edit()?.putString("control_${input.name}", action.name)?.apply()
+            preferences?.edit { putString("control_${input.name}", action.name) }
         },
         onReset = {
             controlBindings.clear()
-            preferences?.edit()?.also { editor ->
-                GuideInput.entries.forEach { editor.remove("control_${it.name}") }
-            }?.apply()
+            preferences?.edit { GuideInput.entries.forEach { remove("control_${it.name}") } }
         },
         onDismiss = { ui.controlSettingsOpen = false }
     ) }
@@ -5766,13 +5793,13 @@ private fun PlayerHome(
             fun toggle(id: String, section: String, label: String, get: () -> Boolean, key: String, set: (Boolean) -> Unit) =
                 RemoteEntry.Toggle(id, section, label, get) { value ->
                     set(value)
-                    preferences?.edit()?.putBoolean(key, value)?.apply()
+                    preferences?.edit { putBoolean(key, value) }
                 }
             fun number(id: String, section: String, label: String, min: Int, max: Int, step: Int, unit: String,
                        get: () -> Int, key: String, set: (Int) -> Unit) =
                 RemoteEntry.Number(id, section, label, min, max, step, unit, get) { value ->
                     set(value)
-                    preferences?.edit()?.putInt(key, value)?.apply()
+                    preferences?.edit { putInt(key, value) }
                 }
             val vodViews = VodLiveView.entries
             return buildList {
@@ -5783,13 +5810,13 @@ private fun PlayerHome(
                     options(ExitConfirmation.entries) { it.label }, { exitConfirmation.name }
                 ) { value ->
                     exitConfirmation = ExitConfirmation.valueOf(value)
-                    preferences?.edit()?.putString("exit_confirmation", value)?.apply()
+                    preferences?.edit { putString("exit_confirmation", value) }
                 })
                 add(RemoteEntry.Choice("startPage", general, name(R.string.start_destination_setting),
                     options(START_DESTINATIONS) { it.label }, { startDestination.name }
                 ) { value ->
                     startDestination = START_DESTINATIONS.firstOrNull { it.name == value } ?: Destination.LIVE
-                    preferences?.edit()?.putString("start_destination", startDestination.name)?.apply()
+                    preferences?.edit { putString("start_destination", startDestination.name) }
                 })
                 // App language: the app is built again in the new language (the phone reconnects).
                 add(RemoteEntry.Choice("language", general, text(R.string.app_language),
@@ -5812,7 +5839,7 @@ private fun PlayerHome(
                     context.getString(R.string.search_history_size, 0).substringBefore(':').trim(),
                     SEARCH_HISTORY_SIZES.map { RemoteOption(it.toString(), it.toString()) },
                     { (preferences?.getInt("search_history_size", SEARCH_HISTORY_DEFAULT_SIZE) ?: SEARCH_HISTORY_DEFAULT_SIZE).toString() }
-                ) { value -> preferences?.edit()?.putInt("search_history_size", value.toInt())?.apply() }
+                ) { value -> preferences?.edit { putInt("search_history_size", value.toInt()) } }
                     .shownIf("searchHistory", true))
                 add(RemoteEntry.Action("searchHistoryClear", general, text(R.string.clear_search_history),
                     text(R.string.clear_search_history)) {
@@ -5849,7 +5876,7 @@ private fun PlayerHome(
                     add(RemoteEntry.Toggle("mergePortalChannels", library, text(R.string.merge_portal_channels),
                         { activeId in mergedIndividualPortals }) { value ->
                         mergedIndividualPortals = if (value) mergedIndividualPortals + activeId else mergedIndividualPortals - activeId
-                        preferences?.edit()?.putStringSet("merged_individual_portals", mergedIndividualPortals)?.apply()
+                        preferences?.edit { putStringSet("merged_individual_portals", mergedIndividualPortals) }
                         category = null
                     })
                 }
@@ -5861,7 +5888,7 @@ private fun PlayerHome(
                     RemoteOption("PROVIDER", text(R.string.epg_provider)), RemoteOption("CUSTOM", text(R.string.epg_custom))
                 ), { if (useXmlTv) "CUSTOM" else "PROVIDER" }) {
                     useXmlTv = it == "CUSTOM"
-                    preferences?.edit()?.putBoolean("xmltv_enabled", useXmlTv)?.apply()
+                    preferences?.edit { putBoolean("xmltv_enabled", useXmlTv) }
                 })
                 xmlTvSources.forEachIndexed { index, url ->
                     add(RemoteEntry.Action("epgRemove$index", guide, "${index + 1}. " + (guideSourceUri(url)?.host ?: url),
@@ -5888,7 +5915,7 @@ private fun PlayerHome(
                     }, { epgRefreshHours.toString() }
                 ) {
                     epgRefreshHours = it.toInt()
-                    preferences?.edit()?.putInt("epg_refresh_hours", epgRefreshHours)?.apply()
+                    preferences?.edit { putInt("epg_refresh_hours", epgRefreshHours) }
                 })
                 add(RemoteEntry.Choice(
                     "epgHorizon", guide, text(R.string.remote_epg_horizon),
@@ -5897,7 +5924,7 @@ private fun PlayerHome(
                     }, { epgHorizonHours.toString() }
                 ) {
                     epgHorizonHours = it.toInt()
-                    preferences?.edit()?.putInt("epg_horizon_hours", epgHorizonHours)?.apply()
+                    preferences?.edit { putInt("epg_horizon_hours", epgHorizonHours) }
                     epgRefreshRequest++
                 })
                 add(RemoteEntry.Action("epgRefreshNow", guide,
@@ -5971,13 +5998,13 @@ private fun PlayerHome(
                     options(MainMenuStyle.entries) { it.label }, { mainMenuStyle.name }
                 ) { value ->
                     mainMenuStyle = MainMenuStyle.valueOf(value)
-                    preferences?.edit()?.putString("main_menu_style", value)?.apply()
+                    preferences?.edit { putString("main_menu_style", value) }
                 })
                 add(RemoteEntry.Choice("providerStyle", appearance, name(R.string.provider_category_style_setting),
                     options(ProviderCategoryStyle.entries) { it.label }, { providerCategoryStyle.name }
                 ) { value ->
                     providerCategoryStyle = ProviderCategoryStyle.valueOf(value)
-                    preferences?.edit()?.putString("provider_category_style", value)?.apply()
+                    preferences?.edit { putString("provider_category_style", value) }
                 })
                 add(toggle("subtitles", playback, text(R.string.subtitles_default_on), { subtitleDefaultEnabled },
                     "subtitle_default_enabled") { subtitleDefaultEnabled = it })
@@ -6001,7 +6028,7 @@ private fun PlayerHome(
                     options(vodViews) { it.label }, { vodLiveView.name }
                 ) { value ->
                     vodLiveView = VodLiveView.valueOf(value)
-                    preferences?.edit()?.putString("vod_live_view", value)?.apply()
+                    preferences?.edit { putString("vod_live_view", value) }
                 })
                 for ((section, label) in listOf(
                     PortalSection.MOVIES to R.string.vod_movies_playback,
@@ -6013,7 +6040,7 @@ private fun PlayerHome(
                 ) { value ->
                     val next = VodLiveView.valueOf(value)
                     vodPlaybackViews[section] = next
-                    preferences?.edit()?.putString("vod_view_${section.name}", value)?.apply()
+                    preferences?.edit { putString("vod_view_${section.name}", value) }
                     if (next == VodLiveView.HIDDEN && vodSection == section) player?.pause()
                 })
                 val episodes = text(R.string.episode_settings)
@@ -6030,7 +6057,7 @@ private fun PlayerHome(
                     "decode_audio_for_intro") { decodeAudioForIntro = it })
                 add(RemoteEntry.Choice("introMode", episodes, text(R.string.remote_intro), detection, { if (manualIntro) "TIME" else "AUTO" }) {
                     manualIntro = it == "TIME"
-                    preferences?.edit()?.putBoolean("manual_intro", manualIntro)?.apply()
+                    preferences?.edit { putBoolean("manual_intro", manualIntro) }
                 })
                 add(number("introStart", episodes, text(R.string.remote_intro_start), 0, 595, 5, text(R.string.remote_unit_seconds), { introStartSeconds },
                     "intro_start_seconds") { introStartSeconds = it.coerceAtMost(introEndSeconds - 5).coerceAtLeast(0) }
@@ -6040,7 +6067,7 @@ private fun PlayerHome(
                     .shownIf("introMode", "TIME"))
                 add(RemoteEntry.Choice("creditsMode", episodes, text(R.string.remote_credits), detection, { if (manualCredits) "TIME" else "AUTO" }) {
                     manualCredits = it == "TIME"
-                    preferences?.edit()?.putBoolean("manual_credits", manualCredits)?.apply()
+                    preferences?.edit { putBoolean("manual_credits", manualCredits) }
                 })
                 add(number("creditsBefore", episodes, text(R.string.remote_credits_before), 0, 600, 5, text(R.string.remote_unit_seconds), { creditsBeforeEndSeconds },
                     "credits_before_end_seconds") { creditsBeforeEndSeconds = it }.shownIf("creditsMode", "TIME"))
@@ -6053,7 +6080,7 @@ private fun PlayerHome(
                 ) { value ->
                     val action = ControlAction.valueOf(value)
                     controlBindings[input] = action
-                    preferences?.edit()?.putString("control_${input.name}", value)?.apply()
+                    preferences?.edit { putString("control_${input.name}", value) }
                 })
                 val updates = text(R.string.settings_updates)
                 add(RemoteEntry.Toggle("updateAuto", updates, text(R.string.update_auto), { appUpdates.automatic }) {
@@ -6705,7 +6732,7 @@ private fun PlayerHome(
                 // Credits followed by more footage are skipped instead of ending the episode early.
                 analysis.creditsStartMs?.takeIf { timing.outroStartMs == null }?.let { marker ->
                     timing = timing.copy(creditsStartMs = marker)
-                    progressPreferences?.edit()?.putLong(markerKey, marker)?.apply()
+                    progressPreferences?.edit { putLong(markerKey, marker) }
                 }
                 detectedTiming = attempt.mediaId to timing
             }
@@ -6855,9 +6882,9 @@ private fun PlayerHome(
                 requestEpisodeActionFocus(0)
             }
         }
-        val screen = LocalConfiguration.current
-        val screenWidth = screen.screenWidthDp.dp
-        val screenHeight = screen.screenHeightDp.dp
+        val screenSize = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize
+        val screenWidth = with(LocalDensity.current) { screenSize.width.toDp() }
+        val screenHeight = with(LocalDensity.current) { screenSize.height.toDp() }
         val scheduleBesideList = guideAppearance.showSchedule && screenWidth >= 640.dp
         val descriptionBesideSchedule = scheduleBesideList && guideAppearance.showDescription && screenWidth >= 840.dp
         val live = vodSection == null
@@ -7567,11 +7594,11 @@ private fun PlayerHome(
         SettingsDialog(stringResource(R.string.epg_settings), { ui.epgSettingsOpen = false }) {
                 SettingRow(stringResource(R.string.epg_provider), Modifier, selected = !useXmlTv) {
                     useXmlTv = false
-                    preferences?.edit()?.putBoolean("xmltv_enabled", false)?.apply()
+                    preferences?.edit { putBoolean("xmltv_enabled", false) }
                 }
                 SettingRow(stringResource(R.string.epg_custom), Modifier, selected = useXmlTv) {
                     useXmlTv = true
-                    preferences?.edit()?.putBoolean("xmltv_enabled", true)?.apply()
+                    preferences?.edit { putBoolean("xmltv_enabled", true) }
                 }
                 if (useXmlTv) {
                     xmlTvSources.forEachIndexed { index, url ->
@@ -7590,14 +7617,14 @@ private fun PlayerHome(
                 }
                 SettingRow(stringResource(R.string.epg_refresh_at_start), Modifier, selected = epgAtStartup) {
                     epgAtStartup = !epgAtStartup
-                    preferences?.edit()?.putBoolean("epg_at_startup", epgAtStartup)?.apply()
+                    preferences?.edit { putBoolean("epg_at_startup", epgAtStartup) }
                 }
                 val refreshLabel = if (epgRefreshHours == 0) stringResource(R.string.epg_refresh_off)
                     else stringResource(R.string.epg_refresh_hours, epgRefreshHours)
                 SettingRow(refreshLabel, Modifier) {
                     val intervals = listOf(0, 1, 3, 6, 12, 24)
                     epgRefreshHours = intervals[(intervals.indexOf(epgRefreshHours) + 1) % intervals.size]
-                    preferences?.edit()?.putInt("epg_refresh_hours", epgRefreshHours)?.apply()
+                    preferences?.edit { putInt("epg_refresh_hours", epgRefreshHours) }
                 }
                 val horizon = if (epgHorizonHours < 24) stringResource(R.string.epg_schedule_hours, epgHorizonHours)
                     else if (epgHorizonHours == 24) stringResource(R.string.epg_schedule_day)
@@ -7605,7 +7632,7 @@ private fun PlayerHome(
                 SettingRow(horizon, Modifier) {
                     val windows = listOf(6, 12, 24, 48, 72, 168)
                     epgHorizonHours = windows[(windows.indexOf(epgHorizonHours) + 1) % windows.size]
-                    preferences?.edit()?.putInt("epg_horizon_hours", epgHorizonHours)?.apply()
+                    preferences?.edit { putInt("epg_horizon_hours", epgHorizonHours) }
                     epgRefreshRequest++
                 }
                 SettingRow(stringResource(R.string.epg_refresh_now), enabled = !ui.epgUpdating && (!useXmlTv || xmlTvSources.isNotEmpty())) { epgRefreshRequest++ }
@@ -7619,34 +7646,34 @@ private fun PlayerHome(
         SettingsDialog(stringResource(R.string.episode_settings), { ui.episodeSettingsOpen = false }) {
                 SettingRow(stringResource(R.string.auto_next_episode), Modifier, selected = autoNextEpisode) {
                     autoNextEpisode = !autoNextEpisode
-                    preferences?.edit()?.putBoolean("auto_next_episode", autoNextEpisode)?.apply()
+                    preferences?.edit { putBoolean("auto_next_episode", autoNextEpisode) }
                 }
                 SettingRow(
                     stringResource(R.string.series_inactivity_check), Modifier, selected = checkSeriesInactivity
                 ) {
                     checkSeriesInactivity = !checkSeriesInactivity
-                    preferences?.edit()?.putBoolean("check_series_inactivity", checkSeriesInactivity)?.apply()
+                    preferences?.edit { putBoolean("check_series_inactivity", checkSeriesInactivity) }
                 }
                 if (checkSeriesInactivity) {
                     Text(stringResource(R.string.series_inactive_episode_limit, inactiveEpisodeLimit))
                     Row {
                         MenuButton("−1", Modifier) {
                             inactiveEpisodeLimit = (inactiveEpisodeLimit - 1).coerceAtLeast(1)
-                            preferences?.edit()?.putInt("inactive_episode_limit", inactiveEpisodeLimit)?.apply()
+                            preferences?.edit { putInt("inactive_episode_limit", inactiveEpisodeLimit) }
                         }
                         MenuButton("+1", Modifier) {
                             inactiveEpisodeLimit = (inactiveEpisodeLimit + 1).coerceAtMost(10)
-                            preferences?.edit()?.putInt("inactive_episode_limit", inactiveEpisodeLimit)?.apply()
+                            preferences?.edit { putInt("inactive_episode_limit", inactiveEpisodeLimit) }
                         }
                     }
                 }
                 SettingRow(stringResource(R.string.skip_intro_automatically), Modifier, selected = autoSkipIntro) {
                     autoSkipIntro = !autoSkipIntro
-                    preferences?.edit()?.putBoolean("auto_skip_intro", autoSkipIntro)?.apply()
+                    preferences?.edit { putBoolean("auto_skip_intro", autoSkipIntro) }
                 }
                 SettingRow(stringResource(R.string.decode_audio_for_intro), Modifier, selected = decodeAudioForIntro) {
                     decodeAudioForIntro = !decodeAudioForIntro
-                    preferences?.edit()?.putBoolean("decode_audio_for_intro", decodeAudioForIntro)?.apply()
+                    preferences?.edit { putBoolean("decode_audio_for_intro", decodeAudioForIntro) }
                 }
                 Text(stringResource(R.string.decode_audio_for_intro_hint), style = MaterialTheme.typography.bodySmall)
                 SettingRow(
@@ -7654,7 +7681,7 @@ private fun PlayerHome(
                     Modifier
                 ) {
                     manualIntro = !manualIntro
-                    preferences?.edit()?.putBoolean("manual_intro", manualIntro)?.apply()
+                    preferences?.edit { putBoolean("manual_intro", manualIntro) }
                 }
                 if (manualIntro) {
                     EpisodeTimingAdjustment(
@@ -7662,14 +7689,14 @@ private fun PlayerHome(
                         introStartSeconds, 0, introEndSeconds - 5
                     ) {
                         introStartSeconds = it
-                        preferences?.edit()?.putInt("intro_start_seconds", it)?.apply()
+                        preferences?.edit { putInt("intro_start_seconds", it) }
                     }
                     EpisodeTimingAdjustment(
                         stringResource(R.string.intro_end_time, playbackTime(introEndSeconds * 1_000L)),
                         introEndSeconds, introStartSeconds + 5, 600
                     ) {
                         introEndSeconds = it
-                        preferences?.edit()?.putInt("intro_end_seconds", it)?.apply()
+                        preferences?.edit { putInt("intro_end_seconds", it) }
                     }
                 }
                 SettingRow(
@@ -7677,7 +7704,7 @@ private fun PlayerHome(
                     Modifier
                 ) {
                     manualCredits = !manualCredits
-                    preferences?.edit()?.putBoolean("manual_credits", manualCredits)?.apply()
+                    preferences?.edit { putBoolean("manual_credits", manualCredits) }
                 }
                 if (manualCredits) {
                     EpisodeTimingAdjustment(
@@ -7685,18 +7712,18 @@ private fun PlayerHome(
                         creditsBeforeEndSeconds, 0, 600
                     ) {
                         creditsBeforeEndSeconds = it
-                        preferences?.edit()?.putInt("credits_before_end_seconds", it)?.apply()
+                        preferences?.edit { putInt("credits_before_end_seconds", it) }
                     }
                 }
                 Text(stringResource(R.string.episode_notice_seconds, episodeNoticeSeconds))
                 Row {
                     MenuButton("−5", Modifier) {
                         episodeNoticeSeconds = (episodeNoticeSeconds - 5).coerceAtLeast(5)
-                        preferences?.edit()?.putInt("episode_notice_seconds", episodeNoticeSeconds)?.apply()
+                        preferences?.edit { putInt("episode_notice_seconds", episodeNoticeSeconds) }
                     }
                     MenuButton("+5", Modifier) {
                         episodeNoticeSeconds = (episodeNoticeSeconds + 5).coerceAtMost(60)
-                        preferences?.edit()?.putInt("episode_notice_seconds", episodeNoticeSeconds)?.apply()
+                        preferences?.edit { putInt("episode_notice_seconds", episodeNoticeSeconds) }
                     }
                 }
         }
@@ -7719,7 +7746,7 @@ private fun PlayerHome(
                 AndroidView(
                     factory = { viewContext ->
                         (android.view.LayoutInflater.from(viewContext)
-                            .inflate(R.layout.vod_live_backdrop, null) as PlayerView).apply { this.player = player }
+                            .inflate(R.layout.vod_live_backdrop, android.widget.FrameLayout(viewContext), false) as PlayerView).apply { this.player = player }
                     },
                     modifier = Modifier.fillMaxSize(),
                     onReset = null,
@@ -7729,7 +7756,7 @@ private fun PlayerHome(
                 Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface.copy(alpha = 0.78f)))
             }
         }
-        val compactGuideWindow = inGuide && LocalConfiguration.current.screenHeightDp < 440
+        val compactGuideWindow = inGuide && with(LocalDensity.current) { androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.height.toDp() } < 440.dp
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
@@ -7760,7 +7787,7 @@ private fun PlayerHome(
                 val section = vodSectionForScreen ?: return
                 ui.catalogueReturnTitle = null
                 ui.focusFirstTitle = true
-                preferences?.edit()?.putString(recentCategoryKey, group.id)?.apply()
+                preferences?.edit { putString(recentCategoryKey, group.id) }
                 closeSeries()
                 details = null
                 myAreaSection = null
@@ -7776,7 +7803,7 @@ private fun PlayerHome(
             val guidePreviewWidth = (basePreviewWidth * guideAppearance.previewSize.factor)
                 .coerceAtMost(minOf(maxWidth * 0.45f, maxHeight * 0.7f))
             val menu: @Composable () -> Unit = {
-                StreamWatchLogo(26.dp, Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
+                StreamWatchLogo(Modifier.padding(horizontal = 10.dp, vertical = 6.dp), height = 26.dp)
                 visibleDestinations.forEach { item ->
                     val position = visibleDestinations.indexOf(item)
                     val previousItem = visibleDestinations.getOrNull(position - 1) ?: item
@@ -7824,7 +7851,7 @@ private fun PlayerHome(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    StreamWatchLogo(28.dp)
+                    StreamWatchLogo(height = 28.dp)
                     Row(
                         Modifier.weight(1f).focusGroup().horizontalScroll(rememberScrollState()),
                         verticalAlignment = Alignment.CenterVertically,
@@ -8055,11 +8082,13 @@ private fun PlayerHome(
                                                     AccentGradient.parse(preferences?.getString(AccentGradient.key(true), null))
                                                 }
                                                 AccentPalette(kidsAccent, kidsGradient, { choice ->
-                                                    preferences?.edit()?.putString(UserProfiles.accentKey(true), choice.name)
-                                                        ?.remove(AccentGradient.key(true))?.apply()
+                                                    preferences?.edit {
+                                                        putString(UserProfiles.accentKey(true), choice.name)
+                                                        remove(AccentGradient.key(true))
+                                                    }
                                                     ui.kidsAccentVersion++
                                                 }) { gradient ->
-                                                    preferences?.edit()?.putString(AccentGradient.key(true), gradient.name)?.apply()
+                                                    preferences?.edit { putString(AccentGradient.key(true), gradient.name) }
                                                     ui.kidsAccentVersion++
                                                 }
                                             }
@@ -8140,21 +8169,19 @@ private fun PlayerHome(
                                         selected = showSettingsBackButton
                                     ) {
                                         showSettingsBackButton = !showSettingsBackButton
-                                        preferences?.edit()?.putBoolean(
-                                            "show_settings_back_button", showSettingsBackButton
-                                        )?.apply()
+                                        preferences?.edit { putBoolean("show_settings_back_button", showSettingsBackButton) }
                                     }
                                     SettingRow(
                                         stringResource(R.string.exit_confirmation_setting, stringResource(exitConfirmation.label)), Modifier
                                     ) {
                                         exitConfirmation = ExitConfirmation.entries[(exitConfirmation.ordinal + 1) % ExitConfirmation.entries.size]
-                                        preferences?.edit()?.putString("exit_confirmation", exitConfirmation.name)?.apply()
+                                        preferences?.edit { putString("exit_confirmation", exitConfirmation.name) }
                                     }
                                     SearchHistorySettings()
                                     InputModeSetting()
                                     SettingRow(stringResource(R.string.key_sounds), Modifier, selected = keySounds) {
                                         keySounds = !keySounds
-                                        preferences?.edit()?.putBoolean("key_sounds", keySounds)?.apply()
+                                        preferences?.edit { putBoolean("key_sounds", keySounds) }
                                     }
                                     SettingRow(
                                         stringResource(R.string.start_destination_setting, stringResource(startDestination.label)),
@@ -8163,7 +8190,7 @@ private fun PlayerHome(
                                         startDestination = START_DESTINATIONS[
                                             (START_DESTINATIONS.indexOf(startDestination) + 1) % START_DESTINATIONS.size
                                         ]
-                                        preferences?.edit()?.putString("start_destination", startDestination.name)?.apply()
+                                        preferences?.edit { putString("start_destination", startDestination.name) }
                                     }
                                     // Playing the last channel (and fullscreen) only exists with Live-TV as the start page.
                                     if (startDestination == Destination.LIVE) {
@@ -8173,13 +8200,13 @@ private fun PlayerHome(
                                             selected = playLastChannelAtStartup
                                         ) {
                                             playLastChannelAtStartup = !playLastChannelAtStartup
-                                            preferences?.edit()?.putBoolean("play_last_channel_at_startup", playLastChannelAtStartup)?.apply()
+                                            preferences?.edit { putBoolean("play_last_channel_at_startup", playLastChannelAtStartup) }
                                         }
                                         if (playLastChannelAtStartup) SettingRow(
                                             stringResource(R.string.start_in_fullscreen), Modifier, selected = startInFullscreen
                                         ) {
                                             startInFullscreen = !startInFullscreen
-                                            preferences?.edit()?.putBoolean("start_in_fullscreen", startInFullscreen)?.apply()
+                                            preferences?.edit { putBoolean("start_in_fullscreen", startInFullscreen) }
                                         }
                                     }
                                 }
@@ -8189,9 +8216,7 @@ private fun PlayerHome(
                                         selected = refreshPortalsAtStartup
                                     ) {
                                         refreshPortalsAtStartup = !refreshPortalsAtStartup
-                                        preferences?.edit()?.putBoolean(
-                                            "refresh_portals_at_startup", refreshPortalsAtStartup
-                                        )?.apply()
+                                        preferences?.edit { putBoolean("refresh_portals_at_startup", refreshPortalsAtStartup) }
                                     }
                                     SettingRow(
                                         label = stringResource(R.string.destination_sources),
@@ -8209,9 +8234,7 @@ private fun PlayerHome(
                                         selected = autoDisableUnavailablePortals
                                     ) {
                                         autoDisableUnavailablePortals = !autoDisableUnavailablePortals
-                                        preferences?.edit()?.putBoolean(
-                                            "auto_disable_unavailable_portals", autoDisableUnavailablePortals
-                                        )?.apply()
+                                        preferences?.edit { putBoolean("auto_disable_unavailable_portals", autoDisableUnavailablePortals) }
                                     }
                                 }
                                 SettingsSection.GUIDE ->
@@ -8227,7 +8250,7 @@ private fun PlayerHome(
                                     ) {
                                         val styles = MainMenuStyle.entries
                                         mainMenuStyle = styles[(mainMenuStyle.ordinal + 1) % styles.size]
-                                        preferences?.edit()?.putString("main_menu_style", mainMenuStyle.name)?.apply()
+                                        preferences?.edit { putString("main_menu_style", mainMenuStyle.name) }
                                     }
                                     SettingRow(
                                         stringResource(R.string.provider_category_style_setting, stringResource(providerCategoryStyle.label)),
@@ -8236,7 +8259,7 @@ private fun PlayerHome(
                                         providerCategoryStyle = ProviderCategoryStyle.entries[
                                             (providerCategoryStyle.ordinal + 1) % ProviderCategoryStyle.entries.size
                                         ]
-                                        preferences?.edit()?.putString("provider_category_style", providerCategoryStyle.name)?.apply()
+                                        preferences?.edit { putString("provider_category_style", providerCategoryStyle.name) }
                                     }
                                     SettingRow(stringResource(R.string.guide_grid_appearance), Modifier) {
                                         openSettingsPage { ui.guideAppearancePage = GuideAppearancePage.GRID }
@@ -8257,18 +8280,18 @@ private fun PlayerHome(
                                         ), Modifier, selected = subtitleDefaultEnabled
                                     ) {
                                         subtitleDefaultEnabled = !subtitleDefaultEnabled
-                                        preferences?.edit()?.putBoolean("subtitle_default_enabled", subtitleDefaultEnabled)?.apply()
+                                        preferences?.edit { putBoolean("subtitle_default_enabled", subtitleDefaultEnabled) }
                                     }
                                     SettingRow(
                                         stringResource(R.string.subtitles_forced_auto), Modifier,
                                         selected = forcedSubtitlesEnabled
                                     ) {
                                         forcedSubtitlesEnabled = !forcedSubtitlesEnabled
-                                        preferences?.edit()?.putBoolean("forced_subtitles_enabled", forcedSubtitlesEnabled)?.apply()
+                                        preferences?.edit { putBoolean("forced_subtitles_enabled", forcedSubtitlesEnabled) }
                                     }
                                     SettingRow(stringResource(R.string.live_preview_in_vod, stringResource(vodLiveView.label)), Modifier) {
                                         vodLiveView = VodLiveView.entries[(vodLiveView.ordinal + 1) % VodLiveView.entries.size]
-                                        preferences?.edit()?.putString("vod_live_view", vodLiveView.name)?.apply()
+                                        preferences?.edit { putString("vod_live_view", vodLiveView.name) }
                                     }
                                     for ((section, label) in listOf(
                                         PortalSection.MOVIES to R.string.vod_movies_playback,
@@ -8280,7 +8303,7 @@ private fun PlayerHome(
                                         )), Modifier) {
                                             val next = VodLiveView.entries[(view.ordinal + 1) % VodLiveView.entries.size]
                                             vodPlaybackViews[section] = next
-                                            preferences?.edit()?.putString("vod_view_${section.name}", next.name)?.apply()
+                                            preferences?.edit { putString("vod_view_${section.name}", next.name) }
                                             if (next == VodLiveView.HIDDEN && vodSection == section) player?.pause()
                                         }
                                     }
@@ -8389,7 +8412,7 @@ private fun PlayerHome(
                             Modifier, selected = automaticCountries
                         ) {
                             automaticCountries = !automaticCountries
-                            preferences?.edit()?.putBoolean("autoCountries", automaticCountries)?.apply()
+                            preferences?.edit { putBoolean("autoCountries", automaticCountries) }
                         }
                         SettingRow(
                             stringResource(R.string.show_hidden_categories),
@@ -8430,7 +8453,7 @@ private fun PlayerHome(
                             selected = mergeSources
                         ) {
                             mergeSources = !mergeSources
-                            preferences?.edit()?.putBoolean("mergeSources", mergeSources)?.apply()
+                            preferences?.edit { putBoolean("mergeSources", mergeSources) }
                             closeGroup()
                             closeSeries()
                             details = null
@@ -8445,7 +8468,7 @@ private fun PlayerHome(
                             SettingRow(stringResource(R.string.merge_portal_channels), Modifier, selected = mergePortalChannels) {
                                 mergedIndividualPortals = if (mergePortalChannels) mergedIndividualPortals - activePortalId
                                     else mergedIndividualPortals + activePortalId
-                                preferences?.edit()?.putStringSet("merged_individual_portals", mergedIndividualPortals)?.apply()
+                                preferences?.edit { putStringSet("merged_individual_portals", mergedIndividualPortals) }
                                 category = null
                             }
                         }
@@ -9099,7 +9122,7 @@ private fun PlayerHome(
                                     "EE, dd.MM.", resources.configuration.locales[0]
                                 )
                                 listOf(
-                                    continueLabel to playable.filter { it.continuable() }.sortedByDescending { it.watchedAt }
+                                    continueLabel to playable.filter { it.continuable() }.continueOrder()
                                         .map { entry ->
                                             card("c", entry, resumeFor(entry)?.let { episode ->
                                                 episodeResumeLabel(episode, progressPreferences?.getLong(episode.progressKey, 0L) ?: 0L)
@@ -9336,21 +9359,26 @@ private fun PlayerHome(
                                     // Into the rows: the row used last in this section, the first
                                     // time the top row (not the row nearest to the section bar item,
                                     // which made "Sperren" land in the middle).
-                                    enter = { direction ->
-                                        settingsFocusMemory.target() ?: if (direction == FocusDirection.Right) {
+                                    // (A requester whose row is gone fails quietly: then the usual search runs.)
+                                    onEnter = {
+                                        val remembered = settingsFocusMemory.target()
+                                        val redirected = remembered != null && runCatching { remembered.requestFocus() }.getOrDefault(false)
+                                        if (!redirected && requestedFocusDirection == FocusDirection.Right) {
                                             settingsContentFocusRequest++
-                                            FocusRequester.Cancel
-                                        } else FocusRequester.Default
+                                            cancelFocusChange()
+                                        }
                                     }
                                     // Left out of the rows works like Back: one step at a time, and
                                     // to the section that is open (not the one nearest on screen).
-                                    exit = { direction ->
-                                        if (direction == FocusDirection.Left) {
+                                    this.onExit = {
+                                        if (requestedFocusDirection == FocusDirection.Left) {
                                             if (closeSettingsPages()) {
                                                 settingsContentFocusRequest++
-                                                FocusRequester.Cancel
-                                            } else settingsFocusRequesters[settingsSection] ?: FocusRequester.Default
-                                        } else FocusRequester.Default
+                                                cancelFocusChange()
+                                            } else settingsFocusRequesters[settingsSection]?.let { section ->
+                                                runCatching { section.requestFocus() }
+                                            }
+                                        }
                                     }
                                 }
                                 .focusGroup()
@@ -10157,7 +10185,7 @@ internal fun PlayerFrame(
                 seekable -> 2
                 else -> 0
             }
-            button.visibility = if (mode == 0) android.view.View.GONE else android.view.View.VISIBLE
+            button.isVisible = mode != 0
             if (mode != 0 && button.getTag(R.string.player_jump_back) != mode) {
                 button.setTag(R.string.player_jump_back, mode)
                 button.setImageResource(if (mode == 1) episodeIcon else jumpIcon)
@@ -10222,10 +10250,10 @@ internal fun PlayerFrame(
         // button inside is the one that takes the focus (and gets the round look).
         fun target(child: android.view.View): android.view.View? = when {
             child.isFocusable || child !is android.view.ViewGroup -> child
-            else -> (0 until child.childCount).map(child::getChildAt).firstOrNull { it.isFocusable && it.visibility == android.view.View.VISIBLE }
+            else -> (0 until child.childCount).map(child::getChildAt).firstOrNull { it.isFocusable && it.isVisible }
         }
         val buttons = (0 until row.childCount).map(row::getChildAt).filter { child ->
-            child.visibility == android.view.View.VISIBLE && child !is LinearLayout
+            child.isVisible && child !is LinearLayout
         }.mapNotNull(::target).filter { it.isEnabled }
         buttons.forEach { button ->
             if (button.id == android.view.View.NO_ID) button.id = android.view.View.generateViewId()
@@ -10245,7 +10273,7 @@ internal fun PlayerFrame(
         // Media3 disables this button when it cannot currently find selectable tracks.
         // Keep it focusable on TV so the settings entry remains in the D-pad route; its
         // own click handler still decides which settings are actually available.
-        if (settingsButton?.visibility == android.view.View.VISIBLE) settingsButton.isEnabled = true
+        if (settingsButton?.isVisible == true) settingsButton.isEnabled = true
         val bottomButtons = listOf(
             view.findViewById(androidx.media3.ui.R.id.exo_settings),
             view.findViewWithTag<android.view.View>("player_subtitles_action"),
@@ -10253,7 +10281,7 @@ internal fun PlayerFrame(
             view.findViewById(androidx.media3.ui.R.id.exo_fullscreen),
             view.findViewById(androidx.media3.ui.R.id.exo_overflow_show)
         ).filterNotNull()
-            .filter { it.visibility == android.view.View.VISIBLE && it.isEnabled }
+            .filter { it.isVisible && it.isEnabled }
         if (bottomButtons.isEmpty()) {
             progress.nextFocusDownId = progress.id
             return
@@ -10387,7 +10415,7 @@ internal fun PlayerFrame(
                                         )
                                     ) {
                                         findViewById<android.view.View>(androidx.media3.ui.R.id.exo_settings)?.let { settings ->
-                                            if (settings.visibility == android.view.View.VISIBLE) settings.isEnabled = true
+                                            if (settings.isVisible) settings.isEnabled = true
                                         }
                                         configureBottomFocus(this)
                                         val focused = findFocus()
@@ -10399,7 +10427,7 @@ internal fun PlayerFrame(
                                             findViewById(androidx.media3.ui.R.id.exo_overflow_show)
                                         )
                                         val bottom = bottomTargets.firstOrNull {
-                                            it.visibility == android.view.View.VISIBLE && it.isEnabled && it.isFocusable
+                                            it.isVisible && it.isEnabled && it.isFocusable
                                         }
                                         // Live streams cannot seek: Media3 disables the time bar, so the
                                         // route between the play controls and the bottom row skips it.
@@ -10706,7 +10734,7 @@ internal fun PlayerFrame(
                 fun applySubtitleChoice(selection: TrackSelectionOverride?, enabled: Boolean, savedMode: String) {
                     val persistForSeries = saveSubtitleChoiceForSeries && subtitleSeriesKey != null
                     if (persistForSeries) {
-                        subtitlePreferences?.edit()?.putString("subtitle_series:$subtitleSeriesKey", savedMode)?.apply()
+                        subtitlePreferences?.edit { putString("subtitle_series:$subtitleSeriesKey", savedMode) }
                         oneTimeSubtitleChoice = false
                     } else {
                         oneTimeSubtitleChoice = true
@@ -10719,7 +10747,7 @@ internal fun PlayerFrame(
                     subtitleDialogOpen = false
                 }
                 fun useSeriesDefault() {
-                    subtitleSeriesKey?.let { key -> subtitlePreferences?.edit()?.remove("subtitle_series:$key")?.apply() }
+                    subtitleSeriesKey?.let { key -> subtitlePreferences?.edit { remove("subtitle_series:$key") } }
                     oneTimeSubtitleChoice = false
                     val forced = subtitleChoices.firstOrNull { (group, index, _) ->
                         isForcedSubtitle(group.getTrackFormat(index))
@@ -10898,7 +10926,7 @@ private fun AboutSettings() {
     val context = LocalContext.current
     val app = remember(context) { context.packageManager.getPackageInfo(context.packageName, 0) }
     val code = if (android.os.Build.VERSION.SDK_INT >= 28) app.longVersionCode else app.versionCode.toLong()
-    StreamWatchLogo(30.dp)
+    StreamWatchLogo(height = 30.dp)
     Text(stringResource(R.string.about_version, app.versionName.orEmpty()))
     Text(stringResource(R.string.about_version_code, code))
     Text(stringResource(R.string.about_version_date, stringResource(R.string.version_date)))

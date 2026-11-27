@@ -32,9 +32,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -67,7 +69,7 @@ private const val GUIDE_WINDOW = 4 * GUIDE_INTERVAL
 
 /** Time window and filter of the guide; shared by the grid and the controls in the top bar. */
 internal class GuideWindow(offset: Long = 0L, onlyPinned: Boolean = false) {
-    var offset by mutableStateOf(offset)
+    var offset by mutableLongStateOf(offset)
     var onlyPinned by mutableStateOf(onlyPinned)
 
     companion object {
@@ -105,6 +107,7 @@ private fun latestGuideOffset(horizonHours: Int): Long = ((horizonHours * 3_600L
 
 /** Früher / Jetzt / Später / Nur vorgemerkte, shown in the top bar next to the category. */
 @Composable
+@Suppress("ModifierParameter") // [entry] goes to the first button (focus entry), not to the row
 internal fun GuideWindowControls(window: GuideWindow, horizonHours: Int, entry: Modifier) {
     Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
         MenuButton(stringResource(R.string.guide_previous_window), entry) {
@@ -260,7 +263,9 @@ internal fun ProgrammeTimeline(
                     timelineFocus.requestFocus()
                 }
             }
-            val entryFocus = if (index == scroll.firstVisibleItemIndex) Modifier.focusRequester(channelColumnFocus) else Modifier
+            // Derived: the rows only recompose when "first visible" changes, not on every scroll step.
+            val firstVisible by remember(index) { derivedStateOf { index == scroll.firstVisibleItemIndex } }
+            val entryFocus = if (firstVisible) Modifier.focusRequester(channelColumnFocus) else Modifier
             val restoreFocus = if (active && index == playingIndex) {
                 LaunchedEffect(channel) {
                     withFrameNanos { }

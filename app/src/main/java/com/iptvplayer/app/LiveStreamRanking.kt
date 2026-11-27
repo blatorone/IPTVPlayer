@@ -1,5 +1,7 @@
 package com.iptvplayer.app
 
+import androidx.core.content.edit
+
 import android.content.SharedPreferences
 import org.json.JSONObject
 
@@ -104,13 +106,14 @@ internal class LiveStreamHistory(private val preferences: SharedPreferences?) {
             if (record.blockedUntil > 0) entry.put("u", record.blockedUntil)
             json.put(source, entry)
         }
-        val editor = prefs.edit().putString(channelKey, json.toString())
         // Bounded: once too many channels are stored, some others are forgotten to make room.
         val stored = prefs.all.keys
-        if (stored.size >= MAX_CHANNELS && channelKey !in stored) {
-            stored.filter { it != channelKey }.take(stored.size - MAX_CHANNELS + 1).forEach(editor::remove)
+        prefs.edit {
+            putString(channelKey, json.toString())
+            if (stored.size >= MAX_CHANNELS && channelKey !in stored) {
+                stored.filter { it != channelKey }.take(stored.size - MAX_CHANNELS + 1).forEach { remove(it) }
+            }
         }
-        editor.apply()
     }
 
     companion object {

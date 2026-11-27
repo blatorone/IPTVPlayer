@@ -5,6 +5,11 @@
 - Neue App-Sprachen: Lettisch, Litauisch, Ungarisch, Niederländisch, Norwegisch, Schwedisch, Slowakisch und Slowenisch.
 - Fließender Portalwechsel: Der Abstand zwischen zwei Portalen wird jetzt pro Sender gelernt und erst verwendet, wenn zwei Messungen übereinstimmen. Das Standbild beim Wechsel dauert höchstens 3 Sekunden (vorher bis zu 9).
 - Diagnose: Bricht ein Stream nach dem Wechsel ab, steht dabei, wie lange seine Aufnahme lief und warum sie endete.
+- Timeshift und fließender Portalwechsel: Die Aufnahme ruft den Stream jetzt genauso ab wie der Player. Manche Portale hatten die Aufnahme abgelehnt („HTTP 406“), sodass der Sender sofort auf ein anderes Portal sprang. Die Verbindung wird beim Umschalten gleich geschlossen.
+- Hakt das Bild während Timeshift (Dekodierfehler), startet die Wiedergabe einmal neu am Live-Rand der Aufnahme, statt das Portal zu wechseln. Ist die Aufnahme selbst beendet, wird sofort gewechselt statt erst neu geladen.
+- Serien → „Weiter schauen“: Serien mit neuen, noch nicht gesehenen Folgen stehen vorne – die zuletzt gefundenen zuerst. „Zuletzt gesehen“ bleibt nach dem letzten Anschauen sortiert.
+- Diagnose: Die Suche nach neuen Folgen vermerkt Funde und Fehler (nur Anzahlen, keine Serientitel).
+- Aufgeräumt: alle Warnungen des Compilers und von Android Lint behoben (u. a. Passwortfelder auf die neue sichere Eingabe umgestellt, Fokussteuerung der Einstellungen auf die neue Schnittstelle, ungenutzte Startsymbole entfernt, slowenische Mehrzahl korrigiert).
 - Aufgeräumt: über 40 nicht mehr verwendete Texte in allen Sprachen entfernt, dazu ungenutzte Farben und Symbole.
 - Sicherheit: Der Hinweis zum Backup sagt jetzt klar, dass die Datei Zugangsdaten enthält und sicher aufbewahrt werden muss (sie lässt sich ohne Passwort auf jedem Gerät öffnen).
 - Technik: Player (Media3 1.11), Oberfläche (Compose), Netzwerk (OkHttp 5) und weitere Bibliotheken auf den aktuellen Stand gebracht – mit den Sicherheits- und Fehlerkorrekturen der neuen Versionen.

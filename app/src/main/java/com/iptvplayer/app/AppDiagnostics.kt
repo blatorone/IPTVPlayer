@@ -1,5 +1,7 @@
 package com.iptvplayer.app
 
+import androidx.core.net.toUri
+
 import android.content.Context
 import android.net.Uri
 import android.os.Build
@@ -64,7 +66,8 @@ internal object AppDiagnostics {
      * folder selection, which Fire TV does not offer. Returns the file name.
      */
     fun saveToDownloads(context: Context): String {
-        check(Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+        // The shared "Download" folder without a permission exists from Android 10 on.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) throw IllegalStateException("Android 10 needed")
         val name = "StreamWatch-Diagnose-${System.currentTimeMillis()}.txt"
         val resolver = context.contentResolver
         val values = android.content.ContentValues().apply {
@@ -89,7 +92,7 @@ internal object AppDiagnostics {
     private fun exportCrashToSelectedFolder(context: Context) {
         val value = context.getSharedPreferences(SETTINGS, Context.MODE_PRIVATE)
             .getString(TREE_KEY, null) ?: return
-        val tree = Uri.parse(value)
+        val tree = value.toUri()
         val permission = context.contentResolver.persistedUriPermissions
             .firstOrNull { it.uri == tree && it.isWritePermission } ?: return
         @Suppress("UNUSED_VARIABLE") val retainedPermission = permission

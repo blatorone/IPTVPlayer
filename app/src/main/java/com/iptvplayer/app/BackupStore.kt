@@ -1,5 +1,7 @@
 package com.iptvplayer.app
 
+import androidx.core.content.edit
+
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -109,16 +111,17 @@ internal suspend fun restoreBackup(context: Context, storage: PortalStorage, doc
             BackupPart.SETTINGS, BackupPart.CATEGORIES, BackupPart.LOCKS, BackupPart.WATCH_DATA -> {
                 data.getAsJsonObject(MAIN_SETTINGS)?.let { values ->
                     val preferences = context.getSharedPreferences(MAIN_SETTINGS, Context.MODE_PRIVATE)
-                    val editor = preferences.edit()
-                    preferences.all.keys.filter { backupPartOfSetting(it) == part }.forEach(editor::remove)
-                    putAll(editor, preferencesFromJson(values).filterKeys { backupPartOfSetting(it) == part })
-                    editor.commit()
+                    val old = preferences.all.keys.filter { backupPartOfSetting(it) == part }
+                    preferences.edit(commit = true) {
+                        old.forEach { remove(it) }
+                        putAll(this, preferencesFromJson(values).filterKeys { backupPartOfSetting(it) == part })
+                    }
                 }
                 if (part == BackupPart.WATCH_DATA) WATCH_FILES.forEach { file ->
                     val values = data.getAsJsonObject(file) ?: return@forEach
-                    val editor = context.getSharedPreferences(file, Context.MODE_PRIVATE).edit()
-                    putAll(editor, preferencesFromJson(values))
-                    editor.commit()
+                    context.getSharedPreferences(file, Context.MODE_PRIVATE).edit(commit = true) {
+                        putAll(this, preferencesFromJson(values))
+                    }
                 }
             }
             BackupPart.ACCOUNTS -> {
@@ -158,7 +161,8 @@ internal fun backupFileName(): String =
 
 /** Saves into the public "Download" folder (Android 10+); needs no permission or folder picker. */
 internal fun saveBackupToDownloads(context: Context, bytes: ByteArray): String {
-    check(Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+    // The shared "Download" folder without a permission exists from Android 10 on.
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) throw IllegalStateException("Android 10 needed")
     val name = backupFileName()
     val resolver = context.contentResolver
     val values = android.content.ContentValues().apply {

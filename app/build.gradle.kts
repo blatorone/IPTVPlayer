@@ -36,6 +36,12 @@ android {
     buildFeatures {
         compose = true
     }
+    // The language is chosen inside the app, so every translation must be in the installed app.
+    bundle {
+        language {
+            enableSplit = false
+        }
+    }
 }
 
 // "Neuigkeiten" in the app shows CHANGELOG.md: it is copied into the assets at build time.

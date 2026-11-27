@@ -1,5 +1,6 @@
 package com.iptvplayer.app
 
+import androidx.core.content.edit
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -23,6 +24,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -68,7 +70,7 @@ internal class SearchHistory(private val preferences: android.content.SharedPref
     }.getOrDefault(emptyList())
 
     private fun save() {
-        preferences?.edit()?.putString(key, org.json.JSONArray(entries).toString())?.apply()
+        preferences?.edit { putString(key, org.json.JSONArray(entries).toString()) }
     }
 
     fun add(term: String) {
@@ -88,22 +90,22 @@ internal fun SearchHistorySettings() {
         context.getSharedPreferences("catalog_visibility", android.content.Context.MODE_PRIVATE)
     }
     var enabled by remember { mutableStateOf(preferences.getBoolean(SEARCH_HISTORY_ENABLED, true)) }
-    var size by remember { mutableStateOf(preferences.getInt(SEARCH_HISTORY_SIZE, SEARCH_HISTORY_DEFAULT_SIZE)) }
+    var size by remember { mutableIntStateOf(preferences.getInt(SEARCH_HISTORY_SIZE, SEARCH_HISTORY_DEFAULT_SIZE)) }
     var cleared by remember { mutableStateOf(false) }
     fun clearAll() {
-        preferences.edit().apply { SEARCH_HISTORY_KEYS.forEach(::remove) }.apply()
+        preferences.edit { SEARCH_HISTORY_KEYS.forEach { remove(it) } }
     }
     SettingRow(stringResource(R.string.search_history_setting), selected = enabled) {
         enabled = !enabled
-        preferences.edit().putBoolean(SEARCH_HISTORY_ENABLED, enabled).apply()
+        preferences.edit { putBoolean(SEARCH_HISTORY_ENABLED, enabled) }
         if (!enabled) clearAll()
     }
     if (enabled) {
         SettingRow(stringResource(R.string.search_history_size, size)) {
             size = SEARCH_HISTORY_SIZES[(SEARCH_HISTORY_SIZES.indexOf(size) + 1) % SEARCH_HISTORY_SIZES.size]
-            preferences.edit().putInt(SEARCH_HISTORY_SIZE, size).apply()
+            preferences.edit { putInt(SEARCH_HISTORY_SIZE, size) }
             // A smaller number shortens the saved lists right away.
-            preferences.edit().apply {
+            preferences.edit {
                 SEARCH_HISTORY_KEYS.forEach { key ->
                     val kept = runCatching {
                         val data = org.json.JSONArray(preferences.getString(key, null) ?: return@forEach)
@@ -111,7 +113,7 @@ internal fun SearchHistorySettings() {
                     }.getOrNull() ?: return@forEach
                     putString(key, org.json.JSONArray(kept).toString())
                 }
-            }.apply()
+            }
         }
         SettingRow(stringResource(R.string.clear_search_history)) {
             clearAll()
@@ -417,5 +419,5 @@ internal fun portalSearchTerm(term: String): String =
 
 /** Deletes the search history of the admin and the kids account. */
 internal fun clearSearchHistories(preferences: android.content.SharedPreferences) {
-    preferences.edit().apply { SEARCH_HISTORY_KEYS.forEach(::remove) }.apply()
+    preferences.edit { SEARCH_HISTORY_KEYS.forEach { remove(it) } }
 }

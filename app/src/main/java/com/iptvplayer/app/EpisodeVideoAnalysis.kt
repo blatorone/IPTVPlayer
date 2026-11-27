@@ -1,5 +1,7 @@
 package com.iptvplayer.app
 
+import androidx.core.graphics.createBitmap
+
 import android.media.MediaMetadataRetriever
 import android.graphics.Bitmap
 import android.net.Uri
@@ -91,7 +93,7 @@ internal const val HLS_INTRO_FRAME_INTERVAL_MS = 1_000L
 internal suspend fun sampleEpisodeSurface(surface: SurfaceView, timeMs: Long): EpisodeFrame? {
     if (!surface.holder.surface.isValid) return null
     return suspendCoroutine { continuation ->
-        val bitmap = Bitmap.createBitmap(SAMPLE_WIDTH, SAMPLE_HEIGHT, Bitmap.Config.ARGB_8888)
+        val bitmap = createBitmap(SAMPLE_WIDTH, SAMPLE_HEIGHT)
         try {
             PixelCopy.request(surface, bitmap, { result ->
                 val frame = if (result == PixelCopy.SUCCESS) {

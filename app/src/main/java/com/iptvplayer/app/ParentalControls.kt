@@ -1,5 +1,6 @@
 package com.iptvplayer.app
 
+import androidx.core.content.edit
 import android.content.SharedPreferences
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -23,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
@@ -85,7 +87,7 @@ internal class ParentalControls(private val preferences: SharedPreferences?) {
         private set
     var kidsMode by mutableStateOf(preferences?.getBoolean("kids_mode", false) ?: false)
         private set
-    var kidsAge by mutableStateOf(preferences?.getInt("kids_age", 6) ?: 6)
+    var kidsAge by mutableIntStateOf(preferences?.getInt("kids_age", 6) ?: 6)
         private set
     var lockedCategories by mutableStateOf(preferences?.getStringSet("parental_locked_categories", null)?.toSet().orEmpty())
         private set
@@ -120,23 +122,29 @@ internal class ParentalControls(private val preferences: SharedPreferences?) {
 
     /** Own settings PIN ([pin]) or the Kindersicherung PIN ([pin] null, shared). */
     fun setSettingsPin(pin: String?) {
-        val editor = preferences?.edit()
-        if (pin == null) {
-            editor?.remove("settings_pin_hash")?.putBoolean("settings_pin_shared", true)
-        } else {
-            editor?.putString("settings_pin_hash", hash(pin, "settings_pin_salt"))?.putInt("settings_pin_length", pinLengthToStore(pin))
-                ?.putBoolean("settings_pin_shared", false)
+        preferences?.edit {
+            if (pin == null) {
+                remove("settings_pin_hash")
+                putBoolean("settings_pin_shared", true)
+            } else {
+                putString("settings_pin_hash", hash(pin, "settings_pin_salt"))
+                putInt("settings_pin_length", pinLengthToStore(pin))
+                putBoolean("settings_pin_shared", false)
+            }
         }
-        editor?.apply()
         ownSettingsPin = pin != null
         settingsPinShared = pin == null
     }
 
     /** Removes the settings PIN and with it every settings restriction. */
     fun removeSettingsPin() {
-        preferences?.edit()?.remove("settings_pin_hash")?.putBoolean("settings_pin_shared", false)
-            ?.putBoolean("parental_protect_settings", false)?.putBoolean("settings_lock_portals", false)
-            ?.putBoolean("settings_lock_categories", false)?.apply()
+        preferences?.edit {
+            remove("settings_pin_hash")
+            putBoolean("settings_pin_shared", false)
+            putBoolean("parental_protect_settings", false)
+            putBoolean("settings_lock_portals", false)
+            putBoolean("settings_lock_categories", false)
+        }
         ownSettingsPin = false
         settingsPinShared = false
         protectSettings = false
@@ -146,12 +154,12 @@ internal class ParentalControls(private val preferences: SharedPreferences?) {
 
     fun updateLockPortals(value: Boolean) {
         lockPortals = value
-        preferences?.edit()?.putBoolean("settings_lock_portals", value)?.apply()
+        preferences?.edit { putBoolean("settings_lock_portals", value) }
     }
 
     fun updateLockCategories(value: Boolean) {
         lockCategories = value
-        preferences?.edit()?.putBoolean("settings_lock_categories", value)?.apply()
+        preferences?.edit { putBoolean("settings_lock_categories", value) }
     }
 
     /** Hides or shows a main area; the last visible one cannot be hidden. */
@@ -159,7 +167,7 @@ internal class ParentalControls(private val preferences: SharedPreferences?) {
         val next = if (hidden) hiddenAreas + area else hiddenAreas - area
         if (MAIN_AREAS.all { it in next }) return false
         hiddenAreas = next
-        preferences?.edit()?.putStringSet("hidden_areas", next)?.apply()
+        preferences?.edit { putStringSet("hidden_areas", next) }
         return true
     }
 
@@ -173,7 +181,7 @@ internal class ParentalControls(private val preferences: SharedPreferences?) {
 
     private fun hash(pin: String, saltKey: String): String {
         val salt = preferences?.getString(saltKey, null) ?: ByteArray(16).also(SecureRandom()::nextBytes)
-            .joinToString("") { "%02x".format(it) }.also { preferences?.edit()?.putString(saltKey, it)?.apply() }
+            .joinToString("") { "%02x".format(it) }.also { preferences?.edit { putString(saltKey, it) } }
         val digest = MessageDigest.getInstance("SHA-256").digest((salt + pin).toByteArray())
         return digest.joinToString("") { "%02x".format(it) }
     }
@@ -195,23 +203,30 @@ internal class ParentalControls(private val preferences: SharedPreferences?) {
         preferences?.getInt(key, 0)?.takeIf { it >= 4 || it == PIN_PASSWORD }
 
     fun setPin(pin: String) {
-        preferences?.edit()?.putString("parental_pin_hash", hash(pin, "parental_pin_salt"))
-            ?.putInt("parental_pin_length", pinLengthToStore(pin))?.apply()
+        preferences?.edit {
+            putString("parental_pin_hash", hash(pin, "parental_pin_salt"))
+            putInt("parental_pin_length", pinLengthToStore(pin))
+        }
         hasPin = true
     }
 
     fun setKidsPin(pin: String?) {
-        if (pin == null) preferences?.edit()?.remove("kids_pin_hash")?.apply()
-        else preferences?.edit()?.putString("kids_pin_hash", hash(pin, "kids_pin_salt"))
-            ?.putInt("kids_pin_length", pinLengthToStore(pin))?.apply()
+        if (pin == null) preferences?.edit { remove("kids_pin_hash") }
+        else preferences?.edit {
+            putString("kids_pin_hash", hash(pin, "kids_pin_salt"))
+            putInt("kids_pin_length", pinLengthToStore(pin))
+        }
         separateKidsPin = pin != null
     }
 
     fun removePin() {
         // Settings that share this PIN lose their protection with it; an own settings PIN stays.
         if (settingsPinShared && !ownSettingsPin) removeSettingsPin()
-        preferences?.edit()?.remove("parental_pin_hash")?.remove("kids_pin_hash")
-            ?.putBoolean("kids_mode", false)?.apply()
+        preferences?.edit {
+            remove("parental_pin_hash")
+            remove("kids_pin_hash")
+            putBoolean("kids_mode", false)
+        }
         hasPin = false
         separateKidsPin = false
         kidsMode = false
@@ -219,29 +234,29 @@ internal class ParentalControls(private val preferences: SharedPreferences?) {
 
     fun updateProtectSettings(value: Boolean) {
         protectSettings = value
-        preferences?.edit()?.putBoolean("parental_protect_settings", value)?.apply()
+        preferences?.edit { putBoolean("parental_protect_settings", value) }
     }
 
     fun updateLockAdult(value: Boolean) {
         lockAdult = value
-        preferences?.edit()?.putBoolean("parental_lock_adult", value)?.apply()
+        preferences?.edit { putBoolean("parental_lock_adult", value) }
     }
 
     fun updateKidsMode(value: Boolean) {
         kidsMode = value
         unlocked = false
         allowedTitles.clear()
-        preferences?.edit()?.putBoolean("kids_mode", value)?.apply()
+        preferences?.edit { putBoolean("kids_mode", value) }
     }
 
     fun updateKidsAge(value: Int) {
         kidsAge = value
-        preferences?.edit()?.putInt("kids_age", value)?.apply()
+        preferences?.edit { putInt("kids_age", value) }
     }
 
     fun toggleLocked(key: String) {
         lockedCategories = if (key in lockedCategories) lockedCategories - key else lockedCategories + key
-        preferences?.edit()?.putStringSet("parental_locked_categories", lockedCategories)?.apply()
+        preferences?.edit { putStringSet("parental_locked_categories", lockedCategories) }
     }
 
     /** Whether a category may be listed right now. */
@@ -375,16 +390,12 @@ internal fun PinDialog(
                         stringResource(if (first == null) R.string.password_enter_new else R.string.password_repeat),
                         style = MaterialTheme.typography.labelLarge
                     )
-                    androidx.compose.material3.OutlinedTextField(
-                        value = pin, onValueChange = { pin = it.take(64) }, singleLine = true,
-                        label = { Text(stringResource(R.string.password_label)) },
+                    SecretField(
+                        value = pin, onValueChange = { pin = it.take(64) },
+                        label = stringResource(R.string.password_label),
                         modifier = Modifier.fillMaxWidth().focusRequester(firstKey),
-                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Password,
-                            imeAction = androidx.compose.ui.text.input.ImeAction.Done
-                        ),
-                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { submit() })
+                        imeAction = androidx.compose.ui.text.input.ImeAction.Done,
+                        onDone = { submit() }
                     )
                     error?.let { Text(it, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center) }
                     PinKey("OK", Modifier.width(220.dp), enabled = pin.length >= PIN_PASSWORD_MIN) { submit() }
@@ -441,7 +452,7 @@ private fun PhonePinEntry(newPin: Boolean, onPin: (String) -> Boolean, password:
     val wrongMessage = stringResource(R.string.pin_wrong)
     val ended = stringResource(R.string.remote_msg_ended)
     val failed = stringResource(R.string.remote_msg_change_failed)
-    var attempts by remember { mutableStateOf(0) }
+    var attempts by remember { mutableIntStateOf(0) }
     val session = remember {
         var self: RemoteSession? = null
         val handler = object : RemoteHandler {
@@ -616,7 +627,7 @@ internal fun InputModeSetting() {
     var remoteOnly by remember { mutableStateOf(preferences.getBoolean("input_remote_only", false)) }
     SettingRow(stringResource(R.string.input_remote_only), selected = remoteOnly) {
         remoteOnly = !remoteOnly
-        preferences.edit().putBoolean("input_remote_only", remoteOnly).apply()
+        preferences.edit { putBoolean("input_remote_only", remoteOnly) }
     }
     Text(stringResource(R.string.input_remote_only_hint), style = MaterialTheme.typography.bodySmall)
 }

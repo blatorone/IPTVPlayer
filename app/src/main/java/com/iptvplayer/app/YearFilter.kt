@@ -11,6 +11,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -62,8 +63,8 @@ private fun YearSpanDialog(years: List<Int>, value: YearSpan?, onApply: (YearSpa
     val newest = maxOf(years.maxOrNull() ?: current, current)
     val oldest = minOf(years.minOrNull() ?: 1950, newest)
     val options = (newest downTo oldest).toList()
-    var from by remember { mutableStateOf(value?.from ?: oldest) }
-    var to by remember { mutableStateOf(value?.to ?: newest) }
+    var from by remember { mutableIntStateOf(value?.from ?: oldest) }
+    var to by remember { mutableIntStateOf(value?.to ?: newest) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.custom_years)) },

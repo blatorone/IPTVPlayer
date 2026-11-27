@@ -1,5 +1,6 @@
 package com.iptvplayer.app
 
+import androidx.core.content.edit
 import android.content.SharedPreferences
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -63,15 +64,24 @@ internal data class GuideAppearance(
     val veilStrength: Int = 40
 ) {
     fun save(preferences: SharedPreferences?) {
-        preferences?.edit()
-            ?.putString("guide_row_size", rowSize.name)?.putString("guide_text_size", textSize.name)
-            ?.putString("guide_preview_size", previewSize.name)?.putString("guide_list_width", listWidth.name)
-            ?.putBoolean("guide_preview_visible", showPreview)?.putBoolean("guide_numbers", showNumbers)
-            ?.putBoolean("guide_logos", showLogos)?.putBoolean("guide_progress", showProgress)
-            ?.putBoolean("guide_schedule", showSchedule)?.putBoolean("guide_description", showDescription)
-            ?.putBoolean("guide_keep_list", keepChannelList)?.putInt("guide_opacity", opacity)
-            ?.putInt("guide_close_seconds", closeSeconds)?.putString("guide_now_color", nowColor.name)
-            ?.putString("guide_veil", veil.name)?.putInt("guide_veil_strength", veilStrength)?.apply()
+        preferences?.edit {
+            putString("guide_row_size", rowSize.name)
+            putString("guide_text_size", textSize.name)
+            putString("guide_preview_size", previewSize.name)
+            putString("guide_list_width", listWidth.name)
+            putBoolean("guide_preview_visible", showPreview)
+            putBoolean("guide_numbers", showNumbers)
+            putBoolean("guide_logos", showLogos)
+            putBoolean("guide_progress", showProgress)
+            putBoolean("guide_schedule", showSchedule)
+            putBoolean("guide_description", showDescription)
+            putBoolean("guide_keep_list", keepChannelList)
+            putInt("guide_opacity", opacity)
+            putInt("guide_close_seconds", closeSeconds)
+            putString("guide_now_color", nowColor.name)
+            putString("guide_veil", veil.name)
+            putInt("guide_veil_strength", veilStrength)
+        }
     }
 }
 

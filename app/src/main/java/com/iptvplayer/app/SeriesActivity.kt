@@ -1,5 +1,7 @@
 package com.iptvplayer.app
 
+import androidx.core.content.edit
+
 import android.content.SharedPreferences
 
 import org.json.JSONArray
@@ -47,6 +49,9 @@ internal data class TrackedSeries(
     val isComplete: Boolean? = null,
     val localViewed: Boolean = false,
     val hiddenFromHistory: Boolean = false
+,
+    /** When episodes not yet seen were last found (0: never or before this was recorded). */
+    val newAt: Long = 0
 )
 
 internal fun seriesEpisodeKey(season: PortalSeason, episode: PortalTitle): String {
@@ -64,13 +69,13 @@ private val numberedSeason = Regex("""(?i)\b(?:staffel|season)\s+(\d+)\b""")
 private val numberedEpisode = Regex("""(?i)(?:s\d+\s*e|e|episode\s+|folge\s+)(\d+)""")
 
 internal fun SharedPreferences.saveInterruptedPlayback(key: String, position: Long, duration: Long) {
-    edit().putLong(key, position)
-        .putLong("progress_updated:$key", System.currentTimeMillis())
-        .putBoolean("completed:$key", false)
-        .remove("manual_watched:$key")
-        .apply {
-            if (duration > 0) putLong("duration:$key", duration)
-        }.apply()
+    edit {
+        putLong(key, position)
+        putLong("progress_updated:$key", System.currentTimeMillis())
+        putBoolean("completed:$key", false)
+        remove("manual_watched:$key")
+        if (duration > 0) putLong("duration:$key", duration)
+    }
 }
 
 internal fun SharedPreferences.isPlaybackCompleted(key: String, fallback: Boolean): Boolean =
@@ -153,6 +158,7 @@ internal fun TrackedSeries.observe(episodes: Set<String>, now: Long): TrackedSer
         known = known + episodes,
         unseen = unseen + added,
         checkedAt = now,
+        newAt = if (added.isNotEmpty()) now else newAt,
         // A finished series with new episodes is in progress again ("Weiter schauen").
         isComplete = if (added.isNotEmpty()) false else isComplete
     )
@@ -161,6 +167,15 @@ internal fun TrackedSeries.observe(episodes: Set<String>, now: Long): TrackedSer
 /** Shown under "Weiter schauen": unfinished, or finished with episodes added since. */
 internal fun TrackedSeries.continuable(): Boolean =
     viewed && !hiddenFromHistory && (isComplete != true || unseen.isNotEmpty())
+
+/**
+ * Order of "Weiter schauen": series with episodes not yet seen first, the most recently found
+ * first; then the others by when they were watched last ("Verlauf" keeps that order for all).
+ */
+internal fun List<TrackedSeries>.continueOrder(): List<TrackedSeries> = sortedWith(
+    compareByDescending<TrackedSeries> { it.unseen.isNotEmpty() }
+        .thenByDescending { if (it.unseen.isNotEmpty() && it.newAt > 0) it.newAt else it.watchedAt }
+)
 
 /**
  * Watched or saved series whose next episode has a known air date today or later,
@@ -195,6 +210,7 @@ internal fun encodeSeriesActivity(entries: List<TrackedSeries>): String = JSONAr
             put("usedTmdb", series.usedTmdb)
             put("episodeProvider", series.episodeProvider)
             put("watchedAt", series.watchedAt)
+            if (series.newAt > 0) put("newAt", series.newAt)
             series.nextEpisodeName?.let { put("nextEpisodeName", it) }
             series.nextAirDate?.let { put("nextAirDate", it) }
             series.lastEpisode?.let { episode ->
@@ -230,6 +246,7 @@ internal fun decodeSeriesActivity(data: String?): List<TrackedSeries> = runCatch
             usedTmdb = entry.optBoolean("usedTmdb"),
             episodeProvider = entry.optString("episodeProvider").ifBlank { null },
             watchedAt = entry.optLong("watchedAt"),
+            newAt = entry.optLong("newAt"),
             nextEpisodeName = entry.optString("nextEpisodeName").ifBlank { null },
             nextAirDate = entry.optString("nextAirDate").ifBlank { null },
             lastEpisode = entry.optJSONObject("lastEpisode")?.let {

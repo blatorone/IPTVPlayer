@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="settings_about">StreamWatch hakkında</string>
     <string name="about_version">Sürüm %1$s</string>
     <string name="about_version_code">Sürüm kodu %1$d</string>
@@ -214,7 +214,7 @@
     <string name="episode_number">Bölüm %1$s</string>
     <string name="play_movie">Filmi oynat</string>
     <string name="search">Ara</string>
-    <string name="search_partial">Kısmi sonuç. Portallar sonuçları sayfa sayfa veriyor veya aramayı yalnızca kısmen destekliyor.</string>
+    <string name="search_partial" tools:ignore="Typos">Kısmi sonuç. Portallar sonuçları sayfa sayfa veriyor veya aramayı yalnızca kısmen destekliyor.</string>
     <string name="no_visible_categories">Görünür kategori yok. Ülke ve görünürlük ayarlarını kontrol et veya portalı yeniden yükle.</string>
     <string name="playback_starting">Yayın başlıyor: %s</string>
     <string name="playback_timeout">Yayın 25 saniye içinde başlatılamadı.</string>

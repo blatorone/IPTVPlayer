@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <!-- Every configuration change (and the in-app language switch, via recreate()) restarts the
+         activity: the manifest handles no configChanges itself. LocalContext therefore never holds
+         stale values, and most of these calls run in click handlers where stringResource is not
+         available. -->
+    <issue id="LocalContextGetResourceValueCall" severity="ignore" />
+    <!-- The TV banner exists only for xhdpi, as Android TV expects (320 x 180). -->
+    <issue id="IconMissingDensityFolder">
+        <ignore path="src/main/res" />
+    </issue>
+</lint>

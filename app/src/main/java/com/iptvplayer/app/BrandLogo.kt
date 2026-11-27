@@ -36,7 +36,7 @@ private val LogoPink = Color(0xFFFF4D8D)
  * drawn after Extern/streamwatch-modern-tv-banner.svg so it scales sharply to any height.
  */
 @Composable
-internal fun StreamWatchLogo(height: Dp = 30.dp, modifier: Modifier = Modifier) {
+internal fun StreamWatchLogo(modifier: Modifier = Modifier, height: Dp = 30.dp) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(height * 0.28f)) {
         StreamWatchMark(Modifier.size(height))
         val textSize = (height.value * 0.78f).sp

@@ -1,5 +1,6 @@
 package com.iptvplayer.app
 
+import androidx.core.content.edit
 import android.content.Context
 import android.content.res.Configuration
 import android.os.Build
@@ -82,7 +83,7 @@ internal fun mirrorLayout(context: Context): Boolean =
     context.getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE).getBoolean(MIRROR_KEY, false)
 
 internal fun saveMirrorLayout(context: Context, mirror: Boolean) {
-    context.getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE).edit().putBoolean(MIRROR_KEY, mirror).apply()
+    context.getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE).edit { putBoolean(MIRROR_KEY, mirror) }
 }
 
 /** The chosen language tag, or null for the device language. */
@@ -91,8 +92,7 @@ internal fun chosenLanguage(context: Context): String? =
         ?.takeIf { it in TRANSLATED_LANGUAGES }
 
 internal fun saveLanguage(context: Context, tag: String?) {
-    context.getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE).edit()
-        .apply { if (tag == null) remove(LANGUAGE_KEY) else putString(LANGUAGE_KEY, tag) }.apply()
+    context.getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE).edit { if (tag == null) remove(LANGUAGE_KEY) else putString(LANGUAGE_KEY, tag) }
 }
 
 /**
@@ -174,8 +174,9 @@ internal fun AppLanguageSettings(current: String?, mirror: Boolean, onChoose: (S
 @Composable
 internal fun MirrorQuestion(language: AppLanguage, onDismiss: () -> Unit, onAnswer: (Boolean) -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val texts = remember(language) {
-        val configuration = Configuration(context.resources.configuration)
+    val current = androidx.compose.ui.platform.LocalConfiguration.current
+    val texts = remember(language, current) {
+        val configuration = Configuration(current)
         configuration.setLocale(Locale.forLanguageTag(language.tag))
         context.createConfigurationContext(configuration).resources
     }

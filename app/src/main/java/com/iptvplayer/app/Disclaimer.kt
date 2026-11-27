@@ -1,5 +1,6 @@
 package com.iptvplayer.app
 
+import androidx.core.content.edit
 import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -64,16 +65,19 @@ internal fun disclaimerAccepted(context: Context): Boolean {
         listOf("portal-library.v2", "stalker-source.v1", "stalker-source.v1.migrated")
             .any { File(context.noBackupFilesDir, it).exists() }
     if (existingInstall) {
-        preferences.edit().putInt(DISCLAIMER_KEY, DISCLAIMER_VERSION)
-            .putLong("disclaimer_accepted_at", System.currentTimeMillis()).apply()
+        preferences.edit {
+            putInt(DISCLAIMER_KEY, DISCLAIMER_VERSION)
+            putLong("disclaimer_accepted_at", System.currentTimeMillis())
+        }
     }
     return existingInstall
 }
 
 internal fun acceptDisclaimer(context: Context) {
-    context.getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE).edit()
-        .putInt(DISCLAIMER_KEY, DISCLAIMER_VERSION)
-        .putLong("disclaimer_accepted_at", System.currentTimeMillis()).apply()
+    context.getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE).edit {
+        putInt(DISCLAIMER_KEY, DISCLAIMER_VERSION)
+        putLong("disclaimer_accepted_at", System.currentTimeMillis())
+    }
 }
 
 /** First start: the terms fill the screen; nothing else can be used before "Akzeptieren". */
@@ -89,7 +93,7 @@ internal fun DisclaimerScreen(onAccept: () -> Unit, onExit: () -> Unit) {
             shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainer
         ) {
             Column(Modifier.padding(28.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                StreamWatchLogo(28.dp)
+                StreamWatchLogo(height = 28.dp)
                 Text(stringResource(R.string.disclaimer_title), style = MaterialTheme.typography.headlineSmall)
                 DisclaimerText(Modifier.weight(1f, fill = false), text)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)) {
@@ -145,7 +149,7 @@ internal fun firstLanguageChosen(context: Context): Boolean =
     context.getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE).getBoolean("first_language_chosen", false)
 
 internal fun markFirstLanguageChosen(context: Context) {
-    context.getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE).edit().putBoolean("first_language_chosen", true).apply()
+    context.getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE).edit { putBoolean("first_language_chosen", true) }
 }
 
 /**
@@ -161,7 +165,7 @@ internal fun FirstLanguageScreen(onChosen: (String?, Boolean) -> Unit, onExit: (
             shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainer
         ) {
             Column(Modifier.padding(28.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                StreamWatchLogo(28.dp)
+                StreamWatchLogo(height = 28.dp)
                 Text("🌐  " + stringResource(R.string.app_language), style = MaterialTheme.typography.headlineSmall)
                 // First only the question (in the device language); the list opens on "Sprache ändern".
                 var choosing by remember { mutableStateOf(false) }

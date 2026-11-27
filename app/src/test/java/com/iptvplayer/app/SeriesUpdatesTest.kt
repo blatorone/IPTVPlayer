@@ -42,4 +42,16 @@ class SeriesUpdatesTest {
         )
         assertEquals(listOf("A", "B"), upcomingSeries(entries, today).map { it.first.name })
     }
+
+    @Test
+    fun seriesWithNewEpisodesComeFirstNewestFirst() {
+        val lastWatched = finished.copy(key = "a", name = "Watched last", isComplete = false, watchedAt = 900)
+        val olderNews = finished.observe(setOf("7:1", "7:2", "8:1"), 100).copy(key = "b", name = "Older news", watchedAt = 10)
+        val newestNews = finished.observe(setOf("7:1", "7:2", "8:1"), 500).copy(key = "c", name = "Newest news", watchedAt = 5)
+        assertEquals(500L, newestNews.newAt)
+        assertEquals(
+            listOf("Newest news", "Older news", "Watched last"),
+            listOf(lastWatched, olderNews, newestNews).continueOrder().map { it.name }
+        )
+    }
 }

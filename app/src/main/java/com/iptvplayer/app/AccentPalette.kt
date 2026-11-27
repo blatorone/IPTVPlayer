@@ -140,7 +140,7 @@ private fun AccentPreview(modifier: Modifier) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(stringResource(R.string.accent_palette_example), style = MaterialTheme.typography.labelSmall, color = colors.primary)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                StreamWatchLogo(18.dp)
+                StreamWatchLogo(height = 18.dp)
                 Box(Modifier.width(3.dp).height(18.dp).background(colors.primary, RoundedCornerShape(2.dp)))
                 PreviewPill(stringResource(R.string.destination_live), active = true)
                 PreviewPill(stringResource(R.string.destination_movies), active = false)

@@ -10,13 +10,12 @@ import androidx.media3.datasource.BaseDataSource
 import androidx.media3.datasource.DataSpec
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
-import okhttp3.OkHttpClient
-import okhttp3.Request
 import java.io.File
 import java.io.IOException
 import java.io.InterruptedIOException
 import java.io.RandomAccessFile
-import java.util.concurrent.TimeUnit
+import java.net.HttpURLConnection
+import java.net.URL
 
 /*
  * Timeshift for Live-TV (optional, off by default): the running channel is recorded into a ring of
@@ -62,6 +61,8 @@ internal class TimeshiftRecorder(
     private val marks = ArrayDeque<Pair<Long, Long>>()
     @Volatile private var failure: IOException? = null
     @Volatile private var stopped = false
+    /** The open stream; stop() closes it, since interrupting the thread does not end a blocked read. */
+    @Volatile private var connection: HttpURLConnection? = null
     private val thread = Thread(::record, "timeshift-recorder")
     val startedAt = timeshiftNow()
 
@@ -87,6 +88,7 @@ internal class TimeshiftRecorder(
         thread.interrupt()
         synchronized(lock) { lock.notifyAll() }
         Thread {
+            runCatching { connection?.disconnect() }
             directory.listFiles()?.forEach { it.delete() }
             if (directory.name.startsWith("standby-")) directory.delete()
         }.start()
@@ -95,47 +97,56 @@ internal class TimeshiftRecorder(
     private fun segment(index: Long) = File(directory, "seg-$index")
 
     private fun record() {
-        val client = OkHttpClient.Builder().readTimeout(20, TimeUnit.SECONDS).connectTimeout(15, TimeUnit.SECONDS).build()
+        // The same request as the player's own (Media3's default HTTP source: the system's
+        // HttpURLConnection, no compression, no extra headers). Fetched with OkHttp, some portals
+        // refused the recording (HTTP 406) while they let the player in.
         try {
-            client.newCall(Request.Builder().url(url).build()).execute().use { response ->
-                if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
-                val input = response.body?.byteStream() ?: throw IOException("no body")
-                val buffer = ByteArray(64 * 1024)
-                var file: RandomAccessFile? = null
-                var fileIndex = -1L
-                try {
-                    while (!stopped) {
-                        val count = input.read(buffer)
-                        if (count < 0) throw IOException("stream ended")
-                        var done = 0
-                        while (done < count) {
-                            val index = written / SEGMENT_BYTES
-                            if (index != fileIndex) {
-                                file?.close()
-                                file = RandomAccessFile(segment(index), "rw")
-                                fileIndex = index
-                            }
-                            val inSegment = (SEGMENT_BYTES - written % SEGMENT_BYTES).toInt()
-                            val part = minOf(inSegment, count - done)
-                            file!!.write(buffer, done, part)
-                            done += part
-                            synchronized(lock) {
-                                written += part
-                                lock.notifyAll()
-                            }
+            val opened = (URL(url).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 15_000
+                readTimeout = 20_000
+                instanceFollowRedirects = true
+                setRequestProperty("Accept-Encoding", "identity")
+            }
+            connection = opened
+            val code = opened.responseCode
+            if (code !in 200..299) throw IOException("HTTP $code")
+            val input = opened.inputStream
+            val buffer = ByteArray(64 * 1024)
+            var file: RandomAccessFile? = null
+            var fileIndex = -1L
+            try {
+                while (!stopped) {
+                    val count = input.read(buffer)
+                    if (count < 0) throw IOException("stream ended")
+                    var done = 0
+                    while (done < count) {
+                        val index = written / SEGMENT_BYTES
+                        if (index != fileIndex) {
+                            file?.close()
+                            file = RandomAccessFile(segment(index), "rw")
+                            fileIndex = index
                         }
-                        mark()
-                        trim()
+                        val inSegment = (SEGMENT_BYTES - written % SEGMENT_BYTES).toInt()
+                        val part = minOf(inSegment, count - done)
+                        file!!.write(buffer, done, part)
+                        done += part
+                        synchronized(lock) {
+                            written += part
+                            lock.notifyAll()
+                        }
                     }
-                } finally {
-                    file?.close()
+                    mark()
+                    trim()
                 }
+            } finally {
+                file?.close()
             }
         } catch (error: IOException) {
             if (!stopped) failure = error
         } catch (error: Exception) {
             if (!stopped) failure = IOException(error)
         } finally {
+            runCatching { connection?.disconnect() }
             synchronized(lock) { lock.notifyAll() }
         }
     }
@@ -148,6 +159,8 @@ internal class TimeshiftRecorder(
     }
 
     /** Deletes whole segments that fall out of the time window or exceed the space limits. */
+    // UsableSpace: really free space is meant; allocateBytes would clear other apps' caches for the recording.
+    @android.annotation.SuppressLint("UsableSpace")
     private fun trim() {
         val now = timeshiftNow()
         while (true) {

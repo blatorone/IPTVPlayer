@@ -1,11 +1,13 @@
 package com.iptvplayer.app
 
+import androidx.core.content.edit
 import android.content.Context
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
@@ -36,18 +38,18 @@ internal fun chosenBuffer(context: Context): BufferLevel? {
 
 /** Buffer off (null) or one of the sizes; applies after a restart of the app. */
 internal fun setChosenBuffer(context: Context, level: BufferLevel?) {
-    context.getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE).edit()
-        .putBoolean(BUFFER_ENABLED, level != null)
-        .apply { if (level != null) putString(BUFFER_LEVEL, level.name) }
-        .apply()
+    context.getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE).edit {
+        putBoolean(BUFFER_ENABLED, level != null)
+        if (level != null) putString(BUFFER_LEVEL, level.name)
+    }
 }
 
 /** Timeshift off (null) or on with this many minutes. */
 internal fun setTimeshiftMinutes(context: Context, minutes: Int?) {
-    context.getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE).edit()
-        .putBoolean("timeshift_enabled", minutes != null)
-        .apply { if (minutes != null) putInt("timeshift_minutes", minutes) }
-        .apply()
+    context.getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE).edit {
+        putBoolean("timeshift_enabled", minutes != null)
+        if (minutes != null) putInt("timeshift_minutes", minutes)
+    }
 }
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
@@ -68,12 +70,12 @@ internal fun BufferSettings() {
     SettingRow(stringResource(R.string.buffer_setting), selected = enabled) {
         enabled = !enabled
         changed = true
-        preferences.edit().putBoolean(BUFFER_ENABLED, enabled).apply()
+        preferences.edit { putBoolean(BUFFER_ENABLED, enabled) }
     }
     if (enabled) SettingRow(stringResource(R.string.buffer_size_setting, stringResource(level.label))) {
         level = BufferLevel.entries[(level.ordinal + 1) % BufferLevel.entries.size]
         changed = true
-        preferences.edit().putString(BUFFER_LEVEL, level.name).apply()
+        preferences.edit { putString(BUFFER_LEVEL, level.name) }
     }
     Text(
         stringResource(if (changed) R.string.buffer_restart_hint else R.string.buffer_hint),
@@ -88,14 +90,14 @@ internal fun TimeshiftSettings() {
     val context = LocalContext.current
     val preferences = remember(context) { context.getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE) }
     var enabled by remember { mutableStateOf(preferences.getBoolean("timeshift_enabled", false)) }
-    var minutes by remember { mutableStateOf(preferences.getInt("timeshift_minutes", 30).takeIf { it in TIMESHIFT_DURATIONS } ?: 30) }
+    var minutes by remember { mutableIntStateOf(preferences.getInt("timeshift_minutes", 30).takeIf { it in TIMESHIFT_DURATIONS } ?: 30) }
     SettingRow(stringResource(R.string.timeshift_setting), selected = enabled) {
         enabled = !enabled
-        preferences.edit().putBoolean("timeshift_enabled", enabled).apply()
+        preferences.edit { putBoolean("timeshift_enabled", enabled) }
     }
     if (enabled) SettingRow(stringResource(R.string.timeshift_duration_setting, minutes)) {
         minutes = TIMESHIFT_DURATIONS[(TIMESHIFT_DURATIONS.indexOf(minutes) + 1) % TIMESHIFT_DURATIONS.size]
-        preferences.edit().putInt("timeshift_minutes", minutes).apply()
+        preferences.edit { putInt("timeshift_minutes", minutes) }
     }
     Text(stringResource(R.string.timeshift_hint), style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant)

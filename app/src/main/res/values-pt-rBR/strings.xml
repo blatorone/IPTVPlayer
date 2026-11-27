@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="settings_about">Sobre o StreamWatch</string>
     <string name="about_version">Versão %1$s</string>
     <string name="about_version_code">Código da versão %1$d</string>
@@ -292,7 +292,7 @@
     <string name="vod_category_cinema">Estreias atuais nos cinemas</string>
     <string name="vod_category_cinema_year">Filmes de cinema %1$d</string>
     <string name="vod_category_netflix">Netflix</string>
-    <string name="vod_category_prime">Prime Video</string>
+    <string name="vod_category_prime" tools:ignore="Typos">Prime Video</string>
     <string name="vod_category_apple">Apple TV</string>
     <string name="vod_category_disney">Disney+</string>
     <string name="vod_category_max">HBO e Max</string>

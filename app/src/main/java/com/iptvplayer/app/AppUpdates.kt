@@ -1,5 +1,8 @@
 package com.iptvplayer.app
 
+import androidx.core.net.toUri
+
+import androidx.core.content.edit
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -19,6 +22,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -227,11 +232,11 @@ internal fun rememberAppUpdates(): AppUpdateUi {
     var auto by remember { mutableStateOf(preferences.getBoolean("automatic", true)) }
     // Betas (GitHub pre-releases) only for those who switch them on; off by default.
     var beta by remember { mutableStateOf(preferences.getBoolean("beta", false)) }
-    var lastCheck by remember { mutableStateOf(preferences.getLong("last_check", 0L)) }
+    var lastCheck by remember { mutableLongStateOf(preferences.getLong("last_check", 0L)) }
     var result by remember { mutableStateOf<Int?>(null) }
     var release by remember { mutableStateOf<AppRelease?>(null) }
     var busy by remember { mutableStateOf(false) }
-    var rateLimitMinutes by remember { mutableStateOf(0) }
+    var rateLimitMinutes by remember { mutableIntStateOf(0) }
     // Automatic checks only mark the update; the dialog opens on request.
     var dialogOpen by remember { mutableStateOf(false) }
     // Opening or closing the window hands the focus around for a moment; the settings use the
@@ -249,7 +254,7 @@ internal fun rememberAppUpdates(): AppUpdateUi {
                     dialogOpen = true
                 }
                 lastCheck = System.currentTimeMillis()
-                preferences.edit().putLong("last_check", lastCheck).apply()
+                preferences.edit { putLong("last_check", lastCheck) }
                 if (release == null) result = R.string.update_current
             } catch (error: CancellationException) {
                 throw error
@@ -280,7 +285,7 @@ internal fun rememberAppUpdates(): AppUpdateUi {
                 result = null
                 if (!context.packageManager.canRequestPackageInstalls()) {
                     result = R.string.update_permission
-                    context.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}")))
+                    context.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, "package:${context.packageName}".toUri()))
                     return@launch
                 }
                 busy = true
@@ -347,13 +352,13 @@ internal fun rememberAppUpdates(): AppUpdateUi {
         automatic = auto,
         setAutomatic = { value ->
             auto = value
-            preferences.edit().putBoolean("automatic", value).apply()
+            preferences.edit { putBoolean("automatic", value) }
         },
         check = { check(manual = false) },
         beta = beta,
         setBeta = { value ->
             beta = value
-            preferences.edit().putBoolean("beta", value).apply()
+            preferences.edit { putBoolean("beta", value) }
             release = null
             check(manual = false)
         },
@@ -375,11 +380,11 @@ internal fun rememberAppUpdates(): AppUpdateUi {
         ) { check(manual = true) }
         SettingRow(stringResource(R.string.update_auto), selected = auto) {
             auto = !auto
-            preferences.edit().putBoolean("automatic", auto).apply()
+            preferences.edit { putBoolean("automatic", auto) }
         }
         SettingRow(stringResource(R.string.update_beta), selected = beta) {
             beta = !beta
-            preferences.edit().putBoolean("beta", beta).apply()
+            preferences.edit { putBoolean("beta", beta) }
             release = null
             check(manual = false)
         }

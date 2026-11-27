@@ -77,7 +77,8 @@
     <string name="portal_expired_badge">Potekel</string>
     <string name="portal_expires_today_badge">Poteče danes</string>
     <plurals name="portal_expires_soon_badge">
-        <item quantity="one">Poteče jutri</item>
+        <!-- "one" also covers 101, 201 … in Slovenian, so it needs the number. -->
+        <item quantity="one">Poteče čez %1$d dan</item>
         <item quantity="two">Poteče čez %1$d dneva</item>
         <item quantity="few">Poteče čez %1$d dni</item>
         <item quantity="other">Poteče čez %1$d dni</item>

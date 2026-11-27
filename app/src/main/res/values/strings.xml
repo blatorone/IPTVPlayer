@@ -1,4 +1,4 @@
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="settings_about">Über StreamWatch</string>
     <string name="about_version">Version %1$s</string>
     <string name="about_version_code">Versionscode %1$d</string>
@@ -354,7 +354,7 @@
     <string name="accent_apricot">Aprikose</string>
     <string name="accent_rust">Rost</string>
     <string name="accent_sand">Sand</string>
-    <string name="accent_palette_hint">Wähle eine Farbe. Die Beispielansicht zeigt die Farbe, auf der der Fokus steht; OK übernimmt sie.</string>
+    <string name="accent_palette_hint" tools:ignore="Typos">Wähle eine Farbe. Die Beispielansicht zeigt die Farbe, auf der der Fokus steht; OK übernimmt sie.</string>
     <string name="accent_palette_active">eingestellt</string>
     <string name="accent_palette_example">Beispiel</string>
     <string name="resume_playback">Fortsetzen</string>

@@ -1,5 +1,9 @@
 package com.iptvplayer.app
 
+import androidx.core.graphics.set
+
+import androidx.core.graphics.createBitmap
+
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -110,9 +114,9 @@ internal fun QrCode(value: String, modifier: Modifier = Modifier) {
                 value, BarcodeFormat.QR_CODE, 360, 360,
                 mapOf(EncodeHintType.CHARACTER_SET to StandardCharsets.UTF_8.name())
             )
-            Bitmap.createBitmap(matrix.width, matrix.height, Bitmap.Config.RGB_565).apply {
+            createBitmap(matrix.width, matrix.height, Bitmap.Config.RGB_565).apply {
                 for (y in 0 until matrix.height) for (x in 0 until matrix.width) {
-                    setPixel(x, y, if (matrix[x, y]) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
+                    this[x, y] = if (matrix[x, y]) android.graphics.Color.BLACK else android.graphics.Color.WHITE
                 }
             }.asImageBitmap()
         }.getOrNull()
@@ -135,17 +139,13 @@ private fun TraktAppForm(app: TraktApp?, enabled: Boolean, onSave: (String, Stri
         stringResource(if (app == null) R.string.trakt_app_help else R.string.trakt_app_saved),
         style = MaterialTheme.typography.bodySmall
     )
-    androidx.compose.material3.OutlinedTextField(
-        value = clientId, onValueChange = { clientId = it.trim() }, singleLine = true, enabled = enabled,
-        label = { Text("Client ID") }, modifier = Modifier.fillMaxWidth(),
-        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Password),
-        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
+    SecretField(
+        value = clientId, onValueChange = { clientId = it.trim() }, enabled = enabled,
+        label = "Client ID", modifier = Modifier.fillMaxWidth()
     )
-    androidx.compose.material3.OutlinedTextField(
-        value = clientSecret, onValueChange = { clientSecret = it.trim() }, singleLine = true, enabled = enabled,
-        label = { Text("Client Secret") }, modifier = Modifier.fillMaxWidth(),
-        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Password),
-        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
+    SecretField(
+        value = clientSecret, onValueChange = { clientSecret = it.trim() }, enabled = enabled,
+        label = "Client Secret", modifier = Modifier.fillMaxWidth()
     )
     SettingRow(
         stringResource(R.string.trakt_app_save),

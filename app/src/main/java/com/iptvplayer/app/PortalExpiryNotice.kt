@@ -1,5 +1,7 @@
 package com.iptvplayer.app
 
+import androidx.core.content.edit
+
 import android.content.SharedPreferences
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
@@ -66,8 +68,6 @@ internal class ExpiryConfirmations(private val preferences: SharedPreferences?) 
             ?.let { parts -> ExpiryState.entries.firstOrNull { it.name == parts[1] } }
 
     fun confirm(notices: List<ExpiryNotice>) {
-        val editor = preferences?.edit() ?: return
-        notices.forEach { editor.putString("expiry_ack:${it.portalId}", "${it.expiry}|${it.state.name}") }
-        editor.apply()
+        preferences?.edit { notices.forEach { putString("expiry_ack:${it.portalId}", "${it.expiry}|${it.state.name}") } }
     }
 }

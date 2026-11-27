@@ -1,5 +1,6 @@
 package com.iptvplayer.app
 
+import androidx.core.content.edit
 import android.content.SharedPreferences
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
@@ -49,7 +50,7 @@ internal class UserProfiles(private val preferences: SharedPreferences?) {
 
     fun updateKidsShareData(value: Boolean) {
         kidsShareData = value
-        preferences?.edit()?.putBoolean("kids_profile_share", value)?.apply()
+        preferences?.edit { putBoolean("kids_profile_share", value) }
     }
 
     var startProfile by mutableStateOf(
@@ -59,27 +60,31 @@ internal class UserProfiles(private val preferences: SharedPreferences?) {
 
     fun createKids(name: String) {
         kidsName = name
-        preferences?.edit()?.putString("kids_profile_name", name)?.apply()
+        preferences?.edit { putString("kids_profile_name", name) }
     }
 
     fun removeKids() {
         kidsName = null
         startProfile = StartProfile.ADMIN
-        preferences?.edit()?.remove("kids_profile_name")?.remove("kids_profile_areas")?.remove("kids_profile_share")
-            ?.putString("start_profile", StartProfile.ADMIN.name)?.apply()
+        preferences?.edit {
+            remove("kids_profile_name")
+            remove("kids_profile_areas")
+            remove("kids_profile_share")
+            putString("start_profile", StartProfile.ADMIN.name)
+        }
     }
 
     fun setKidsArea(area: String, shown: Boolean): Boolean {
         val next = if (shown) kidsAreas + area else kidsAreas - area
         if (next.none { it in MAIN_AREAS }) return false
         kidsAreas = next
-        preferences?.edit()?.putStringSet("kids_profile_areas", next)?.apply()
+        preferences?.edit { putStringSet("kids_profile_areas", next) }
         return true
     }
 
     fun updateStartProfile(value: StartProfile) {
         startProfile = value
-        preferences?.edit()?.putString("start_profile", value.name)?.apply()
+        preferences?.edit { putString("start_profile", value.name) }
     }
 
     companion object {

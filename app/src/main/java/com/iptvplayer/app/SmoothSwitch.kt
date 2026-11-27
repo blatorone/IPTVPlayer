@@ -1,5 +1,6 @@
 package com.iptvplayer.app
 
+import androidx.core.content.edit
 import android.content.Context
 import androidx.media3.common.C
 import java.nio.ByteBuffer
@@ -22,7 +23,7 @@ internal fun smoothSwitchEnabled(context: Context): Boolean =
     context.getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE).getBoolean(SMOOTH_SWITCH, false)
 
 internal fun setSmoothSwitchEnabled(context: Context, enabled: Boolean) {
-    context.getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE).edit().putBoolean(SMOOTH_SWITCH, enabled).apply()
+    context.getSharedPreferences("catalog_visibility", Context.MODE_PRIVATE).edit { putBoolean(SMOOTH_SWITCH, enabled) }
     SmoothSwitch.enabled = enabled
 }
 
@@ -132,7 +133,7 @@ internal object SmoothSwitch {
         val store = lagStore ?: return
         val next = nextLagRecord(storedLag(channel, from, to), lagMs)
         val stored = if (from < to) next else next.copy(lagMs = -next.lagMs)
-        store.edit().putString(lagKey(channel, from, to), stored.format()).apply()
+        store.edit { putString(lagKey(channel, from, to), stored.format()) }
     }
 
     /** A switch from portal [from] to [to] on [channel]; the new stream starts after [waitMs]. */
@@ -325,7 +326,7 @@ internal fun bestLag(history: List<Double>, probe: List<Double>, minOverlap: Int
  */
 internal suspend fun pictureBrightness(surface: android.view.SurfaceView): Double? {
     if (!surface.holder.surface.isValid) return null
-    val bitmap = android.graphics.Bitmap.createBitmap(32, 18, android.graphics.Bitmap.Config.ARGB_8888)
+    val bitmap = androidx.core.graphics.createBitmap(32, 18)
     return try {
         val ok = kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
             android.view.PixelCopy.request(surface, bitmap, { result ->

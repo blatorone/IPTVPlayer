@@ -953,4 +953,5 @@
     <string name="player_jump_back">رجوع 10 دقائق</string>
     <string name="player_jump_forward">تقديم 10 دقائق</string>
     <string name="guide_now_line_color">لون خط الوقت</string>
+    <string name="update_rate_limited">لا يقبل GitHub حاليًا طلبات أخرى من اتصال الإنترنت هذا. حاول مرة أخرى بعد نحو %1$d دقيقة.</string>
 </resources>

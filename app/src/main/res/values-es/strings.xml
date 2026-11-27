@@ -938,4 +938,5 @@
     <string name="player_jump_back">Retroceder 10 minutos</string>
     <string name="player_jump_forward">Avanzar 10 minutos</string>
     <string name="guide_now_line_color">Color de la línea de tiempo</string>
+    <string name="update_rate_limited">GitHub no acepta más solicitudes desde esta conexión por ahora. Vuelve a intentarlo en unos %1$d minutos.</string>
 </resources>

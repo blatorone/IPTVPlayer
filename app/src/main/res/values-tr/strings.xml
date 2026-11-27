@@ -933,4 +933,5 @@
     <string name="player_jump_back">10 dakika geri</string>
     <string name="player_jump_forward">10 dakika ileri</string>
     <string name="guide_now_line_color">Zaman çizgisi rengi</string>
+    <string name="update_rate_limited">GitHub şu anda bu internet bağlantısından başka istek kabul etmiyor. Yaklaşık %1$d dakika sonra tekrar dene.</string>
 </resources>

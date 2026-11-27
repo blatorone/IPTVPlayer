@@ -88,6 +88,20 @@ internal fun newestAppRelease(releases: org.json.JSONArray, installedCode: Long,
         runCatching { parseAppRelease(releases.getJSONObject(index), installedCode, allowBeta) }.getOrNull()
     }.maxByOrNull { it.code }
 
+/** GitHub refused more requests from this connection for now (60 per hour without login). */
+internal class UpdateRateLimited(val minutes: Int) : java.io.IOException("rate limited")
+
+/** Throws [UpdateRateLimited] when GitHub's request limit is used up, with the minutes until it resets. */
+private fun HttpsURLConnection.checkRateLimit() {
+    val code = responseCode
+    if (code != 403 && code != 429) return
+    val reset = getHeaderField("X-RateLimit-Reset")?.toLongOrNull()
+    val retry = getHeaderField("Retry-After")?.toLongOrNull()
+    if (reset == null && retry == null && getHeaderField("X-RateLimit-Remaining") != "0") return
+    val seconds = retry ?: ((reset ?: 0L) - System.currentTimeMillis() / 1000)
+    throw UpdateRateLimited(((seconds + 59) / 60).toInt().coerceIn(1, 60))
+}
+
 private fun URL.connection(): HttpsURLConnection = (openConnection() as HttpsURLConnection).apply {
     connectTimeout = 12_000
     readTimeout = 15_000
@@ -103,10 +117,13 @@ private suspend fun checkRelease(context: Context, beta: Boolean): AppRelease? =
     val installed = context.packageManager.getPackageInfo(context.packageName, 0).code()
     if (beta) {
         // "latest" never returns pre-releases; with betas switched on the newest releases are compared.
-        val list = URL("https://api.github.com/repos/$repository/releases?per_page=20").connection()
+        // GitHub does not always list the newest first, so 50 are read (the highest version code wins).
+        val list = URL("https://api.github.com/repos/$repository/releases?per_page=50").connection()
         try {
             list.setRequestProperty("Accept", "application/vnd.github+json")
+            list.checkRateLimit()
             if (list.responseCode == 404) return@withContext null
+            check(list.responseCode == 200) { "http ${list.responseCode}" }
             val bytes = list.inputStream.use { it.readNBytesCompat(4_000_000) }
             return@withContext newestAppRelease(org.json.JSONArray(bytes.decodeToString()), installed, allowBeta = true)
         } finally {
@@ -116,6 +133,7 @@ private suspend fun checkRelease(context: Context, beta: Boolean): AppRelease? =
     val connection = URL("https://api.github.com/repos/$repository/releases/latest").connection()
     try {
         connection.setRequestProperty("Accept", "application/vnd.github+json")
+        connection.checkRateLimit()
         if (connection.responseCode == 404) {
             val repositoryConnection = URL("https://api.github.com/repos/$repository").connection()
             try {
@@ -210,6 +228,7 @@ internal fun rememberAppUpdates(): AppUpdateUi {
     var result by remember { mutableStateOf<Int?>(null) }
     var release by remember { mutableStateOf<AppRelease?>(null) }
     var busy by remember { mutableStateOf(false) }
+    var rateLimitMinutes by remember { mutableStateOf(0) }
     // Automatic checks only mark the update; the dialog opens on request.
     var dialogOpen by remember { mutableStateOf(false) }
     fun check(manual: Boolean) {
@@ -225,7 +244,13 @@ internal fun rememberAppUpdates(): AppUpdateUi {
                 if (release == null) result = R.string.update_current
             } catch (error: CancellationException) {
                 throw error
-            } catch (_: Exception) {
+            } catch (error: UpdateRateLimited) {
+                rateLimitMinutes = error.minutes
+                result = R.string.update_rate_limited
+            } catch (error: Exception) {
+                // The reason goes to the diagnostic report (type and HTTP status only, no addresses).
+                AppDiagnostics.record(context, "update_check_failed ${error.javaClass.simpleName}" +
+                    (error.message?.takeIf { it.startsWith("http ") }?.let { " $it" } ?: ""))
                 result = R.string.update_check_failed
             } finally {
                 busy = false
@@ -277,7 +302,7 @@ internal fun rememberAppUpdates(): AppUpdateUi {
                         Modifier.weight(1f, fill = false).heightIn(max = 340.dp)
                     )
                     if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-                    result?.let { Text(stringResource(it)) }
+                    result?.let { Text(if (it == R.string.update_rate_limited) stringResource(it, rateLimitMinutes) else stringResource(it)) }
                 }
             },
             confirmButton = {
@@ -303,7 +328,7 @@ internal fun rememberAppUpdates(): AppUpdateUi {
                 " – " + context.getString(R.string.update_install_on_device)
         },
         if (busy) context.getString(R.string.update_searching) else null,
-        result?.let { context.getString(it) },
+        result?.let { if (it == R.string.update_rate_limited) context.getString(it, rateLimitMinutes) else context.getString(it) },
         lastCheckText?.let { context.getString(R.string.update_last_check, it) } ?: context.getString(R.string.update_never_checked)
     ).joinToString("\n")
     return AppUpdateUi(
@@ -351,6 +376,6 @@ internal fun rememberAppUpdates(): AppUpdateUi {
         }
         Text(stringResource(R.string.update_beta_hint), style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
         if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-        result?.let { Text(stringResource(it)) }
+        result?.let { Text(if (it == R.string.update_rate_limited) stringResource(it, rateLimitMinutes) else stringResource(it)) }
     })
 }

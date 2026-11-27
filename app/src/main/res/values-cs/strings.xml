@@ -943,4 +943,5 @@
     <string name="player_jump_back">10 minut zpět</string>
     <string name="player_jump_forward">10 minut vpřed</string>
     <string name="guide_now_line_color">Barva časové čáry</string>
+    <string name="update_rate_limited">GitHub teď nepřijímá další požadavky z tohoto připojení. Zkus to znovu asi za %1$d min.</string>
 </resources>

@@ -33,6 +33,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
@@ -162,6 +163,7 @@ internal fun ColumnScope.PortalSearch(
     val firstHistory = remember { FocusRequester() }
     var focusHistory by remember { mutableIntStateOf(0) }
     var showHistory by remember { mutableStateOf(false) }
+    val clearHistory = remember { FocusRequester() }
     LaunchedEffect(focusHistory) {
         if (focusHistory == 0) return@LaunchedEffect
         keyboard?.hide()
@@ -210,26 +212,23 @@ internal fun ColumnScope.PortalSearch(
     if (term.isEmpty() || showHistory) {
         // Recent searches: OK searches again, a long press removes the entry.
         if (history.enabled && history.entries.isNotEmpty()) {
-            Text(stringResource(R.string.recent_searches), style = MaterialTheme.typography.titleSmall)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Text(stringResource(R.string.recent_searches), Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+                // Up from the first entry lands here, up once more in the search field.
+                MenuButton(stringResource(R.string.clear_search_history), Modifier.focusRequester(clearHistory)
+                    .focusProperties { up = focusRequester; down = firstHistory }) { history.clear() }
+            }
             Text(stringResource(R.string.search_history_hint), style = MaterialTheme.typography.bodySmall)
             LazyColumn(Modifier.weight(1f)) {
                 itemsIndexed(history.entries, key = { _, entry -> entry }) { index, entry ->
                     MenuButton(
-                        entry, Modifier.fillMaxWidth().then(if (index == 0) Modifier.focusRequester(firstHistory) else Modifier),
+                        entry, Modifier.fillMaxWidth().then(if (index == 0) Modifier.focusRequester(firstHistory).focusProperties { up = clearHistory } else Modifier),
                         leadingIcon = R.drawable.ic_menu_search,
                         onLongPress = { history.remove(entry) }
                     ) {
                         onQueryChange(entry)
                         showHistory = false
                         focusResults++
-                    }
-                }
-                // Deleting is the last row: reachable with Down (top right it could not be reached).
-                item(key = "clear") {
-                    MenuButton(stringResource(R.string.clear_search_history), Modifier.fillMaxWidth()) {
-                        history.clear()
-                        showHistory = false
-                        runCatching { focusRequester.requestFocus() }
                     }
                 }
             }

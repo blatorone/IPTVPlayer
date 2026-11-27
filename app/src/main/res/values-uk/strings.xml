@@ -840,7 +840,7 @@
     <string name="search_history_size">Записів в історії пошуку: %1$d</string>
     <string name="search_history_cleared">Історію пошуку очищено.</string>
     <string name="backup_title">Резервна копія</string>
-    <string name="backup_description">Зберігає портали, налаштування, облікові записи та інше в зашифрований файл – для нового встановлення або іншого пристрою.</string>
+    <string name="backup_description">Зберігає портали, налаштування, облікові записи та інше в одному файлі – для нового встановлення чи іншого пристрою. Файл містить дані для входу: зберігай його надійно й нікому не передавай.</string>
     <string name="backup_create">Створити резервну копію</string>
     <string name="backup_import">Імпортувати копію</string>
     <string name="backup_pick_export">Що додати до копії?</string>

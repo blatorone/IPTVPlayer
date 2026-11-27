@@ -836,7 +836,7 @@
     <string name="search_history_size">Ставки у историји претраге: %1$d</string>
     <string name="search_history_cleared">Историја претраге обрисана.</string>
     <string name="backup_title">Резервна копија</string>
-    <string name="backup_description">Чува портале, подешавања, налоге и још тога у шифровану датотеку – за нову инсталацију или други уређај.</string>
+    <string name="backup_description">Чува портале, подешавања, налоге и још тога у једној датотеци – за нову инсталацију или други уређај. Датотека садржи податке за пријаву: чувај је безбедно и не дели је.</string>
     <string name="backup_create">Направи резервну копију</string>
     <string name="backup_import">Увези резервну копију</string>
     <string name="backup_pick_export">Шта треба да уђе у копију?</string>

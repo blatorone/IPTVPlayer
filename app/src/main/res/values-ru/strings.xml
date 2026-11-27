@@ -840,7 +840,7 @@
     <string name="search_history_size">Записей в истории поиска: %1$d</string>
     <string name="search_history_cleared">История поиска очищена.</string>
     <string name="backup_title">Резервная копия</string>
-    <string name="backup_description">Сохраняет порталы, настройки, учётные записи и другое в зашифрованный файл – для новой установки или другого устройства.</string>
+    <string name="backup_description">Сохраняет порталы, настройки, учётные записи и другое в одном файле – для новой установки или другого устройства. Файл содержит данные для входа: храни его надёжно и никому не передавай.</string>
     <string name="backup_create">Создать резервную копию</string>
     <string name="backup_import">Импортировать копию</string>
     <string name="backup_pick_export">Что включить в копию?</string>

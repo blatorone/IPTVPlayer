@@ -832,7 +832,7 @@
     <string name="search_history_size">Poster i sökhistoriken: %1$d</string>
     <string name="search_history_cleared">Sökhistoriken rensad.</string>
     <string name="backup_title">Säkerhetskopia</string>
-    <string name="backup_description">Säkerhetskopierar portaler, inställningar, åtkomster och mer i en krypterad fil – för en ny installation eller en annan enhet.</string>
+    <string name="backup_description">Sparar portaler, inställningar, konton och mer i en fil – för en ny installation eller en annan enhet. Filen innehåller inloggningsuppgifter: förvara den säkert och dela den inte.</string>
     <string name="backup_create">Skapa säkerhetskopia</string>
     <string name="backup_import">Importera säkerhetskopia</string>
     <string name="backup_pick_export">Vad ska ingå i säkerhetskopian?</string>

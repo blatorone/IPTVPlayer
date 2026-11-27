@@ -848,7 +848,7 @@
     <string name="search_history_size">عدد عناصر سجل البحث: %1$d</string>
     <string name="search_history_cleared">تم مسح سجل البحث.</string>
     <string name="backup_title">نسخة احتياطية</string>
-    <string name="backup_description">يحفظ البوابات والإعدادات والحسابات وغيرها في ملف مشفّر – لتثبيت جديد أو جهاز آخر.</string>
+    <string name="backup_description">يحفظ البوابات والإعدادات والحسابات وغيرها في ملف واحد – لتثبيت جديد أو جهاز آخر. يحتوي الملف على بيانات تسجيل الدخول: احفظه بأمان ولا تشاركه.</string>
     <string name="backup_create">إنشاء نسخة احتياطية</string>
     <string name="backup_import">استيراد نسخة احتياطية</string>
     <string name="backup_pick_export">ماذا تريد أن تتضمن النسخة؟</string>

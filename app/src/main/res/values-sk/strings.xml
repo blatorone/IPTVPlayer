@@ -840,7 +840,7 @@
     <string name="search_history_size">Záznamy v histórii hľadania: %1$d</string>
     <string name="search_history_cleared">História hľadania vymazaná.</string>
     <string name="backup_title">Záloha</string>
-    <string name="backup_description">Zálohuje portály, nastavenia, prístupy a ďalšie údaje do šifrovaného súboru – pre novú inštaláciu alebo iné zariadenie.</string>
+    <string name="backup_description">Uloží portály, nastavenia, účty a ďalšie do jedného súboru – pre novú inštaláciu alebo iné zariadenie. Súbor obsahuje prihlasovacie údaje: uchovaj ho v bezpečí a nikomu ho nedávaj.</string>
     <string name="backup_create">Vytvoriť zálohu</string>
     <string name="backup_import">Importovať zálohu</string>
     <string name="backup_pick_export">Čo zahrnúť do zálohy?</string>

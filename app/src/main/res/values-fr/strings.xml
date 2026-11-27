@@ -836,7 +836,7 @@
     <string name="search_history_size">Entrées de l\'historique : %1$d</string>
     <string name="search_history_cleared">Historique de recherche effacé.</string>
     <string name="backup_title">Sauvegarde</string>
-    <string name="backup_description">Enregistre les portails, réglages, comptes et plus dans un fichier chiffré – pour une nouvelle installation ou un autre appareil.</string>
+    <string name="backup_description">Sauvegarde les portails, réglages, comptes et plus dans un seul fichier – pour une nouvelle installation ou un autre appareil. Le fichier contient des identifiants : conserve-le en lieu sûr et ne le partage pas.</string>
     <string name="backup_create">Créer une sauvegarde</string>
     <string name="backup_import">Importer une sauvegarde</string>
     <string name="backup_pick_export">Que doit contenir la sauvegarde ?</string>

@@ -832,7 +832,7 @@
     <string name="search_history_size">Bejegyzések a keresési előzményekben: %1$d</string>
     <string name="search_history_cleared">Keresési előzmények törölve.</string>
     <string name="backup_title">Biztonsági mentés</string>
-    <string name="backup_description">A portálokat, beállításokat, hozzáféréseket és egyebeket egy titkosított fájlba menti – új telepítéshez vagy másik eszközhöz.</string>
+    <string name="backup_description">Egy fájlba menti a portálokat, beállításokat, fiókokat és egyebeket – új telepítéshez vagy másik eszközhöz. A fájl belépési adatokat tartalmaz: tárold biztonságosan, és ne add tovább.</string>
     <string name="backup_create">Biztonsági mentés készítése</string>
     <string name="backup_import">Biztonsági mentés importálása</string>
     <string name="backup_pick_export">Mi kerüljön a mentésbe?</string>

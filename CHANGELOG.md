@@ -5,7 +5,9 @@
 - Neue App-Sprachen: Lettisch, Litauisch, Ungarisch, Niederländisch, Norwegisch, Schwedisch, Slowakisch und Slowenisch.
 - Fließender Portalwechsel: Der Abstand zwischen zwei Portalen wird jetzt pro Sender gelernt und erst verwendet, wenn zwei Messungen übereinstimmen. Das Standbild beim Wechsel dauert höchstens 3 Sekunden (vorher bis zu 9).
 - Diagnose: Bricht ein Stream nach dem Wechsel ab, steht dabei, wie lange seine Aufnahme lief und warum sie endete.
-- Aufgeräumt: über 40 nicht mehr verwendete Texte in allen Sprachen entfernt.
+- Aufgeräumt: über 40 nicht mehr verwendete Texte in allen Sprachen entfernt, dazu ungenutzte Farben und Symbole.
+- Sicherheit: Der Hinweis zum Backup sagt jetzt klar, dass die Datei Zugangsdaten enthält und sicher aufbewahrt werden muss (sie lässt sich ohne Passwort auf jedem Gerät öffnen).
+- Technik: Player (Media3 1.11), Oberfläche (Compose), Netzwerk (OkHttp 5) und weitere Bibliotheken auf den aktuellen Stand gebracht – mit den Sicherheits- und Fehlerkorrekturen der neuen Versionen.
 
 ## 2.0.0
 

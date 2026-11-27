@@ -840,7 +840,7 @@
     <string name="search_history_size">Paieškos istorijos įrašų: %1$d</string>
     <string name="search_history_cleared">Paieškos istorija ištrinta.</string>
     <string name="backup_title">Atsarginė kopija</string>
-    <string name="backup_description">Išsaugo portalus, nustatymus, prisijungimus ir kita vienoje užšifruotoje byloje – naujam diegimui ar kitam įrenginiui.</string>
+    <string name="backup_description">Išsaugo portalus, nustatymus, paskyras ir kita viename faile – naujam diegimui ar kitam įrenginiui. Faile yra prisijungimo duomenys: laikyk jį saugiai ir niekam neperduok.</string>
     <string name="backup_create">Sukurti atsarginę kopiją</string>
     <string name="backup_import">Importuoti atsarginę kopiją</string>
     <string name="backup_pick_export">Ką įtraukti į atsarginę kopiją?</string>

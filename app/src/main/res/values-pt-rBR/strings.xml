@@ -836,7 +836,7 @@
     <string name="search_history_size">Itens no histórico de pesquisa: %1$d</string>
     <string name="search_history_cleared">Histórico de pesquisa limpo.</string>
     <string name="backup_title">Backup</string>
-    <string name="backup_description">Salva portais, configurações, contas e mais em um arquivo criptografado, para uma nova instalação ou outro aparelho.</string>
+    <string name="backup_description">Salva portais, configurações, contas e mais em um único arquivo – para uma nova instalação ou outro aparelho. O arquivo contém dados de acesso: guarde-o com segurança e não compartilhe.</string>
     <string name="backup_create">Criar backup</string>
     <string name="backup_import">Importar backup</string>
     <string name="backup_pick_export">O que deve entrar no backup?</string>

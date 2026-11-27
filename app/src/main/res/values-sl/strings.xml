@@ -840,7 +840,7 @@
     <string name="search_history_size">Vnosi v zgodovini iskanja: %1$d</string>
     <string name="search_history_cleared">Zgodovina iskanja izbrisana.</string>
     <string name="backup_title">Varnostna kopija</string>
-    <string name="backup_description">Varnostno shrani portale, nastavitve, dostope in drugo v šifrirano datoteko – za novo namestitev ali drugo napravo.</string>
+    <string name="backup_description">Shrani portale, nastavitve, račune in drugo v eno datoteko – za novo namestitev ali drugo napravo. Datoteka vsebuje podatke za prijavo: hrani jo varno in je ne deli z drugimi.</string>
     <string name="backup_create">Ustvari varnostno kopijo</string>
     <string name="backup_import">Uvozi varnostno kopijo</string>
     <string name="backup_pick_export">Kaj vključiti v varnostno kopijo?</string>

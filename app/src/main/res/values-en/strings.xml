@@ -832,7 +832,7 @@
     <string name="search_history_size">Search history entries: %1$d</string>
     <string name="search_history_cleared">Search history cleared.</string>
     <string name="backup_title">Backup</string>
-    <string name="backup_description">Saves portals, settings, accounts and more in an encrypted file – for a new installation or another device.</string>
+    <string name="backup_description">Saves portals, settings, accounts and more in one file – for a new installation or another device. The file contains login data: keep it safe and do not share it.</string>
     <string name="backup_create">Create backup</string>
     <string name="backup_import">Import backup</string>
     <string name="backup_pick_export">What should go into the backup?</string>

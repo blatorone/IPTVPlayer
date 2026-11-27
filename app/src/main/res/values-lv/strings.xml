@@ -836,7 +836,7 @@
     <string name="search_history_size">Ieraksti meklēšanas vēsturē: %1$d</string>
     <string name="search_history_cleared">Meklēšanas vēsture dzēsta.</string>
     <string name="backup_title">Dublējums</string>
-    <string name="backup_description">Saglabā portālus, iestatījumus, piekļuves datus un citu vienā šifrētā failā – jaunai instalācijai vai citai ierīcei.</string>
+    <string name="backup_description">Saglabā portālus, iestatījumus, kontus un citu vienā failā – jaunai instalācijai vai citai ierīcei. Failā ir pieteikšanās dati: glabā to droši un nedod citiem.</string>
     <string name="backup_create">Izveidot dublējumu</string>
     <string name="backup_import">Importēt dublējumu</string>
     <string name="backup_pick_export">Ko iekļaut dublējumā?</string>

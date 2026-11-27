@@ -832,7 +832,7 @@
     <string name="search_history_size">Oppføringer i søkehistorikken: %1$d</string>
     <string name="search_history_cleared">Søkehistorikk slettet.</string>
     <string name="backup_title">Sikkerhetskopi</string>
-    <string name="backup_description">Sikrer portaler, innstillinger, tilganger og mer i én kryptert fil – for en ny installasjon eller en annen enhet.</string>
+    <string name="backup_description">Lagrer portaler, innstillinger, kontoer og mer i én fil – for en ny installasjon eller en annen enhet. Filen inneholder påloggingsdata: oppbevar den trygt og ikke del den.</string>
     <string name="backup_create">Opprett sikkerhetskopi</string>
     <string name="backup_import">Importer sikkerhetskopi</string>
     <string name="backup_pick_export">Hva skal med i sikkerhetskopien?</string>

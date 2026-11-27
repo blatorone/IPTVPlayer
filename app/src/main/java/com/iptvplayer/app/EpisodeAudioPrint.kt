@@ -278,14 +278,16 @@ internal class EpisodeAudioTapSink(
     private var lastBuffer: ByteBuffer? = null
     private var lastPresentationUs = Long.MIN_VALUE
 
-    override fun configure(inputFormat: Format, specifiedBufferSize: Int, outputChannels: IntArray?) {
+    // Media3 1.11: the format arrives in an AudioSinkConfig (the old configure is final now).
+    override fun configure(config: AudioSink.AudioSinkConfig) {
+        val inputFormat = config.format
         encoding = inputFormat.pcmEncoding
         pcm = inputFormat.sampleMimeType == MimeTypes.AUDIO_RAW &&
             (encoding == C.ENCODING_PCM_16BIT || encoding == C.ENCODING_PCM_FLOAT)
         channels = inputFormat.channelCount
         rate = inputFormat.sampleRate
         EpisodeAudioTap.discontinuity()
-        super.configure(inputFormat, specifiedBufferSize, outputChannels)
+        super.configure(config)
     }
 
     override fun setOutputStreamOffsetUs(outputStreamOffsetUs: Long) {

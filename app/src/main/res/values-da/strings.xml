@@ -832,7 +832,7 @@
     <string name="search_history_size">Poster i søgehistorikken: %1$d</string>
     <string name="search_history_cleared">Søgehistorik slettet.</string>
     <string name="backup_title">Backup</string>
-    <string name="backup_description">Gemmer portaler, indstillinger, adgange og mere i en krypteret fil – til en ny installation eller en anden enhed.</string>
+    <string name="backup_description">Gemmer portaler, indstillinger, konti og mere i én fil – til en ny installation eller en anden enhed. Filen indeholder login-oplysninger: opbevar den sikkert, og del den ikke.</string>
     <string name="backup_create">Opret backup</string>
     <string name="backup_import">Importér backup</string>
     <string name="backup_pick_export">Hvad skal med i backuppen?</string>

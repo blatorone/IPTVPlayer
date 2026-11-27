@@ -832,7 +832,7 @@
     <string name="search_history_size">Einträge im Suchverlauf: %1$d</string>
     <string name="search_history_cleared">Suchverlauf gelöscht.</string>
     <string name="backup_title">Backup</string>
-    <string name="backup_description">Sichert Portale, Einstellungen, Zugänge und mehr in einer verschlüsselten Datei – für eine neue Installation oder ein anderes Gerät.</string>
+    <string name="backup_description">Sichert Portale, Einstellungen, Zugänge und mehr in einer Datei – für eine neue Installation oder ein anderes Gerät. Die Datei enthält Zugangsdaten: Bewahre sie sicher auf und gib sie nicht weiter.</string>
     <string name="backup_create">Backup erstellen</string>
     <string name="backup_import">Backup importieren</string>
     <string name="backup_pick_export">Was soll ins Backup?</string>

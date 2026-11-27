@@ -832,7 +832,7 @@
     <string name="search_history_size">Arama geçmişindeki girişler: %1$d</string>
     <string name="search_history_cleared">Arama geçmişi temizlendi.</string>
     <string name="backup_title">Yedek</string>
-    <string name="backup_description">Portalları, ayarları, hesapları ve daha fazlasını şifreli bir dosyada saklar – yeni kurulum veya başka bir cihaz için.</string>
+    <string name="backup_description">Portalları, ayarları, hesapları ve daha fazlasını tek bir dosyada yedekler – yeni bir kurulum veya başka bir cihaz için. Dosya giriş bilgileri içerir: güvenli sakla ve kimseyle paylaşma.</string>
     <string name="backup_create">Yedek oluştur</string>
     <string name="backup_import">Yedeği içe aktar</string>
     <string name="backup_pick_export">Yedeğe neler girsin?</string>

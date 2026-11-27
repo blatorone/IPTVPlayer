@@ -840,7 +840,7 @@
     <string name="search_history_size">Wpisy w historii wyszukiwania: %1$d</string>
     <string name="search_history_cleared">Historia wyszukiwania wyczyszczona.</string>
     <string name="backup_title">Kopia zapasowa</string>
-    <string name="backup_description">Zapisuje portale, ustawienia, konta i więcej w zaszyfrowanym pliku – na nową instalację lub inne urządzenie.</string>
+    <string name="backup_description">Zapisuje portale, ustawienia, konta i więcej w jednym pliku – dla nowej instalacji lub innego urządzenia. Plik zawiera dane logowania: przechowuj go bezpiecznie i nie udostępniaj.</string>
     <string name="backup_create">Utwórz kopię zapasową</string>
     <string name="backup_import">Importuj kopię zapasową</string>
     <string name="backup_pick_export">Co ma się znaleźć w kopii?</string>

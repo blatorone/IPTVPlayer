@@ -836,7 +836,7 @@
     <string name="search_history_size">Unosa u povijesti pretraživanja: %1$d</string>
     <string name="search_history_cleared">Povijest pretraživanja obrisana.</string>
     <string name="backup_title">Sigurnosna kopija</string>
-    <string name="backup_description">Sprema portale, postavke, račune i više u šifriranu datoteku – za novu instalaciju ili drugi uređaj.</string>
+    <string name="backup_description">Sprema portale, postavke, račune i više u jednu datoteku – za novu instalaciju ili drugi uređaj. Datoteka sadrži podatke za prijavu: čuvaj je sigurno i ne dijeli je.</string>
     <string name="backup_create">Izradi sigurnosnu kopiju</string>
     <string name="backup_import">Uvezi sigurnosnu kopiju</string>
     <string name="backup_pick_export">Što treba ući u kopiju?</string>

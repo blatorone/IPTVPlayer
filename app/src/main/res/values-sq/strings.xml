@@ -832,7 +832,7 @@
     <string name="search_history_size">Hyrje në historikun e kërkimit: %1$d</string>
     <string name="search_history_cleared">Historiku i kërkimit u fshi.</string>
     <string name="backup_title">Kopje rezervë</string>
-    <string name="backup_description">Ruan portalet, cilësimet, llogaritë dhe më shumë në një skedar të koduar – për një instalim të ri ose pajisje tjetër.</string>
+    <string name="backup_description">Ruan portalet, cilësimet, llogaritë dhe më shumë në një skedar – për një instalim të ri ose një pajisje tjetër. Skedari përmban të dhëna hyrjeje: ruaje me kujdes dhe mos e ndaj me të tjerë.</string>
     <string name="backup_create">Krijo kopje rezervë</string>
     <string name="backup_import">Importo kopje rezervë</string>
     <string name="backup_pick_export">Çfarë të përfshihet në kopje?</string>

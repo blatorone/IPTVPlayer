@@ -6,15 +6,18 @@ plugins {
 android {
     namespace = "com.iptvplayer.app"
     compileSdk {
-        version = release(37)
+        // Compose 1.13 needs the 37.1 platform to compile against (runtime devices are unaffected).
+        version = release(37) {
+            minorApiLevel = 1
+        }
     }
 
     defaultConfig {
         applicationId = "com.iptvplayer.app"
         minSdk = 26
         targetSdk = 37
-        versionCode = 130
-        versionName = "2.0.1-beta.1"
+        versionCode = 131
+        versionName = "2.0.1-beta.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

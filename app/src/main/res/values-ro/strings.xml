@@ -836,7 +836,7 @@
     <string name="search_history_size">Intrări în istoricul căutărilor: %1$d</string>
     <string name="search_history_cleared">Istoricul căutărilor a fost șters.</string>
     <string name="backup_title">Backup</string>
-    <string name="backup_description">Salvează portalurile, setările, conturile și altele într-un fișier criptat – pentru o instalare nouă sau alt dispozitiv.</string>
+    <string name="backup_description">Salvează portalurile, setările, conturile și altele într-un singur fișier – pentru o instalare nouă sau alt dispozitiv. Fișierul conține date de autentificare: păstrează-l în siguranță și nu-l da altora.</string>
     <string name="backup_create">Creează backup</string>
     <string name="backup_import">Importă backup</string>
     <string name="backup_pick_export">Ce să conțină backup-ul?</string>

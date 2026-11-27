@@ -836,7 +836,7 @@
     <string name="search_history_size">Voci nella cronologia: %1$d</string>
     <string name="search_history_cleared">Cronologia di ricerca cancellata.</string>
     <string name="backup_title">Backup</string>
-    <string name="backup_description">Salva portali, impostazioni, account e altro in un file cifrato, per una nuova installazione o un altro dispositivo.</string>
+    <string name="backup_description">Salva portali, impostazioni, account e altro in un unico file, per una nuova installazione o un altro dispositivo. Il file contiene dati di accesso: conservalo al sicuro e non condividerlo.</string>
     <string name="backup_create">Crea backup</string>
     <string name="backup_import">Importa backup</string>
     <string name="backup_pick_export">Cosa includere nel backup?</string>

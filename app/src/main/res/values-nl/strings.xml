@@ -832,7 +832,7 @@
     <string name="search_history_size">Items in de zoekgeschiedenis: %1$d</string>
     <string name="search_history_cleared">Zoekgeschiedenis gewist.</string>
     <string name="backup_title">Back-up</string>
-    <string name="backup_description">Bewaart portalen, instellingen, toegangen en meer in een versleuteld bestand – voor een nieuwe installatie of een ander apparaat.</string>
+    <string name="backup_description">Slaat portalen, instellingen, accounts en meer op in één bestand – voor een nieuwe installatie of een ander apparaat. Het bestand bevat inloggegevens: bewaar het veilig en deel het niet.</string>
     <string name="backup_create">Back-up maken</string>
     <string name="backup_import">Back-up importeren</string>
     <string name="backup_pick_export">Wat moet in de back-up?</string>

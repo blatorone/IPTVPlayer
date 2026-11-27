@@ -7,7 +7,10 @@
 - Diagnose: Bricht ein Stream nach dem Wechsel ab, steht dabei, wie lange seine Aufnahme lief und warum sie endete.
 - Timeshift und fließender Portalwechsel: Die Aufnahme ruft den Stream jetzt genauso ab wie der Player. Manche Portale hatten die Aufnahme abgelehnt („HTTP 406“), sodass der Sender sofort auf ein anderes Portal sprang. Die Verbindung wird beim Umschalten gleich geschlossen.
 - Hakt das Bild während Timeshift (Dekodierfehler), startet die Wiedergabe einmal neu am Live-Rand der Aufnahme, statt das Portal zu wechseln. Ist die Aufnahme selbst beendet, wird sofort gewechselt statt erst neu geladen.
-- Serien → „Weiter schauen“: Serien mit neuen, noch nicht gesehenen Folgen stehen vorne – die zuletzt gefundenen zuerst. „Zuletzt gesehen“ bleibt nach dem letzten Anschauen sortiert.
+- Serien → „Weiter schauen“: Ist diese Woche eine neue Folge erschienen und schon im Portal, steht die Serie vorne und zeigt „Neue Folgen“. Fehlt die Folge im Portal noch, gibt es keinen Hinweis (die App schaut alle 3 Stunden nach). „Zuletzt gesehen“ bleibt nach dem letzten Anschauen sortiert.
+- Serien → „Bald verfügbar“: zeigt jetzt den Start der nächsten Staffel (z. B. „S3 · Do, 04.12.“), nur bei Serien, die du schaust. Nur ein Hinweis – ob das Portal sie dann gleich hat, ist noch offen.
+- Backup: Beim Speichern kann die Datei mit einem Passwort geschützt werden (mind. 8 Zeichen). Dann ist sie wirklich verschlüsselt, und ohne das Passwort lässt sie sich nicht öffnen. Ohne Passwort bleibt alles wie bisher; alte Backups lassen sich weiter einspielen.
+- Technik: Kotlin 2.4.
 - Diagnose: Die Suche nach neuen Folgen vermerkt Funde und Fehler (nur Anzahlen, keine Serientitel).
 - Aufgeräumt: alle Warnungen des Compilers und von Android Lint behoben (u. a. Passwortfelder auf die neue sichere Eingabe umgestellt, Fokussteuerung der Einstellungen auf die neue Schnittstelle, ungenutzte Startsymbole entfernt, slowenische Mehrzahl korrigiert).
 - Aufgeräumt: über 40 nicht mehr verwendete Texte in allen Sprachen entfernt, dazu ungenutzte Farben und Symbole.

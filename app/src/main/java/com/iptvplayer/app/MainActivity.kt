@@ -1614,6 +1614,9 @@ private fun PlayerHome(
                         lastEpisode = records.maxByOrNull { it.watchedAt }?.lastEpisode,
                         nextEpisodeName = records.firstNotNullOfOrNull { it.nextEpisodeName },
                         nextAirDate = records.firstNotNullOfOrNull { it.nextAirDate },
+                        nextSeason = records.firstNotNullOfOrNull { it.nextSeason },
+                        nextSeasonDate = records.firstNotNullOfOrNull { it.nextSeasonDate },
+                        newAt = records.maxOf { it.newAt },
                         watchedEpisodes = watchedEpisodes,
                         isComplete = records.mapNotNull { it.isComplete }.takeIf { it.isNotEmpty() }?.all { it }
                     )
@@ -2348,14 +2351,17 @@ private fun PlayerHome(
         key: String,
         episodes: Set<String>,
         provider: String,
-        upcoming: TraktUpcomingEpisode? = null
+        upcoming: TraktUpcomingEpisode? = null,
+        season: TraktUpcomingEpisode? = null
     ) {
         saveSeriesActivity(seriesActivity.map {
             if (it.key != key) it
             else if ((it.episodeProvider ?: if (it.usedTmdb) "tmdb" else null) == provider) {
                 it.observe(episodes, System.currentTimeMillis()).copy(
                     nextEpisodeName = upcoming?.name,
-                    nextAirDate = upcoming?.airDate
+                    nextAirDate = upcoming?.airDate,
+                    nextSeason = season?.season,
+                    nextSeasonDate = season?.airDate
                 ).also { updated ->
                     val added = updated.unseen.size - it.unseen.size
                     if (added > 0 && (it.viewed || it.saved) && !it.hiddenFromHistory) {
@@ -2366,13 +2372,42 @@ private fun PlayerHome(
                 }
             } else it.copy(
                 episodeProvider = provider, known = episodes, checkedAt = System.currentTimeMillis(),
-                nextEpisodeName = upcoming?.name, nextAirDate = upcoming?.airDate
+                nextEpisodeName = upcoming?.name, nextAirDate = upcoming?.airDate,
+                nextSeason = season?.season, nextSeasonDate = season?.airDate
             )
         })
     }
 
     val trackedSources = savedSources.filter { it.enabled }.map { it.identity }
     val trackedTitles = seriesActivity.map { it.key to it.refs }
+    /**
+     * Episode keys ("season:episode") the portals linked to [entry] offer, or null when none could
+     * be asked. Stops once every episode reported as new was found.
+     */
+    suspend fun portalEpisodeKeys(entry: TrackedSeries): Set<String>? {
+        val reference = PortalTitle(entry.name, year = entry.year, imdbId = entry.imdb, tmdbId = entry.tmdb)
+        val found = linkedSetOf<String>()
+        var asked = false
+        for (ref in entry.refs.take(3)) {
+            val source = savedSources.firstOrNull { it.identity == ref.sourceId && it.enabled } ?: continue
+            val title = source.catalogs[PortalSection.SERIES]?.titles?.firstOrNull { it.id == ref.portalTitleId }
+                ?: reference.copy(id = ref.portalTitleId)
+            try {
+                val portal = sessionFor(source)
+                portal.loadSeasons(title, portal.openSession()).forEach { season ->
+                    season.episodes.forEach { found += seriesEpisodeKey(season, it) }
+                }
+                asked = true
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                continue
+            }
+            if (found.containsAll(entry.unseen)) break
+        }
+        return found.takeIf { asked }
+    }
+
     val trackedEpisodeChecks = seriesActivity.map { it.key to it.checkedAt }
     LaunchedEffect(metadataClient, traktSession?.username, trackedSources, trackedTitles, trackedEpisodeChecks) {
         val client = metadataClient
@@ -2408,10 +2443,21 @@ private fun PlayerHome(
                         }
                         if (keys != null && seriesActivity.any { it.key == tracked.key }) {
                             val before = seriesActivity.firstOrNull { it.key == tracked.key }?.unseen?.size ?: 0
-                            observeEpisodeProvider(tracked.key, keys, provider, feed?.upcoming)
+                            observeEpisodeProvider(tracked.key, keys, provider, feed?.upcoming, feed?.upcomingSeason)
                             val after = seriesActivity.firstOrNull { it.key == tracked.key }?.unseen?.size ?: 0
                             // Counts only (no series names): shows whether checks run and find something.
                             if (after > before) AppDiagnostics.record(context, "episode_check p:$provider aired:${keys.size} new:${after - before}")
+                            // Is a reported new episode already in the portal? ("Weiter schauen" marks it then.)
+                            val current = seriesActivity.firstOrNull { it.key == tracked.key }
+                            if (current != null && current.portalCheckDue(System.currentTimeMillis())) {
+                                val offered = portalEpisodeKeys(current)
+                                val checked = System.currentTimeMillis()
+                                if (offered != null) saveSeriesActivity(seriesActivity.map {
+                                    if (it.key == current.key) it.withPortalEpisodes(offered, checked) else it
+                                })
+                                AppDiagnostics.record(context, "episode_portal missing:${(current.unseen - current.portalNew).size} " +
+                                    (offered?.let { "found:${(current.unseen intersect it).size}" } ?: "failed"))
+                            }
                         } else if (keys == null) AppDiagnostics.record(context, "episode_check p:$provider no_list")
                     } catch (error: CancellationException) {
                         throw error
@@ -9112,9 +9158,11 @@ private fun PlayerHome(
                                 )
                             } else {
                                 fun seriesReference(entry: TrackedSeries) = reference(entry.name, entry.year, entry.imdb, entry.tmdb)
-                                fun card(prefix: String, entry: TrackedSeries, caption: String?) = MyAreaCard(
-                                    "$prefix:${entry.key}", seriesReference(entry), entry.refs, caption, entry.unseen.size
+                                fun card(prefix: String, entry: TrackedSeries, caption: String?, newEpisodes: Int = entry.unseen.size) = MyAreaCard(
+                                    "$prefix:${entry.key}", seriesReference(entry), entry.refs, caption, newEpisodes
                                 ) { openTrackedSeries(entry) }
+                                // "Weiter schauen" marks only episodes that are in the portal and came up this week.
+                                val now = System.currentTimeMillis()
                                 val playable = seriesActivity.filter {
                                     hasPortalReference(PortalSection.SERIES, seriesReference(it), it.refs)
                                 }
@@ -9122,15 +9170,15 @@ private fun PlayerHome(
                                     "EE, dd.MM.", resources.configuration.locales[0]
                                 )
                                 listOf(
-                                    continueLabel to playable.filter { it.continuable() }.continueOrder()
+                                    continueLabel to playable.filter { it.continuable() }.continueOrder(now)
                                         .map { entry ->
-                                            card("c", entry, resumeFor(entry)?.let { episode ->
+                                            card("c", entry, newEpisodes = entry.newInPortal(now).size, caption = resumeFor(entry)?.let { episode ->
                                                 episodeResumeLabel(episode, progressPreferences?.getLong(episode.progressKey, 0L) ?: 0L)
                                             })
                                         },
                                     watchlistLabel to playable.filter { it.saved }.sortedBy { it.name }.map { card("w", it, null) },
                                     upcomingLabel to upcomingSeries(playable, java.time.LocalDate.now()).map { (entry, date) ->
-                                        card("u", entry, date.format(dateFormat))
+                                        card("u", entry, (entry.nextSeason?.let { "S$it · " } ?: "") + date.format(dateFormat), newEpisodes = 0)
                                     },
                                     recentLabel to playable.filter { it.viewed && !it.hiddenFromHistory }
                                         .sortedByDescending { it.watchedAt }.take(20).map { card("r", it, null) }

@@ -52,6 +52,14 @@ internal data class TrackedSeries(
 ,
     /** When episodes not yet seen were last found (0: never or before this was recorded). */
     val newAt: Long = 0
+,
+    /** Episodes not yet seen that the portal already offers, and when the last of them showed up there. */
+    val portalNew: Set<String> = emptySet(),
+    val portalNewAt: Long = 0,
+    val portalCheckedAt: Long = 0,
+    /** Start of the next season (Trakt), for "Bald verfügbar". */
+    val nextSeason: Int? = null,
+    val nextSeasonDate: String? = null
 )
 
 internal fun seriesEpisodeKey(season: PortalSeason, episode: PortalTitle): String {
@@ -168,23 +176,48 @@ internal fun TrackedSeries.observe(episodes: Set<String>, now: Long): TrackedSer
 internal fun TrackedSeries.continuable(): Boolean =
     viewed && !hiddenFromHistory && (isComplete != true || unseen.isNotEmpty())
 
+private const val DAY_MS = 24 * 60 * 60 * 1000L
+/** "Neu diese Woche": how long an episode found in the portal counts as new. */
+internal const val PORTAL_NEW_MS = 7 * DAY_MS
+/** The portal is asked again after this long while a new episode is still missing there. */
+internal const val PORTAL_CHECK_MS = 3 * 60 * 60 * 1000L
+
+/** Episodes not yet seen that the portal already has, if one of them came up there this week. */
+internal fun TrackedSeries.newInPortal(now: Long): Set<String> =
+    if (now - portalNewAt > PORTAL_NEW_MS) emptySet() else portalNew intersect unseen
+
+/** Whether the portal should be asked for the episodes Trakt reported as new (only for two weeks). */
+internal fun TrackedSeries.portalCheckDue(now: Long): Boolean =
+    (unseen - portalNew).isNotEmpty() && newAt > 0 && now - newAt <= 2 * PORTAL_NEW_MS &&
+        now - portalCheckedAt >= PORTAL_CHECK_MS
+
+/** Records which new episodes the portal offers ([offered]: episode keys found in the portal). */
+internal fun TrackedSeries.withPortalEpisodes(offered: Set<String>, now: Long): TrackedSeries {
+    val available = unseen intersect offered
+    return copy(
+        portalNew = available,
+        portalNewAt = if ((available - portalNew).isNotEmpty()) now else portalNewAt,
+        portalCheckedAt = now
+    )
+}
+
 /**
- * Order of "Weiter schauen": series with episodes not yet seen first, the most recently found
- * first; then the others by when they were watched last ("Verlauf" keeps that order for all).
+ * Order of "Weiter schauen": series with a new episode in the portal this week first, the most
+ * recent first; then the others by when they were watched last ("Verlauf" keeps that order for all).
  */
-internal fun List<TrackedSeries>.continueOrder(): List<TrackedSeries> = sortedWith(
-    compareByDescending<TrackedSeries> { it.unseen.isNotEmpty() }
-        .thenByDescending { if (it.unseen.isNotEmpty() && it.newAt > 0) it.newAt else it.watchedAt }
+internal fun List<TrackedSeries>.continueOrder(now: Long): List<TrackedSeries> = sortedWith(
+    compareByDescending<TrackedSeries> { it.newInPortal(now).isNotEmpty() }
+        .thenByDescending { if (it.newInPortal(now).isNotEmpty()) it.portalNewAt else it.watchedAt }
 )
 
 /**
- * Watched or saved series whose next episode has a known air date today or later,
- * soonest first ("Bald verfügbar").
+ * "Bald verfügbar": series that are watched whose next season has a start date today or later,
+ * soonest first. Only a hint: whether the portal will have it is not known yet.
  */
 internal fun upcomingSeries(entries: List<TrackedSeries>, today: java.time.LocalDate): List<Pair<TrackedSeries, java.time.LocalDate>> =
-    entries.filter { (it.viewed || it.saved) && !it.hiddenFromHistory }
+    entries.filter { it.viewed && !it.hiddenFromHistory }
         .mapNotNull { entry ->
-            entry.nextAirDate?.let { runCatching { java.time.LocalDate.parse(it.take(10)) }.getOrNull() }
+            entry.nextSeasonDate?.let { runCatching { java.time.LocalDate.parse(it.take(10)) }.getOrNull() }
                 ?.takeIf { !it.isBefore(today) }?.let { entry to it }
         }
         .sortedWith(compareBy({ it.second }, { it.first.name }))
@@ -211,6 +244,11 @@ internal fun encodeSeriesActivity(entries: List<TrackedSeries>): String = JSONAr
             put("episodeProvider", series.episodeProvider)
             put("watchedAt", series.watchedAt)
             if (series.newAt > 0) put("newAt", series.newAt)
+            if (series.portalNew.isNotEmpty()) put("portalNew", JSONArray(series.portalNew))
+            if (series.portalNewAt > 0) put("portalNewAt", series.portalNewAt)
+            if (series.portalCheckedAt > 0) put("portalCheckedAt", series.portalCheckedAt)
+            series.nextSeason?.let { put("nextSeason", it) }
+            series.nextSeasonDate?.let { put("nextSeasonDate", it) }
             series.nextEpisodeName?.let { put("nextEpisodeName", it) }
             series.nextAirDate?.let { put("nextAirDate", it) }
             series.lastEpisode?.let { episode ->
@@ -247,6 +285,11 @@ internal fun decodeSeriesActivity(data: String?): List<TrackedSeries> = runCatch
             episodeProvider = entry.optString("episodeProvider").ifBlank { null },
             watchedAt = entry.optLong("watchedAt"),
             newAt = entry.optLong("newAt"),
+            portalNew = entry.optJSONArray("portalNew").readStrings(),
+            portalNewAt = entry.optLong("portalNewAt"),
+            portalCheckedAt = entry.optLong("portalCheckedAt"),
+            nextSeason = if (entry.has("nextSeason")) entry.optInt("nextSeason") else null,
+            nextSeasonDate = entry.optString("nextSeasonDate").ifBlank { null },
             nextEpisodeName = entry.optString("nextEpisodeName").ifBlank { null },
             nextAirDate = entry.optString("nextAirDate").ifBlank { null },
             lastEpisode = entry.optJSONObject("lastEpisode")?.let {

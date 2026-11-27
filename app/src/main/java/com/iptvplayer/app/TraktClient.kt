@@ -105,7 +105,12 @@ internal data class TraktSeriesProgress(
 }
 
 internal data class TraktUpcomingEpisode(val name: String?, val season: Int?, val number: Int?, val airDate: String?)
-internal data class TraktEpisodeFeed(val airedKeys: Set<String>, val upcoming: TraktUpcomingEpisode?)
+internal data class TraktEpisodeFeed(
+    val airedKeys: Set<String>,
+    val upcoming: TraktUpcomingEpisode?,
+    /** Episode 1 of the next season with a date (a new season), for "Bald verfügbar". */
+    val upcomingSeason: TraktUpcomingEpisode? = null
+)
 internal data class TraktTitleMetadata(
     val title: String,
     val year: Int?,
@@ -211,7 +216,10 @@ internal class TraktApi(
                 )
             }
         }
-        return TraktEpisodeFeed(aired, upcoming.minByOrNull { it.first }?.second)
+        return TraktEpisodeFeed(
+            aired, upcoming.minByOrNull { it.first }?.second,
+            upcoming.filter { (_, episode) -> episode.number == 1 && (episode.season ?: 0) >= 1 }.minByOrNull { it.first }?.second
+        )
     }
 
     /** Localized episode summaries and screenshots keyed by season and episode number. */

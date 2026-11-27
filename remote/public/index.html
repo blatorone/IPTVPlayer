@@ -98,16 +98,8 @@
     </section>
   </main>
 
-  <dialog id="pin-dialog">
-    <form method="dialog">
-      <h2 id="pin-title" data-i18n="pin.heading">PIN</h2>
-      <input id="pin-input" type="password" inputmode="numeric" autocomplete="off" minlength="4" maxlength="64">
-      <div class="row-actions">
-        <button value="cancel" data-i18n="common.cancel">Abbrechen</button>
-        <button value="ok" class="primary" data-i18n="common.ok">OK</button>
-      </div>
-    </form>
-  </dialog>
+  <!-- PIN or password entry: a page of its own over everything (no tab bar), with a large digit pad. -->
+  <div id="pin-page" hidden></div>
 
   <div id="toast" role="status" aria-live="polite"></div>
 </body>

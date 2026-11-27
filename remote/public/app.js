@@ -195,22 +195,51 @@ function show() {
   if (!$("page-title").textContent) switchTab(tab);
 }
 
+// A large digit pad like on the TV: dots for the digits, 1–9, ⌫, 0, OK. Returns the parts to show.
+// With [length] the PIN is taken as soon as it is complete; without, OK confirms (at least 4).
+function digitPad(onSubmit, length = null) {
+  let pin = "";
+  const dots = el("div", { class: "pin-dots", "aria-live": "polite" });
+  const draw = () => {
+    dots.textContent = Array.from({ length: length || Math.max(4, pin.length) }, (_, i) => (i < pin.length ? "●" : "○")).join(" ");
+  };
+  const submit = () => {
+    if (pin.length < 4) { toast(t("pin.min4"), true); return; }
+    const value = pin;
+    pin = "";
+    draw();
+    onSubmit(value);
+  };
+  const key = (label) => el("button", { type: "button", class: "pin-key" + (label === "OK" ? " primary" : label === "⌫" ? " pin-back" : ""),
+    "aria-label": label === "⌫" ? "⌫" : null, onclick: () => {
+      if (navigator.vibrate) navigator.vibrate(10);
+      if (label === "⌫") pin = pin.slice(0, -1);
+      else if (label === "OK") return submit();
+      else if (pin.length < (length || 12)) pin += label;
+      draw();
+      if (length && pin.length === length) submit();
+    } }, label === "OK" ? t("common.ok") : label);
+  draw();
+  return [dots, el("div", { class: "pin-pad" }, ["1","2","3","4","5","6","7","8","9","⌫","0","OK"].map(key))];
+}
+
+// PIN or password asked inside the page: a page of its own over everything (the tab bar is
+// covered); Abbrechen or a correct entry returns to where it was asked.
 function askPin(title) {
   return new Promise((resolve) => {
-    const dialog = $("pin-dialog");
-    $("pin-title").textContent = title;
-    const input = $("pin-input");
-    input.value = "";
-    // Digits get the number pad; a password (letters allowed) the normal keyboard.
-    input.setAttribute("inputmode", state && state.parental && state.parental.pinPassword ? "text" : "numeric");
-    dialog.onclose = () => {
-      const pin = input.value;
-      input.value = "";
-      input.blur();
-      resolve(dialog.returnValue === "ok" && /^[^\x00-\x1f]{4,64}$/.test(pin) ? pin : null);
+    const page = $("pin-page");
+    const password = !!(state && state.parental && state.parental.pinPassword);
+    const done = (value) => {
+      page.hidden = true;
+      page.replaceChildren();
+      document.body.classList.remove("pin-open");
+      resolve(value);
     };
-    dialog.showModal();
-    input.focus();
+    const cancel = el("button", { type: "button", class: "pin-cancel", onclick: () => done(null) }, t("common.cancel"));
+    const entry = password ? [passwordForm(t("pw.label"), done)] : digitPad(done);
+    page.replaceChildren(el("div", { class: "pin-sheet" }, el("h1", {}, title), ...entry, cancel));
+    document.body.classList.add("pin-open");
+    page.hidden = false;
   });
 }
 async function askNewPin(title) {
@@ -697,12 +726,14 @@ function renderUnlock() {
   $("tabs").hidden = true;
   $("app").hidden = true;
   $("intro").hidden = false;
-  $("intro").replaceChildren(
+  // A PIN gets the large digit pad (the phone keyboard was too small); a password the keyboard.
+  const entry = state.password
+    ? [passwordForm(t("pw.label"), (pin) => send({ t: "pinEntry", pin }))]
+    : digitPad((pin) => send({ t: "pinEntry", pin }));
+  $("intro").replaceChildren(el("div", { class: "pin-sheet" },
     el("h1", {}, t("unlock.title")),
-    el("p", { class: "hint" }, state.password
-      ? t("unlock.hintPw")
-      : t("unlock.hintPin")),
-    passwordForm(state.password ? t("pw.label") : t("pin.heading"), (pin) => send({ t: "pinEntry", pin }), !state.password));
+    el("p", { class: "hint" }, state.password ? t("unlock.hintPw") : t("unlock.hintPin")),
+    ...entry));
 }
 
 // ---------- backup ----------

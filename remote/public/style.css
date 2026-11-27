@@ -80,9 +80,22 @@ button.primary, nav button.active, .segments button.active { color: var(--on-acc
 .overview-row { display: flex; justify-content: space-between; gap: 10px; padding: 7px 10px; border-bottom: 1px solid var(--line); }
 .overview-row:last-child { border-bottom: none; }
 .overview-row .sub { flex: none; color: var(--muted); font-size: .8rem; }
-.pin-dots { font-size: 1.8rem; letter-spacing: .3rem; text-align: center; margin: 12px 0; }
-.pin-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-width: 320px; margin: 0 auto; }
-.pin-key { font-size: 1.4rem; padding: 16px 0; border-radius: 14px; }
+.pin-dots { font-size: 2rem; letter-spacing: .35rem; text-align: center; margin: 8px 0 16px; color: var(--text); }
+.pin-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: 100%; max-width: 340px; margin: 0 auto; }
+.pin-key { font-size: 1.7rem; font-weight: 600; min-height: 64px; padding: 0; border-radius: 18px;
+  background: var(--card2); border: 1px solid var(--line); color: var(--text); touch-action: manipulation; user-select: none; }
+.pin-key:active { background: var(--line); transform: scale(.97); }
+.pin-key.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent, #fff); font-size: 1.2rem; }
+.pin-key.pin-back { font-size: 1.4rem; color: var(--muted); }
+/* PIN page: covers the whole page including the tab bar; centred, thumb-friendly. */
+#pin-page { position: fixed; inset: 0; z-index: 20; background: var(--bg); overflow-y: auto;
+  display: flex; align-items: center; justify-content: center; padding: 24px 16px calc(24px + env(safe-area-inset-bottom)); }
+#pin-page[hidden] { display: none; }
+body.pin-open { overflow: hidden; }
+.pin-sheet { width: 100%; max-width: 380px; margin: 0 auto; display: flex; flex-direction: column; align-items: stretch; gap: 8px; text-align: center; }
+.pin-sheet h1 { margin: 0 0 4px; font-size: 1.4rem; }
+.pin-sheet form.card { text-align: left; }
+.pin-cancel { margin-top: 12px; background: none; border: none; color: var(--muted); font-size: 1rem; padding: 12px; }
 .pin-lengths { display: grid; gap: 10px; max-width: 320px; margin: 0 auto; }
 
 /* ---------- App look ---------- */

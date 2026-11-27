@@ -203,6 +203,7 @@ internal class TimeshiftRecorder(
 }
 
 /** Serves the recording to the player from [startOffset], like an endless live stream. */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 internal class TimeshiftDataSource(private val recorder: TimeshiftRecorder, private val startOffset: Long) :
     BaseDataSource(false) {
     @Volatile private var closed = false

@@ -72,8 +72,10 @@ internal object SmartHomePages {
     var state by mutableStateOf<LightState?>(null)
     var entity by mutableStateOf<String?>(null)
     val open: Boolean get() = state != null
+    /** The row that stays on every page; Back moves the focus there before the page changes. */
+    var anchor: FocusRequester? = null
 
-    fun back(): Boolean = when {
+    fun back(): Boolean = (state != null).also { if (it) runCatching { anchor?.requestFocus() } } && when {
         entity != null -> { entity = null; true }
         state != null -> { state = null; true }
         else -> false
@@ -164,20 +166,60 @@ internal fun SmartHomeSettings(onPhone: () -> Unit) {
     val state = SmartHomePages.state
     val entityId = SmartHomePages.entity
     val first = rememberPageFocus(state to entityId)
+    // Before a page changes, the focus goes to the top row, which stays on every page: a row that
+    // disappears would hand it to the section bar, which then switched the section.
+    fun go(change: () -> Unit) {
+        runCatching { first.requestFocus() }
+        change()
+    }
+    SmartHomePages.anchor = first
 
-    if (connected && state != null) {
-        val entity = LightAutomation.known?.firstOrNull { it.id == entityId }
-        if (entity != null) LightEditor(state, entity, first)
-        else SceneEditor(state, first) { busy { LightAutomation.test(state) } }
-    } else if (!connected) {
-        Text(stringResource(R.string.smart_home_hint), style = MaterialTheme.typography.bodySmall)
-        Text(stringResource(R.string.smart_home_not_connected), color = MaterialTheme.colorScheme.primary)
-        SettingRow(stringResource(R.string.smart_home_search), Modifier.focusRequester(first)) {
-            busy {
+    val entity = if (connected) state?.let { LightAutomation.known?.firstOrNull { it.id == entityId } } else null
+    when {
+        !connected -> {
+            Text(stringResource(R.string.smart_home_hint), style = MaterialTheme.typography.bodySmall)
+            Text(stringResource(R.string.smart_home_not_connected), color = MaterialTheme.colorScheme.primary)
+        }
+        else -> Unit
+    }
+    if (connected) {
+        when {
+            state == null -> {
+                Text(stringResource(R.string.smart_home_hint), style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.smart_home_connected, LightAutomation.known?.size ?: 0), color = MaterialTheme.colorScheme.primary)
+                lastText(context)?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            }
+            entity != null -> Text(lightStateLabel(state) + " · " + entity.name, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+            else -> {
+                Text(lightStateLabel(state), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                if (state == LightState.SMOKE) Text(stringResource(R.string.smart_home_smoke_hint), style = MaterialTheme.typography.bodySmall)
+            }
+        }
+    }
+    // The one row that stays on every page (same place, same row): "Suchen" before connecting,
+    // "Licht-Automatik" on the overview, "Zurück" on the pages below it.
+    SettingRow(
+        stringResource(when {
+            !connected -> R.string.smart_home_search
+            state == null -> R.string.smart_home_enabled
+            else -> R.string.navigation_back
+        }),
+        Modifier.focusRequester(first), selected = if (connected && state == null) rule.enabled else null
+    ) {
+        when {
+            !connected -> busy {
                 found = discoverHomeAssistant(context)
                 status = if (found.isNullOrEmpty()) context.getString(R.string.smart_home_none_found) else null
             }
+            state == null -> LightAutomation.update { it.copy(enabled = !it.enabled) }
+            else -> go { SmartHomePages.back() }
         }
+    }
+    if (connected && state != null) {
+        if (entity != null) LightEditor(state, entity)
+        else SceneEditor(state, ::go) { busy { LightAutomation.test(state) } }
+    }
+    if (!connected) {
         found?.forEach { candidate -> SettingRow(candidate, selected = candidate == address) { address = candidate } }
         OutlinedTextField(
             value = address, onValueChange = { address = it.trim().take(200) }, singleLine = true,
@@ -185,6 +227,8 @@ internal fun SmartHomeSettings(onPhone: () -> Unit) {
         )
         SecretField(token, { token = it.trim().take(400) }, stringResource(R.string.smart_home_token), Modifier.fillMaxWidth())
         SettingRow(stringResource(R.string.smart_home_connect), enabled = address.isNotBlank() && token.isNotBlank()) {
+            // The connect row disappears with the connection: the focus waits on the top row.
+            runCatching { first.requestFocus() }
             busy {
                 val count = LightAutomation.connect(address, token)
                 token = ""
@@ -193,19 +237,13 @@ internal fun SmartHomeSettings(onPhone: () -> Unit) {
         }
         // The token is long: typing it on the phone is easier.
         SettingRow(stringResource(R.string.smart_home_via_phone)) { onPhone() }
-    } else {
-        Text(stringResource(R.string.smart_home_hint), style = MaterialTheme.typography.bodySmall)
-        Text(stringResource(R.string.smart_home_connected, LightAutomation.known?.size ?: 0), color = MaterialTheme.colorScheme.primary)
-        lastText(context)?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-        SettingRow(stringResource(R.string.smart_home_enabled), Modifier.focusRequester(first), selected = rule.enabled) {
-            LightAutomation.update { it.copy(enabled = !it.enabled) }
-        }
+    } else if (state == null) {
         // One page per state: which lights do what.
         LightState.entries.forEach { each ->
             val scene = rule.scene(each)
             val summary = if (scene.isEmpty()) stringResource(R.string.smart_home_scene_empty)
                 else stringResource(R.string.smart_home_scene_lights, scene.size)
-            SettingRow(lightStateLabel(each) + ": " + summary) { SmartHomePages.state = each }
+            SettingRow(lightStateLabel(each) + ": " + summary) { go { SmartHomePages.state = each } }
         }
         SettingRow(stringResource(R.string.smart_home_pause_delay) + ": " + stringResource(R.string.smart_home_seconds, rule.pauseDelay)) {
             LightAutomation.update { it.copy(pauseDelay = LIGHT_DELAYS.after(it.pauseDelay.takeIf { d -> d in LIGHT_DELAYS } ?: 0)) }
@@ -245,7 +283,10 @@ internal fun SmartHomeSettings(onPhone: () -> Unit) {
             }
         }
         SettingRow(stringResource(R.string.smart_home_via_phone)) { onPhone() }
-        SettingRow(stringResource(R.string.smart_home_disconnect)) { busy { LightAutomation.disconnect(); status = null } }
+        SettingRow(stringResource(R.string.smart_home_disconnect)) {
+            runCatching { first.requestFocus() }
+            busy { LightAutomation.disconnect(); status = null }
+        }
     }
     if (working) LinearProgressIndicator(Modifier.fillMaxWidth())
     status?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
@@ -253,25 +294,20 @@ internal fun SmartHomeSettings(onPhone: () -> Unit) {
 
 /** All lights for one state; a light opens its own page. */
 @Composable
-private fun SceneEditor(state: LightState, first: FocusRequester, onTry: () -> Unit) {
+private fun SceneEditor(state: LightState, go: (() -> Unit) -> Unit, onTry: () -> Unit) {
     val context = LocalContext.current
     val scene = LightAutomation.rule.scene(state)
-    Text(lightStateLabel(state), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-    if (state == LightState.SMOKE) Text(stringResource(R.string.smart_home_smoke_hint), style = MaterialTheme.typography.bodySmall)
-    SettingRow(stringResource(R.string.navigation_back), Modifier.focusRequester(first)) { SmartHomePages.back() }
     SettingRow(stringResource(R.string.smart_home_try), enabled = scene.isNotEmpty()) { onTry() }
     LightAutomation.known?.forEach { entity ->
-        SettingRow(entity.name + ": " + lightSummary(context, entity, scene[entity.id])) { SmartHomePages.entity = entity.id }
+        SettingRow(entity.name + ": " + lightSummary(context, entity, scene[entity.id])) { go { SmartHomePages.entity = entity.id } }
     }
 }
 
 /** One light in one state: not changed, off, or on with brightness and colour. */
 @Composable
-private fun LightEditor(state: LightState, entity: HaEntity, first: FocusRequester) {
+private fun LightEditor(state: LightState, entity: HaEntity) {
     val setting = LightAutomation.rule.scene(state)[entity.id]
     fun set(value: LightSetting?) = LightAutomation.update { it.withSetting(state, entity.id, value) }
-    Text(lightStateLabel(state) + " · " + entity.name, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-    SettingRow(stringResource(R.string.navigation_back), Modifier.focusRequester(first)) { SmartHomePages.back() }
     SettingRow(stringResource(R.string.smart_home_unchanged), selected = setting == null) { set(null) }
     if (entity.domain != "scene") SettingRow(stringResource(onLabel(entity, false)), selected = setting?.on == false) { set(LightSetting(false)) }
     SettingRow(stringResource(onLabel(entity, true)), selected = setting?.on == true) {

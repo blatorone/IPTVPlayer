@@ -3251,6 +3251,8 @@ private fun PlayerHome(
         // Live TV still opens immediately; automatic episode transitions stay fullscreen.
         val remainFullscreen = selection.section == PortalSection.LIVE && !stayInGuide ||
             fullscreen && selection.section == PortalSection.SERIES && ui.advancingEpisode
+        // A new channel or title while one runs (also the next episode): not a stop for the light.
+        LightAutomation.beginSwitch()
         stopPlayback()
         fullscreen = remainFullscreen
         playbackSelection = selection
@@ -4871,8 +4873,9 @@ private fun PlayerHome(
                     }
                 }
                 if (playbackState == Player.STATE_ENDED && player?.currentMediaItem?.mediaId == attempt.mediaId) {
-                    // The end of a film or episode counts as stop (the next episode cancels it if it follows).
-                    LightAutomation.onStopped()
+                    // The end of a film counts as stop. An episode only when no next one follows (then
+                    // stopPlayback below does it); a live stream that ends is replaced by another portal.
+                    if (attempt.selection.section == PortalSection.MOVIES) LightAutomation.onStopped()
                     if (attempt.progressKey == null) {
                         if (attempt.selection.section == PortalSection.LIVE) AppDiagnostics.record(context, "playback_live_ended")
                         scope.launch { failPlayback(attempt, R.string.playback_error) }

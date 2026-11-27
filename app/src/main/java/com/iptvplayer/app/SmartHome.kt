@@ -506,8 +506,20 @@ internal object LightAutomation {
         }
     }
 
+    /** A new channel or title starts while one runs: the stop that comes with it is no stop. */
+    @Volatile private var switching = false
+
+    fun beginSwitch() {
+        switching = true
+    }
+
     /** Playback stopped or ended. Waits as set: the next episode may start right away. */
     fun onStopped() {
+        if (switching) {
+            // Channel or episode change: no stop scene; the new title sets the play scene.
+            switching = false
+            return
+        }
         val wasPlaying = playing || section0 != null
         playing = false
         val client = client() ?: return

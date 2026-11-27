@@ -370,7 +370,6 @@
     <string name="new_episode_count">Nove epizode: %1$d</string>
     <string name="new_episode_entry">Novo · %1$s</string>
     <string name="live_stream_variants">Varijante streama</string>
-    <string name="live_quality_unknown">Kvaliteta nepoznata</string>
     <string name="portal_restore_failed">Spremljeni popis portala nije bilo moguće otvoriti.</string>
     <string name="portal_save_failed">Popis portala nije bilo moguće spremiti. Ostaje dostupan do zatvaranja aplikacije.</string>
     <string name="search_empty">Nema pogodaka u ovom odjeljku.</string>

@@ -366,7 +366,6 @@
     <string name="new_episode_count">Yeni bölümler: %1$d</string>
     <string name="new_episode_entry">Yeni · %1$s</string>
     <string name="live_stream_variants">Yayın varyantları</string>
-    <string name="live_quality_unknown">Kalite bilinmiyor</string>
     <string name="portal_restore_failed">Kayıtlı portal listesi açılamadı.</string>
     <string name="portal_save_failed">Portal listesi kaydedilemedi. Uygulama kapatılana kadar kullanılabilir kalır.</string>
     <string name="search_empty">Bu bölümde sonuç yok.</string>

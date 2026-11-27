@@ -366,7 +366,6 @@
     <string name="new_episode_count">Episode të reja: %1$d</string>
     <string name="new_episode_entry">E re · %1$s</string>
     <string name="live_stream_variants">Variantet e transmetimit</string>
-    <string name="live_quality_unknown">Cilësia e panjohur</string>
     <string name="portal_restore_failed">Lista e ruajtur e portaleve nuk u hap dot.</string>
     <string name="portal_save_failed">Lista e portaleve nuk u ruajt dot. Mbetet e disponueshme deri sa të mbyllet aplikacioni.</string>
     <string name="search_empty">Nuk ka rezultate në këtë zonë.</string>

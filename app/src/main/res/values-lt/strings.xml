@@ -374,7 +374,6 @@
     <string name="new_episode_count">Naujos serijos: %1$d</string>
     <string name="new_episode_entry">Nauja · %1$s</string>
     <string name="live_stream_variants">Transliacijos variantai</string>
-    <string name="live_quality_unknown">Kokybė nežinoma</string>
     <string name="portal_restore_failed">Išsaugoto portalų sąrašo nepavyko atidaryti.</string>
     <string name="portal_save_failed">Portalų sąrašo nepavyko išsaugoti. Jis išliks pasiekiamas, kol uždarysi programėlę.</string>
     <string name="search_empty">Šioje skiltyje rezultatų nėra.</string>

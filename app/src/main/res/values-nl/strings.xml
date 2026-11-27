@@ -366,7 +366,6 @@
     <string name="new_episode_count">Nieuwe afleveringen: %1$d</string>
     <string name="new_episode_entry">Nieuw · %1$s</string>
     <string name="live_stream_variants">Streamvarianten</string>
-    <string name="live_quality_unknown">Kwaliteit onbekend</string>
     <string name="portal_restore_failed">De opgeslagen portaallijst kon niet worden geopend.</string>
     <string name="portal_save_failed">De portaallijst kon niet worden opgeslagen. Ze blijft beschikbaar tot de app wordt gesloten.</string>
     <string name="search_empty">Geen resultaten in dit onderdeel.</string>

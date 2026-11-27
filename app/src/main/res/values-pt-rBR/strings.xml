@@ -370,7 +370,6 @@
     <string name="new_episode_count">Novos episódios: %1$d</string>
     <string name="new_episode_entry">Novo · %1$s</string>
     <string name="live_stream_variants">Variantes da transmissão</string>
-    <string name="live_quality_unknown">Qualidade desconhecida</string>
     <string name="portal_restore_failed">Não foi possível abrir a lista de portais salva.</string>
     <string name="portal_save_failed">Não foi possível salvar a lista de portais. Ela continua disponível até o app ser fechado.</string>
     <string name="search_empty">Nenhum resultado nesta área.</string>

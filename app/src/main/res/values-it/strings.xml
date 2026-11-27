@@ -370,7 +370,6 @@
     <string name="new_episode_count">Nuovi episodi: %1$d</string>
     <string name="new_episode_entry">Nuovo · %1$s</string>
     <string name="live_stream_variants">Varianti dello stream</string>
-    <string name="live_quality_unknown">Qualità sconosciuta</string>
     <string name="portal_restore_failed">Non è stato possibile aprire l\'elenco dei portali salvato.</string>
     <string name="portal_save_failed">Non è stato possibile salvare l\'elenco dei portali. Resta disponibile fino alla chiusura dell\'app.</string>
     <string name="search_empty">Nessun risultato in quest\'area.</string>

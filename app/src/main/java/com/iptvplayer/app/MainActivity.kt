@@ -3409,9 +3409,10 @@ private fun PlayerHome(
                 .map { variant ->
                 val item = variant.item
                 val portal = sessionFor(item.source)
+                // "Portal 2 · FHD · host": portal number, quality and portal, so it is clear which stream plays.
+                val number = savedSources.indexOfFirst { it.identity == item.source.identity } + 1
                 val quality = variant.description.qualities.joinToString(" / ")
-                val sourceLabel = playbackSourceLabel(item.source, portal)
-                val label = if (quality.isBlank()) sourceLabel else "$quality · $sourceLabel"
+                val label = listOf("Portal $number", quality, playbackSourceLabel(item.source, portal)).filter { it.isNotBlank() }.joinToString(" · ")
                 PlaybackVariant(label, sourceId = item.source.identity, streamKey = liveStreamKey(item.source.identity, item.value.id)) {
                     portal.resolve(item.value, portal.openSession())
                 }
@@ -8176,10 +8177,9 @@ private fun PlayerHome(
                         programmes = programmes,
                         variants = programmeChannel?.let { channel ->
                             liveGroups[channel]?.variants.orEmpty().map { variant ->
-                                val host = sessionFor(variant.item.source).sourceLabel
+                                val number = savedSources.indexOfFirst { it.identity == variant.item.source.identity } + 1
                                 val quality = variant.description.qualities.joinToString(" / ")
-                                    .ifBlank { stringResource(R.string.live_quality_unknown) }
-                                "$quality · $host"
+                                listOf("Portal $number", quality, sessionFor(variant.item.source).sourceLabel).filter { it.isNotBlank() }.joinToString(" · ")
                             }
                         }.orEmpty(),
                         epgPinned = pinnedProgramme,

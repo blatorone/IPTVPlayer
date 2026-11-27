@@ -374,7 +374,6 @@
     <string name="new_episode_count">Nové díly: %1$d</string>
     <string name="new_episode_entry">Nové · %1$s</string>
     <string name="live_stream_variants">Varianty streamu</string>
-    <string name="live_quality_unknown">Neznámá kvalita</string>
     <string name="portal_restore_failed">Uložený seznam portálů se nepodařilo otevřít.</string>
     <string name="portal_save_failed">Seznam portálů se nepodařilo uložit. Zůstane dostupný do zavření aplikace.</string>
     <string name="search_empty">V této oblasti nejsou žádné výsledky.</string>

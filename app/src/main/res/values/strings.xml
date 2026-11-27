@@ -366,7 +366,6 @@
     <string name="new_episode_count">Neue Folgen: %1$d</string>
     <string name="new_episode_entry">Neu · %1$s</string>
     <string name="live_stream_variants">Streamvarianten</string>
-    <string name="live_quality_unknown">Qualität unbekannt</string>
     <string name="portal_restore_failed">Die gespeicherte Portalliste konnte nicht geöffnet werden.</string>
     <string name="portal_save_failed">Die Portalliste konnte nicht gespeichert werden. Sie bleibt bis zum Schließen der App verfügbar.</string>
     <string name="search_empty">Keine Treffer in diesem Bereich.</string>

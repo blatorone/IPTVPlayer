@@ -366,7 +366,6 @@
     <string name="new_episode_count">Nye episoder: %1$d</string>
     <string name="new_episode_entry">Ny · %1$s</string>
     <string name="live_stream_variants">Strømvarianter</string>
-    <string name="live_quality_unknown">Ukjent kvalitet</string>
     <string name="portal_restore_failed">Den lagrede portallisten kunne ikke åpnes.</string>
     <string name="portal_save_failed">Portallisten kunne ikke lagres. Den er tilgjengelig til appen lukkes.</string>
     <string name="search_empty">Ingen treff i dette området.</string>

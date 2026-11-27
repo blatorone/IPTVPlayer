@@ -370,7 +370,6 @@
     <string name="new_episode_count">Jaunas sērijas: %1$d</string>
     <string name="new_episode_entry">Jauns · %1$s</string>
     <string name="live_stream_variants">Straumes varianti</string>
-    <string name="live_quality_unknown">Kvalitāte nezināma</string>
     <string name="portal_restore_failed">Saglabāto portālu sarakstu neizdevās atvērt.</string>
     <string name="portal_save_failed">Portālu sarakstu neizdevās saglabāt. Tas paliks pieejams, līdz aizvērsi lietotni.</string>
     <string name="search_empty">Šajā sadaļā nav rezultātu.</string>

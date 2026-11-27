@@ -366,7 +366,6 @@
     <string name="new_episode_count">Új epizódok: %1$d</string>
     <string name="new_episode_entry">Új · %1$s</string>
     <string name="live_stream_variants">Adásváltozatok</string>
-    <string name="live_quality_unknown">Ismeretlen minőség</string>
     <string name="portal_restore_failed">A mentett portállistát nem sikerült megnyitni.</string>
     <string name="portal_save_failed">A portállistát nem sikerült elmenteni. Az alkalmazás bezárásáig elérhető marad.</string>
     <string name="search_empty">Nincs találat ezen a területen.</string>

@@ -382,7 +382,6 @@
     <string name="new_episode_count">حلقات جديدة: %1$d</string>
     <string name="new_episode_entry">جديد · %1$s</string>
     <string name="live_stream_variants">نسخ البث</string>
-    <string name="live_quality_unknown">الجودة غير معروفة</string>
     <string name="portal_restore_failed">تعذّر فتح قائمة البوابات المحفوظة.</string>
     <string name="portal_save_failed">تعذّر حفظ قائمة البوابات. ستبقى متاحة حتى إغلاق التطبيق.</string>
     <string name="search_empty">لا توجد نتائج في هذا القسم.</string>

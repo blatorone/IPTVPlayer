@@ -375,7 +375,6 @@
     <string name="new_episode_count">Nove epizode: %1$d</string>
     <string name="new_episode_entry">Novo · %1$s</string>
     <string name="live_stream_variants">Različice pretoka</string>
-    <string name="live_quality_unknown">Kakovost neznana</string>
     <string name="portal_restore_failed">Shranjenega seznama portalov ni bilo mogoče odpreti.</string>
     <string name="portal_save_failed">Seznama portalov ni bilo mogoče shraniti. Ostane na voljo do zaprtja aplikacije.</string>
     <string name="search_empty">V tem razdelku ni zadetkov.</string>

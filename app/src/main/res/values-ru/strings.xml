@@ -374,7 +374,6 @@
     <string name="new_episode_count">Новых серий: %1$d</string>
     <string name="new_episode_entry">Новое · %1$s</string>
     <string name="live_stream_variants">Варианты потока</string>
-    <string name="live_quality_unknown">Качество неизвестно</string>
     <string name="portal_restore_failed">Не удалось открыть сохранённый список порталов.</string>
     <string name="portal_save_failed">Не удалось сохранить список порталов. Он останется доступным до закрытия приложения.</string>
     <string name="search_empty">В этом разделе ничего не найдено.</string>

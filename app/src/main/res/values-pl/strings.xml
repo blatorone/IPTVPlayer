@@ -374,7 +374,6 @@
     <string name="new_episode_count">Nowe odcinki: %1$d</string>
     <string name="new_episode_entry">Nowość · %1$s</string>
     <string name="live_stream_variants">Warianty strumienia</string>
-    <string name="live_quality_unknown">Nieznana jakość</string>
     <string name="portal_restore_failed">Nie udało się otworzyć zapisanej listy portali.</string>
     <string name="portal_save_failed">Nie udało się zapisać listy portali. Pozostanie dostępna do zamknięcia aplikacji.</string>
     <string name="search_empty">Brak wyników w tym obszarze.</string>

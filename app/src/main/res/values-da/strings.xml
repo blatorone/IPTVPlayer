@@ -366,7 +366,6 @@
     <string name="new_episode_count">Nye afsnit: %1$d</string>
     <string name="new_episode_entry">Nyt · %1$s</string>
     <string name="live_stream_variants">Streamvarianter</string>
-    <string name="live_quality_unknown">Ukendt kvalitet</string>
     <string name="portal_restore_failed">Den gemte portalliste kunne ikke åbnes.</string>
     <string name="portal_save_failed">Portallisten kunne ikke gemmes. Den forbliver tilgængelig, indtil appen lukkes.</string>
     <string name="search_empty">Ingen resultater i dette område.</string>

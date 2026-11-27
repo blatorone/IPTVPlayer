@@ -366,7 +366,6 @@
     <string name="new_episode_count">Nya avsnitt: %1$d</string>
     <string name="new_episode_entry">Ny · %1$s</string>
     <string name="live_stream_variants">Strömvarianter</string>
-    <string name="live_quality_unknown">Okänd kvalitet</string>
     <string name="portal_restore_failed">Den sparade portallistan kunde inte öppnas.</string>
     <string name="portal_save_failed">Portallistan kunde inte sparas. Den är tillgänglig tills appen stängs.</string>
     <string name="search_empty">Inga träffar i det här området.</string>

@@ -370,7 +370,6 @@
     <string name="new_episode_count">Нове епизоде: %1$d</string>
     <string name="new_episode_entry">Ново · %1$s</string>
     <string name="live_stream_variants">Варијанте стрима</string>
-    <string name="live_quality_unknown">Квалитет непознат</string>
     <string name="portal_restore_failed">Сачувана листа портала није могла да се отвори.</string>
     <string name="portal_save_failed">Листа портала није могла да се сачува. Остаје доступна до затварања апликације.</string>
     <string name="search_empty">Нема погодака у овом одељку.</string>

@@ -2,6 +2,7 @@
 
 ## 2.0.1
 
+- Live-TV: Die Stream-Auswahl in den Einstellungen und die Meldung beim Senderwechsel oben rechts zeigen „Portal N · Qualität (z. B. FHD/UHD) · Portal“, damit klar ist, welcher Stream läuft.
 - Suche: „Suchverlauf löschen“ ist mit der Fernbedienung erreichbar: vom ersten Eintrag nach oben, noch einmal nach oben ins Suchfeld.
 - Suche: Neben „Serien“ gibt es den Knopf „Letzte Suchen“. Die Tastatur schließt jetzt mit jeder Abschlusstaste, auch ohne Eingabe; dann geht der Fokus auf den Suchverlauf.
 - Suche: Nach dem Suchen (auf Fire TV der Tastaturknopf „Weiter“, sonst „Suchen“, oder ein Eintrag aus dem Verlauf) und nach dem Schließen der Tastatur geht der Fokus auf „Live-TV“ bei den Ergebnissen statt nach oben. Der Raucherpause-Knopf erscheint nur bei Filmen und Serien.

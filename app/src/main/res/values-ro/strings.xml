@@ -370,7 +370,6 @@
     <string name="new_episode_count">Episoade noi: %1$d</string>
     <string name="new_episode_entry">Nou · %1$s</string>
     <string name="live_stream_variants">Variante de flux</string>
-    <string name="live_quality_unknown">Calitate necunoscută</string>
     <string name="portal_restore_failed">Lista salvată de portaluri nu a putut fi deschisă.</string>
     <string name="portal_save_failed">Lista de portaluri nu a putut fi salvată. Rămâne disponibilă până la închiderea aplicației.</string>
     <string name="search_empty">Niciun rezultat în această secțiune.</string>

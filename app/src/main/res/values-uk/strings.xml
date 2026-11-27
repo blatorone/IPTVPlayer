@@ -374,7 +374,6 @@
     <string name="new_episode_count">Нових серій: %1$d</string>
     <string name="new_episode_entry">Нове · %1$s</string>
     <string name="live_stream_variants">Варіанти потоку</string>
-    <string name="live_quality_unknown">Якість невідома</string>
     <string name="portal_restore_failed">Не вдалося відкрити збережений список порталів.</string>
     <string name="portal_save_failed">Не вдалося зберегти список порталів. Він залишається доступним, доки застосунок не закрито.</string>
     <string name="search_empty">У цьому розділі збігів немає.</string>

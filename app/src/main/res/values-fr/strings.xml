@@ -370,7 +370,6 @@
     <string name="new_episode_count">Nouveaux épisodes : %1$d</string>
     <string name="new_episode_entry">Nouveau · %1$s</string>
     <string name="live_stream_variants">Variantes du flux</string>
-    <string name="live_quality_unknown">Qualité inconnue</string>
     <string name="portal_restore_failed">La liste des portails enregistrée n\'a pas pu être ouverte.</string>
     <string name="portal_save_failed">La liste des portails n\'a pas pu être enregistrée. Elle reste disponible jusqu\'à la fermeture de l\'application.</string>
     <string name="search_empty">Aucun résultat dans cette section.</string>

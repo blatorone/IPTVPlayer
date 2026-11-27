@@ -230,10 +230,10 @@ function digitPad(onSubmit, length = null, auto = true) {
 
 // PIN or password asked inside the page: a page of its own over everything (the tab bar is
 // covered); Abbrechen or a correct entry returns to where it was asked.
-function askPin(title) {
+// [password]: the asked PIN is a password (text); by default as the device reports it.
+function askPin(title, password = !!(state && state.parental && state.parental.pinPassword)) {
   return new Promise((resolve) => {
     const page = $("pin-page");
-    const password = !!(state && state.parental && state.parental.pinPassword);
     const done = (value) => {
       page.hidden = true;
       page.replaceChildren();
@@ -482,67 +482,140 @@ function settingRow(s, onChange) {
   return el("div", { class: "row" }, el("span", { class: "label" }, s.label), control);
 }
 
+// A question with a few answers on a page of its own (like the PIN steps); null when cancelled.
+function askChoice(title, options) {
+  return new Promise((resolve) => {
+    const page = $("pin-page");
+    const done = (value) => {
+      page.hidden = true;
+      page.replaceChildren();
+      document.body.classList.remove("pin-open");
+      resolve(value);
+    };
+    page.replaceChildren(el("div", { class: "pin-sheet" }, el("h1", {}, title),
+      el("div", { class: "pin-choices" }, options.map(([label, value]) =>
+        el("button", { type: "button", class: "pin-choice", onclick: () => done(value) }, label))),
+      el("button", { type: "button", class: "pin-cancel", onclick: () => done(null) }, t("common.cancel"))));
+    document.body.classList.add("pin-open");
+    page.hidden = false;
+  });
+}
+
+// "Sperren" like on the device: Kindersicherung and Einstellungsschutz each with their own PIN
+// (or one shared), the areas always. Nothing waits for a PIN that is not needed for it.
 function renderParental() {
   const p = state.parental;
-  const box = $("parental");
-  if (!p.hasPin) {
-    box.replaceChildren(
-      el("p", { class: "hint" }, t("parental.setPinFirst")),
-      el("button", { class: "primary", onclick: async () => {
-        const pin = await askNewPin(null);
-        if (pin) send({ t: "pin", pin });
-      } }, t("parental.setPin")));
-    return;
-  }
-  const fields = state.settings.filter((s) => s.id.startsWith("parental."));
+  const kidsPw = p.parentalPinPassword ?? p.pinPassword;
+  const settingsPw = p.settingsPinPassword ?? p.pinPassword;
+  // Older apps know no settings-PIN commands: then that PIN is set on the device, as before.
+  const modern = p.ownSettingsPin !== undefined;
+  const fields = new Map(state.settings.filter((s) => s.id.startsWith("parental."))
+    .map((s) => [s.id.slice("parental.".length), s]));
   // Like on the device: lockAdult off and leaving kids mode need the PIN; with a settings PIN,
   // every change of the Einstellungsschutz and of the areas needs that one.
   const settingsField = (f) => ["protectSettings", "lockPortals", "lockCategories"].includes(f) || f.startsWith("area.");
   const needsPin = (field, value) =>
     (field === "lockAdult" && value === false) || (field === "kidsMode" && value === false) ||
     (p.hasSettingsPin && settingsField(field) && !(field === "protectSettings" && value === true));
-  box.replaceChildren(
-    p.kidsMode ? el("div", { class: "notice" }, t("parental.kidsActive")) : null,
-    ...fields.map((s) => settingRow(s, async (value) => {
-      const field = s.id.slice("parental.".length);
+  const row = (field) => {
+    const s = fields.get(field);
+    return s ? settingRow(s, async (value) => {
       let pin;
       if (needsPin(field, value)) {
-        pin = await askPin(field === "kidsMode" ? t("pin.endKids")
-          : settingsField(field) ? t("pin.settings") : t("pin.enter"));
+        pin = field === "kidsMode" ? await askPin(t("pin.endKids"), kidsPw)
+          : settingsField(field) ? await askPin(t("pin.enterSettings"), settingsPw)
+          : await askPin(t("pin.enterKids"), kidsPw);
         if (!pin) return;
       }
       send({ t: "parental", field, value, pin });
-    })),
-    el("h3", {}, t("pin.heading")),
-    el("div", { class: "row-actions" },
-      el("button", { onclick: async () => {
-        const current = await askPin(t("pin.enterCurrent")); if (!current) return;
-        const pin = await askNewPin(null); if (pin) send({ t: "pin", pin, current });
-      } }, t("parental.changePin")),
-      el("button", { onclick: async () => {
-        const current = await askPin(t("pin.enterCurrent")); if (!current) return;
-        if (p.separateKidsPin) send({ t: "kidsPin", pin: null, current });
-        else { const pin = await askNewPin(t("pin.endKids")); if (pin) send({ t: "kidsPin", pin, current }); }
-      } }, p.separateKidsPin ? t("parental.kidsPinRemove") : t("parental.kidsPinSet")),
-      el("button", { class: "danger", onclick: async () => {
-        if (!confirm(t("parental.removePinConfirm"))) return;
-        const current = await askPin(t("pin.enterCurrent")); if (current) send({ t: "pinRemove", current });
-      } }, t("parental.removePin"))),
-    p.hasSettingsPin ? null : el("p", { class: "hint" }, t("parental.settingsPinHint")),
-    el("h3", {}, t("parental.kidsAccountHeading")),
-    el("p", { class: "hint" }, p.kidsAccount
-      ? t("parental.kidsAccountInfo", p.kidsAccount)
-      : t("parental.kidsAccountNone")),
-    el("div", { class: "row-actions" },
-      el("button", { onclick: () => {
-        const name = (prompt(t("parental.kidsNamePrompt"), p.kidsAccount || "") || "").trim();
-        if (name) send({ t: "parental", field: "kidsName", value: name });
-      } }, p.kidsAccount ? t("parental.rename") : t("parental.createKids")),
-      p.kidsAccount ? el("button", { class: "danger", onclick: async () => {
-        if (!confirm(t("parental.removeKidsConfirm", p.kidsAccount))) return;
-        const pin = await askPin(t("pin.enter")); if (pin) send({ t: "parental", field: "kidsRemove", value: true, pin });
-      } }, t("parental.removeKids")) : null),
-    el("p", { class: "hint" }, t("parental.categoriesHint")));
+    }) : null;
+  };
+  const rows = (prefix) => [...fields.keys()].filter((f) => f.startsWith(prefix)).map(row);
+
+  // ---- Kindersicherung ----
+  const setKidsPin = async () => {
+    // With an own settings PIN the Kindersicherung can use the same one (as on the device).
+    const same = modern && p.ownSettingsPin ? await askChoice(t("parental.whichPin"),
+      [[t("parental.sameAsSettings"), true], [t("parental.ownPin"), false]]) : false;
+    if (same === null) return;
+    if (same) {
+      const current = await askPin(t("pin.enterSettings"), settingsPw);
+      if (current) send({ t: "pinFromSettings", current });
+    } else {
+      const pin = await askNewPin(t("parental.kidsHeading"));
+      if (pin) send({ t: "pin", pin });
+    }
+  };
+  const kids = el("div", { class: "card" }, el("h2", {}, t("parental.kidsHeading")),
+    el("p", { class: "hint" }, t("parental.kidsHint")),
+    !p.hasPin ? el("button", { class: "primary", onclick: setKidsPin }, t("parental.setPin")) : [
+      p.kidsMode ? el("div", { class: "notice" }, t("parental.kidsActive")) : null,
+      row("lockAdult"), row("kidsMode"), row("kidsAge"),
+      el("div", { class: "row-actions" },
+        el("button", { onclick: async () => {
+          const current = await askPin(t("pin.enterKids"), kidsPw); if (!current) return;
+          const pin = await askNewPin(t("parental.kidsHeading")); if (pin) send({ t: "pin", pin, current });
+        } }, t("parental.changePin")),
+        el("button", { onclick: async () => {
+          const current = await askPin(t("pin.enterKids"), kidsPw); if (!current) return;
+          if (p.separateKidsPin) send({ t: "kidsPin", pin: null, current });
+          else { const pin = await askNewPin(t("pin.endKids")); if (pin) send({ t: "kidsPin", pin, current }); }
+        } }, p.separateKidsPin ? t("parental.kidsPinRemove") : t("parental.kidsPinSet")),
+        el("button", { class: "danger", onclick: async () => {
+          if (!confirm(t("parental.removePinConfirm"))) return;
+          const current = await askPin(t("pin.enterKids"), kidsPw); if (current) send({ t: "pinRemove", current });
+        } }, t("parental.removePin"))),
+      el("h3", {}, t("parental.kidsAccountHeading")),
+      el("p", { class: "hint" }, p.kidsAccount ? t("parental.kidsAccountInfo", p.kidsAccount) : t("parental.kidsAccountNone")),
+      ...rows("kidsArea."), row("kidsShare"), row("startProfile"),
+      el("div", { class: "row-actions" },
+        el("button", { onclick: () => {
+          const name = (prompt(t("parental.kidsNamePrompt"), p.kidsAccount || "") || "").trim();
+          if (name) send({ t: "parental", field: "kidsName", value: name });
+        } }, p.kidsAccount ? t("parental.rename") : t("parental.createKids")),
+        p.kidsAccount ? el("button", { class: "danger", onclick: async () => {
+          if (!confirm(t("parental.removeKidsConfirm", p.kidsAccount))) return;
+          const pin = await askPin(t("pin.enterKids"), kidsPw);
+          if (pin) send({ t: "parental", field: "kidsRemove", value: true, pin });
+        } }, t("parental.removeKids")) : null),
+    ]);
+
+  // ---- Einstellungsschutz ----
+  // With a Kindersicherung PIN the settings can use the same one, or an own one.
+  const chooseSettingsPin = async (current) => {
+    const same = p.hasPin ? await askChoice(t("parental.whichPin"),
+      [[t("parental.sameAsKids"), true], [t("parental.ownPin"), false]]) : false;
+    if (same === null) return;
+    const extra = current ? { current } : {};
+    if (same) {
+      const confirmPin = await askPin(t("pin.enterKids"), kidsPw);
+      if (confirmPin) send({ t: "settingsPin", shared: true, confirm: confirmPin, ...extra });
+    } else {
+      const pin = await askNewPin(t("parental.protectHeading"));
+      if (pin) send({ t: "settingsPin", pin, ...extra });
+    }
+  };
+  const protection = el("div", { class: "card" }, el("h2", {}, t("parental.protectHeading")),
+    el("p", { class: "hint" }, t("parental.protectHint")),
+    !p.hasSettingsPin ? (modern ? el("button", { class: "primary", onclick: () => chooseSettingsPin(null) }, t("parental.setPin"))
+      : el("p", { class: "hint" }, t("parental.settingsPinHint"))) : [
+      modern ? el("p", { class: "hint" }, p.ownSettingsPin ? t("parental.protectOwn") : t("parental.protectShared")) : null,
+      row("protectSettings"), row("lockPortals"), row("lockCategories"),
+      !modern ? null : el("div", { class: "row-actions" },
+        el("button", { onclick: async () => {
+          const current = await askPin(t("pin.enterSettings"), settingsPw);
+          if (current) chooseSettingsPin(current);
+        } }, t("parental.changePin")),
+        el("button", { class: "danger", onclick: async () => {
+          if (!confirm(t("parental.removeSettingsPinConfirm"))) return;
+          const current = await askPin(t("pin.enterSettings"), settingsPw);
+          if (current) send({ t: "settingsPinRemove", current });
+        } }, t("parental.removeSettingsPin"))),
+    ],
+    el("h3", {}, t("parental.areasHeading")),
+    ...rows("area."));
+
+  $("parental").replaceChildren(kids, protection, el("p", { class: "hint" }, t("parental.categoriesHint")));
 }
 
 function renderSettings() {

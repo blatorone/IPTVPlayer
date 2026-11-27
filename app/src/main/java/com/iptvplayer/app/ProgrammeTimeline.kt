@@ -66,6 +66,8 @@ import kotlinx.coroutines.flow.first
 
 private const val GUIDE_INTERVAL = 1_800L
 private const val GUIDE_WINDOW = 4 * GUIDE_INTERVAL
+/** "Früher" goes back as far as the guide keeps shows (one day). */
+private const val EARLIEST_GUIDE_OFFSET = -(GUIDE_PAST_SECONDS / GUIDE_WINDOW) * GUIDE_WINDOW
 
 /** Time window and filter of the guide; shared by the grid and the controls in the top bar. */
 internal class GuideWindow(offset: Long = 0L, onlyPinned: Boolean = false) {
@@ -111,7 +113,7 @@ private fun latestGuideOffset(horizonHours: Int): Long = ((horizonHours * 3_600L
 internal fun GuideWindowControls(window: GuideWindow, horizonHours: Int, entry: Modifier) {
     Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
         MenuButton(stringResource(R.string.guide_previous_window), entry) {
-            window.offset = (window.offset - GUIDE_WINDOW).coerceAtLeast(-GUIDE_WINDOW)
+            window.offset = (window.offset - GUIDE_WINDOW).coerceAtLeast(EARLIEST_GUIDE_OFFSET)
         }
         MenuButton(stringResource(R.string.guide_now), entry, selected = window.offset == 0L) { window.offset = 0 }
         MenuButton(stringResource(R.string.guide_next_window), entry) {
@@ -481,7 +483,7 @@ private fun TimelineRow(
             }
             !right && offset == 0L && index <= entryIndex -> channelFocus.requestFocus()
             !right && index > 0 -> cellFocus[index - 1].requestFocus()
-            !right && offset > 0 -> {
+            !right && offset != 0L && offset > EARLIEST_GUIDE_OFFSET -> {
                 pageTarget = false
                 onPage(false)
             }

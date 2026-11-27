@@ -25,6 +25,10 @@ import com.google.gson.JsonPrimitive
  *   {"t":"pin","pin":"1234","current":"…"}            set or change the parental PIN
  *   {"t":"pinRemove","current":"…"}
  *   {"t":"kidsPin","pin":"…"|null,"current":"…"}      separate PIN for leaving kids mode
+ *   {"t":"pinFromSettings","current":"…"}             Kindersicherung uses the own settings PIN
+ *   {"t":"settingsPin","pin":"…","current":"…"}        own PIN for the Einstellungsschutz
+ *   {"t":"settingsPin","shared":true,"confirm":"…","current":"…"}  use the Kindersicherung PIN
+ *   {"t":"settingsPinRemove","current":"…"}
  *   {"t":"parental","field":"lockAdult","value":false,"pin":"…"}
  *   {"t":"portalPreferred","id":"…","preferred":true}
  *   {"t":"portalCategories","id":"…"}                   the provider's own categories of a portal
@@ -115,7 +119,12 @@ internal data class RemoteParental(
     /** Name of the kids account, if one exists. */
     val kidsAccount: String? = null,
     /** The PIN is a password: the phone asks with a text field instead of digits. */
-    val pinPassword: Boolean = false
+    val pinPassword: Boolean = false,
+    /** The Einstellungsschutz has its own PIN (false: none, or the Kindersicherung PIN is used). */
+    val ownSettingsPin: Boolean = false,
+    /** Kindersicherung PIN and settings PIN each a password (text) instead of digits. */
+    val parentalPinPassword: Boolean = false,
+    val settingsPinPassword: Boolean = false
 )
 
 internal data class RemoteState(
@@ -154,6 +163,11 @@ internal sealed interface RemoteCommand {
     data class PortalEnabled(val id: String, val enabled: Boolean) : RemoteCommand
     data class PortalRemove(val id: String) : RemoteCommand
     data class Pin(val pin: String, val current: String?) : RemoteCommand
+    /** The Kindersicherung takes over the own settings PIN ([current]); the settings then share it. */
+    data class PinFromSettings(val current: String?) : RemoteCommand
+    /** Own settings PIN [pin], or (null) the Kindersicherung PIN confirmed with [confirm]. */
+    data class SettingsPin(val pin: String?, val current: String?, val confirm: String?) : RemoteCommand
+    data class SettingsPinRemove(val current: String?) : RemoteCommand
     data class PinRemove(val current: String?) : RemoteCommand
     data class KidsPin(val pin: String?, val current: String?) : RemoteCommand
     data class Parental(val field: String, val value: JsonElement?, val pin: String?) : RemoteCommand
@@ -293,6 +307,9 @@ internal object RemoteProtocol {
             addProperty("kidsMode", state.parental.kidsMode)
             addProperty("hasSettingsPin", state.parental.hasSettingsPin)
             addProperty("pinPassword", state.parental.pinPassword)
+            addProperty("ownSettingsPin", state.parental.ownSettingsPin)
+            addProperty("parentalPinPassword", state.parental.parentalPinPassword)
+            addProperty("settingsPinPassword", state.parental.settingsPinPassword)
             state.parental.kidsAccount?.let { addProperty("kidsAccount", it) }
         })
         if (state.backupParts.isNotEmpty()) add("backupParts", JsonArray().apply {
@@ -356,6 +373,14 @@ internal object RemoteProtocol {
             "input" -> RemoteCommand.Input(root.text("id") ?: return null, root.text("value") ?: return null)
             "pin" -> RemoteCommand.Pin(root.pin("pin") ?: return null, root.pin("current"))
             "pinRemove" -> RemoteCommand.PinRemove(root.pin("current"))
+            "pinFromSettings" -> RemoteCommand.PinFromSettings(root.pin("current"))
+            "settingsPin" -> {
+                val pin = root.pin("pin")
+                val shared = root.get("shared")?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isBoolean }?.asBoolean == true
+                if (pin == null && !shared) return null
+                RemoteCommand.SettingsPin(if (shared) null else pin, root.pin("current"), root.pin("confirm"))
+            }
+            "settingsPinRemove" -> RemoteCommand.SettingsPinRemove(root.pin("current"))
             "kidsPin" -> {
                 val requested = root.get("pin")
                 val pin = if (requested == null || requested.isJsonNull) null else root.pin("pin") ?: return null

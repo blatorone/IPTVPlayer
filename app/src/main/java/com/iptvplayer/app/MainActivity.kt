@@ -2765,6 +2765,16 @@ private fun PlayerHome(
                 }
             }
             check(answered)
+            // The portal answers from now on: shows that already ran today stay from the last
+            // fetch (up to one day back), the rest is replaced. So the guide holds about 48 hours
+            // and does not grow.
+            val nowSeconds = System.currentTimeMillis() / 1_000
+            val firstNew = entries.mapNotNull { it.startSeconds }.minOrNull()
+            val earlier = epgCache[key].orEmpty().filter { show ->
+                val start = show.startSeconds ?: return@filter false
+                start < (firstNew ?: nowSeconds) && (show.endSeconds ?: start + 3_600L) > nowSeconds - GUIDE_PAST_SECONDS
+            }
+            entries = (earlier + entries).guideWindow(nowSeconds, epgHorizonHours)
             epgCache = epgCache + (key to entries)
             // Nothing came back: asked again after a few minutes, not only after the whole interval.
             val now = System.currentTimeMillis()
@@ -6276,7 +6286,10 @@ private fun PlayerHome(
                 parental = RemoteParental(
                     parental.hasPin, parental.separateKidsPin, parental.kidsMode,
                     hasSettingsPin = parental.hasSettingsPin, kidsAccount = profiles.kidsName,
-                    pinPassword = (if (parental.hasSettingsPin) parental.settingsPinLength else parental.pinLength) == PIN_PASSWORD
+                    pinPassword = (if (parental.hasSettingsPin) parental.settingsPinLength else parental.pinLength) == PIN_PASSWORD,
+                    ownSettingsPin = parental.ownSettingsPin,
+                    parentalPinPassword = parental.pinLength == PIN_PASSWORD,
+                    settingsPinPassword = parental.settingsPinLength == PIN_PASSWORD
                 ),
                 busy = if (connecting) text(R.string.remote_busy_portals) else null,
                 askCountries = ui.askForCountries || ui.choosingCountries,
@@ -6371,6 +6384,24 @@ private fun PlayerHome(
             is RemoteCommand.Pin ->
                 if (parental.hasPin && !pinOk(command.current, parental::checkPin)) wrongPin
                 else { parental.setPin(command.pin); RemoteReply(true, text(R.string.remote_msg_pin_saved)) }
+            // Like the device: the Kindersicherung can take over the own settings PIN (then shared).
+            is RemoteCommand.PinFromSettings -> when {
+                parental.hasPin || !parental.ownSettingsPin -> RemoteReply(false)
+                !pinOk(command.current, parental::checkSettingsPin) -> wrongPin
+                else -> { parental.setPin(command.current!!); parental.setSettingsPin(null); RemoteReply(true, text(R.string.remote_msg_pin_saved)) }
+            }
+            // Einstellungsschutz: an own PIN, or the Kindersicherung PIN (confirmed with it).
+            is RemoteCommand.SettingsPin -> when {
+                parental.hasSettingsPin && !pinOk(command.current, parental::checkSettingsPin) -> wrongPin
+                command.pin != null -> { parental.setSettingsPin(command.pin); RemoteReply(true, text(R.string.remote_msg_pin_saved)) }
+                !parental.hasPin -> RemoteReply(false, text(R.string.remote_msg_pin_first))
+                !pinOk(command.confirm, parental::checkPin) -> wrongPin
+                else -> { parental.setSettingsPin(null); RemoteReply(true, text(R.string.remote_msg_pin_saved)) }
+            }
+            is RemoteCommand.SettingsPinRemove ->
+                if (!parental.hasSettingsPin) RemoteReply(true)
+                else if (!pinOk(command.current, parental::checkSettingsPin)) wrongPin
+                else { parental.removeSettingsPin(); RemoteReply(true, text(R.string.remote_msg_pin_removed)) }
             is RemoteCommand.PinRemove ->
                 if (!parental.hasPin) RemoteReply(true)
                 else if (!pinOk(command.current, parental::checkPin)) wrongPin

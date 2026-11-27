@@ -192,6 +192,22 @@ class RemoteProtocolTest {
     }
 
     @Test
+    fun settingsPinCommands() {
+        assertEquals(
+            RemoteCommand.SettingsPin("5678", "1234", null),
+            decode("""{"t":"settingsPin","epoch":"$epoch","pin":"5678","current":"1234"}""")
+        )
+        // Shared: no own PIN, the Kindersicherung PIN confirms it.
+        assertEquals(
+            RemoteCommand.SettingsPin(null, null, "1234"),
+            decode("""{"t":"settingsPin","epoch":"$epoch","shared":true,"confirm":"1234"}""")
+        )
+        assertNull(decode("""{"t":"settingsPin","epoch":"$epoch"}"""))
+        assertEquals(RemoteCommand.SettingsPinRemove("1234"), decode("""{"t":"settingsPinRemove","epoch":"$epoch","current":"1234"}"""))
+        assertEquals(RemoteCommand.PinFromSettings("1234"), decode("""{"t":"pinFromSettings","epoch":"$epoch","current":"1234"}"""))
+    }
+
+    @Test
     fun backupCommandsCarryAnOptionalPassword() {
         assertEquals(
             RemoteCommand.BackupCreate(listOf("EPG"), "geheim-123"),

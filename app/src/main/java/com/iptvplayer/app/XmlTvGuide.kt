@@ -60,10 +60,13 @@ internal fun decodeProgrammeText(value: String): String {
     } ?: value
 }
 
+/** How far back the guide keeps shows: one day (plus [hours] ahead, e.g. 24 + 24 = 48 hours). */
+internal const val GUIDE_PAST_SECONDS = 24 * 3_600L
+
 internal fun List<PortalProgramme>.guideWindow(now: Long, hours: Int): List<PortalProgramme> =
     filter { item ->
         val start = item.startSeconds ?: return@filter true
-        start < now + hours * 3_600L && (item.endSeconds ?: start + 3_600L) > now - 7_200L
+        start < now + hours * 3_600L && (item.endSeconds ?: start + 3_600L) > now - GUIDE_PAST_SECONDS
     }.sortedBy { it.startSeconds ?: Long.MAX_VALUE }
 
 internal data class XmlTvGuide(
@@ -189,7 +192,7 @@ private suspend fun parseXmlTv(input: InputStream, hours: Int): XmlTvGuide {
                 val id = parser.getAttributeValue(null, "channel")?.let(::normalizedLabel).orEmpty()
                 val start = xmlTvTime(parser.getAttributeValue(null, "start")) ?: continue
                 val end = xmlTvTime(parser.getAttributeValue(null, "stop"))?.takeIf { it > start }
-                if (id.isEmpty() || start >= now + hours * 3_600L || (end ?: start + 3_600L) <= now - 7_200L) continue
+                if (id.isEmpty() || start >= now + hours * 3_600L || (end ?: start + 3_600L) <= now - GUIDE_PAST_SECONDS) continue
                 var title: String? = null
                 var description: String? = null
                 while (parser.next() != XmlPullParser.END_DOCUMENT &&

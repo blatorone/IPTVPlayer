@@ -8649,16 +8649,26 @@ private fun PlayerHome(
                                 ExpiryState.EXPIRED -> Color(0xFFE53935)
                                 null -> null
                             }
-                            Text(stringResource(when (source.reachable) {
-                                true -> R.string.portal_status_reachable
-                                false -> R.string.portal_status_unreachable
-                                null -> R.string.portal_status_unknown
-                            }))
+                            // Status and the counts of Live-TV, films and series side by side, above the frame:
+                            // inside it they took the room of the portal address.
+                            val counts = ui.sourceContentCounts[source.identity] ?: PortalContentCounts(0, 0, 0)
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                                Text(stringResource(when (source.reachable) {
+                                    true -> R.string.portal_status_reachable
+                                    false -> R.string.portal_status_unreachable
+                                    null -> R.string.portal_status_unknown
+                                }))
+                                Text(
+                                    stringResource(R.string.portal_content_counts, counts.tv, counts.movies, counts.series),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                             Row(
                                 Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                            // The portal's frame: name, counts and its on/off switch belong together.
+                            // The portal's frame: name and its on/off switch belong together.
                             Surface(
                                 Modifier.weight(1f), shape = RoundedCornerShape(14.dp),
                                 color = expiryColor?.copy(alpha = 0.12f)?.compositeOver(MaterialTheme.colorScheme.surfaceContainer)
@@ -8699,12 +8709,6 @@ private fun PlayerHome(
                                         editing = true
                                     } else switchSource(source)
                                 }
-                                )
-                                val counts = ui.sourceContentCounts[source.identity] ?: PortalContentCounts(0, 0, 0)
-                                Text(
-                                    stringResource(R.string.portal_content_counts, counts.tv, counts.movies, counts.series),
-                                    Modifier.padding(start = 10.dp, end = 10.dp),
-                                    style = MaterialTheme.typography.labelSmall
                                 )
                                 // The switch on the portal turns it on or off (and refreshes it when turned on).
                                 SettingToggleButton(

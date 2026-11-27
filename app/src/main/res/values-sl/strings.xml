@@ -867,7 +867,6 @@
     <string name="backup_password_needed">Ta datoteka je zaščitena z geslom.</string>
     <string name="backup_password_open">Odpri</string>
     <string name="backup_password_wrong">Napačno geslo.</string>
-    <string name="backup_password_phone">Ta datoteka je zaščitena z geslom in jo je mogoče obnoviti le neposredno v napravi.</string>
     <string name="backup_import_now">Uvozi zdaj</string>
     <string name="backup_restart_hint">Nato se aplikacija znova zažene. Portali se dodajo obstoječim, izbrane nastavitve se zamenjajo.</string>
     <string name="backup_picker_missing">Ta naprava ne ponuja izbire datotek. Uporabi mapo Prenosi.</string>

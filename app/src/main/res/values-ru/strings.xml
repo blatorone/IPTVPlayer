@@ -866,7 +866,6 @@
     <string name="backup_password_needed">Этот файл защищён паролем.</string>
     <string name="backup_password_open">Открыть</string>
     <string name="backup_password_wrong">Неверный пароль.</string>
-    <string name="backup_password_phone">Этот файл защищён паролем, восстановить его можно только непосредственно на устройстве.</string>
     <string name="backup_import_now">Импортировать</string>
     <string name="backup_restart_hint">После этого приложение перезапустится. Порталы добавятся к существующим, выбранные настройки будут заменены.</string>
     <string name="backup_picker_missing">На этом устройстве нет выбора файлов. Используйте папку Download.</string>

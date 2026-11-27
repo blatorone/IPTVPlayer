@@ -866,7 +866,6 @@
     <string name="backup_password_needed">Цей файл захищено паролем.</string>
     <string name="backup_password_open">Відкрити</string>
     <string name="backup_password_wrong">Неправильний пароль.</string>
-    <string name="backup_password_phone">Цей файл захищено паролем, відновити його можна лише безпосередньо на пристрої.</string>
     <string name="backup_import_now">Імпортувати зараз</string>
     <string name="backup_restart_hint">Після цього застосунок перезапуститься. Портали додаються до наявних, вибрані налаштування замінюються.</string>
     <string name="backup_picker_missing">На цьому пристрої немає вибору файлів. Використовуйте теку Download.</string>

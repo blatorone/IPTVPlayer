@@ -858,7 +858,6 @@
     <string name="backup_password_needed">Bu dosya parola ile korunuyor.</string>
     <string name="backup_password_open">Aç</string>
     <string name="backup_password_wrong">Yanlış parola.</string>
-    <string name="backup_password_phone">Bu dosya parola ile korunuyor ve yalnızca doğrudan cihazda geri yüklenebilir.</string>
     <string name="backup_import_now">Şimdi içe aktar</string>
     <string name="backup_restart_hint">Ardından uygulama yeniden başlar. Portallar mevcutlara eklenir, seçilen ayarlar değiştirilir.</string>
     <string name="backup_picker_missing">Bu cihazda dosya seçici yok. Download klasörünü kullan.</string>

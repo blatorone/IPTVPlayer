@@ -862,7 +862,6 @@
     <string name="backup_password_needed">Ova datoteka je zaštićena lozinkom.</string>
     <string name="backup_password_open">Otvori</string>
     <string name="backup_password_wrong">Pogrešna lozinka.</string>
-    <string name="backup_password_phone">Ova datoteka je zaštićena lozinkom i može se vratiti samo direktno na uređaju.</string>
     <string name="backup_import_now">Uvezi sada</string>
     <string name="backup_restart_hint">Nakon toga aplikacija se ponovo pokreće. Portali se dodaju postojećim, odabrane postavke se zamjenjuju.</string>
     <string name="backup_picker_missing">Ovaj uređaj nema odabir datoteka. Koristi folder Download.</string>

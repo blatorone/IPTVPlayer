@@ -858,7 +858,6 @@
     <string name="backup_password_needed">Ez a fájl jelszóval védett.</string>
     <string name="backup_password_open">Megnyitás</string>
     <string name="backup_password_wrong">Hibás jelszó.</string>
-    <string name="backup_password_phone">Ez a fájl jelszóval védett, és csak közvetlenül az eszközön állítható vissza.</string>
     <string name="backup_import_now">Importálás most</string>
     <string name="backup_restart_hint">Ezután az alkalmazás újraindul. A portálok hozzáadódnak a meglévőkhöz, a kiválasztott beállítások felülíródnak.</string>
     <string name="backup_picker_missing">Ez az eszköz nem kínál fájlválasztót. Használd a Letöltések mappát.</string>

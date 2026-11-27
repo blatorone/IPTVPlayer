@@ -858,7 +858,6 @@
     <string name="backup_password_needed">Dit bestand is beveiligd met een wachtwoord.</string>
     <string name="backup_password_open">Openen</string>
     <string name="backup_password_wrong">Onjuist wachtwoord.</string>
-    <string name="backup_password_phone">Dit bestand is beveiligd met een wachtwoord en kan alleen direct op het apparaat worden hersteld.</string>
     <string name="backup_import_now">Nu importeren</string>
     <string name="backup_restart_hint">Daarna start de app opnieuw. Portalen worden aan de bestaande toegevoegd, de gekozen instellingen worden vervangen.</string>
     <string name="backup_picker_missing">Dit apparaat biedt geen bestandskiezer. Gebruik de map Downloads.</string>

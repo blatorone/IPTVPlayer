@@ -874,7 +874,6 @@
     <string name="backup_password_needed">هذا الملف محمي بكلمة مرور.</string>
     <string name="backup_password_open">فتح</string>
     <string name="backup_password_wrong">كلمة مرور خاطئة.</string>
-    <string name="backup_password_phone">هذا الملف محمي بكلمة مرور ولا يمكن استعادته إلا على الجهاز مباشرةً.</string>
     <string name="backup_import_now">استيراد الآن</string>
     <string name="backup_restart_hint">بعد ذلك يُعاد تشغيل التطبيق. تُضاف البوابات إلى الموجودة وتُستبدل الإعدادات المختارة.</string>
     <string name="backup_picker_missing">لا يوفر هذا الجهاز اختيار الملفات. استخدم مجلد Download.</string>

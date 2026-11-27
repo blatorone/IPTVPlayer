@@ -866,7 +866,6 @@
     <string name="backup_password_needed">Ten plik jest chroniony hasłem.</string>
     <string name="backup_password_open">Otwórz</string>
     <string name="backup_password_wrong">Nieprawidłowe hasło.</string>
-    <string name="backup_password_phone">Ten plik jest chroniony hasłem i można go przywrócić tylko bezpośrednio na urządzeniu.</string>
     <string name="backup_import_now">Importuj teraz</string>
     <string name="backup_restart_hint">Potem aplikacja uruchomi się ponownie. Portale zostaną dodane do istniejących, wybrane ustawienia zastąpione.</string>
     <string name="backup_picker_missing">To urządzenie nie ma wyboru plików. Użyj folderu Download.</string>

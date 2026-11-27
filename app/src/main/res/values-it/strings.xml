@@ -862,7 +862,6 @@
     <string name="backup_password_needed">Questo file è protetto da password.</string>
     <string name="backup_password_open">Apri</string>
     <string name="backup_password_wrong">Password errata.</string>
-    <string name="backup_password_phone">Questo file è protetto da password e si può ripristinare solo direttamente sul dispositivo.</string>
     <string name="backup_import_now">Importa ora</string>
     <string name="backup_restart_hint">Poi l\'app si riavvia. I portali vengono aggiunti a quelli esistenti, le impostazioni scelte sostituite.</string>
     <string name="backup_picker_missing">Questo dispositivo non ha un selettore di file. Usa la cartella Download.</string>

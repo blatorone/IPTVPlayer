@@ -858,7 +858,6 @@
     <string name="backup_password_needed">Diese Datei ist mit einem Passwort geschützt.</string>
     <string name="backup_password_open">Öffnen</string>
     <string name="backup_password_wrong">Falsches Passwort.</string>
-    <string name="backup_password_phone">Diese Datei ist mit einem Passwort geschützt und lässt sich nur direkt am Gerät einspielen.</string>
     <string name="backup_import_now">Jetzt importieren</string>
     <string name="backup_restart_hint">Danach startet die App neu. Portale werden zu den vorhandenen hinzugefügt, die ausgewählten Einstellungen ersetzt.</string>
     <string name="backup_picker_missing">Dieses Gerät bietet keine Dateiauswahl. Nutze den Download-Ordner.</string>

@@ -866,7 +866,6 @@
     <string name="backup_password_needed">Tento súbor je chránený heslom.</string>
     <string name="backup_password_open">Otvoriť</string>
     <string name="backup_password_wrong">Nesprávne heslo.</string>
-    <string name="backup_password_phone">Tento súbor je chránený heslom a dá sa obnoviť len priamo v zariadení.</string>
     <string name="backup_import_now">Importovať teraz</string>
     <string name="backup_restart_hint">Potom sa aplikácia reštartuje. Portály sa pridajú k existujúcim, vybrané nastavenia sa nahradia.</string>
     <string name="backup_picker_missing">Toto zariadenie neposkytuje výber súboru. Použi priečinok Stiahnuté.</string>

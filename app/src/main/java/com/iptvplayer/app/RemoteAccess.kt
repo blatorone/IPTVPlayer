@@ -127,15 +127,27 @@ internal fun backupRemoteHandler(base: RemoteHandler, storage: PortalStorage?, c
         override suspend fun applyRemoteSuspending(command: RemoteCommand): RemoteReply? {
             val store = storage ?: return null
             fun parts(names: List<String>) = BackupPart.entries.filter { it.name in names }.toSet()
-            fun decode(file: String): BackupDocument {
+            fun decode(file: String, password: String?): BackupDocument {
                 val bytes = java.util.Base64.getDecoder().decode(file)
-                return if (isBackupFile(bytes)) decodeBackup(bytes)
+                return if (isBackupFile(bytes)) decodeBackup(bytes, password?.toCharArray())
                 else legacyPortalBackup(bytes.toString(Charsets.UTF_8)) ?: error("not a backup")
+            }
+            // A protected file: the phone asks for the password ("needsPassword") and sends it along.
+            fun failed(error: Throwable) = when {
+                error is BackupPasswordException && error.missing -> RemoteReply(false, context.getString(R.string.backup_password_needed),
+                    com.google.gson.JsonObject().apply { addProperty("needsPassword", true) })
+                error is BackupPasswordException -> RemoteReply(false, context.getString(R.string.backup_password_wrong),
+                    com.google.gson.JsonObject().apply { addProperty("needsPassword", true) })
+                else -> RemoteReply(false, context.getString(R.string.backup_failed))
             }
             return when (command) {
                 is RemoteCommand.BackupCreate -> {
                     val chosen = parts(command.parts).ifEmpty { return RemoteReply(false, context.getString(R.string.backup_failed)) }
-                    val bytes = createBackup(context, store, chosen)
+                    // Never an unprotected file when a password was meant: too short is refused.
+                    if (command.password != null && command.password.length < BACKUP_PASSWORD_MIN) {
+                        return RemoteReply(false, context.getString(R.string.backup_password_label))
+                    }
+                    val bytes = createBackup(context, store, chosen, command.password?.toCharArray())
                     if (bytes.size > PHONE_BACKUP_LIMIT) RemoteReply(false, context.getString(R.string.backup_too_large_phone))
                     else RemoteReply(true, null, com.google.gson.JsonObject().apply {
                         addProperty("name", backupFileName())
@@ -143,10 +155,9 @@ internal fun backupRemoteHandler(base: RemoteHandler, storage: PortalStorage?, c
                     })
                 }
                 is RemoteCommand.BackupInspect -> {
-                    val document = runCatching { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { decode(command.file) } }
-                        .getOrElse { error -> return RemoteReply(false, context.getString(
-                            if (error is BackupPasswordException) R.string.backup_password_phone else R.string.backup_failed
-                        )) }
+                    val document = runCatching {
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { decode(command.file, command.password) }
+                    }.getOrElse { return failed(it) }
                     RemoteReply(true, null, com.google.gson.JsonObject().apply {
                         add("backupParts", com.google.gson.JsonArray().apply { document.parts.keys.forEach { add(it.name) } })
                         addProperty("createdAt", document.createdAt.replace('T', ' '))
@@ -154,10 +165,9 @@ internal fun backupRemoteHandler(base: RemoteHandler, storage: PortalStorage?, c
                     })
                 }
                 is RemoteCommand.BackupRestore -> {
-                    val document = runCatching { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { decode(command.file) } }
-                        .getOrElse { error -> return RemoteReply(false, context.getString(
-                            if (error is BackupPasswordException) R.string.backup_password_phone else R.string.backup_failed
-                        )) }
+                    val document = runCatching {
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { decode(command.file, command.password) }
+                    }.getOrElse { return failed(it) }
                     restoreBackup(context, store, document, parts(command.parts))
                     // Answer first, then restart: the phone shows that the import worked.
                     android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ restartApp(context) }, 1_500)

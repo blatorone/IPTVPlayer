@@ -866,7 +866,6 @@
     <string name="backup_password_needed">Šis failas apsaugotas slaptažodžiu.</string>
     <string name="backup_password_open">Atidaryti</string>
     <string name="backup_password_wrong">Neteisingas slaptažodis.</string>
-    <string name="backup_password_phone">Šis failas apsaugotas slaptažodžiu, jį atkurti galima tik tiesiogiai įrenginyje.</string>
     <string name="backup_import_now">Importuoti dabar</string>
     <string name="backup_restart_hint">Po to programėlė persileis iš naujo. Portalai pridedami prie esamų, pasirinkti nustatymai pakeičiami.</string>
     <string name="backup_picker_missing">Šis įrenginys neturi failų parinkiklio. Naudok aplanką Atsisiuntimai.</string>

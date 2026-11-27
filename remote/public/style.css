@@ -148,3 +148,4 @@ header { flex-wrap: wrap; row-gap: 2px; }
 #status::before { content: "● "; }
 #finish { order: 2; max-width: 58%; overflow: hidden; text-overflow: ellipsis; }
 .row-actions .badge { align-self: center; padding: 4px 10px; }
+.hint.error { color: #ff6b6b; }

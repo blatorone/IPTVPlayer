@@ -862,7 +862,6 @@
     <string name="backup_password_needed">Este arquivo está protegido por senha.</string>
     <string name="backup_password_open">Abrir</string>
     <string name="backup_password_wrong">Senha incorreta.</string>
-    <string name="backup_password_phone">Este arquivo está protegido por senha e só pode ser restaurado diretamente no aparelho.</string>
     <string name="backup_import_now">Importar agora</string>
     <string name="backup_restart_hint">Depois o app reinicia. Os portais são adicionados aos existentes; as configurações escolhidas são substituídas.</string>
     <string name="backup_picker_missing">Este aparelho não tem seletor de arquivos. Use a pasta Download.</string>

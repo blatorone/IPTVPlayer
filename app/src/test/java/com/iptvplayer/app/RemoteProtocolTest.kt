@@ -190,4 +190,23 @@ class RemoteProtocolTest {
         assertFalse(live[1].asJsonObject.has("count"))
         assertEquals("DE 2 · TR 1", countrySummary(categories.getValue(PortalSection.LIVE)) { it })
     }
+
+    @Test
+    fun backupCommandsCarryAnOptionalPassword() {
+        assertEquals(
+            RemoteCommand.BackupCreate(listOf("EPG"), "geheim-123"),
+            decode("""{"t":"backupCreate","epoch":"$epoch","parts":["EPG"],"password":"geheim-123"}""")
+        )
+        assertEquals(RemoteCommand.BackupCreate(listOf("EPG")), decode("""{"t":"backupCreate","epoch":"$epoch","parts":["EPG"]}"""))
+        assertEquals(
+            RemoteCommand.BackupRestore("QUJD", listOf("EPG"), "pw"),
+            decode("""{"t":"backupRestore","epoch":"$epoch","file":"QUJD","parts":["EPG"],"password":"pw"}""")
+        )
+        // More than 64 characters: no password (the file then asks for it again).
+        val long = "x".repeat(65)
+        assertEquals(
+            RemoteCommand.BackupInspect("QUJD"),
+            decode("""{"t":"backupInspect","epoch":"$epoch","file":"QUJD","password":"$long"}""")
+        )
+    }
 }

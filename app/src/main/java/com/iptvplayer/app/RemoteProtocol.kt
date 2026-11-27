@@ -162,11 +162,11 @@ internal sealed interface RemoteCommand {
     data class Action(val id: String) : RemoteCommand
     data class Input(val id: String, val value: String) : RemoteCommand
     /** Creates a backup of [parts]; the file comes back in "result" as data (name, file). */
-    data class BackupCreate(val parts: List<String>) : RemoteCommand
+    data class BackupCreate(val parts: List<String>, val password: String? = null) : RemoteCommand
     /** Reads a backup file from the phone; answers with the parts it holds. */
-    data class BackupInspect(val file: String) : RemoteCommand
+    data class BackupInspect(val file: String, val password: String? = null) : RemoteCommand
     /** Imports [parts] of a backup file from the phone; the app restarts afterwards. */
-    data class BackupRestore(val file: String, val parts: List<String>) : RemoteCommand
+    data class BackupRestore(val file: String, val parts: List<String>, val password: String? = null) : RemoteCommand
 }
 
 internal object RemoteProtocol {
@@ -300,6 +300,8 @@ internal object RemoteProtocol {
                 add(JsonObject().apply { addProperty("value", part.value); addProperty("label", part.label) })
             }
         })
+        // Tells the phone page that backups can carry a password (older apps would ignore it).
+        if (state.backupParts.isNotEmpty()) addProperty("backupPassword", true)
         state.language?.let { addProperty("language", it) }
     }.toString()
 
@@ -359,9 +361,9 @@ internal object RemoteProtocol {
                 val pin = if (requested == null || requested.isJsonNull) null else root.pin("pin") ?: return null
                 RemoteCommand.KidsPin(pin, root.pin("current"))
             }
-            "backupCreate" -> RemoteCommand.BackupCreate(root.names("parts") ?: return null)
-            "backupInspect" -> RemoteCommand.BackupInspect(root.file() ?: return null)
-            "backupRestore" -> RemoteCommand.BackupRestore(root.file() ?: return null, root.names("parts") ?: return null)
+            "backupCreate" -> RemoteCommand.BackupCreate(root.names("parts") ?: return null, root.backupPassword(1))
+            "backupInspect" -> RemoteCommand.BackupInspect(root.file() ?: return null, root.backupPassword(1))
+            "backupRestore" -> RemoteCommand.BackupRestore(root.file() ?: return null, root.names("parts") ?: return null, root.backupPassword(1))
             "parental" -> RemoteCommand.Parental(
                 root.text("field")?.takeIf { it in PARENTAL_FIELDS } ?: return null,
                 root.get("value"), root.pin("pin")
@@ -378,6 +380,11 @@ internal object RemoteProtocol {
     private fun JsonObject.file(): String? =
         get("file")?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isString }?.asString
             ?.takeIf { it.length <= MAX_FILE_TEXT && it.isNotEmpty() }
+
+    /** Optional backup password (the connection is end-to-end encrypted); the handler checks its length. */
+    private fun JsonObject.backupPassword(min: Int): String? =
+        get("password")?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isString }?.asString
+            ?.takeIf { it.length in min..64 && it.none(Char::isISOControl) }
 
     private fun JsonObject.names(name: String): List<String>? =
         get(name)?.takeIf { it.isJsonArray }?.asJsonArray?.mapNotNull { element ->

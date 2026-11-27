@@ -862,7 +862,6 @@
     <string name="backup_password_needed">Este archivo está protegido con contraseña.</string>
     <string name="backup_password_open">Abrir</string>
     <string name="backup_password_wrong">Contraseña incorrecta.</string>
-    <string name="backup_password_phone">Este archivo está protegido con contraseña y solo se puede restaurar directamente en el dispositivo.</string>
     <string name="backup_import_now">Importar ahora</string>
     <string name="backup_restart_hint">Después la app se reinicia. Los portales se añaden a los existentes; los ajustes elegidos se sustituyen.</string>
     <string name="backup_picker_missing">Este dispositivo no tiene selector de archivos. Usa la carpeta Download.</string>

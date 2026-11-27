@@ -144,6 +144,7 @@ async function receive(data) {
   } else if (message.t === "result") {
     if (message.data && message.data.sections) { portalCategories = message.data; renderPortals(); }
     if (message.data && message.data.file) downloadBackup(message.data.name, message.data.file);
+    if (message.data && message.data.needsPassword && backupImport) { backupImport = { ...backupImport, needsPassword: true, password: null }; renderBackup(); }
     if (message.data && message.data.backupParts) { backupImport = { ...backupImport, info: message.data, parts: message.data.backupParts.slice() }; renderBackup(); }
     if (message.message || !message.ok) toast(message.message || t("result.failed"), !message.ok);
   }
@@ -739,6 +740,8 @@ function renderUnlock() {
 // ---------- backup ----------
 let backupChoice = null;
 let backupImport = null;
+let backupProtect = false;
+let backupPw = ["", ""];
 function downloadBackup(name, file) {
   const bytes = Uint8Array.from(atob(file), (c) => c.charCodeAt(0));
   const url = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
@@ -748,6 +751,7 @@ function downloadBackup(name, file) {
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10000);
   toast(t("backup.downloaded"));
+  backupPw = ["", ""];
 }
 function partChoice(parts, chosen, onChange) {
   const labels = new Map((state.backupParts || []).map((p) => [p.value, p.label]));
@@ -762,6 +766,12 @@ function partChoice(parts, chosen, onChange) {
 }
 function renderBackup() {
   if (!state || !$("backup")) return;
+  // While a field of this card is typed in, a new state from the device waits (keeps the keyboard open).
+  const typing = document.activeElement;
+  if (typing && typing.tagName === "INPUT" && typing.type === "password" && $("backup").contains(typing)) {
+    typing.onblur = () => { typing.onblur = null; setTimeout(renderBackup, 0); };
+    return;
+  }
   const parts = (state.backupParts || []).map((p) => p.value);
   if (!parts.length) { $("backup").replaceChildren(el("p", { class: "hint" }, t("backup.unavailable"))); return; }
   if (!backupChoice) backupChoice = parts.slice();
@@ -781,22 +791,68 @@ function renderBackup() {
     reader.readAsArrayBuffer(file);
   });
   const imported = backupImport && backupImport.info;
+  // Optional password, as on the device. The fields are read on click, so typing never re-renders
+  // (which would close the keyboard); the button follows the fields directly.
+  const download = el("button", { class: "primary", onclick: () => {
+    const password = backupProtect ? first.value : null;
+    send(password ? { t: "backupCreate", parts: backupChoice, password } : { t: "backupCreate", parts: backupChoice });
+  } }, t("backup.download"));
+  const first = el("input", { type: "password", autocomplete: "new-password", maxlength: "64" });
+  const second = el("input", { type: "password", autocomplete: "new-password", maxlength: "64" });
+  first.value = backupPw[0];
+  second.value = backupPw[1];
+  const mismatch = el("p", { class: "hint error" }, t("pw.mismatch"));
+  if (!state.backupPassword) backupProtect = false;
+  const check = () => {
+    backupPw = [first.value, second.value];
+    const ready = !backupProtect || (first.value.length >= 8 && first.value === second.value);
+    mismatch.hidden = !backupProtect || !second.value || first.value === second.value;
+    download.disabled = !backupChoice.length || !ready;
+  };
+  first.addEventListener("input", check);
+  second.addEventListener("input", check);
+  check();
+  // A protected file asks for its password before its parts are shown.
+  const askFilePassword = () => {
+    const input = el("input", { type: "password", autocomplete: "off", maxlength: "64" });
+    const form = el("form", {}, el("label", {}, t("backup.pwNeeded"), input),
+      el("button", { type: "submit", class: "primary" }, t("common.ok")));
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      if (!input.value) return;
+      backupImport.password = input.value;
+      input.value = "";
+      input.blur();
+      send({ t: "backupInspect", file: backupImport.file, password: backupImport.password });
+    });
+    return form;
+  };
   $("backup").replaceChildren(
     el("div", { class: "card" },
       el("h2", {}, t("backup.createTitle")),
       el("p", { class: "hint" }, t("backup.createHint")),
       ...partChoice(parts, backupChoice, (next) => { backupChoice = next; renderBackup(); }),
-      el("button", { class: "primary", disabled: !backupChoice.length,
-        onclick: () => send({ t: "backupCreate", parts: backupChoice }) }, t("backup.download"))),
+      // Only when the device can do it: an older app would save the file without protection.
+      !state.backupPassword ? null : el("div", { class: "row" }, el("span", { class: "label" }, el("b", {}, t("backup.protect"))),
+        switchButton(backupProtect, t("backup.protect"), () => { backupProtect = !backupProtect; renderBackup(); })),
+      backupProtect ? [
+        el("p", { class: "hint" }, t("backup.protectHint")),
+        el("label", {}, t("backup.pwLabel"), first),
+        el("label", {}, t("pw.repeat"), second),
+        mismatch,
+      ] : null,
+      download),
     el("div", { class: "card" },
       el("h2", {}, t("backup.importTitle")),
       el("label", {}, t("backup.chooseFile"), fileInput),
+      backupImport && backupImport.needsPassword && !imported ? askFilePassword() : null,
       imported ? [
         el("p", { class: "hint" }, imported.createdAt ? t("backup.info", imported.createdAt, imported.appVersion) : backupImport.name),
         ...partChoice(imported.backupParts, backupImport.parts, (next) => { backupImport.parts = next; renderBackup(); }),
         el("p", { class: "hint" }, t("backup.importHint")),
         el("button", { class: "primary", disabled: !backupImport.parts.length, onclick: () => {
-          if (confirm(t("backup.importConfirm"))) send({ t: "backupRestore", file: backupImport.file, parts: backupImport.parts });
+          if (confirm(t("backup.importConfirm"))) send({ t: "backupRestore", file: backupImport.file, parts: backupImport.parts,
+            ...(backupImport.password ? { password: backupImport.password } : {}) });
         } }, t("backup.importNow")),
       ] : null));
 }

@@ -862,7 +862,6 @@
     <string name="backup_password_needed">Šis fails ir aizsargāts ar paroli.</string>
     <string name="backup_password_open">Atvērt</string>
     <string name="backup_password_wrong">Nepareiza parole.</string>
-    <string name="backup_password_phone">Šis fails ir aizsargāts ar paroli, un to var atjaunot tikai tieši ierīcē.</string>
     <string name="backup_import_now">Importēt tagad</string>
     <string name="backup_restart_hint">Pēc tam lietotne restartēsies. Portāli tiek pievienoti esošajiem, izvēlētie iestatījumi tiek aizstāti.</string>
     <string name="backup_picker_missing">Šajā ierīcē nav failu izvēles. Izmanto mapi Lejupielādes.</string>

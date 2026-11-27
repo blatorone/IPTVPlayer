@@ -862,7 +862,6 @@
     <string name="backup_password_needed">Acest fișier este protejat cu parolă.</string>
     <string name="backup_password_open">Deschide</string>
     <string name="backup_password_wrong">Parolă greșită.</string>
-    <string name="backup_password_phone">Acest fișier este protejat cu parolă și poate fi restaurat doar direct pe dispozitiv.</string>
     <string name="backup_import_now">Importă acum</string>
     <string name="backup_restart_hint">Apoi aplicația repornește. Portalurile se adaugă celor existente, setările alese sunt înlocuite.</string>
     <string name="backup_picker_missing">Acest dispozitiv nu are selector de fișiere. Folosește folderul Download.</string>

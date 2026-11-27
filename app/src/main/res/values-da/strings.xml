@@ -858,7 +858,6 @@
     <string name="backup_password_needed">Denne fil er beskyttet med en adgangskode.</string>
     <string name="backup_password_open">Åbn</string>
     <string name="backup_password_wrong">Forkert adgangskode.</string>
-    <string name="backup_password_phone">Denne fil er beskyttet med en adgangskode og kan kun gendannes direkte på enheden.</string>
     <string name="backup_import_now">Importér nu</string>
     <string name="backup_restart_hint">Derefter genstarter appen. Portaler føjes til de eksisterende, de valgte indstillinger erstattes.</string>
     <string name="backup_picker_missing">Denne enhed tilbyder ikke filvalg. Brug mappen Download.</string>

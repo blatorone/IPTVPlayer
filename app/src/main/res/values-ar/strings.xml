@@ -992,4 +992,6 @@
     <string name="visibility_only_channel">هذه القناة فقط</string>
     <string name="visibility_all_channels">كل قنوات هذه الفئة</string>
     <string name="visibility_all">الكل</string>
+    <string name="percent_value">%1$d%%</string>
+    <string name="watched_percent">تمت مشاهدة %1$d%%</string>
 </resources>

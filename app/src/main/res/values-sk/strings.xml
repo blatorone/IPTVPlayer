@@ -984,4 +984,6 @@
     <string name="visibility_only_channel">Len tento kanál</string>
     <string name="visibility_all_channels">Všetky kanály tejto kategórie</string>
     <string name="visibility_all">Všetko</string>
+    <string name="percent_value">%1$d %%</string>
+    <string name="watched_percent">%1$d %% pozreté</string>
 </resources>

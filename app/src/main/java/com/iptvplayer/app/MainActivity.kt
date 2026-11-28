@@ -9205,7 +9205,7 @@ private fun PlayerHome(
                             }
                             val resumeLabel = resumePercent?.let {
                                 stringResource(R.string.trakt_resume_progress, it.toInt())
-                            } ?: seriesResume?.let { episodeResumeLabel(it, resumePosition ?: 0L) }
+                            } ?: seriesResume?.let { episodeResumeLabel(it, resumePosition ?: 0L) + resumePercentSuffix(resumeKey?.let { key -> progressPreferences?.savedPercent(key) }) }
                                 ?: resumePosition?.takeIf { it > 0 }?.let(::playbackTime)
                             val baseTitle = (portalDetail ?: title).let { detail -> detailMetadata?.applyTo(detail) ?: detail }
                             val displayTitle = traktDetailMetadata?.let { metadata ->
@@ -9251,6 +9251,7 @@ private fun PlayerHome(
                                     )
                                 },
                                 resumeLabel = resumeLabel,
+                                resumePercent = resumeKey?.let { progressPreferences?.savedPercent(it) },
                                 onResume = if (resumeKey != null && (section == PortalSection.MOVIES || seasons != null)) {
                                     { selectTitle(section, title, seriesResume, movieResumeKey) }
                                 } else null,
@@ -9364,7 +9365,8 @@ private fun PlayerHome(
                                     val position = progressPreferences?.getLong(entry.progressKey, 0L) ?: 0L
                                     MyAreaCard(
                                         "c:${entry.progressKey}", movieReference(entry), entry.refs,
-                                        resources.getString(R.string.saved_playback_position, playbackTime(position)), 0
+                                        resources.getString(R.string.saved_playback_position, playbackTime(position)) +
+                                            (progressPreferences?.savedPercent(entry.progressKey)?.let { " · " + resources.getString(R.string.percent_value, it) } ?: ""), 0
                                     ) { openWatchedMovie(entry, resume = true) }
                                 }
                                 val bookmarks = movieBookmarks.filter { entry ->
@@ -9410,7 +9412,8 @@ private fun PlayerHome(
                                     continueLabel to playable.filter { it.continuable() }.continueOrder(now)
                                         .map { entry ->
                                             card("c", entry, newEpisodes = entry.newInPortal(now).size, caption = resumeFor(entry)?.let { episode ->
-                                                episodeResumeLabel(episode, progressPreferences?.getLong(episode.progressKey, 0L) ?: 0L)
+                                                episodeResumeLabel(episode, progressPreferences?.getLong(episode.progressKey, 0L) ?: 0L) +
+                                                    resumePercentSuffix(progressPreferences?.savedPercent(episode.progressKey))
                                             })
                                         },
                                     watchlistLabel to playable.filter { it.saved }.sortedBy { it.name }.map { card("w", it, null) },
@@ -11286,6 +11289,11 @@ private fun ProgrammeDetails(channel: StalkerChannel, programmes: List<PortalPro
         }
     }
 }
+
+/** " · 42 %" after a resume label, or nothing. */
+@Composable
+private fun resumePercentSuffix(percent: Int?): String =
+    percent?.takeIf { it > 0 }?.let { " · " + stringResource(R.string.percent_value, it) } ?: ""
 
 @Composable
 private fun episodeResumeLabel(episode: EpisodeResume, position: Long): String = listOfNotNull(

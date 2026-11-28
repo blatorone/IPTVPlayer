@@ -335,3 +335,11 @@ private fun decodeRefs(refs: JSONArray): List<SeriesPortalRef> = List(refs.lengt
     val ref = refs.getJSONObject(index)
     SeriesPortalRef(ref.getString("source"), ref.getString("title"))
 }
+
+/** Watched share of a saved playback in percent (local position, else Trakt's); null when unknown. */
+internal fun SharedPreferences.savedPercent(key: String): Int? {
+    val position = getLong(key, 0L)
+    val duration = getLong("duration:$key", 0L)
+    return if (position > 0L && duration > 0L) (position * 100 / duration).toInt().coerceIn(0, 100)
+    else getFloat("trakt_percent:$key", 0f).takeIf { it > 0f }?.toInt()?.coerceIn(0, 100)
+}

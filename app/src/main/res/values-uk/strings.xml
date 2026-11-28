@@ -984,4 +984,6 @@
     <string name="visibility_only_channel">Лише цей канал</string>
     <string name="visibility_all_channels">Усі канали цієї категорії</string>
     <string name="visibility_all">Усі</string>
+    <string name="percent_value">%1$d %%</string>
+    <string name="watched_percent">переглянуто %1$d %%</string>
 </resources>

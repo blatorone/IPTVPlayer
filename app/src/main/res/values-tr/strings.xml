@@ -976,4 +976,6 @@
     <string name="visibility_only_channel">Yalnızca bu kanal</string>
     <string name="visibility_all_channels">Bu kategorideki tüm kanallar</string>
     <string name="visibility_all">Tümü</string>
+    <string name="percent_value">%%%1$d</string>
+    <string name="watched_percent">%%%1$d izlendi</string>
 </resources>

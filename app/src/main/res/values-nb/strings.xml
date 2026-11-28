@@ -976,4 +976,6 @@
     <string name="visibility_only_channel">Bare denne kanalen</string>
     <string name="visibility_all_channels">Alle kanaler i denne kategorien</string>
     <string name="visibility_all">Alle</string>
+    <string name="percent_value">%1$d %%</string>
+    <string name="watched_percent">%1$d %% sett</string>
 </resources>

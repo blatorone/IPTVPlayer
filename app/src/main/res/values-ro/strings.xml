@@ -980,4 +980,6 @@
     <string name="visibility_only_channel">Doar acest canal</string>
     <string name="visibility_all_channels">Toate canalele acestei categorii</string>
     <string name="visibility_all">Toate</string>
+    <string name="percent_value">%1$d%%</string>
+    <string name="watched_percent">%1$d%% vizionat</string>
 </resources>

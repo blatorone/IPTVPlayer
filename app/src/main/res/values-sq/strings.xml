@@ -976,4 +976,6 @@
     <string name="visibility_only_channel">Vetëm ky kanal</string>
     <string name="visibility_all_channels">Të gjithë kanalet e kësaj kategorie</string>
     <string name="visibility_all">Të gjitha</string>
+    <string name="percent_value">%1$d%%</string>
+    <string name="watched_percent">%1$d%% e parë</string>
 </resources>

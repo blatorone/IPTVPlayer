@@ -980,4 +980,6 @@
     <string name="visibility_only_channel">Seulement cette chaîne</string>
     <string name="visibility_all_channels">Toutes les chaînes de cette catégorie</string>
     <string name="visibility_all">Tout</string>
+    <string name="percent_value">%1$d %%</string>
+    <string name="watched_percent">%1$d %% vu</string>
 </resources>

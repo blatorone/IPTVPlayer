@@ -976,4 +976,6 @@
     <string name="visibility_only_channel">Csak ez a csatorna</string>
     <string name="visibility_all_channels">A kategória összes csatornája</string>
     <string name="visibility_all">Mind</string>
+    <string name="percent_value">%1$d%%</string>
+    <string name="watched_percent">%1$d%% megnézve</string>
 </resources>

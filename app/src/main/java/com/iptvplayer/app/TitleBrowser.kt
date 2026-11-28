@@ -383,6 +383,8 @@ internal fun TitleDetails(
     upcomingEpisode: String?,
     resumeLabel: String?,
     onResume: (() -> Unit)?,
+    /** Watched share of what "Fortsetzen" continues, shown on the button. */
+    resumePercent: Int? = null,
     firstEpisodeAction: (() -> Unit)?,
     firstEpisodeLabel: String?,
     focusPrimary: Boolean,
@@ -437,7 +439,8 @@ internal fun TitleDetails(
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (primaryAction != null) MenuButton(
                     when {
-                        onResume != null -> stringResource(R.string.resume_playback)
+                        onResume != null -> stringResource(R.string.resume_playback) +
+                            (resumePercent?.takeIf { it > 0 }?.let { " · " + stringResource(R.string.percent_value, it) } ?: "")
                         firstEpisodeAction != null -> firstEpisodeLabel.orEmpty()
                         else -> stringResource(R.string.play_movie)
                     },
@@ -465,7 +468,18 @@ internal fun TitleDetails(
     }
 }
 
-internal data class EpisodeCardProgress(val completed: Boolean, val position: Long, val duration: Long)
+internal data class EpisodeCardProgress(val completed: Boolean, val position: Long, val duration: Long) {
+    /** Watched share 0..1: a finished episode counts fully, a started one by its position. */
+    val share: Float get() = when {
+        completed -> 1f
+        duration > 0L -> (position.toFloat() / duration).coerceIn(0f, 1f)
+        else -> 0f
+    }
+}
+
+/** Watched share of several episodes in percent (0 for none). */
+internal fun watchedPercent(progress: List<EpisodeCardProgress>): Int =
+    if (progress.isEmpty()) 0 else (progress.sumOf { it.share.toDouble() } * 100 / progress.size).toInt()
 
 @Composable
 private fun WatchProgress(progress: EpisodeCardProgress) {
@@ -506,7 +520,16 @@ internal fun SeriesSeasons(
         item(key = "overview") { header() }
         item(key = "seasons") {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(stringResource(R.string.seasons), style = MaterialTheme.typography.titleMedium)
+                // Watched share of the whole series, once all seasons have their episodes.
+                val seriesPercent = seasons?.takeIf { list -> list.isNotEmpty() && list.all { it.episodes.isNotEmpty() } }
+                    ?.let { list -> watchedPercent(list.flatMap { season -> season.episodes.map { episodeProgress(season, it) } }) }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.seasons), style = MaterialTheme.typography.titleMedium)
+                    seriesPercent?.takeIf { it > 0 }?.let {
+                        Text(stringResource(R.string.watched_percent, it), style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary)
+                    }
+                }
                 if (seasons == null && !failed) LinearProgressIndicator(Modifier.fillMaxWidth())
                 if (failed || seasons?.isEmpty() == true) {
                     Text(stringResource(R.string.no_episodes))
@@ -532,6 +555,9 @@ internal fun SeriesSeasons(
                     Text(seasonLabel(season, series), style = MaterialTheme.typography.titleMedium)
                     if (season.episodes.isNotEmpty()) {
                         MenuButton(stringResource(R.string.season_watched_status), Modifier) { onSeasonWatchStatus(season) }
+                        // Next to the season status: how much of this season is watched.
+                        Text(stringResource(R.string.watched_percent, watchedPercent(season.episodes.map { episodeProgress(season, it) })),
+                            style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                     }
                 }
             }

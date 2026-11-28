@@ -984,4 +984,6 @@
     <string name="visibility_only_channel">Tik šis kanalas</string>
     <string name="visibility_all_channels">Visi šios kategorijos kanalai</string>
     <string name="visibility_all">Visi</string>
+    <string name="percent_value">%1$d %%</string>
+    <string name="watched_percent">peržiūrėta %1$d %%</string>
 </resources>

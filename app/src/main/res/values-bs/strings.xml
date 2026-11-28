@@ -980,4 +980,6 @@
     <string name="visibility_only_channel">Samo ovaj kanal</string>
     <string name="visibility_all_channels">Svi kanali ove kategorije</string>
     <string name="visibility_all">Sve</string>
+    <string name="percent_value">%1$d %%</string>
+    <string name="watched_percent">%1$d %% pogledano</string>
 </resources>

@@ -2,6 +2,7 @@
 
 ## 2.0.2
 
+- Fortschritt in Prozent: Der Knopf „Fortsetzen“ zeigt, wie viel vom Film bzw. der Folge gesehen ist (z. B. „Fortsetzen · 42 %“), ebenso die Zeile darüber und „Weiter schauen“. Bei Serien steht neben „Staffeln“, wie viel der ganzen Serie gesehen ist, und neben „Staffelstatus“, wie viel der Staffel.
 - Trakt: Wer eine Folge nach 80 %, aber vor dem Abspann stoppte, bekam sie bei Trakt als gesehen markiert, obwohl die App den Fortschritt zum Weiterschauen speicherte. Vor dem Ende (Folge: Abspann, Film: 95 %) meldet die App Trakt jetzt eine Pause; Trakt behält dann den Fortschritt. Als gesehen zählt es erst am Ende oder beim Wechsel zur nächsten Folge.
 - Serien: Kommt die Einblendung „Nächste Folge“ zu früh, bricht die Zurück-Taste sie ab. Die Folge läuft dann bis zum echten Ende weiter, danach geht es wie gewohnt weiter. Die zu früh erkannte Abspann-Stelle dieser Folge wird verworfen und beim nächsten Mal neu gemessen; die Diagnose vermerkt den Abbruch (nur Zeiten).
 - Sichtbarkeit wird mit einem Auge gezeigt statt mit einem Schalter: offenes Auge = eingeblendet, durchgestrichenes Auge = ausgeblendet – am Fernseher in den Listen „Alle“ und auf der Handy-Seite bei Kategorien und Sendern.

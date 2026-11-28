@@ -971,4 +971,12 @@
     <string name="stream_choice_failed">Stream nehrá. Vyber iný:</string>
     <string name="smart_home_light_hint">„Ponechať bez zmeny“: StreamWatch toto svetlo tu vôbec neprepína. Pri „zapnuté“ sa zobrazí jas a – ak to svetlo podporuje – paleta pre teplotu farby a farbu.</string>
     <string name="smart_home_action">Prepnutie</string>
+    <string name="edit_move">Presunúť</string>
+    <string name="edit_visibility">Viditeľnosť</string>
+    <string name="epg_name_edit">Zmeniť názov EPG</string>
+    <string name="epg_name_hint">Pod týmto názvom (alebo XMLTV ID) hľadá StreamWatch relácie v sprievodcovi XMLTV.</string>
+    <string name="epg_name_save">Uložiť</string>
+    <string name="epg_name_reset">Obnoviť</string>
+    <string name="move_hint_vertical">Presúvaj pomocou ▲ a ▼, OK alebo Späť ukončí.</string>
+    <string name="move_hint_horizontal">Presúvaj pomocou ◀ a ▶, OK alebo Späť ukončí.</string>
 </resources>

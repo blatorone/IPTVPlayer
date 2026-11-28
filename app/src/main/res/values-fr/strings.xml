@@ -967,4 +967,12 @@
     <string name="stream_choice_failed">Le flux ne fonctionne pas. Choisis-en un autre :</string>
     <string name="smart_home_light_hint">« Laisser tel quel » : StreamWatch ne change pas du tout cette lampe ici. Avec « allumée » apparaissent la luminosité et – si la lampe le permet – la palette de température de couleur et de couleur.</string>
     <string name="smart_home_action">Action</string>
+    <string name="edit_move">Déplacer</string>
+    <string name="edit_visibility">Visibilité</string>
+    <string name="epg_name_edit">Modifier le nom EPG</string>
+    <string name="epg_name_hint">StreamWatch cherche les programmes dans le guide XMLTV sous ce nom (ou cet ID XMLTV).</string>
+    <string name="epg_name_save">Enregistrer</string>
+    <string name="epg_name_reset">Réinitialiser</string>
+    <string name="move_hint_vertical">Déplace avec ▲ et ▼, OK ou Retour termine.</string>
+    <string name="move_hint_horizontal">Déplace avec ◀ et ▶, OK ou Retour termine.</string>
 </resources>

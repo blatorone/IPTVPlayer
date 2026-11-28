@@ -967,4 +967,12 @@
     <string name="stream_choice_failed">Fluxul nu merge. Alege altul:</string>
     <string name="smart_home_light_hint">„Lasă așa cum e“: StreamWatch nu comută deloc această lampă aici. La „aprinsă“ apar luminozitatea și – dacă lampa poate – paleta pentru temperatura culorii și culoare.</string>
     <string name="smart_home_action">Comutare</string>
+    <string name="edit_move">Mută</string>
+    <string name="edit_visibility">Vizibilitate</string>
+    <string name="epg_name_edit">Schimbă numele EPG</string>
+    <string name="epg_name_hint">StreamWatch caută emisiunile în ghidul XMLTV sub acest nume (sau ID XMLTV).</string>
+    <string name="epg_name_save">Salvează</string>
+    <string name="epg_name_reset">Resetează</string>
+    <string name="move_hint_vertical">Mută cu ▲ și ▼, OK sau Înapoi încheie.</string>
+    <string name="move_hint_horizontal">Mută cu ◀ și ▶, OK sau Înapoi încheie.</string>
 </resources>

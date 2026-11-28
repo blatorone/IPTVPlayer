@@ -963,4 +963,12 @@
     <string name="stream_choice_failed">Der Stream läuft nicht. Wähle einen anderen:</string>
     <string name="smart_home_light_hint">„Unverändert lassen“: StreamWatch schaltet diese Lampe hier gar nicht. Bei „an“ erscheinen die Helligkeit und – wenn die Lampe es kann – die Farbpalette für Farbtemperatur und Farbe.</string>
     <string name="smart_home_action">Schalten</string>
+    <string name="edit_move">Verschieben</string>
+    <string name="edit_visibility">Sichtbarkeit</string>
+    <string name="epg_name_edit">EPG-Name ändern</string>
+    <string name="epg_name_hint">Unter diesem Namen (oder dieser XMLTV-ID) sucht StreamWatch die Sendungen im XMLTV-EPG.</string>
+    <string name="epg_name_save">Speichern</string>
+    <string name="epg_name_reset">Zurücksetzen</string>
+    <string name="move_hint_vertical">Mit ▲ und ▼ verschieben, OK oder Zurück beendet.</string>
+    <string name="move_hint_horizontal">Mit ◀ und ▶ verschieben, OK oder Zurück beendet.</string>
 </resources>

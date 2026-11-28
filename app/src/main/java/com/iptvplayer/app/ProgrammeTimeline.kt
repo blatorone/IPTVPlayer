@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
@@ -150,7 +152,10 @@ internal fun ProgrammeTimeline(
     onHighlight: (StalkerChannel) -> Unit,
     onProgrammeFocus: (StalkerChannel, PortalProgramme) -> Unit,
     onPlay: (StalkerChannel) -> Unit,
-    onTogglePin: (StalkerChannel) -> Unit
+    onTogglePin: (StalkerChannel) -> Unit,
+    // Long press OK: the channel menu; while a channel is moved the arrows move it.
+    onChannelMenu: (StalkerChannel) -> Unit = {},
+    onChannelMove: (StalkerChannel, Boolean) -> Unit = { _, _ -> }
 ) {
     var onlyPinned by window::onlyPinned
     var offset by window::offset
@@ -250,11 +255,31 @@ internal fun ProgrammeTimeline(
             }
         }
     }
+    // Keys follow the channel, so the focus stays on a moved channel. Same names get a suffix.
+    val rowKeys = remember(displayed) {
+        val seen = HashMap<String, Int>()
+        displayed.map { channel ->
+            val base = channel.name + "0000" + channel.id
+            val count = seen.merge(base, 1, Int::plus) ?: 1
+            if (count == 1) base else base + "0000" + count
+        }
+    }
+    // The moved channel stays on screen.
+    val movingName = ChannelEdits.moving
+    LaunchedEffect(displayed, movingName) {
+        val target = displayed.indexOfFirst { it.name == movingName }
+        if (movingName == null || target < 0) return@LaunchedEffect
+        val visible = scroll.layoutInfo.visibleItemsInfo
+        val firstShown = visible.firstOrNull()?.index ?: return@LaunchedEffect
+        val lastShown = visible.last().index
+        if (target <= firstShown) scroll.scrollToItem((target - 1).coerceAtLeast(0))
+        else if (target >= lastShown) scroll.scrollToItem((firstShown + target - lastShown + 1).coerceAtLeast(0))
+    }
     LazyColumn(
         Modifier.weight(1f), state = scroll,
         verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        itemsIndexed(displayed) { index, channel ->
+        itemsIndexed(displayed, key = { index, _ -> rowKeys[index] }) { index, channel ->
             val schedule = programmes(channel)
             val channelFocus = remember { FocusRequester() }
             val timelineFocus = remember { FocusRequester() }
@@ -278,7 +303,11 @@ internal fun ProgrammeTimeline(
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 GuideChannelCell(
                     channel, channel.number ?: index + 1L,
-                    Modifier.weight(1.25f).then(entryFocus).then(restoreFocus).focusRequester(channelFocus)
+                    Modifier.weight(1.25f)
+                        .moveKeys(movingName == channel.name, vertical = true, onStep = { up -> onChannelMove(channel, up) }) {
+                            ChannelEdits.moving = null
+                        }
+                        .then(entryFocus).then(restoreFocus).focusRequester(channelFocus)
                         .focusProperties {
                             canFocus = active
                             right = timelineFocus
@@ -296,7 +325,9 @@ internal fun ProgrammeTimeline(
                     rowHeight = rowHeight,
                     compact = compact,
                     appearance = appearance,
-                    onFocus = { onHighlight(channel) }
+                    onFocus = { onHighlight(channel) },
+                    hidden = ChannelEdits.isHidden(channel),
+                    onLongPress = { onChannelMenu(channel) }
                 ) {
                     onHighlight(channel)
                     onPlay(channel)
@@ -367,6 +398,8 @@ private fun GuideChannelCell(
     compact: Boolean,
     appearance: GuideAppearance,
     onFocus: () -> Unit,
+    hidden: Boolean = false,
+    onLongPress: () -> Unit = {},
     onPlay: () -> Unit
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -392,7 +425,7 @@ private fun GuideChannelCell(
                 if (it.isFocused && !focused) onFocus()
                 focused = it.isFocused
             }
-            .clickable(onClick = onPlay)
+            .combinedClickable(onClick = onPlay, onLongClick = onLongPress)
             .padding(horizontal = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -406,8 +439,8 @@ private fun GuideChannelCell(
             Modifier.width(if (compact) 22.dp else 28.dp).height(if (compact) 18.dp else 24.dp)
         )
         Text(
-            channel.name,
-            Modifier.weight(1f),
+            if (hidden) stringResource(R.string.hidden_category_label, channel.name) else channel.name,
+            Modifier.weight(1f).then(if (hidden) Modifier.alpha(0.55f) else Modifier),
             style = (if (compact) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelMedium)
                 .scaled(appearance.textSize.factor),
             maxLines = 2,

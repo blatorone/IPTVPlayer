@@ -2,6 +2,8 @@
 
 ## 2.0.1
 
+- Live-TV: Langes Drücken von OK auf einen Sender im Programmführer öffnet ein Menü: Verschieben (mit ▲/▼ innerhalb der Kategorie, OK oder Zurück beendet), Sichtbarkeit (ein- oder ausblenden) und „EPG-Name ändern“ (der Name bzw. die XMLTV-ID, unter der der Sender im XMLTV-EPG gesucht wird, z. B. bei doppelten EPG-Einträgen). Ausgeblendete Sender erscheinen mit „Ausgeblendete Kategorien vorübergehend anzeigen“ wieder.
+- Kategorien: Langes Drücken öffnet ein Menü mit Verschieben (Live-TV mit ▲/▼, Filme und Serien mit ◀/▶ direkt in der Liste), Sichtbarkeit und – mit PIN – Sperren. „Kategorien verwalten“ bleibt wie bisher.
 - Live-TV: Die Stream-Auswahl in den Einstellungen und die Meldung beim Senderwechsel oben rechts zeigen „Portal N · Qualität (z. B. FHD/UHD) · Portal“, damit klar ist, welcher Stream läuft.
 - Suche: „Suchverlauf löschen“ ist mit der Fernbedienung erreichbar: vom ersten Eintrag nach oben, noch einmal nach oben ins Suchfeld.
 - Suche: Neben „Serien“ gibt es den Knopf „Letzte Suchen“. Die Tastatur schließt jetzt mit jeder Abschlusstaste, auch ohne Eingabe; dann geht der Fokus auf den Suchverlauf.

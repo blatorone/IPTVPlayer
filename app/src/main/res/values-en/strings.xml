@@ -963,4 +963,12 @@
     <string name="stream_choice_failed">The stream does not play. Choose another one:</string>
     <string name="smart_home_light_hint">„Leave as is“: StreamWatch does not switch this light here at all. With „on“ the brightness and – if the light supports it – the palette for colour temperature and colour appear.</string>
     <string name="smart_home_action">Switch</string>
+    <string name="edit_move">Move</string>
+    <string name="edit_visibility">Visibility</string>
+    <string name="epg_name_edit">Change EPG name</string>
+    <string name="epg_name_hint">StreamWatch looks up the programmes in the XMLTV guide under this name (or XMLTV ID).</string>
+    <string name="epg_name_save">Save</string>
+    <string name="epg_name_reset">Reset</string>
+    <string name="move_hint_vertical">Move with ▲ and ▼, OK or Back finishes.</string>
+    <string name="move_hint_horizontal">Move with ◀ and ▶, OK or Back finishes.</string>
 </resources>

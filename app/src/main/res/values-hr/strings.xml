@@ -967,4 +967,12 @@
     <string name="stream_choice_failed">Stream ne radi. Odaberi drugi:</string>
     <string name="smart_home_light_hint">„Ostavi kako jest“: StreamWatch ovdje uopće ne prebacuje ovo svjetlo. Kod „uključeno“ pojavljuju se svjetlina i – ako svjetlo to podržava – paleta za temperaturu boje i boju.</string>
     <string name="smart_home_action">Prebacivanje</string>
+    <string name="edit_move">Premjesti</string>
+    <string name="edit_visibility">Vidljivost</string>
+    <string name="epg_name_edit">Promijeni EPG naziv</string>
+    <string name="epg_name_hint">StreamWatch pod ovim nazivom (ili XMLTV ID-om) traži emisije u XMLTV vodiču.</string>
+    <string name="epg_name_save">Spremi</string>
+    <string name="epg_name_reset">Vrati</string>
+    <string name="move_hint_vertical">Pomiči s ▲ i ▼, OK ili Natrag završava.</string>
+    <string name="move_hint_horizontal">Pomiči s ◀ i ▶, OK ili Natrag završava.</string>
 </resources>

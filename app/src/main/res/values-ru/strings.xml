@@ -971,4 +971,12 @@
     <string name="stream_choice_failed">Поток не воспроизводится. Выбери другой:</string>
     <string name="smart_home_light_hint">«Оставить как есть»: здесь StreamWatch эту лампу вообще не переключает. При «вкл.» появляются яркость и – если лампа умеет – палитра цветовой температуры и цвета.</string>
     <string name="smart_home_action">Переключение</string>
+    <string name="edit_move">Переместить</string>
+    <string name="edit_visibility">Видимость</string>
+    <string name="epg_name_edit">Изменить имя EPG</string>
+    <string name="epg_name_hint">Под этим именем (или XMLTV ID) StreamWatch ищет передачи в программе XMLTV.</string>
+    <string name="epg_name_save">Сохранить</string>
+    <string name="epg_name_reset">Сбросить</string>
+    <string name="move_hint_vertical">Перемещай ▲ и ▼, OK или Назад завершает.</string>
+    <string name="move_hint_horizontal">Перемещай ◀ и ▶, OK или Назад завершает.</string>
 </resources>

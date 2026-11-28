@@ -967,4 +967,12 @@
     <string name="stream_choice_failed">El stream no se reproduce. Elige otro:</string>
     <string name="smart_home_light_hint">„Dejar como está“: StreamWatch no cambia esta luz aquí. Con „encendida“ aparecen el brillo y, si la luz lo admite, la paleta de temperatura de color y color.</string>
     <string name="smart_home_action">Acción</string>
+    <string name="edit_move">Mover</string>
+    <string name="edit_visibility">Visibilidad</string>
+    <string name="epg_name_edit">Cambiar nombre EPG</string>
+    <string name="epg_name_hint">StreamWatch busca los programas en la guía XMLTV con este nombre (o ID de XMLTV).</string>
+    <string name="epg_name_save">Guardar</string>
+    <string name="epg_name_reset">Restablecer</string>
+    <string name="move_hint_vertical">Mueve con ▲ y ▼; OK o Atrás termina.</string>
+    <string name="move_hint_horizontal">Mueve con ◀ y ▶; OK o Atrás termina.</string>
 </resources>

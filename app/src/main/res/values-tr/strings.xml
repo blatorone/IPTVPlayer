@@ -963,4 +963,12 @@
     <string name="stream_choice_failed">Yayın oynatılamıyor. Başka birini seç:</string>
     <string name="smart_home_light_hint">„Olduğu gibi bırak“: StreamWatch bu lambayı burada hiç değiştirmez. „Açık“ seçilince parlaklık ve – lamba destekliyorsa – renk sıcaklığı ve renk paleti görünür.</string>
     <string name="smart_home_action">Geçiş</string>
+    <string name="edit_move">Taşı</string>
+    <string name="edit_visibility">Görünürlük</string>
+    <string name="epg_name_edit">EPG adını değiştir</string>
+    <string name="epg_name_hint">StreamWatch programları XMLTV rehberinde bu adla (veya XMLTV kimliğiyle) arar.</string>
+    <string name="epg_name_save">Kaydet</string>
+    <string name="epg_name_reset">Sıfırla</string>
+    <string name="move_hint_vertical">▲ ve ▼ ile taşı, OK veya Geri bitirir.</string>
+    <string name="move_hint_horizontal">◀ ve ▶ ile taşı, OK veya Geri bitirir.</string>
 </resources>

@@ -241,6 +241,7 @@ class MainActivity : ComponentActivity() {
         Log.setLogLevel(Log.LOG_LEVEL_OFF)
         // Optional: keep listening for the device waking from standby (also without a restart).
         AutoStart.sync(this)
+        ChannelEdits.init(this)
         // The audio sink is wrapped so that series openings can also be recognised by their theme music.
         // Passthrough audio (Dolby to the TV or receiver) is never decoded by the app; users may
         // choose to decode it so that the theme music can be analysed as well.
@@ -2080,12 +2081,18 @@ private fun PlayerHome(
             }
         }
     }
-    val liveCategories = remember(allLiveCategories, liveGroups, countries) {
-        allLiveCategories.mapValues { (_, items) ->
-            if (countries.isEmpty()) items else items.filter {
+    // With the viewer's own channel order and hidden channels (channel menu, long press OK).
+    val liveCategories = remember(allLiveCategories, liveGroups, countries, ChannelEdits.orders, ChannelEdits.hidden, ui.showHiddenCategories) {
+        allLiveCategories.mapValues { (category, items) ->
+            ChannelEdits.arrange(category, if (countries.isEmpty()) items else items.filter {
                 liveGroups.getValue(it).description.country in countries
-            }
+            }, ui.showHiddenCategories)
         }.filterValues { it.isNotEmpty() }
+    }
+    // Channel menu "Verschieben": one step among the shown channels of its category.
+    fun moveChannel(channel: StalkerChannel, up: Boolean) {
+        val entry = allLiveCategories.entries.firstOrNull { channel in it.value } ?: return
+        ChannelEdits.move(entry.key, entry.value, liveCategories[entry.key].orEmpty(), channel, up)
     }
     // Read through this holder where a callback may outlive the composition that created it
     // (the fullscreen player keeps its key handler): it always sees the current channel list.
@@ -2246,6 +2253,18 @@ private fun PlayerHome(
             { if (combine) vodCategoryNames.keys.indexOf(it.id) else countryPriority(it.name, it.country) },
             { it.name }
         ))
+
+    // Category menu "Verschieben": one step among the [shown] categories with the arrow keys.
+    fun moveCategoryStep(section: PortalSection, id: String, up: Boolean, shown: List<String>) {
+        val defaultGroups = if (section == PortalSection.LIVE) {
+            allLiveCategories.keys.sortedBy { categoryNames.values.indexOf(it) }.map { PortalGroup(it, it) }
+        } else defaultVodCategoryOrder(section)
+        val stored = withCategoryOrder(section, defaultGroups) { it.id }.map { it.id }
+        val order = moveAmong(stored + shown.filter { it !in stored }, shown, id, up) ?: return
+        val key = categoryOrderKey(section)
+        categoryOrders[key] = order
+        preferences?.edit { putString(key, org.json.JSONArray(order).toString()) }
+    }
 
     fun titleKey(section: PortalSection, title: PortalTitle): String =
         "${catalogSession?.first?.sourceLabel.orEmpty()}:${section.name}:${title.id ?: title.name}"
@@ -2730,7 +2749,7 @@ private fun PlayerHome(
         if (useXmlTv) {
             externalGuides.firstNotNullOfOrNull { guide ->
                 liveVariants[channel].orEmpty().firstNotNullOfOrNull { item ->
-                    guide.programmes(item.value, channel.name).takeIf { it.isNotEmpty() }
+                    guide.programmes(item.value, channel.name, ChannelEdits.epgName(channel)).takeIf { it.isNotEmpty() }
                 }
             } ?: emptyList<PortalProgramme>().takeUnless { ui.epgUpdating }
         } else {
@@ -5739,7 +5758,28 @@ private fun PlayerHome(
             allLiveCategories.keys.sortedBy { categoryNames.values.indexOf(it) }.map { PortalGroup(it, it) }
         } else defaultVodCategoryOrder(section)
         val groups = withCategoryOrder(section, defaultGroups) { it.id }
-        CategoryDialog(
+        val toggleLock: ((PortalGroup) -> Unit)? = if (parental.hasPin) { group ->
+            val key = categoryKey(section, group.id)
+            if (key in parental.lockedCategories) {
+                ui.pinRequest = PinRequest(context.getString(R.string.pin_enter), null, check = parental::checkPin, length = parental.pinLength) {
+                    parental.toggleLocked(key)
+                }
+            } else parental.toggleLocked(key)
+        } else null
+        // Long press on one category: move (with the arrows in the list), visibility, lock.
+        if (first != null) {
+            val group = groups.firstOrNull { it.id == first } ?: PortalGroup(first, first)
+            CategoryActionDialog(
+                name = group.name,
+                hidden = categoryKey(section, first) in hiddenCategories,
+                vertical = section == PortalSection.LIVE,
+                onMove = { ChannelEdits.movingCategory = section to first },
+                onHidden = { hide -> setCategoryVisibility(section, setOf(first), hide) },
+                locked = categoryKey(section, first) in parental.lockedCategories,
+                onToggleLock = toggleLock?.let { toggle -> { toggle(group) } },
+                onDismiss = { ui.categoryMenu = null }
+            )
+        } else CategoryDialog(
             groups, first,
             isHidden = { categoryKey(section, it.id) in hiddenCategories },
             onApply = { ids, hidden ->
@@ -5754,18 +5794,18 @@ private fun PlayerHome(
             },
             onDismiss = { ui.categoryMenu = null },
             isLocked = { categoryKey(section, it.id) in parental.lockedCategories },
-            onToggleLock = if (parental.hasPin) { group ->
-                val key = categoryKey(section, group.id)
-                if (key in parental.lockedCategories) {
-                    ui.pinRequest = PinRequest(context.getString(R.string.pin_enter), null, check = parental::checkPin, length = parental.pinLength) {
-                        parental.toggleLocked(key)
-                    }
-                } else parental.toggleLocked(key)
-            } else null
+            onToggleLock = toggleLock
         )
+    }
+    ChannelEdits.menu?.let { channel ->
+        ChannelMenuDialog(channel, liveVariants[channel].orEmpty().firstNotNullOfOrNull { it.value.epgIdentity } ?: channel.name) {
+            ChannelEdits.menu = null
+        }
     }
     // Leaving the settings locks the protected settings again.
     LaunchedEffect(selected) {
+        ChannelEdits.moving = null
+        ChannelEdits.movingCategory = null
         if (selected != Destination.SETTINGS && selected != Destination.SOURCES && selected != Destination.CATEGORIES) {
             parental.settingsUnlocked = false
         }
@@ -7401,8 +7441,11 @@ private fun PlayerHome(
                                             }
                                         }
                                     } else {
-                                    items(groups) { group ->
-                                        MenuButton(group, Modifier.fillMaxWidth(), selected = channelCategory == group,
+                                    items(groups, key = { it }) { group ->
+                                        MenuButton(group, Modifier.fillMaxWidth().moveKeys(
+                                            ChannelEdits.movingCategory == (PortalSection.LIVE to group), vertical = true,
+                                            onStep = { up -> moveCategoryStep(PortalSection.LIVE, group, up, groups) }
+                                        ) { ChannelEdits.movingCategory = null }, selected = channelCategory == group,
                                             onLongPress = { ui.categoryMenu = PortalSection.LIVE to group }) {
                                             category = group
                                             showFullscreenPanel(GuidePanel.CHANNELS)
@@ -8933,7 +8976,13 @@ private fun PlayerHome(
                                     ui.guideProgramme = channel to programme
                                 },
                                 onPlay = { channel -> playChannel(channel, openFullscreenOnStart = false) },
-                                onTogglePin = ::toggleProgrammeChannel
+                                onTogglePin = ::toggleProgrammeChannel,
+                                onChannelMenu = { channel ->
+                                    if (parental.needsSettingsPin(parental.lockCategories)) {
+                                        withSettingsPin(true, unlock = false) { ChannelEdits.menu = channel }
+                                    } else ChannelEdits.menu = channel
+                                },
+                                onChannelMove = ::moveChannel
                                 )
                             }
                             }
@@ -8980,15 +9029,18 @@ private fun PlayerHome(
                                             guideScroll.requestScrollToItem(0)
                                             guidePanel = GuidePanel.GRID
                                         }
-                                        groups.forEach { group ->
-                                            MenuButton(group, Modifier.fillMaxWidth(), selected = category == group,
+                                        groups.forEach { group -> androidx.compose.runtime.key(group) {
+                                            MenuButton(group, Modifier.fillMaxWidth().moveKeys(
+                                                ChannelEdits.movingCategory == (PortalSection.LIVE to group), vertical = true,
+                                                onStep = { up -> moveCategoryStep(PortalSection.LIVE, group, up, groups) }
+                                            ) { ChannelEdits.movingCategory = null }, selected = category == group,
                                                 onLongPress = { ui.categoryMenu = PortalSection.LIVE to group }) {
                                                 category = group
                                                 ui.restoreLiveFocus = false
                                                 guideScroll.requestScrollToItem(0)
                                                 guidePanel = GuidePanel.GRID
                                             }
-                                        }
+                                        } }
                                     }
                                 }
                             }
@@ -9446,10 +9498,13 @@ private fun PlayerHome(
                             details = null
                             myAreaSection = section
                         }
-                            visibleVodGroups.forEach { group ->
+                            visibleVodGroups.forEach { group -> androidx.compose.runtime.key(group.id) {
                                 MenuButton(
                                     group.name,
-                                    Modifier,
+                                    Modifier.moveKeys(
+                                        ChannelEdits.movingCategory == (section to group.id), vertical = false,
+                                        onStep = { left -> moveCategoryStep(section, group.id, left, visibleVodGroups.map { it.id }) }
+                                    ) { ChannelEdits.movingCategory = null },
                                     providerMark = providerCategoryMark(group.name).takeIf {
                                         providerCategoryStyle != ProviderCategoryStyle.LABELS && providerCategoryIcon(group.name) == null
                                     },
@@ -9464,7 +9519,7 @@ private fun PlayerHome(
                                     hiddenIndicator = categoryKey(section, group.id) in hiddenCategories,
                                     onLongPress = { ui.categoryMenu = section to group.id }
                                 ) { openVodCategory(group) }
-                            }
+                            } }
                         MenuButton(
                             stringResource(R.string.manage_categories),
                             Modifier

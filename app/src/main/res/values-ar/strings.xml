@@ -979,4 +979,12 @@
     <string name="stream_choice_failed">البث لا يعمل. اختر بثًا آخر:</string>
     <string name="smart_home_light_hint">„اتركه كما هو“: لا يبدّل StreamWatch هذا المصباح هنا إطلاقًا. عند „تشغيل“ يظهر السطوع و – إن كان المصباح يدعم ذلك – لوحة درجة حرارة اللون واللون.</string>
     <string name="smart_home_action">التبديل</string>
+    <string name="edit_move">نقل</string>
+    <string name="edit_visibility">الظهور</string>
+    <string name="epg_name_edit">تغيير اسم دليل البرامج</string>
+    <string name="epg_name_hint">يبحث StreamWatch عن البرامج في دليل XMLTV بهذا الاسم (أو معرّف XMLTV).</string>
+    <string name="epg_name_save">حفظ</string>
+    <string name="epg_name_reset">إعادة تعيين</string>
+    <string name="move_hint_vertical">انقل باستخدام ▲ و ▼، ويُنهي OK أو رجوع.</string>
+    <string name="move_hint_horizontal">انقل باستخدام ◀ و ▶، ويُنهي OK أو رجوع.</string>
 </resources>

@@ -963,4 +963,12 @@
     <string name="stream_choice_failed">A stream nem játszik. Válassz egy másikat:</string>
     <string name="smart_home_light_hint">„Hagyd változatlanul“: a StreamWatch itt egyáltalán nem kapcsolja ezt a lámpát. „Be” esetén megjelenik a fényerő és – ha a lámpa tudja – a színhőmérséklet- és színpaletta.</string>
     <string name="smart_home_action">Kapcsolás</string>
+    <string name="edit_move">Áthelyezés</string>
+    <string name="edit_visibility">Láthatóság</string>
+    <string name="epg_name_edit">EPG-név módosítása</string>
+    <string name="epg_name_hint">A StreamWatch ezen a néven (vagy XMLTV-azonosítón) keresi a műsorokat az XMLTV-műsorújságban.</string>
+    <string name="epg_name_save">Mentés</string>
+    <string name="epg_name_reset">Visszaállítás</string>
+    <string name="move_hint_vertical">Mozgatás ▲ és ▼ gombbal, OK vagy Vissza befejezi.</string>
+    <string name="move_hint_horizontal">Mozgatás ◀ és ▶ gombbal, OK vagy Vissza befejezi.</string>
 </resources>

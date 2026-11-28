@@ -972,4 +972,12 @@
     <string name="stream_choice_failed">Pretok se ne predvaja. Izberi drugega:</string>
     <string name="smart_home_light_hint">„Pusti, kot je“: StreamWatch te luči tukaj sploh ne preklaplja. Pri „vklopljeno“ se prikažeta svetlost in – če luč to zmore – paleta za barvno temperaturo in barvo.</string>
     <string name="smart_home_action">Preklop</string>
+    <string name="edit_move">Premakni</string>
+    <string name="edit_visibility">Vidnost</string>
+    <string name="epg_name_edit">Spremeni ime EPG</string>
+    <string name="epg_name_hint">StreamWatch pod tem imenom (ali XMLTV ID) išče oddaje v vodniku XMLTV.</string>
+    <string name="epg_name_save">Shrani</string>
+    <string name="epg_name_reset">Ponastavi</string>
+    <string name="move_hint_vertical">Premikaj z ▲ in ▼, OK ali Nazaj konča.</string>
+    <string name="move_hint_horizontal">Premikaj z ◀ in ▶, OK ali Nazaj konča.</string>
 </resources>

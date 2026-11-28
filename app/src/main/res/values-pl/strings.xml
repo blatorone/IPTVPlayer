@@ -971,4 +971,12 @@
     <string name="stream_choice_failed">Strumień nie działa. Wybierz inny:</string>
     <string name="smart_home_light_hint">„Pozostaw bez zmian“: StreamWatch w ogóle nie przełącza tu tej lampy. Przy „włączone“ pojawia się jasność i – jeśli lampa to obsługuje – paleta temperatury barwowej i koloru.</string>
     <string name="smart_home_action">Przełączanie</string>
+    <string name="edit_move">Przenieś</string>
+    <string name="edit_visibility">Widoczność</string>
+    <string name="epg_name_edit">Zmień nazwę EPG</string>
+    <string name="epg_name_hint">Pod tą nazwą (lub identyfikatorem XMLTV) StreamWatch szuka programów w przewodniku XMLTV.</string>
+    <string name="epg_name_save">Zapisz</string>
+    <string name="epg_name_reset">Przywróć</string>
+    <string name="move_hint_vertical">Przesuwaj ▲ i ▼, OK lub Wstecz kończy.</string>
+    <string name="move_hint_horizontal">Przesuwaj ◀ i ▶, OK lub Wstecz kończy.</string>
 </resources>

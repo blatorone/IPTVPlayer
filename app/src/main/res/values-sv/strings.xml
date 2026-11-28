@@ -963,4 +963,12 @@
     <string name="stream_choice_failed">Strömmen spelas inte. Välj en annan:</string>
     <string name="smart_home_light_hint">”Låt vara som det är”: StreamWatch växlar inte den här lampan här alls. Vid ”på” visas ljusstyrkan och – om lampan klarar det – paletten för färgtemperatur och färg.</string>
     <string name="smart_home_action">Växla</string>
+    <string name="edit_move">Flytta</string>
+    <string name="edit_visibility">Synlighet</string>
+    <string name="epg_name_edit">Ändra EPG-namn</string>
+    <string name="epg_name_hint">StreamWatch söker programmen i XMLTV-guiden under detta namn (eller XMLTV-id).</string>
+    <string name="epg_name_save">Spara</string>
+    <string name="epg_name_reset">Återställ</string>
+    <string name="move_hint_vertical">Flytta med ▲ och ▼, OK eller Tillbaka avslutar.</string>
+    <string name="move_hint_horizontal">Flytta med ◀ och ▶, OK eller Tillbaka avslutar.</string>
 </resources>

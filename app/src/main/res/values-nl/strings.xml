@@ -963,4 +963,12 @@
     <string name="stream_choice_failed">De stream speelt niet af. Kies een andere:</string>
     <string name="smart_home_light_hint">„Laten zoals het is“: StreamWatch schakelt deze lamp hier helemaal niet. Bij „aan“ verschijnen de helderheid en – als de lamp het kan – het palet voor kleurtemperatuur en kleur.</string>
     <string name="smart_home_action">Schakelen</string>
+    <string name="edit_move">Verplaatsen</string>
+    <string name="edit_visibility">Zichtbaarheid</string>
+    <string name="epg_name_edit">EPG-naam wijzigen</string>
+    <string name="epg_name_hint">StreamWatch zoekt de programma\'s in de XMLTV-gids onder deze naam (of XMLTV-ID).</string>
+    <string name="epg_name_save">Opslaan</string>
+    <string name="epg_name_reset">Herstellen</string>
+    <string name="move_hint_vertical">Verplaats met ▲ en ▼, OK of Terug stopt.</string>
+    <string name="move_hint_horizontal">Verplaats met ◀ en ▶, OK of Terug stopt.</string>
 </resources>

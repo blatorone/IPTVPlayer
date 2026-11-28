@@ -963,4 +963,12 @@
     <string name="stream_choice_failed">Transmetimi nuk luhet. Zgjidh një tjetër:</string>
     <string name="smart_home_light_hint">„Lëre siç është“: StreamWatch këtu nuk e ndërron fare këtë llambë. Me „ndezur“ shfaqen ndriçimi dhe – nëse llamba e mbështet – paleta për temperaturën e ngjyrës dhe ngjyrën.</string>
     <string name="smart_home_action">Ndërrimi</string>
+    <string name="edit_move">Zhvendos</string>
+    <string name="edit_visibility">Dukshmëria</string>
+    <string name="epg_name_edit">Ndrysho emrin EPG</string>
+    <string name="epg_name_hint">StreamWatch i kërkon emisionet në udhëzuesin XMLTV me këtë emër (ose ID XMLTV).</string>
+    <string name="epg_name_save">Ruaj</string>
+    <string name="epg_name_reset">Rivendos</string>
+    <string name="move_hint_vertical">Zhvendos me ▲ dhe ▼, OK ose Prapa përfundon.</string>
+    <string name="move_hint_horizontal">Zhvendos me ◀ dhe ▶, OK ose Prapa përfundon.</string>
 </resources>

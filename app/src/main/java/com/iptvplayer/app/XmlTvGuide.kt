@@ -73,7 +73,12 @@ internal data class XmlTvGuide(
     val schedules: Map<String, List<PortalProgramme>>,
     val aliases: Map<String, Set<String>>
 ) {
-    fun programmes(channel: StalkerChannel, displayName: String): List<PortalProgramme> {
+    fun programmes(channel: StalkerChannel, displayName: String, override: String? = null): List<PortalProgramme> {
+        // A name set by the viewer (channel menu "EPG-Name ändern") wins: XMLTV id or display name.
+        override?.let { name ->
+            val key = normalizedLabel(name)
+            return schedules[key] ?: aliases[key].orEmpty().firstNotNullOfOrNull { schedules[it] }.orEmpty()
+        }
         channel.epgIdentity?.let { schedules[normalizedLabel(it)] }?.let { return it }
         val key = normalizedLabel(displayName)
         val id = (aliases[key].orEmpty() + key.takeIf { it in schedules }.let(::listOfNotNull)).singleOrNull()

@@ -967,4 +967,12 @@
     <string name="stream_choice_failed">Plūsma nedarbojas. Izvēlies citu:</string>
     <string name="smart_home_light_hint">„Atstāt kā ir“: StreamWatch šeit šo lampu nepārslēdz. Izvēloties „ieslēgta“, parādās spilgtums un – ja lampa to atbalsta – krāsas temperatūras un krāsu palete.</string>
     <string name="smart_home_action">Pārslēgšana</string>
+    <string name="edit_move">Pārvietot</string>
+    <string name="edit_visibility">Redzamība</string>
+    <string name="epg_name_edit">Mainīt EPG nosaukumu</string>
+    <string name="epg_name_hint">StreamWatch meklē raidījumus XMLTV ceļvedī ar šo nosaukumu (vai XMLTV ID).</string>
+    <string name="epg_name_save">Saglabāt</string>
+    <string name="epg_name_reset">Atiestatīt</string>
+    <string name="move_hint_vertical">Pārvieto ar ▲ un ▼, OK vai Atpakaļ beidz.</string>
+    <string name="move_hint_horizontal">Pārvieto ar ◀ un ▶, OK vai Atpakaļ beidz.</string>
 </resources>

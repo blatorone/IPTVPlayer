@@ -161,3 +161,7 @@ header { flex-wrap: wrap; row-gap: 2px; }
 
 /* Channel list of a Live-TV category, indented below its row. */
 .channels { display: grid; gap: 6px; margin: 0 0 10px 18px; }
+
+/* Eye button for visibility: open and accent-coloured = shown, crossed out and muted = hidden. */
+.eye { background: none; border: 0; padding: 6px; color: var(--muted); cursor: pointer; line-height: 0; }
+.eye.on { color: var(--accent); }

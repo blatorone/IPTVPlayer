@@ -74,6 +74,8 @@ internal fun SettingRow(
     modifier: Modifier = Modifier,
     selected: Boolean? = null,
     enabled: Boolean = true,
+    // Visibility rows: an eye (open = shown, crossed out = hidden) instead of the switch.
+    eye: Boolean = false,
     onClick: () -> Unit
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -117,6 +119,11 @@ internal fun SettingRow(
                 maxLines = 2, overflow = TextOverflow.Ellipsis
             )
             when {
+                selected != null && eye -> androidx.compose.material3.Icon(
+                    androidx.compose.ui.res.painterResource(if (selected) R.drawable.ic_eye else R.drawable.ic_eye_off),
+                    contentDescription = stringResource(if (selected) R.string.show_categories else R.string.hide_categories),
+                    tint = if (selected) colors.primary else colors.onSurfaceVariant
+                )
                 selected != null -> SettingSwitch(selected)
                 value != null -> Text(
                     value, style = MaterialTheme.typography.labelLarge, color = colors.primary,

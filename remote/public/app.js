@@ -183,6 +183,14 @@ function el(tag, props = {}, ...children) {
 }
 const switchButton = (on, label, onClick) =>
   el("button", { class: "switch", role: "switch", "aria-checked": String(!!on), "aria-label": label, onclick: onClick });
+// Visibility: an open eye = shown, a crossed-out eye = hidden (like on the TV).
+const EYE_OPEN = '<path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/>';
+const EYE_OFF = '<path d="M12 7a5 5 0 0 1 5 5c0 .65-.13 1.26-.36 1.83l2.92 2.92A11.8 11.8 0 0 0 23 12c-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.74 2.74A11.8 11.8 0 0 0 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zm5.53 5.53 1.55 1.55A3 3 0 0 0 12.65 14.92l1.55 1.55A5 5 0 0 1 7.53 9.8zm4.31-.78 3.15 3.15.02-.16a3 3 0 0 0-3-3l-.17.01z"/>';
+function eyeButton(shown, label, onClick) {
+  const button = el("button", { class: "eye" + (shown ? " on" : ""), "aria-pressed": String(!!shown), "aria-label": label, title: label, onclick: onClick });
+  button.innerHTML = '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true">' + (shown ? EYE_OPEN : EYE_OFF) + "</svg>";
+  return button;
+}
 let toastTimer;
 function toast(text, error = false) {
   const box = $("toast");
@@ -422,7 +430,7 @@ function channelPanel(list) {
   const hide = (ids, hidden) => send({ t: "channelsHidden", category: list.channelsOf, ids, hidden });
   return el("div", { class: "channels" },
     el("div", { class: "row" }, el("span", { class: "label" }, t("ch.all")),
-      switchButton(allShown, t("ch.all"), () => hide(names, allShown))),
+      eyeButton(allShown, t("ch.all"), () => hide(names, allShown))),
     ...list.channels.map((c) => el("div", { class: "row" },
       el("span", { class: "label" }, c.name,
         el("span", { class: "sub" }, t("ch.epgSub", c.epg) + (c.epgChanged ? " · " + t("ch.epgChanged") : ""))),
@@ -430,7 +438,7 @@ function channelPanel(list) {
         const value = prompt(t("ch.epgPrompt"), c.epg);
         if (value !== null) send({ t: "epgName", category: list.channelsOf, name: c.name, value });
       } }, t("ch.epg")),
-      switchButton(!c.hidden, t("cat.showAria", c.name), () => hide([c.name], !c.hidden)))));
+      eyeButton(!c.hidden, t("cat.showAria", c.name), () => hide([c.name], !c.hidden)))));
 }
 
 function renderCategories() {
@@ -453,7 +461,7 @@ function renderCategories() {
           if (c.locked && !pin) return;
           send({ t: "categoryLock", section: categorySection, id: c.id, locked: !c.locked, pin });
         } }, c.locked ? "🔒" : "🔓") : null,
-      switchButton(!c.hidden, t("cat.showAria", c.name),
+      eyeButton(!c.hidden, t("cat.showAria", c.name),
         () => send({ t: "categories", section: categorySection, ids: [c.id], hidden: !c.hidden })));
     return open ? [row, channelPanel(channelList)] : [row];
   }));

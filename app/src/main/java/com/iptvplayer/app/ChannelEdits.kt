@@ -326,7 +326,7 @@ private fun FreshPressOnly(content: @Composable () -> Unit) {
 @Composable
 private fun VisibilityList(entries: List<Pair<String, String>>, first: FocusRequester, isShown: (String) -> Boolean, onShown: (Set<String>, Boolean) -> Unit) {
     val allShown = entries.all { isShown(it.first) }
-    SettingRow(stringResource(R.string.visibility_all), Modifier.focusRequester(first), selected = allShown) {
+    SettingRow(stringResource(R.string.visibility_all), Modifier.focusRequester(first), selected = allShown, eye = true) {
         onShown(entries.map { it.first }.toSet(), !allShown)
     }
     androidx.compose.foundation.lazy.LazyColumn(
@@ -336,7 +336,7 @@ private fun VisibilityList(entries: List<Pair<String, String>>, first: FocusRequ
         items(entries.size) { index ->
             val (id, label) = entries[index]
             val shown = isShown(id)
-            SettingRow(label, selected = shown) { onShown(setOf(id), !shown) }
+            SettingRow(label, selected = shown, eye = true) { onShown(setOf(id), !shown) }
         }
     }
 }

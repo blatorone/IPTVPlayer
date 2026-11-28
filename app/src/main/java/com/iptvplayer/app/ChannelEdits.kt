@@ -163,6 +163,7 @@ internal fun ChannelMenuDialog(channel: StalkerChannel, guideName: String, onDis
     var page by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val first = remember(page) { FocusRequester() }
     SettingsDialog(channel.name, onDismiss) {
+    FreshPressOnly {
         when (page) {
             0 -> {
                 SettingRow(stringResource(R.string.edit_move), Modifier.focusRequester(first)) {
@@ -205,6 +206,7 @@ internal fun ChannelMenuDialog(channel: StalkerChannel, guideName: String, onDis
         }
         SettingRow(stringResource(android.R.string.cancel)) { if (page == 0) onDismiss() else page = 0 }
     }
+    }
     LaunchedEffect(page) {
         withFrameNanos { }
         runCatching { first.requestFocus() }
@@ -227,6 +229,7 @@ internal fun CategoryActionDialog(
     var page by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val first = remember(page) { FocusRequester() }
     SettingsDialog(name, onDismiss) {
+    FreshPressOnly {
         if (page == 0) {
             SettingRow(stringResource(R.string.edit_move), Modifier.focusRequester(first)) {
                 onDismiss()
@@ -252,6 +255,7 @@ internal fun CategoryActionDialog(
         }
         SettingRow(stringResource(android.R.string.cancel)) { if (page == 0) onDismiss() else page = 0 }
     }
+    }
     LaunchedEffect(page) {
         withFrameNanos { }
         runCatching { first.requestFocus() }
@@ -267,4 +271,26 @@ internal fun MovableEntry(id: Any, active: Boolean, vertical: Boolean, onStep: (
     androidx.compose.runtime.key(id) {
         content(Modifier.moveKeys(active, vertical, onStep) { ChannelEdits.movingCategory = null })
     }
+}
+
+/**
+ * The menus open while OK is still held (long press): its release and repeats must not choose the
+ * first entry. Only a new press of OK inside the menu counts.
+ */
+@Composable
+private fun FreshPressOnly(content: @Composable () -> Unit) {
+    var armed by remember { mutableStateOf(false) }
+    androidx.compose.foundation.layout.Column(Modifier.onPreviewKeyEvent { event ->
+        val code = event.nativeKeyEvent.keyCode
+        val select = code == AndroidKeyEvent.KEYCODE_DPAD_CENTER || code == AndroidKeyEvent.KEYCODE_ENTER ||
+            code == AndroidKeyEvent.KEYCODE_NUMPAD_ENTER
+        when {
+            !select || armed && event.nativeKeyEvent.repeatCount == 0 -> false
+            event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0 -> {
+                armed = true
+                false
+            }
+            else -> !armed
+        }
+    }) { content() }
 }

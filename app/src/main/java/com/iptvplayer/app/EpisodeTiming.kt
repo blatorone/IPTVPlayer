@@ -80,3 +80,7 @@ internal fun precedingEpisode(
     val previousSeason = orderedSeasons.take(seasonIndex).lastOrNull { it.second.isNotEmpty() } ?: return null
     return previousSeason.first to previousSeason.second.last()
 }
+
+/** Preference key of the credits marker measured for one episode (by its media id, hashed). */
+internal fun creditsMarkerKey(mediaId: String): String = "credits_marker:" +
+    java.security.MessageDigest.getInstance("SHA-256").digest(mediaId.encodeToByteArray()).joinToString("") { "%02x".format(it) }

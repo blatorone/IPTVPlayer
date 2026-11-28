@@ -739,6 +739,8 @@ private class PlayerHomeFlags {
     var skipIntroTo by mutableStateOf<Long?>(null)
     var introOfferClosed by mutableStateOf<Pair<String, Long>?>(null)
     var outroOfferClosed by mutableStateOf<Pair<String, Long>?>(null)
+    /** Media id whose "next episode" countdown was cancelled with Back: it plays to its real end. */
+    var nextOfferClosed by mutableStateOf<String?>(null)
     var skipIsOutro by mutableStateOf(false)
     var pendingSeriesEpisode by mutableStateOf<Pair<PortalTitle, EpisodeResume>?>(null)
     var pendingMovie by mutableStateOf<WatchedMovie?>(null)
@@ -5494,6 +5496,18 @@ private fun PlayerHome(
                 dismissPlaybackControls++
                 return
             }
+            val countdownMedia = playbackAttempt?.mediaId
+            if (ui.nextEpisodeSeconds != null && countdownMedia != null && ui.nextOfferClosed != countdownMedia) {
+                // Back cancels the "next episode" countdown (it came too early): the episode plays to its
+                // real end. Its saved credits marker is forgotten, so the next viewing measures it again.
+                ui.nextOfferClosed = countdownMedia
+                ui.nextEpisodeSeconds = null
+                progressPreferences?.edit { remove(creditsMarkerKey(countdownMedia)) }
+                AppDiagnostics.record(
+                    context, "next_episode_cancelled pos_s:${(player?.currentPosition ?: 0L) / 1000} end_s:${(player?.duration ?: 0L) / 1000}"
+                )
+                return
+            }
             if (ui.skipIntroTo != null) {
                 // Back only closes the skip-intro offer, for the rest of this episode; the
                 // remote's left/right then seek again instead of moving between offer buttons.
@@ -6648,9 +6662,7 @@ private fun PlayerHome(
         val duration = active.duration
         val portal = attempt.variants[attempt.index].timing
         val seriesKey = selection.seriesId?.let { selection.source to it }
-        val markerKey = "credits_marker:" + java.security.MessageDigest.getInstance("SHA-256")
-            .digest(attempt.mediaId.encodeToByteArray())
-            .joinToString("") { "%02x".format(it) }
+        val markerKey = creditsMarkerKey(attempt.mediaId)
         val savedCreditsMarker = progressPreferences?.getLong(markerKey, 0L)?.takeIf { it > 0L }
         val scanOpening = !manualIntro && seriesKey != null && active.currentPosition < OPENING_SCAN_LIMIT_MS
         val scanCredits = !manualCredits && savedCreditsMarker == null &&
@@ -7024,7 +7036,7 @@ private fun PlayerHome(
                     ui.skipIntroTo = null
                     ui.introOfferClosed = attempt.mediaId to it
                 }
-                val nextAt = if (manualCredits) {
+                val nextAt = if (ui.nextOfferClosed == attempt.mediaId) duration else if (manualCredits) {
                     (duration - creditsBeforeEndSeconds * 1_000L).takeIf { it > 0 } ?: duration
                 } else minOf(portal.nextAt(duration), detected?.nextAt(duration) ?: duration)
                 val remaining = (nextAt - position).coerceAtLeast(0)

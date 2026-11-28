@@ -2,6 +2,7 @@
 
 ## 2.0.2
 
+- Serien: Kommt die Einblendung „Nächste Folge“ zu früh, bricht die Zurück-Taste sie ab. Die Folge läuft dann bis zum echten Ende weiter, danach geht es wie gewohnt weiter. Die zu früh erkannte Abspann-Stelle dieser Folge wird verworfen und beim nächsten Mal neu gemessen; die Diagnose vermerkt den Abbruch (nur Zeiten).
 - Sichtbarkeit wird mit einem Auge gezeigt statt mit einem Schalter: offenes Auge = eingeblendet, durchgestrichenes Auge = ausgeblendet – am Fernseher in den Listen „Alle“ und auf der Handy-Seite bei Kategorien und Sendern.
 - Sichtbarkeit (Langdruck auf Sender oder Kategorie): Zuerst wählst du „Nur dieser Sender/diese Kategorie“ (ein- oder ausblenden wie bisher) oder „Alle“. „Alle“ zeigt alle Kategorien bzw. alle Sender der Kategorie mit Schaltern; der Schalter „Alle“ ganz oben blendet alle aus und wieder ein. So holst du ausgeblendete Kategorien und Sender auch ohne Umweg zurück.
 - Handy-Seite: Bei den Live-TV-Kategorien gibt es den Knopf „Sender“. Er zeigt die Sender der Kategorie mit Schaltern (auch „Alle“) und dem EPG-Namen, der sich dort ändern oder zurücksetzen lässt.

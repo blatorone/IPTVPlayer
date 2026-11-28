@@ -2,6 +2,7 @@
 
 ## 2.0.2
 
+- Trakt: Wer eine Folge nach 80 %, aber vor dem Abspann stoppte, bekam sie bei Trakt als gesehen markiert, obwohl die App den Fortschritt zum Weiterschauen speicherte. Vor dem Ende (Folge: Abspann, Film: 95 %) meldet die App Trakt jetzt eine Pause; Trakt behält dann den Fortschritt. Als gesehen zählt es erst am Ende oder beim Wechsel zur nächsten Folge.
 - Serien: Kommt die Einblendung „Nächste Folge“ zu früh, bricht die Zurück-Taste sie ab. Die Folge läuft dann bis zum echten Ende weiter, danach geht es wie gewohnt weiter. Die zu früh erkannte Abspann-Stelle dieser Folge wird verworfen und beim nächsten Mal neu gemessen; die Diagnose vermerkt den Abbruch (nur Zeiten).
 - Sichtbarkeit wird mit einem Auge gezeigt statt mit einem Schalter: offenes Auge = eingeblendet, durchgestrichenes Auge = ausgeblendet – am Fernseher in den Listen „Alle“ und auf der Handy-Seite bei Kategorien und Sendern.
 - Sichtbarkeit (Langdruck auf Sender oder Kategorie): Zuerst wählst du „Nur dieser Sender/diese Kategorie“ (ein- oder ausblenden wie bisher) oder „Alle“. „Alle“ zeigt alle Kategorien bzw. alle Sender der Kategorie mit Schaltern; der Schalter „Alle“ ganz oben blendet alle aus und wieder ein. So holst du ausgeblendete Kategorien und Sender auch ohne Umweg zurück.

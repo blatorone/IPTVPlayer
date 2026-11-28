@@ -741,6 +741,8 @@ private class PlayerHomeFlags {
     var outroOfferClosed by mutableStateOf<Pair<String, Long>?>(null)
     /** Media id whose "next episode" countdown was cancelled with Back: it plays to its real end. */
     var nextOfferClosed by mutableStateOf<String?>(null)
+    /** Where the credits of the playing episode begin (media id to position), for Trakt. */
+    var creditsAt: Pair<String, Long>? = null
     var skipIsOutro by mutableStateOf(false)
     var pendingSeriesEpisode by mutableStateOf<Pair<PortalTitle, EpisodeResume>?>(null)
     var pendingMovie by mutableStateOf<WatchedMovie?>(null)
@@ -3102,14 +3104,22 @@ private fun PlayerHome(
         val activePlayer = player ?: return
         if (attempt.selection.section == PortalSection.LIVE || activePlayer.currentMediaItem?.mediaId != attempt.mediaId) return
         val duration = activePlayer.duration
-        val percent = if (duration > 0L) activePlayer.currentPosition.toFloat() * 100f / duration else 0f
+        val position = activePlayer.currentPosition
+        val percent = if (duration > 0L) position.toFloat() * 100f / duration else 0f
+        // Trakt counts a stop from 80 % as watched. Before the end (episode: the credits, film: 95 %)
+        // it is sent as a pause, so Trakt keeps the progress like the app does.
+        val credits = ui.creditsAt?.takeIf { it.first == attempt.mediaId }?.second
+        val finished = activePlayer.playbackState == Player.STATE_ENDED || ui.advancingEpisode ||
+            if (attempt.selection.section == PortalSection.SERIES) credits != null && position >= credits - 1_000L else percent >= 95f
+        val sent = if (action == "stop" && !finished) "pause" else action
+        if (sent != action) AppDiagnostics.record(context, "trakt_stop_as_pause pct:${percent.toInt()}")
         scope.launch {
             try {
                 withTraktSession { api, session ->
-                    api.scrobble(action, media, session.accessToken, percent)
+                    api.scrobble(sent, media, session.accessToken, percent)
                 }
                 if (notifyUser) ui.traktPlaybackNotice = context.getString(
-                    if (percent >= 80f) R.string.trakt_title_watched else R.string.trakt_playback_saved
+                    if (sent == "stop" && percent >= 80f) R.string.trakt_title_watched else R.string.trakt_playback_saved
                 )
             } catch (error: CancellationException) {
                 throw error
@@ -7039,6 +7049,7 @@ private fun PlayerHome(
                 val nextAt = if (ui.nextOfferClosed == attempt.mediaId) duration else if (manualCredits) {
                     (duration - creditsBeforeEndSeconds * 1_000L).takeIf { it > 0 } ?: duration
                 } else minOf(portal.nextAt(duration), detected?.nextAt(duration) ?: duration)
+                ui.creditsAt = attempt.mediaId to nextAt
                 val remaining = (nextAt - position).coerceAtLeast(0)
                 ui.nextEpisodeSeconds = if (nextEpisodeAction != null && remaining <= episodeNoticeSeconds * 1_000L) {
                     ((remaining + 999) / 1_000).toInt()

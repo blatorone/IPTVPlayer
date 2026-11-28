@@ -16,8 +16,8 @@ android {
         applicationId = "com.iptvplayer.app"
         minSdk = 26
         targetSdk = 37
-        versionCode = 146
-        versionName = "2.0.2-beta.1"
+        versionCode = 147
+        versionName = "2.0.2-beta.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

@@ -257,3 +257,14 @@ internal fun CategoryActionDialog(
         runCatching { first.requestFocus() }
     }
 }
+
+/**
+ * One entry of a category list that can be moved: [content] gets the key modifier. Kept outside the
+ * big screen lambdas (a key group with a composable modifier there failed the Android 11 verifier).
+ */
+@Composable
+internal fun MovableEntry(id: Any, active: Boolean, vertical: Boolean, onStep: (Boolean) -> Unit, content: @Composable (Modifier) -> Unit) {
+    androidx.compose.runtime.key(id) {
+        content(Modifier.moveKeys(active, vertical, onStep) { ChannelEdits.movingCategory = null })
+    }
+}

@@ -2,6 +2,7 @@
 
 ## 2.0.1
 
+- Absturz beim Öffnen bzw. nach „Zurück“ auf Android 11 (beta.13) behoben.
 - Live-TV: Langes Drücken von OK auf einen Sender im Programmführer öffnet ein Menü: Verschieben (mit ▲/▼ innerhalb der Kategorie, OK oder Zurück beendet), Sichtbarkeit (ein- oder ausblenden) und „EPG-Name ändern“ (der Name bzw. die XMLTV-ID, unter der der Sender im XMLTV-EPG gesucht wird, z. B. bei doppelten EPG-Einträgen). Ausgeblendete Sender erscheinen mit „Ausgeblendete Kategorien vorübergehend anzeigen“ wieder.
 - Kategorien: Langes Drücken öffnet ein Menü mit Verschieben (Live-TV mit ▲/▼, Filme und Serien mit ◀/▶ direkt in der Liste), Sichtbarkeit und – mit PIN – Sperren. „Kategorien verwalten“ bleibt wie bisher.
 - Live-TV: Die Stream-Auswahl in den Einstellungen und die Meldung beim Senderwechsel oben rechts zeigen „Portal N · Qualität (z. B. FHD/UHD) · Portal“, damit klar ist, welcher Stream läuft.

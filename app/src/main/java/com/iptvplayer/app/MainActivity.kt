@@ -7442,13 +7442,13 @@ private fun PlayerHome(
                                         }
                                     } else {
                                     items(groups, key = { it }) { group ->
-                                        MenuButton(group, Modifier.fillMaxWidth().moveKeys(
-                                            ChannelEdits.movingCategory == (PortalSection.LIVE to group), vertical = true,
-                                            onStep = { up -> moveCategoryStep(PortalSection.LIVE, group, up, groups) }
-                                        ) { ChannelEdits.movingCategory = null }, selected = channelCategory == group,
+                                        MovableEntry(group, ChannelEdits.movingCategory == (PortalSection.LIVE to group), vertical = true,
+                                            onStep = { up -> moveCategoryStep(PortalSection.LIVE, group, up, groups) }) { move ->
+                                        MenuButton(group, Modifier.fillMaxWidth().then(move), selected = channelCategory == group,
                                             onLongPress = { ui.categoryMenu = PortalSection.LIVE to group }) {
                                             category = group
                                             showFullscreenPanel(GuidePanel.CHANNELS)
+                                        }
                                         }
                                     }
                                 }
@@ -9029,11 +9029,11 @@ private fun PlayerHome(
                                             guideScroll.requestScrollToItem(0)
                                             guidePanel = GuidePanel.GRID
                                         }
-                                        groups.forEach { group -> androidx.compose.runtime.key(group) {
-                                            MenuButton(group, Modifier.fillMaxWidth().moveKeys(
-                                                ChannelEdits.movingCategory == (PortalSection.LIVE to group), vertical = true,
-                                                onStep = { up -> moveCategoryStep(PortalSection.LIVE, group, up, groups) }
-                                            ) { ChannelEdits.movingCategory = null }, selected = category == group,
+                                        groups.forEach { group -> MovableEntry(group,
+                                            ChannelEdits.movingCategory == (PortalSection.LIVE to group), vertical = true,
+                                            onStep = { up -> moveCategoryStep(PortalSection.LIVE, group, up, groups) }
+                                        ) { move ->
+                                            MenuButton(group, Modifier.fillMaxWidth().then(move), selected = category == group,
                                                 onLongPress = { ui.categoryMenu = PortalSection.LIVE to group }) {
                                                 category = group
                                                 ui.restoreLiveFocus = false
@@ -9498,13 +9498,13 @@ private fun PlayerHome(
                             details = null
                             myAreaSection = section
                         }
-                            visibleVodGroups.forEach { group -> androidx.compose.runtime.key(group.id) {
+                            visibleVodGroups.forEach { group -> MovableEntry(group.id,
+                                ChannelEdits.movingCategory == (section to group.id), vertical = false,
+                                onStep = { left -> moveCategoryStep(section, group.id, left, visibleVodGroups.map { it.id }) }
+                            ) { move ->
                                 MenuButton(
                                     group.name,
-                                    Modifier.moveKeys(
-                                        ChannelEdits.movingCategory == (section to group.id), vertical = false,
-                                        onStep = { left -> moveCategoryStep(section, group.id, left, visibleVodGroups.map { it.id }) }
-                                    ) { ChannelEdits.movingCategory = null },
+                                    move,
                                     providerMark = providerCategoryMark(group.name).takeIf {
                                         providerCategoryStyle != ProviderCategoryStyle.LABELS && providerCategoryIcon(group.name) == null
                                     },

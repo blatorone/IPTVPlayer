@@ -975,4 +975,9 @@
     <string name="epg_name_reset">Врати</string>
     <string name="move_hint_vertical">Померај са ▲ и ▼, OK или Назад завршава.</string>
     <string name="move_hint_horizontal">Померај са ◀ и ▶, OK или Назад завршава.</string>
+    <string name="visibility_only_category">Само ова категорија</string>
+    <string name="visibility_all_categories">Све категорије</string>
+    <string name="visibility_only_channel">Само овај канал</string>
+    <string name="visibility_all_channels">Сви канали ове категорије</string>
+    <string name="visibility_all">Све</string>
 </resources>

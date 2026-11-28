@@ -979,4 +979,9 @@
     <string name="epg_name_reset">Obnoviť</string>
     <string name="move_hint_vertical">Presúvaj pomocou ▲ a ▼, OK alebo Späť ukončí.</string>
     <string name="move_hint_horizontal">Presúvaj pomocou ◀ a ▶, OK alebo Späť ukončí.</string>
+    <string name="visibility_only_category">Len táto kategória</string>
+    <string name="visibility_all_categories">Všetky kategórie</string>
+    <string name="visibility_only_channel">Len tento kanál</string>
+    <string name="visibility_all_channels">Všetky kanály tejto kategórie</string>
+    <string name="visibility_all">Všetko</string>
 </resources>

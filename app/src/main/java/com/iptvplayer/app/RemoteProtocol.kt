@@ -32,6 +32,9 @@ import com.google.gson.JsonPrimitive
  *   {"t":"parental","field":"lockAdult","value":false,"pin":"…"}
  *   {"t":"portalPreferred","id":"…","preferred":true}
  *   {"t":"portalCategories","id":"…"}                   the provider's own categories of a portal
+ *   {"t":"channels","category":"…"}                    channels of a Live-TV category (name, hidden, epg)
+ *   {"t":"channelsHidden","category":"…","ids":[…],"hidden":true}  hide or show channels by name
+ *   {"t":"epgName","category":"…","name":"…","value":"…"} XMLTV name of a channel (empty: reset)
  *                                                       (answered in "result" as "data")
  *   {"t":"action","id":"…"}                             run an action entry (button)
  *   {"t":"input","id":"…","value":"…"}                  submit an input entry (text field)
@@ -173,6 +176,11 @@ internal sealed interface RemoteCommand {
     data class Parental(val field: String, val value: JsonElement?, val pin: String?) : RemoteCommand
     data class PortalPreferred(val id: String, val preferred: Boolean) : RemoteCommand
     data class PortalCategories(val id: String) : RemoteCommand
+    /** The channels of a Live-TV category (answer: their visibility and XMLTV name). */
+    data class Channels(val category: String) : RemoteCommand
+    data class ChannelsHidden(val category: String, val names: kotlin.collections.Set<String>, val hidden: Boolean) : RemoteCommand
+    /** XMLTV name of channel [name]; null or empty goes back to the portal's own. */
+    data class EpgName(val category: String, val name: String, val value: String?) : RemoteCommand
     data class Action(val id: String) : RemoteCommand
     data class Input(val id: String, val value: String) : RemoteCommand
     /** Creates a backup of [parts]; the file comes back in "result" as data (name, file). */
@@ -369,6 +377,11 @@ internal object RemoteProtocol {
             "portalRemove" -> RemoteCommand.PortalRemove(root.text("id") ?: return null)
             "portalPreferred" -> RemoteCommand.PortalPreferred(root.text("id") ?: return null, root.flag("preferred") ?: return null)
             "portalCategories" -> RemoteCommand.PortalCategories(root.text("id") ?: return null)
+            "channels" -> RemoteCommand.Channels(root.text("category") ?: return null)
+            "channelsHidden" -> RemoteCommand.ChannelsHidden(
+                root.text("category") ?: return null, root.ids() ?: return null, root.flag("hidden") ?: return null
+            )
+            "epgName" -> RemoteCommand.EpgName(root.text("category") ?: return null, root.text("name") ?: return null, root.text("value"))
             "action" -> RemoteCommand.Action(root.text("id") ?: return null)
             "input" -> RemoteCommand.Input(root.text("id") ?: return null, root.text("value") ?: return null)
             "pin" -> RemoteCommand.Pin(root.pin("pin") ?: return null, root.pin("current"))

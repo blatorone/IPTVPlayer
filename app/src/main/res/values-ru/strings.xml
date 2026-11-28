@@ -979,4 +979,9 @@
     <string name="epg_name_reset">Сбросить</string>
     <string name="move_hint_vertical">Перемещай ▲ и ▼, OK или Назад завершает.</string>
     <string name="move_hint_horizontal">Перемещай ◀ и ▶, OK или Назад завершает.</string>
+    <string name="visibility_only_category">Только эта категория</string>
+    <string name="visibility_all_categories">Все категории</string>
+    <string name="visibility_only_channel">Только этот канал</string>
+    <string name="visibility_all_channels">Все каналы этой категории</string>
+    <string name="visibility_all">Все</string>
 </resources>

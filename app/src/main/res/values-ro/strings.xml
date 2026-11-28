@@ -975,4 +975,9 @@
     <string name="epg_name_reset">Resetează</string>
     <string name="move_hint_vertical">Mută cu ▲ și ▼, OK sau Înapoi încheie.</string>
     <string name="move_hint_horizontal">Mută cu ◀ și ▶, OK sau Înapoi încheie.</string>
+    <string name="visibility_only_category">Doar această categorie</string>
+    <string name="visibility_all_categories">Toate categoriile</string>
+    <string name="visibility_only_channel">Doar acest canal</string>
+    <string name="visibility_all_channels">Toate canalele acestei categorii</string>
+    <string name="visibility_all">Toate</string>
 </resources>

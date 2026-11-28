@@ -971,4 +971,9 @@
     <string name="epg_name_reset">Reset</string>
     <string name="move_hint_vertical">Move with ▲ and ▼, OK or Back finishes.</string>
     <string name="move_hint_horizontal">Move with ◀ and ▶, OK or Back finishes.</string>
+    <string name="visibility_only_category">Only this category</string>
+    <string name="visibility_all_categories">All categories</string>
+    <string name="visibility_only_channel">Only this channel</string>
+    <string name="visibility_all_channels">All channels of this category</string>
+    <string name="visibility_all">All</string>
 </resources>

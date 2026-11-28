@@ -143,6 +143,7 @@ async function receive(data) {
     pinResult(message);
   } else if (message.t === "result") {
     if (message.data && message.data.sections) { portalCategories = message.data; renderPortals(); }
+    if (message.data && message.data.channelsOf) { channelList = message.data; renderCategories(); }
     if (message.data && message.data.file) downloadBackup(message.data.name, message.data.file);
     if (message.data && message.data.needsPassword && backupImport) { backupImport = { ...backupImport, needsPassword: true, password: null }; renderBackup(); }
     if (message.data && message.data.backupParts) { backupImport = { ...backupImport, info: message.data, parts: message.data.backupParts.slice() }; renderBackup(); }
@@ -413,20 +414,49 @@ function visibleCategories() {
   return (state.categories[categorySection] || []).filter((c) => !query || c.name.toLowerCase().includes(query));
 }
 
+// The channels of one Live-TV category (opened with "Sender"): visibility and XMLTV name.
+let channelList = null;
+function channelPanel(list) {
+  const names = list.channels.map((c) => c.name);
+  const allShown = list.channels.every((c) => !c.hidden);
+  const hide = (ids, hidden) => send({ t: "channelsHidden", category: list.channelsOf, ids, hidden });
+  return el("div", { class: "channels" },
+    el("div", { class: "row" }, el("span", { class: "label" }, t("ch.all")),
+      switchButton(allShown, t("ch.all"), () => hide(names, allShown))),
+    ...list.channels.map((c) => el("div", { class: "row" },
+      el("span", { class: "label" }, c.name,
+        el("span", { class: "sub" }, t("ch.epgSub", c.epg) + (c.epgChanged ? " · " + t("ch.epgChanged") : ""))),
+      el("button", { onclick: () => {
+        const value = prompt(t("ch.epgPrompt"), c.epg);
+        if (value !== null) send({ t: "epgName", category: list.channelsOf, name: c.name, value });
+      } }, t("ch.epg")),
+      switchButton(!c.hidden, t("cat.showAria", c.name), () => hide([c.name], !c.hidden)))));
+}
+
 function renderCategories() {
   for (const b of $("category-sections").children) b.classList.toggle("active", b.dataset.section === categorySection);
   const items = visibleCategories();
   const canLock = state.parental.hasPin;
-  $("category-list").replaceChildren(...items.map((c) => el("div", { class: "row" },
-    el("span", { class: "label" }, c.name),
-    canLock ? el("button", { class: "lock", "aria-pressed": String(c.locked), title: t("cat.lockTip"),
-      onclick: async () => {
-        const pin = c.locked ? await askPin(t("pin.unlockTitle")) : undefined;
-        if (c.locked && !pin) return;
-        send({ t: "categoryLock", section: categorySection, id: c.id, locked: !c.locked, pin });
-      } }, c.locked ? "🔒" : "🔓") : null,
-    switchButton(!c.hidden, t("cat.showAria", c.name),
-      () => send({ t: "categories", section: categorySection, ids: [c.id], hidden: !c.hidden })))));
+  // Live-TV categories get a "Sender" button; its channel list opens below the row.
+  const live = categorySection === "LIVE";
+  $("category-list").replaceChildren(...items.flatMap((c) => {
+    const open = live && channelList && channelList.channelsOf === c.id;
+    const row = el("div", { class: "row" },
+      el("span", { class: "label" }, c.name),
+      live ? el("button", { onclick: () => {
+        if (open) { channelList = null; renderCategories(); }
+        else send({ t: "channels", category: c.id });
+      } }, open ? t("ch.close") : t("ch.channels")) : null,
+      canLock ? el("button", { class: "lock", "aria-pressed": String(c.locked), title: t("cat.lockTip"),
+        onclick: async () => {
+          const pin = c.locked ? await askPin(t("pin.unlockTitle")) : undefined;
+          if (c.locked && !pin) return;
+          send({ t: "categoryLock", section: categorySection, id: c.id, locked: !c.locked, pin });
+        } }, c.locked ? "🔒" : "🔓") : null,
+      switchButton(!c.hidden, t("cat.showAria", c.name),
+        () => send({ t: "categories", section: categorySection, ids: [c.id], hidden: !c.hidden })));
+    return open ? [row, channelPanel(channelList)] : [row];
+  }));
   if (!items.length) $("category-list").replaceChildren(el("p", { class: "hint" }, t("cat.none")));
 }
 

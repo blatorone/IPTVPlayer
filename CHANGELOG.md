@@ -1,5 +1,11 @@
 # Änderungen
 
+## 2.0.2
+
+- Sichtbarkeit (Langdruck auf Sender oder Kategorie): Zuerst wählst du „Nur dieser Sender/diese Kategorie“ (ein- oder ausblenden wie bisher) oder „Alle“. „Alle“ zeigt alle Kategorien bzw. alle Sender der Kategorie mit Schaltern; der Schalter „Alle“ ganz oben blendet alle aus und wieder ein. So holst du ausgeblendete Kategorien und Sender auch ohne Umweg zurück.
+- Handy-Seite: Bei den Live-TV-Kategorien gibt es den Knopf „Sender“. Er zeigt die Sender der Kategorie mit Schaltern (auch „Alle“) und dem EPG-Namen, der sich dort ändern oder zurücksetzen lässt.
+- Backup: Ausgeblendete Sender, die eigene Sender-Reihenfolge und geänderte EPG-Namen gehören jetzt zum Teil „Kategorien“.
+
 ## 2.0.1
 
 - Live-TV: Langes Drücken von OK auf einen Sender im Programmführer öffnet ein Menü: Verschieben (mit ▲/▼ innerhalb der Kategorie, OK oder Zurück beendet), Sichtbarkeit (ein- oder ausblenden) und „EPG-Name ändern“ (der Name bzw. die XMLTV-ID, unter der der Sender im XMLTV-EPG gesucht wird, z. B. bei doppelten EPG-Einträgen). Ausgeblendete Sender erscheinen mit „Ausgeblendete Kategorien vorübergehend anzeigen“ wieder.

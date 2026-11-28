@@ -971,4 +971,9 @@
     <string name="epg_name_reset">Tilbakestill</string>
     <string name="move_hint_vertical">Flytt med ▲ og ▼, OK eller Tilbake avslutter.</string>
     <string name="move_hint_horizontal">Flytt med ◀ og ▶, OK eller Tilbake avslutter.</string>
+    <string name="visibility_only_category">Bare denne kategorien</string>
+    <string name="visibility_all_categories">Alle kategorier</string>
+    <string name="visibility_only_channel">Bare denne kanalen</string>
+    <string name="visibility_all_channels">Alle kanaler i denne kategorien</string>
+    <string name="visibility_all">Alle</string>
 </resources>

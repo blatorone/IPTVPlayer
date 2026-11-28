@@ -5,6 +5,8 @@ import android.content.SharedPreferences
 import android.view.KeyEvent as AndroidKeyEvent
 import android.widget.Toast
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.unit.dp
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -71,6 +73,11 @@ internal object ChannelEdits {
     }
 
     fun isHidden(channel: StalkerChannel) = channel.name in hidden
+
+    fun setHiddenNames(names: Set<String>, hide: Boolean) {
+        hidden = if (hide) hidden + names else hidden - names
+        prefs?.edit { putStringSet("hidden_channels", hidden) }
+    }
 
     fun setHidden(channel: StalkerChannel, hide: Boolean) {
         hidden = if (hide) hidden + channel.name else hidden - channel.name
@@ -158,7 +165,7 @@ internal fun showMoveHint(context: Context, vertical: Boolean) {
 
 /** The menu of a channel: move, visibility, the XMLTV name. [guideName]: the name the guide uses without a change. */
 @Composable
-internal fun ChannelMenuDialog(channel: StalkerChannel, guideName: String, onDismiss: () -> Unit) {
+internal fun ChannelMenuDialog(channel: StalkerChannel, guideName: String, categoryChannels: List<StalkerChannel>, onDismiss: () -> Unit) {
     val context = LocalContext.current
     var page by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val first = remember(page) { FocusRequester() }
@@ -175,6 +182,14 @@ internal fun ChannelMenuDialog(channel: StalkerChannel, guideName: String, onDis
                 SettingRow(stringResource(R.string.epg_name_edit)) { page = 2 }
             }
             1 -> {
+                SettingRow(stringResource(R.string.visibility_only_channel), Modifier.focusRequester(first)) { page = 3 }
+                SettingRow(stringResource(R.string.visibility_all_channels)) { page = 4 }
+            }
+            4 -> VisibilityList(
+                categoryChannels.map { it.name }.distinct().map { it to it }, first,
+                isShown = { it !in ChannelEdits.hidden }
+            ) { names, show -> ChannelEdits.setHiddenNames(names, !show) }
+            3 -> {
                 val hidden = ChannelEdits.isHidden(channel)
                 SettingRow(stringResource(R.string.show_categories), Modifier.focusRequester(first), selected = !hidden) {
                     ChannelEdits.setHidden(channel, false)
@@ -217,10 +232,13 @@ internal fun ChannelMenuDialog(channel: StalkerChannel, guideName: String, onDis
 @Composable
 internal fun CategoryActionDialog(
     name: String,
-    hidden: Boolean,
+    id: String,
     vertical: Boolean,
     onMove: () -> Unit,
-    onHidden: (Boolean) -> Unit,
+    // All categories of the section (id to name) and their visibility.
+    allGroups: List<Pair<String, String>>,
+    isHidden: (String) -> Boolean,
+    onHidden: (Set<String>, Boolean) -> Unit,
     locked: Boolean,
     onToggleLock: (() -> Unit)?,
     onDismiss: () -> Unit
@@ -243,13 +261,19 @@ internal fun CategoryActionDialog(
                     toggle()
                 }
             }
+        } else if (page == 1) {
+            SettingRow(stringResource(R.string.visibility_only_category), Modifier.focusRequester(first)) { page = 2 }
+            SettingRow(stringResource(R.string.visibility_all_categories)) { page = 3 }
+        } else if (page == 3) {
+            VisibilityList(allGroups, first, isShown = { !isHidden(it) }) { ids, show -> onHidden(ids, !show) }
         } else {
+            val hidden = isHidden(id)
             SettingRow(stringResource(R.string.show_categories), Modifier.focusRequester(first), selected = !hidden) {
-                onHidden(false)
+                onHidden(setOf(id), false)
                 onDismiss()
             }
             SettingRow(stringResource(R.string.hide_categories), selected = hidden) {
-                onHidden(true)
+                onHidden(setOf(id), true)
                 onDismiss()
             }
         }
@@ -294,3 +318,41 @@ private fun FreshPressOnly(content: @Composable () -> Unit) {
         }
     }) { content() }
 }
+
+/**
+ * Switches for all entries ([entries]: id to label). The top switch "Alle" is on when all are shown;
+ * pressing it hides all, or shows all again when one is hidden.
+ */
+@Composable
+private fun VisibilityList(entries: List<Pair<String, String>>, first: FocusRequester, isShown: (String) -> Boolean, onShown: (Set<String>, Boolean) -> Unit) {
+    val allShown = entries.all { isShown(it.first) }
+    SettingRow(stringResource(R.string.visibility_all), Modifier.focusRequester(first), selected = allShown) {
+        onShown(entries.map { it.first }.toSet(), !allShown)
+    }
+    androidx.compose.foundation.lazy.LazyColumn(
+        Modifier.heightIn(max = 340.dp),
+        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp)
+    ) {
+        items(entries.size) { index ->
+            val (id, label) = entries[index]
+            val shown = isShown(id)
+            SettingRow(label, selected = shown) { onShown(setOf(id), !shown) }
+        }
+    }
+}
+
+/** The channels of [category] for the phone page: name, hidden, the XMLTV name and whether it was changed. */
+internal fun encodeChannels(category: String, channels: List<StalkerChannel>, guideName: (StalkerChannel) -> String) =
+    com.google.gson.JsonObject().apply {
+        addProperty("channelsOf", category)
+        add("channels", com.google.gson.JsonArray().apply {
+            channels.distinctBy { it.name }.forEach { channel ->
+                add(com.google.gson.JsonObject().apply {
+                    addProperty("name", channel.name)
+                    addProperty("hidden", ChannelEdits.isHidden(channel))
+                    addProperty("epg", ChannelEdits.epgName(channel) ?: guideName(channel))
+                    addProperty("epgChanged", ChannelEdits.epgName(channel) != null)
+                })
+            }
+        })
+    }

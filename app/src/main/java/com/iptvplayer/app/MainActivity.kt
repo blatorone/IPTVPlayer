@@ -2254,6 +2254,13 @@ private fun PlayerHome(
             { it.name }
         ))
 
+    // The name the XMLTV guide looks a channel up by, without a change of the viewer.
+    fun guideName(channel: StalkerChannel): String =
+        liveVariants[channel].orEmpty().firstNotNullOfOrNull { it.value.epgIdentity } ?: channel.name
+    // Phone page: the channels of one Live-TV category with visibility and XMLTV name.
+    fun remoteChannels(category: String): RemoteReply = allLiveCategories[category]?.let { items ->
+        RemoteReply(true, data = encodeChannels(category, ChannelEdits.arrange(category, items, true), ::guideName))
+    } ?: RemoteReply(false)
     // Category menu "Verschieben": one step among the [shown] categories with the arrow keys.
     fun moveCategoryStep(section: PortalSection, id: String, up: Boolean, shown: List<String>) {
         val defaultGroups = if (section == PortalSection.LIVE) {
@@ -5771,10 +5778,12 @@ private fun PlayerHome(
             val group = groups.firstOrNull { it.id == first } ?: PortalGroup(first, first)
             CategoryActionDialog(
                 name = group.name,
-                hidden = categoryKey(section, first) in hiddenCategories,
+                id = first,
                 vertical = section == PortalSection.LIVE,
                 onMove = { ChannelEdits.movingCategory = section to first },
-                onHidden = { hide -> setCategoryVisibility(section, setOf(first), hide) },
+                allGroups = groups.map { it.id to it.name },
+                isHidden = { categoryKey(section, it) in hiddenCategories },
+                onHidden = { ids, hide -> setCategoryVisibility(section, ids, hide) },
                 locked = categoryKey(section, first) in parental.lockedCategories,
                 onToggleLock = toggleLock?.let { toggle -> { toggle(group) } },
                 onDismiss = { ui.categoryMenu = null }
@@ -5798,7 +5807,11 @@ private fun PlayerHome(
         )
     }
     ChannelEdits.menu?.let { channel ->
-        ChannelMenuDialog(channel, liveVariants[channel].orEmpty().firstNotNullOfOrNull { it.value.epgIdentity } ?: channel.name) {
+        val category = allLiveCategories.entries.firstOrNull { channel in it.value }
+        ChannelMenuDialog(
+            channel, liveVariants[channel].orEmpty().firstNotNullOfOrNull { it.value.epgIdentity } ?: channel.name,
+            category?.let { ChannelEdits.arrange(it.key, it.value, true) }.orEmpty()
+        ) {
             ChannelEdits.menu = null
         }
     }
@@ -6479,6 +6492,17 @@ private fun PlayerHome(
                 setPreferredPortal(if (command.preferred) source.identity else preferredPortal.takeUnless { it == source.identity })
                 RemoteReply(true, if (command.preferred) text(R.string.remote_msg_portal_preferred) else null)
             } ?: RemoteReply(false, text(R.string.remote_msg_portal_not_found))
+            is RemoteCommand.Channels -> remoteChannels(command.category)
+            is RemoteCommand.ChannelsHidden -> {
+                ChannelEdits.setHiddenNames(command.names, command.hidden)
+                remoteChannels(command.category)
+            }
+            is RemoteCommand.EpgName -> {
+                allLiveCategories[command.category]?.firstOrNull { it.name == command.name }?.let { channel ->
+                    ChannelEdits.setEpgName(channel, command.value?.takeUnless { it.trim() == guideName(channel) })
+                }
+                remoteChannels(command.category)
+            }
             is RemoteCommand.PortalCategories -> savedSources.firstOrNull { it.identity == command.id }?.let { source ->
                 RemoteReply(true, data = encodeProviderCategories(source.identity, portalName(source), providerCategories(source), text(R.string.country_none)))
             } ?: RemoteReply(false, text(R.string.remote_msg_portal_not_found))

@@ -979,4 +979,9 @@
     <string name="epg_name_reset">Atkurti</string>
     <string name="move_hint_vertical">Perkelk su ▲ ir ▼, OK arba Atgal baigia.</string>
     <string name="move_hint_horizontal">Perkelk su ◀ ir ▶, OK arba Atgal baigia.</string>
+    <string name="visibility_only_category">Tik ši kategorija</string>
+    <string name="visibility_all_categories">Visos kategorijos</string>
+    <string name="visibility_only_channel">Tik šis kanalas</string>
+    <string name="visibility_all_channels">Visi šios kategorijos kanalai</string>
+    <string name="visibility_all">Visi</string>
 </resources>

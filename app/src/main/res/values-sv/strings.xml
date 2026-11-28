@@ -971,4 +971,9 @@
     <string name="epg_name_reset">Återställ</string>
     <string name="move_hint_vertical">Flytta med ▲ och ▼, OK eller Tillbaka avslutar.</string>
     <string name="move_hint_horizontal">Flytta med ◀ och ▶, OK eller Tillbaka avslutar.</string>
+    <string name="visibility_only_category">Bara den här kategorin</string>
+    <string name="visibility_all_categories">Alla kategorier</string>
+    <string name="visibility_only_channel">Bara den här kanalen</string>
+    <string name="visibility_all_channels">Alla kanaler i den här kategorin</string>
+    <string name="visibility_all">Alla</string>
 </resources>

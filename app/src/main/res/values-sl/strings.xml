@@ -980,4 +980,9 @@
     <string name="epg_name_reset">Ponastavi</string>
     <string name="move_hint_vertical">Premikaj z ▲ in ▼, OK ali Nazaj konča.</string>
     <string name="move_hint_horizontal">Premikaj z ◀ in ▶, OK ali Nazaj konča.</string>
+    <string name="visibility_only_category">Samo ta kategorija</string>
+    <string name="visibility_all_categories">Vse kategorije</string>
+    <string name="visibility_only_channel">Samo ta kanal</string>
+    <string name="visibility_all_channels">Vsi kanali te kategorije</string>
+    <string name="visibility_all">Vse</string>
 </resources>

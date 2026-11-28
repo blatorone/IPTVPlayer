@@ -979,4 +979,9 @@
     <string name="epg_name_reset">Скинути</string>
     <string name="move_hint_vertical">Переміщуй ▲ і ▼, OK або Назад завершує.</string>
     <string name="move_hint_horizontal">Переміщуй ◀ і ▶, OK або Назад завершує.</string>
+    <string name="visibility_only_category">Лише ця категорія</string>
+    <string name="visibility_all_categories">Усі категорії</string>
+    <string name="visibility_only_channel">Лише цей канал</string>
+    <string name="visibility_all_channels">Усі канали цієї категорії</string>
+    <string name="visibility_all">Усі</string>
 </resources>

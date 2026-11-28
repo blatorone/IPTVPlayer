@@ -35,6 +35,7 @@ internal fun backupPartOfSetting(key: String): BackupPart? = when {
     key in deviceOnlySettings -> null
     key.removePrefix("kids:") in watchDataSettings -> BackupPart.WATCH_DATA
     key == "hidden" || key == "countries" || key == "countryOrder" ||
+        key == "hidden_channels" || key == "channel_orders" || key == "epg_names" ||
         key.startsWith("category_order_") || key.startsWith("last_vod_category_") -> BackupPart.CATEGORIES
     key.startsWith("parental_") || key.startsWith("settings_pin") || key.startsWith("settings_lock") ||
         key.startsWith("kids_") || key == "hidden_areas" || key == "start_profile" || key.endsWith("_salt") -> BackupPart.LOCKS

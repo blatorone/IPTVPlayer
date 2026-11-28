@@ -971,4 +971,9 @@
     <string name="epg_name_reset">Rivendos</string>
     <string name="move_hint_vertical">Zhvendos me ▲ dhe ▼, OK ose Prapa përfundon.</string>
     <string name="move_hint_horizontal">Zhvendos me ◀ dhe ▶, OK ose Prapa përfundon.</string>
+    <string name="visibility_only_category">Vetëm kjo kategori</string>
+    <string name="visibility_all_categories">Të gjitha kategoritë</string>
+    <string name="visibility_only_channel">Vetëm ky kanal</string>
+    <string name="visibility_all_channels">Të gjithë kanalet e kësaj kategorie</string>
+    <string name="visibility_all">Të gjitha</string>
 </resources>

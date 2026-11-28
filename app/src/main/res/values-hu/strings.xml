@@ -971,4 +971,9 @@
     <string name="epg_name_reset">Visszaállítás</string>
     <string name="move_hint_vertical">Mozgatás ▲ és ▼ gombbal, OK vagy Vissza befejezi.</string>
     <string name="move_hint_horizontal">Mozgatás ◀ és ▶ gombbal, OK vagy Vissza befejezi.</string>
+    <string name="visibility_only_category">Csak ez a kategória</string>
+    <string name="visibility_all_categories">Minden kategória</string>
+    <string name="visibility_only_channel">Csak ez a csatorna</string>
+    <string name="visibility_all_channels">A kategória összes csatornája</string>
+    <string name="visibility_all">Mind</string>
 </resources>

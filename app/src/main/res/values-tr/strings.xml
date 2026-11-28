@@ -971,4 +971,9 @@
     <string name="epg_name_reset">Sıfırla</string>
     <string name="move_hint_vertical">▲ ve ▼ ile taşı, OK veya Geri bitirir.</string>
     <string name="move_hint_horizontal">◀ ve ▶ ile taşı, OK veya Geri bitirir.</string>
+    <string name="visibility_only_category">Yalnızca bu kategori</string>
+    <string name="visibility_all_categories">Tüm kategoriler</string>
+    <string name="visibility_only_channel">Yalnızca bu kanal</string>
+    <string name="visibility_all_channels">Bu kategorideki tüm kanallar</string>
+    <string name="visibility_all">Tümü</string>
 </resources>

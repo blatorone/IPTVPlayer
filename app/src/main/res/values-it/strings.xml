@@ -975,4 +975,9 @@
     <string name="epg_name_reset">Ripristina</string>
     <string name="move_hint_vertical">Sposta con ▲ e ▼, OK o Indietro termina.</string>
     <string name="move_hint_horizontal">Sposta con ◀ e ▶, OK o Indietro termina.</string>
+    <string name="visibility_only_category">Solo questa categoria</string>
+    <string name="visibility_all_categories">Tutte le categorie</string>
+    <string name="visibility_only_channel">Solo questo canale</string>
+    <string name="visibility_all_channels">Tutti i canali di questa categoria</string>
+    <string name="visibility_all">Tutti</string>
 </resources>

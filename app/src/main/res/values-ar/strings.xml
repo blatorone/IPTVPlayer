@@ -987,4 +987,9 @@
     <string name="epg_name_reset">إعادة تعيين</string>
     <string name="move_hint_vertical">انقل باستخدام ▲ و ▼، ويُنهي OK أو رجوع.</string>
     <string name="move_hint_horizontal">انقل باستخدام ◀ و ▶، ويُنهي OK أو رجوع.</string>
+    <string name="visibility_only_category">هذه الفئة فقط</string>
+    <string name="visibility_all_categories">كل الفئات</string>
+    <string name="visibility_only_channel">هذه القناة فقط</string>
+    <string name="visibility_all_channels">كل قنوات هذه الفئة</string>
+    <string name="visibility_all">الكل</string>
 </resources>

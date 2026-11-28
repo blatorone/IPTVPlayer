@@ -975,4 +975,9 @@
     <string name="epg_name_reset">Réinitialiser</string>
     <string name="move_hint_vertical">Déplace avec ▲ et ▼, OK ou Retour termine.</string>
     <string name="move_hint_horizontal">Déplace avec ◀ et ▶, OK ou Retour termine.</string>
+    <string name="visibility_only_category">Seulement cette catégorie</string>
+    <string name="visibility_all_categories">Toutes les catégories</string>
+    <string name="visibility_only_channel">Seulement cette chaîne</string>
+    <string name="visibility_all_channels">Toutes les chaînes de cette catégorie</string>
+    <string name="visibility_all">Tout</string>
 </resources>

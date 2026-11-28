@@ -975,4 +975,9 @@
     <string name="epg_name_reset">Vrati</string>
     <string name="move_hint_vertical">Pomeraj sa ▲ i ▼, OK ili Nazad završava.</string>
     <string name="move_hint_horizontal">Pomeraj sa ◀ i ▶, OK ili Nazad završava.</string>
+    <string name="visibility_only_category">Samo ova kategorija</string>
+    <string name="visibility_all_categories">Sve kategorije</string>
+    <string name="visibility_only_channel">Samo ovaj kanal</string>
+    <string name="visibility_all_channels">Svi kanali ove kategorije</string>
+    <string name="visibility_all">Sve</string>
 </resources>

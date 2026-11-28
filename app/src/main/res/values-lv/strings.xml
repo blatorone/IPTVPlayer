@@ -975,4 +975,9 @@
     <string name="epg_name_reset">Atiestatīt</string>
     <string name="move_hint_vertical">Pārvieto ar ▲ un ▼, OK vai Atpakaļ beidz.</string>
     <string name="move_hint_horizontal">Pārvieto ar ◀ un ▶, OK vai Atpakaļ beidz.</string>
+    <string name="visibility_only_category">Tikai šī kategorija</string>
+    <string name="visibility_all_categories">Visas kategorijas</string>
+    <string name="visibility_only_channel">Tikai šis kanāls</string>
+    <string name="visibility_all_channels">Visi šīs kategorijas kanāli</string>
+    <string name="visibility_all">Visi</string>
 </resources>

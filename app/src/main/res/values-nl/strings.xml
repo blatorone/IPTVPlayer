@@ -971,4 +971,9 @@
     <string name="epg_name_reset">Herstellen</string>
     <string name="move_hint_vertical">Verplaats met ▲ en ▼, OK of Terug stopt.</string>
     <string name="move_hint_horizontal">Verplaats met ◀ en ▶, OK of Terug stopt.</string>
+    <string name="visibility_only_category">Alleen deze categorie</string>
+    <string name="visibility_all_categories">Alle categorieën</string>
+    <string name="visibility_only_channel">Alleen deze zender</string>
+    <string name="visibility_all_channels">Alle zenders van deze categorie</string>
+    <string name="visibility_all">Alle</string>
 </resources>

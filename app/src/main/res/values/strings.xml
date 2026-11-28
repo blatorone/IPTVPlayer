@@ -971,4 +971,9 @@
     <string name="epg_name_reset">Zurücksetzen</string>
     <string name="move_hint_vertical">Mit ▲ und ▼ verschieben, OK oder Zurück beendet.</string>
     <string name="move_hint_horizontal">Mit ◀ und ▶ verschieben, OK oder Zurück beendet.</string>
+    <string name="visibility_only_category">Nur diese Kategorie</string>
+    <string name="visibility_all_categories">Alle Kategorien</string>
+    <string name="visibility_only_channel">Nur dieser Sender</string>
+    <string name="visibility_all_channels">Alle Sender dieser Kategorie</string>
+    <string name="visibility_all">Alle</string>
 </resources>

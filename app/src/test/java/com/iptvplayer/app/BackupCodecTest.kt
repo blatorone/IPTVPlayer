@@ -63,6 +63,8 @@ class BackupCodecTest {
         assertEquals(BackupPart.WATCH_DATA, backupPartOfSetting("search_history"))
         assertEquals(BackupPart.CATEGORIES, backupPartOfSetting("category_order_combined_LIVE"))
         assertEquals(BackupPart.CATEGORIES, backupPartOfSetting("hidden"))
+        assertEquals(BackupPart.CATEGORIES, backupPartOfSetting("hidden_channels"))
+        assertEquals(BackupPart.CATEGORIES, backupPartOfSetting("epg_names"))
         assertEquals(BackupPart.LOCKS, backupPartOfSetting("parental_pin_hash"))
         assertEquals(BackupPart.LOCKS, backupPartOfSetting("settings_pin_length"))
         assertEquals(BackupPart.LOCKS, backupPartOfSetting("kids_profile_name"))

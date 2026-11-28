@@ -975,4 +975,9 @@
     <string name="epg_name_reset">Redefinir</string>
     <string name="move_hint_vertical">Mova com ▲ e ▼; OK ou Voltar termina.</string>
     <string name="move_hint_horizontal">Mova com ◀ e ▶; OK ou Voltar termina.</string>
+    <string name="visibility_only_category">Só esta categoria</string>
+    <string name="visibility_all_categories">Todas as categorias</string>
+    <string name="visibility_only_channel">Só este canal</string>
+    <string name="visibility_all_channels">Todos os canais desta categoria</string>
+    <string name="visibility_all">Todos</string>
 </resources>
